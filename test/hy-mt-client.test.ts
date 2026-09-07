@@ -34,6 +34,8 @@ describe('translateWithHyMt', () => {
       });
       const rejected = expect(translation).rejects.toThrow('Translation timed out.');
       await vi.advanceTimersByTimeAsync(60_000);
+      expect(cancelTranslation).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(240_000);
       await rejected;
       expect(unsubscribe).toHaveBeenCalledOnce();
       expect(cancelTranslation).toHaveBeenCalledWith('timeout');
@@ -114,7 +116,10 @@ describe('translateWithHyMt', () => {
     });
 
     await vi.waitFor(() =>
-      expect(startTranslation).toHaveBeenCalledExactlyOnceWith(expect.anything()),
+      expect(startTranslation).toHaveBeenCalledExactlyOnceWith(
+        expect.anything(),
+        expect.any(AbortSignal),
+      ),
     );
     listener?.({
       code: 'sidecar_exited',

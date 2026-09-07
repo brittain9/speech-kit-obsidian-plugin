@@ -291,8 +291,13 @@ export class SidecarConnection {
     }
   }
 
-  async startTranslation(payload: Omit<StartTranslationCommand, 'type'>): Promise<void> {
+  async startTranslation(
+    payload: Omit<StartTranslationCommand, 'type'>,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    signal?.throwIfAborted();
     await this.ensureStarted();
+    signal?.throwIfAborted();
     this.process.write(encodeJsonFrame(createStartTranslationCommand(payload)));
   }
 

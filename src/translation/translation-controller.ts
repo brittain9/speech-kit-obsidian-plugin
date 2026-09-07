@@ -349,6 +349,7 @@ export class TranslationController {
     // repeatedly scheduling it ahead of other finalized utterances.
     slot.processed = request;
     const settings = this.dependencies.getSettings();
+    const configuration = realtimeConfigurationKey(settings);
     if (!settings.realtimeTranslationEnabled) {
       slot.processed = request;
       return;
@@ -385,7 +386,12 @@ export class TranslationController {
     // Otherwise continuous revisions can suppress every visible update.
     const canPublish = stillCurrent || (!request.update.isFinal && !slot.latest.update.isFinal);
     slot.processed = request;
-    if (this.disposed || slot.generation !== this.realtimeGeneration) return;
+    if (
+      this.disposed ||
+      slot.generation !== this.realtimeGeneration ||
+      configuration !== realtimeConfigurationKey(this.dependencies.getSettings())
+    )
+      return;
     if (result.kind !== 'translated' || result.text.trim().length === 0) {
       throw new Error('Realtime translation returned no usable translation.');
     }
@@ -665,6 +671,15 @@ function createTranslationId(): string {
     window.crypto?.randomUUID?.() ??
     `translation-${Date.now()}-${Math.random().toString(16).slice(2)}`
   );
+}
+function realtimeConfigurationKey(settings: PluginSettings): string {
+  return JSON.stringify([
+    settings.realtimeTranslationEnabled,
+    settings.selectedTranslationModel,
+    settings.translationSourceLanguage,
+    settings.translationTargetLanguage,
+    settings.dictationLanguage,
+  ]);
 }
 function endPosition(text: string): EditorPosition {
   const lines = text.split('\n');

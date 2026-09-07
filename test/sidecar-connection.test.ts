@@ -104,6 +104,39 @@ function createHarness(
   return { connection, process };
 }
 
+it('does not send a translation cancelled while the sidecar is starting', async () => {
+  const { connection, process } = createHarness();
+  let ready!: () => void;
+  vi.spyOn(connection, 'ensureStarted').mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        ready = resolve;
+      }),
+  );
+  const controller = new AbortController();
+  const request = connection.startTranslation(
+    {
+      translationId: 'cancelled-start',
+      accelerationPreference: 'auto',
+      modelSelection: {
+        kind: 'catalog_model',
+        runtimeId: 'llama_cpp',
+        familyId: 'tencent_hy_mt',
+        modelId: 'test',
+      },
+      sourceLanguage: 'en',
+      targetLanguage: 'es',
+      texts: ['Hello'],
+    },
+    controller.signal,
+  );
+  controller.abort();
+  ready();
+  await expect(request).rejects.toMatchObject({ name: 'AbortError' });
+  expect(process.writtenFrames).toHaveLength(0);
+  connection.dispose();
+});
+
 function modelInstallUpdate(
   overrides: Partial<ModelInstallUpdateEvent> = {},
 ): ModelInstallUpdateEvent {

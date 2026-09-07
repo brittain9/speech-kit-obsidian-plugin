@@ -532,6 +532,7 @@ describe('TranslationController', () => {
     await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledOnce());
     expect(startTranslation).toHaveBeenCalledWith(
       expect.objectContaining({ sourceLanguage: 'zh', targetLanguage: 'en' }),
+      expect.any(AbortSignal),
     );
     const translationId = startTranslation.mock.calls[0]?.[0].translationId;
     if (translationId === undefined) throw new Error('Expected realtime translation to start.');
@@ -595,6 +596,7 @@ describe('TranslationController', () => {
     await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledOnce());
     expect(startTranslation).toHaveBeenCalledWith(
       expect.objectContaining({ sourceLanguage: 'zh', targetLanguage: 'en' }),
+      expect.any(AbortSignal),
     );
   });
 
@@ -709,6 +711,22 @@ describe('TranslationController', () => {
     expect(replaceUtteranceTranslation).toHaveBeenLastCalledWith('u1', 'final.');
     await drain;
     expect(drained).toHaveBeenCalledOnce();
+    controller.translateRealtime('Another sentence.', target, {
+      isFinal: true,
+      revision: 0,
+      utteranceId: 'u2',
+    });
+    await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledTimes(6));
+    settings.realtimeTranslationEnabled = false;
+    const disabledId = startTranslation.mock.calls[5]?.[0].translationId;
+    if (disabledId === undefined) throw new Error('Expected translation.');
+    listeners[5]?.({
+      type: 'translation_complete',
+      translationId: disabledId,
+      translations: ['Other.'],
+    });
+    await controller.drainRealtime(target);
+    expect(replaceUtteranceTranslation).toHaveBeenCalledTimes(3);
   });
 });
 
