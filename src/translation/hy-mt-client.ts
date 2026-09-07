@@ -35,16 +35,36 @@ interface HyMtTranslationOptions {
 export async function translateWithHyMt(options: HyMtTranslationOptions): Promise<string[]> {
   return new Promise<string[]>((resolve, reject) => {
     let settled = false;
+    const onTimeout = () => {
+      finish(() =>
+        reject(new HyMtTranslationError('translation_timeout', 'Translation timed out.')),
+      );
+      try {
+        options.sidecarConnection.cancelTranslation(options.translationId);
+      } catch {
+        // The request is already settled even if the sidecar cannot be reached.
+      }
+    };
+    let timeout = window.setTimeout(onTimeout, 60_000);
+    const resetTimeout = () => {
+      window.clearTimeout(timeout);
+      timeout = window.setTimeout(onTimeout, 60_000);
+    };
     const finish = (callback: () => void) => {
       if (settled) return;
       settled = true;
+      window.clearTimeout(timeout);
       release();
       options.signal.removeEventListener('abort', onAbort);
       callback();
     };
     const onAbort = () => {
-      options.sidecarConnection.cancelTranslation(options.translationId);
       finish(() => reject(new DOMException('Translation canceled.', 'AbortError')));
+      try {
+        options.sidecarConnection.cancelTranslation(options.translationId);
+      } catch {
+        // Cancellation must settle even when writing to the sidecar fails.
+      }
     };
     const release = options.sidecarConnection.subscribe((event) => {
       if (event.type === 'error' && event.code === 'sidecar_exited') {
@@ -54,9 +74,11 @@ export async function translateWithHyMt(options: HyMtTranslationOptions): Promis
       if (!('translationId' in event) || event.translationId !== options.translationId) return;
       switch (event.type) {
         case 'translation_started':
+          resetTimeout();
           options.onReady();
           break;
         case 'translation_progress':
+          resetTimeout();
           options.onProgress(event.completed, event.total);
           break;
         case 'translation_complete':

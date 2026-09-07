@@ -4,6 +4,43 @@ import type { SidecarEvent } from '../src/sidecar/protocol';
 import { translateWithHyMt } from '../src/translation/hy-mt-client';
 
 describe('translateWithHyMt', () => {
+  it('times out and releases listeners even if cancellation cannot be sent', async () => {
+    vi.useFakeTimers();
+    try {
+      const unsubscribe = vi.fn();
+      const cancelTranslation = vi.fn(() => {
+        throw new Error('closed');
+      });
+      const translation = translateWithHyMt({
+        accelerationPreference: 'auto',
+        modelSelection: {
+          kind: 'catalog_model',
+          runtimeId: 'llama_cpp',
+          familyId: 'tencent_hy_mt',
+          modelId: 'test',
+        },
+        onProgress: vi.fn(),
+        onReady: vi.fn(),
+        sidecarConnection: {
+          cancelTranslation,
+          startTranslation: vi.fn(async () => {}),
+          subscribe: () => unsubscribe,
+        } as never,
+        signal: new AbortController().signal,
+        sourceLanguage: 'en',
+        targetLanguage: 'es',
+        texts: ['Hello'],
+        translationId: 'timeout',
+      });
+      const rejected = expect(translation).rejects.toThrow('Translation timed out.');
+      await vi.advanceTimersByTimeAsync(60_000);
+      await rejected;
+      expect(unsubscribe).toHaveBeenCalledOnce();
+      expect(cancelTranslation).toHaveBeenCalledWith('timeout');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('ignores unrelated sidecar errors while waiting for its keyed result', async () => {
     let listener: ((event: SidecarEvent) => void) | undefined;
     const translation = translateWithHyMt({

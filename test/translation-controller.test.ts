@@ -691,12 +691,22 @@ describe('TranslationController', () => {
     const finalId = startTranslation.mock.calls[3]?.[0].translationId;
     if (finalId === undefined) throw new Error('Expected final translation.');
     listeners[3]?.({
-      type: 'translation_complete',
+      type: 'translation_error',
       translationId: finalId,
-      translations: ['Final.'],
+      code: 'inference_failed',
+      message: 'Temporary failure',
+    });
+    await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledTimes(5));
+    expect(startTranslation.mock.calls[4]?.[0].texts).toEqual(['final.']);
+    const retryId = startTranslation.mock.calls[4]?.[0].translationId;
+    if (retryId === undefined) throw new Error('Expected retry.');
+    listeners[4]?.({
+      type: 'translation_complete',
+      translationId: retryId,
+      translations: ['final.'],
     });
     await vi.waitFor(() => expect(replaceUtteranceTranslation).toHaveBeenCalledTimes(3));
-    expect(replaceUtteranceTranslation).toHaveBeenLastCalledWith('u1', 'Final.');
+    expect(replaceUtteranceTranslation).toHaveBeenLastCalledWith('u1', 'final.');
     await drain;
     expect(drained).toHaveBeenCalledOnce();
   });

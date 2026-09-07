@@ -50,6 +50,7 @@ interface RealtimeTranslationSlot {
   target: RealtimeTranslationTarget;
   done: Promise<void>;
   finish: () => void;
+  retried?: RealtimeTranslationSlot['latest'];
 }
 
 interface TranslationAdapterContext {
@@ -291,6 +292,26 @@ export class TranslationController {
     this.realtimeActive = true;
     void this.processRealtimeSlot(slot)
       .catch((error: unknown) => {
+        const failed = slot.processed;
+        if (
+          this.disposed ||
+          error instanceof TranslationCancelledError ||
+          (error instanceof DOMException && error.name === 'AbortError')
+        )
+          return;
+        if (failed?.update.isFinal && slot.latest === failed) {
+          if (slot.retried !== failed) {
+            slot.retried = failed;
+            delete slot.processed;
+          } else {
+            this.dependencies.feedback.show({
+              intent: 'error',
+              key: 'realtime-final-translation-failed',
+              message: t('translation.modal.failed'),
+              cause: error,
+            });
+          }
+        }
         if (
           !(error instanceof TranslationCancelledError) &&
           !(error instanceof DOMException && error.name === 'AbortError')
@@ -365,18 +386,19 @@ export class TranslationController {
     const canPublish = stillCurrent || (!request.update.isFinal && !slot.latest.update.isFinal);
     slot.processed = request;
     if (this.disposed || slot.generation !== this.realtimeGeneration) return;
-    if (canPublish && result.kind === 'translated' && result.text.trim() !== request.source) {
+    if (result.kind !== 'translated' || result.text.trim().length === 0) {
+      throw new Error('Realtime translation returned no usable translation.');
+    }
+    if (canPublish) {
       const inserted =
         request.update.utteranceId.length > 0 &&
         slot.target.replaceUtteranceTranslation !== undefined
           ? slot.target.replaceUtteranceTranslation(request.update.utteranceId, result.text.trim())
           : slot.target.insertAdjacentToSessionRange(`> ${result.text.trim()}`, 'below');
       if (!inserted) {
-        this.dependencies.logger.warn('translation', 'realtime translation could not be written', {
-          utteranceId: request.update.utteranceId,
-          revision: request.update.revision,
-          isFinal: request.update.isFinal,
-        });
+        throw new Error(
+          `Realtime translation could not be written for ${request.update.utteranceId}.`,
+        );
       }
     }
   }
