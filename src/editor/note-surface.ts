@@ -243,9 +243,10 @@ export class NoteSurface {
     const source = this.spans.get(utteranceId);
     if (source === undefined) return false;
     const text = blockText.trim();
-    if (text.length === 0) return false;
-    const rendered = `\n\n${text}\n\n`;
+    if (text.length > 0 && source.projectedText.trim().length === 0) return false;
+    const rendered = text.length === 0 ? '' : `\n\n${text}\n\n`;
     const existing = this.companionSpans.get(utteranceId);
+    if (text.length === 0 && existing === undefined) return true;
     if (existing?.latched !== undefined) return false;
     if (
       existing !== undefined &&
@@ -262,6 +263,10 @@ export class NoteSurface {
     });
     const currentSource = this.spans.get(utteranceId);
     if (currentSource !== undefined) currentSource.end = start;
+    if (text.length === 0) {
+      this.companionSpans.delete(utteranceId);
+      return true;
+    }
     this.companionSpans.set(utteranceId, {
       end: start + rendered.length,
       projectedText: rendered,
@@ -358,6 +363,9 @@ export class NoteSurface {
     }
 
     const replacementStart = removeBoundary ? span.start : span.textStart;
+    if (newText.trim().length === 0) {
+      this.replaceUtteranceCompanion(utteranceId, '');
+    }
     this.view.dispatch({
       changes: { from: replacementStart, to: span.textEnd, insert: newText },
       effects: this.ownerAnchorEffects(replacementStart + newText.length),

@@ -268,6 +268,31 @@ describe('NoteSurface', () => {
     expect(doc(view)).toBe(`${initialDocument}${final}z`);
   });
 
+  it('removes a withdrawn transcript and translation and rejects late translations', () => {
+    const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+    view.addUpdateListener((update) => surface.observeTransaction(update));
+    surface.appendProjection('u1', literalProjection('temporary'));
+    surface.replaceUtteranceCompanion('u1', '> Temporary translation');
+    surface.appendProjection('u2', literalProjection('next'));
+    expect(surface.replaceAnchor('u1', '', 'temporary').kind).toBe('replaced');
+    expect(doc(view)).toBe('next');
+    expect(surface.replaceUtteranceCompanion('u1', '> Late translation')).toBe(false);
+    expect(doc(view)).toBe('next');
+  });
+
+  it('preserves a user-edited translation when its transcript is withdrawn', () => {
+    const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+    view.addUpdateListener((update) => surface.observeTransaction(update));
+    surface.appendProjection('u1', literalProjection('temporary'));
+    surface.replaceUtteranceCompanion('u1', '> Translation');
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.type'),
+      changes: { from: doc(view).indexOf('Translation'), insert: 'Edited ' },
+    });
+    expect(surface.replaceAnchor('u1', '', 'temporary').kind).toBe('replaced');
+    expect(doc(view)).toBe('\n\n> Edited Translation\n\n');
+  });
+
   it('keeps per-utterance translation blocks outside the next transcript', () => {
     const { surface, view } = createSurface();
 

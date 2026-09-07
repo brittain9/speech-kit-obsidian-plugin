@@ -727,6 +727,22 @@ describe('TranslationController', () => {
     });
     await controller.drainRealtime(target);
     expect(replaceUtteranceTranslation).toHaveBeenCalledTimes(3);
+    settings.realtimeTranslationEnabled = true;
+    controller.translateRealtime('Temporary words', target, {
+      isFinal: false,
+      revision: 0,
+      utteranceId: 'withdrawn',
+    });
+    await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledTimes(7));
+    controller.translateRealtime('', target, {
+      isFinal: true,
+      revision: 1,
+      utteranceId: 'withdrawn',
+    });
+    await controller.drainRealtime(target);
+    expect(cancelTranslation).toHaveBeenCalled();
+    expect(startTranslation).toHaveBeenCalledTimes(7);
+    expect(replaceUtteranceTranslation).toHaveBeenCalledTimes(3);
   });
 });
 

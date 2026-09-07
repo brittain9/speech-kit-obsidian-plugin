@@ -1029,8 +1029,8 @@ export class DictationSessionController {
       await this.cancelSession(sessionId);
       return;
     }
-    if (result.kind === 'accepted' && revision.text.trim().length > 0) {
-      if (revision.isFinal) {
+    if (result.kind === 'accepted') {
+      if (revision.isFinal && revision.text.trim().length > 0) {
         this.dependencies.onFinalizedUtteranceAccepted?.(revision.text);
       }
       this.dependencies.onRealtimeTranslation?.(revision.text, entry.session, {

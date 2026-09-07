@@ -208,7 +208,17 @@ export class TranslationController {
     update?: RealtimeTranslationUpdate,
   ): void {
     const text = source.trim();
-    if (text.length === 0 || this.disposed) return;
+    if (this.disposed) return;
+    if (text.length === 0) {
+      if (update?.isFinal) {
+        const slot = this.realtimeSlots.get(target)?.get(update.utteranceId);
+        if (slot !== undefined && update.revision >= slot.latest.update.revision) {
+          slot.latest = { source: '', update };
+          slot.abortController?.abort();
+        }
+      }
+      return;
+    }
     const hasRevisionMetadata = update !== undefined;
     const resolvedUpdate = update ?? {
       isFinal: true,
@@ -348,6 +358,7 @@ export class TranslationController {
     // Configuration failures must also release this snapshot instead of
     // repeatedly scheduling it ahead of other finalized utterances.
     slot.processed = request;
+    if (request.source.length === 0) return;
     const settings = this.dependencies.getSettings();
     const configuration = realtimeConfigurationKey(settings);
     if (!settings.realtimeTranslationEnabled) {
