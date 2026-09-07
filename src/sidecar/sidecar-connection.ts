@@ -84,6 +84,7 @@ interface SidecarProcessLike {
   start(): Promise<void>;
   stop(): Promise<void>;
   write(frameBytes: Uint8Array): void;
+  writeWithBackpressure(frameBytes: Uint8Array): Promise<void>;
 }
 
 interface SidecarConnectionOptions {
@@ -290,8 +291,13 @@ export class SidecarConnection {
     }
   }
 
-  async startTranslation(payload: Omit<StartTranslationCommand, 'type'>): Promise<void> {
+  async startTranslation(
+    payload: Omit<StartTranslationCommand, 'type'>,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    signal?.throwIfAborted();
     await this.ensureStarted();
+    signal?.throwIfAborted();
     this.process.write(encodeJsonFrame(createStartTranslationCommand(payload)));
   }
 
@@ -367,6 +373,10 @@ export class SidecarConnection {
 
   sendAudioFrame(sessionId: string, frameBytes: Uint8Array): void {
     this.process.write(encodeAudioFrame(sessionId, frameBytes));
+  }
+
+  async sendAudioFrameWithBackpressure(sessionId: string, frameBytes: Uint8Array): Promise<void> {
+    await this.process.writeWithBackpressure(encodeAudioFrame(sessionId, frameBytes));
   }
 
   sendContextResponse(correlationId: string, context: ContextWindow | null): void {

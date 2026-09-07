@@ -13,7 +13,7 @@ import {
   setAnchorEffect,
   setAnchorModeEffect,
 } from '../src/editor/dictation-anchor-extension';
-import { NoteSurface } from '../src/editor/note-surface';
+import { NoteSurface, noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
 import {
   provisionalTranscriptDecorationsField,
   provisionalTranscriptExtension,
@@ -266,6 +266,70 @@ describe('NoteSurface', () => {
     expect(surface.appendProjection('u2', literalProjection('z')).kind).toBe('appended');
 
     expect(doc(view)).toBe(`${initialDocument}${final}z`);
+  });
+
+  it('removes a withdrawn transcript and translation and rejects late translations', () => {
+    const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+    view.addUpdateListener((update) => surface.observeTransaction(update));
+    surface.appendProjection('u1', literalProjection('temporary'));
+    surface.replaceUtteranceCompanion('u1', '> Temporary translation');
+    surface.appendProjection('u2', literalProjection('next'));
+    expect(surface.replaceAnchor('u1', '', 'temporary').kind).toBe('replaced');
+    expect(doc(view)).toBe('next');
+    expect(surface.replaceUtteranceCompanion('u1', '> Late translation')).toBe(false);
+    expect(doc(view)).toBe('next');
+  });
+
+  it('preserves a user-edited translation when its transcript is withdrawn', () => {
+    const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+    view.addUpdateListener((update) => surface.observeTransaction(update));
+    surface.appendProjection('u1', literalProjection('temporary'));
+    surface.replaceUtteranceCompanion('u1', '> Translation');
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.type'),
+      changes: { from: doc(view).indexOf('Translation'), insert: 'Edited ' },
+    });
+    expect(surface.replaceAnchor('u1', '', 'temporary').kind).toBe('replaced');
+    expect(doc(view)).toBe('\n\n> Edited Translation\n\n');
+  });
+
+  it('keeps per-utterance translation blocks outside the next transcript', () => {
+    const { surface, view } = createSurface();
+
+    expect(surface.appendProjection('u1', literalProjection('第一句。')).kind).toBe('appended');
+    expect(surface.replaceUtteranceCompanion('u1', '> First sentence.')).toBe(true);
+    expect(surface.appendProjection('u2', literalProjection('第二句。')).kind).toBe('appended');
+
+    expect(doc(view)).toBe('第一句。\n\n> First sentence.\n\n第二句。');
+  });
+
+  it('replaces a provisional translation in place before appending the next utterance', () => {
+    const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+    view.addUpdateListener((update) => surface.observeTransaction(update));
+
+    expect(surface.appendProjection('u1', literalProjection('partial')).kind).toBe('appended');
+    expect(surface.replaceUtteranceCompanion('u1', '> Partial')).toBe(true);
+    expect(surface.replaceAnchor('u1', 'final.', 'partial').kind).toBe('replaced');
+    expect(surface.replaceUtteranceCompanion('u1', '> Final.')).toBe(true);
+    expect(surface.appendProjection('u2', literalProjection('next')).kind).toBe('appended');
+
+    expect(doc(view)).toBe('final.\n\n> Final.\n\nnext');
+  });
+
+  it('updates an earlier translation after the next utterance and its translation arrive', () => {
+    const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+    view.addUpdateListener((update) => surface.observeTransaction(update));
+    surface.appendProjection('u1', literalProjection('partial'));
+    surface.replaceUtteranceCompanion('u1', '> Early');
+    surface.replaceAnchor('u1', 'Complete first sentence.', 'partial');
+    surface.appendProjection('u2', literalProjection('Second sentence.'));
+    surface.replaceUtteranceCompanion('u2', '> Second translation.');
+
+    expect(surface.replaceUtteranceCompanion('u1', '> Complete first translation.')).toBe(true);
+    expect(doc(view)).toBe(
+      'Complete first sentence.\n\n> Complete first translation.\n\nSecond sentence.\n\n> Second translation.\n\n',
+    );
+    expect(surface.replaceUtteranceCompanion('u2', '> Updated second translation.')).toBe(true);
   });
 
   it.each([
