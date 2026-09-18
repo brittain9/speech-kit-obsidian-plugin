@@ -2,26 +2,13 @@ name: sidecar-e2e
 
 # Heavy, model-backed quality suite for the Rust sidecar: runs known audio
 # fixtures through the full pipeline and asserts the transcript (accuracy +
-# wire-protocol). Kept out of the general `ci` workflow because it downloads
-# large model artifacts and runs real inference. English smoke coverage runs on
-# relevant PR paths. Multilingual certification has its own manually
-# dispatchable, weekly workflow in multilingual-quality.yml.
+# wire-protocol). It is deliberately manual-only: model downloads, real
+# inference, and performance measurements are certification evidence rather
+# than routine PR feedback. Multilingual certification has its own focused
+# manual workflow in multilingual-quality.yml.
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/sidecar-e2e.yml'
-      - 'native/catalog.json'
-      - 'native/src/**'
-      - 'native/tests/**'
-      - 'scripts/lib/transcription-quality-report.mjs'
-      - 'scripts/transcription-quality-report.mjs'
-      - 'scripts/pocket-tts-phase0/**'
-      - 'test/transcription-quality-report.test.ts'
-      - 'package.json'
   workflow_dispatch:
-  schedule:
-    - cron: '0 6 * * 1' # Mondays 06:00 UTC
 
 permissions:
   contents: read

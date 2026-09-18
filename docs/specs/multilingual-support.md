@@ -147,7 +147,7 @@ Multilingual support is first-class only when all of these are true:
 - Document code-switching policy explicitly; do not imply it from monolingual
   fixtures.
 
-The exhaustive real-model matrix runs in the manually dispatchable, weekly
+The exhaustive real-model matrix runs only in the manually dispatchable
 `multilingual-quality` workflow. It is certification evidence, not a release
 publication gate.
 

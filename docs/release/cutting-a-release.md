@@ -196,8 +196,8 @@ and generates checksums. When they differ, every native job is skipped. Both
 paths attest the plugin assets, create a **draft** release with the notes file
 as the body, publish it, and produce the timing report.
 Unit, lint, and static-analysis gates run on pull requests and `main` in
-`ci.yml`; real-model certification runs in the scheduled or manually
-dispatchable E2E workflows and does not delay publication.
+`ci.yml`; real-model certification runs only in manually dispatchable E2E
+workflows and does not delay publication.
 
 ## Watch and verify
 
