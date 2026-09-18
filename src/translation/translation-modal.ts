@@ -1,5 +1,10 @@
 import { type App, type Editor, type EditorPosition, Modal, Setting, setIcon } from 'obsidian';
 import { type CatalogModelRecord, matchesModelTriple } from '../models/model-management-types';
+import {
+  normalizeTranslationStyleInstruction,
+  TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS,
+} from '../settings/plugin-settings';
+import { addTextAreaSetting } from '../settings/setting-helpers';
 import { formatBytes } from '../shared/format-utils';
 import { t, tPlural } from '../shared/i18n';
 import type { UserFeedback } from '../shared/user-feedback';
@@ -34,6 +39,7 @@ interface TranslationModalDependencies {
   };
   editor: Editor;
   feedback: Pick<UserFeedback, 'show'>;
+  getStyleInstruction?: () => string;
   installedModelOptions: readonly CatalogModelRecord[];
   job: TranslationJob;
   onApplied: () => void;
@@ -55,6 +61,7 @@ interface TranslationModalDependencies {
     target: TranslationLanguage,
   ) => Promise<void>;
   onReadAloud: (text: string, language: TranslationLanguage) => Promise<void> | void;
+  onStyleInstructionChange?: (value: string) => Promise<void> | void;
   onTranslateCurrent: (source: TranslationLanguage, target: TranslationLanguage) => void;
   onRestart: (source: TranslationLanguage, target: TranslationLanguage) => void;
   snapshot: TranslationSnapshot;
@@ -81,6 +88,7 @@ export class TranslationModal extends Modal {
   private draftModel: CatalogModelRecord | null;
   private draftSourceLanguage: TranslationLanguage;
   private draftTargetLanguage: TranslationLanguage;
+  private draftStyleInstruction: string;
   private installingPack = false;
   private closed = false;
 
@@ -93,6 +101,9 @@ export class TranslationModal extends Modal {
     this.draftModel = dependencies.configuration.model;
     this.draftSourceLanguage = dependencies.configuration.sourceLanguage;
     this.draftTargetLanguage = dependencies.configuration.targetLanguage;
+    this.draftStyleInstruction = normalizeTranslationStyleInstruction(
+      dependencies.getStyleInstruction?.() ?? '',
+    );
   }
   override onOpen(): void {
     this.closed = false;
@@ -227,6 +238,31 @@ export class TranslationModal extends Modal {
         this.renderState();
       });
     });
+    if (this.draftModel?.familyId === 'tencent_hy_mt') {
+      addTextAreaSetting(this.selectorsEl, {
+        name: t('translation.modal.styleInstruction.name'),
+        desc: t('translation.modal.styleInstruction.desc'),
+        rows: 3,
+        value: this.draftStyleInstruction,
+        onElement: (element) => {
+          element.maxLength = TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS;
+          element.disabled = active;
+        },
+        onChange: (value) => {
+          const normalized = normalizeTranslationStyleInstruction(value);
+          this.draftStyleInstruction = normalized;
+          void Promise.resolve(this.dependencies.onStyleInstructionChange?.(normalized)).catch(
+            (error: unknown) => {
+              this.dependencies.feedback.show({
+                cause: error,
+                intent: 'error',
+                message: t('common.actionFailed'),
+              });
+            },
+          );
+        },
+      });
+    }
     const languagePair = this.selectorsEl.createDiv({
       cls: 'local-stt-translation-modal__language-pair',
     });

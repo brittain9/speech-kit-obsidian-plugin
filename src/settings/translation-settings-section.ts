@@ -15,7 +15,12 @@ import {
   translationSourcesFor,
   translationTargetsFor,
 } from '../translation/languages';
-import type { PluginSettings } from './plugin-settings';
+import {
+  normalizeTranslationStyleInstruction,
+  type PluginSettings,
+  TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS,
+} from './plugin-settings';
+import { addTextAreaSetting } from './setting-helpers';
 
 export interface TranslationSettingsDependencies {
   getSettings: () => PluginSettings;
@@ -25,6 +30,7 @@ export interface TranslationSettingsDependencies {
     sourceLanguage: TranslationLanguage,
     targetLanguage: TranslationLanguage,
   ) => Promise<void>;
+  persistStyleInstruction?: (value: string) => Promise<void>;
 }
 
 export function translationSettingsFingerprint(
@@ -106,6 +112,21 @@ export function renderTranslationSettings(
           render();
         });
       });
+
+    if (selectedModel?.familyId === 'tencent_hy_mt') {
+      addTextAreaSetting(container, {
+        name: t('settings.translation.styleInstruction.name'),
+        desc: t('settings.translation.styleInstruction.desc'),
+        rows: 3,
+        value: settings.translationStyleInstruction,
+        onElement: (element) => {
+          element.maxLength = TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS;
+        },
+        onChange: (value) => {
+          void dependencies.persistStyleInstruction?.(normalizeTranslationStyleInstruction(value));
+        },
+      });
+    }
   };
 
   render();

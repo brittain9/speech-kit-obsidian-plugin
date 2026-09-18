@@ -450,6 +450,12 @@ export class LocalSttSettingTab extends PluginSettingTab {
           translationTargetLanguage: targetLanguage,
         });
       },
+      persistStyleInstruction: async (translationStyleInstruction) => {
+        await this.dependencies.saveSettings({
+          ...this.dependencies.getSettings(),
+          translationStyleInstruction,
+        });
+      },
     } satisfies TranslationSettingsDependencies;
 
     this.disposeTranslationModelSection = renderTranslationModelSetting(

@@ -13,6 +13,8 @@ pub enum HelperCommand {
         translation_id: String,
         model_path: PathBuf,
         source_language: String,
+        #[serde(default)]
+        style_instruction: Option<String>,
         target_language: String,
         texts: Vec<String>,
         use_gpu: bool,

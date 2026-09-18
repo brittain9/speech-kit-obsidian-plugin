@@ -381,6 +381,8 @@ pub enum Command {
         acceleration_preference: AccelerationPreference,
         #[serde(default)]
         model_store_path_override: Option<String>,
+        #[serde(default)]
+        style_instruction: Option<String>,
     },
     CancelTranslation {
         translation_id: String,

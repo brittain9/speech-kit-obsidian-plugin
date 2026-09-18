@@ -44,6 +44,15 @@ pub const HY_MT_LANGUAGES: [(&str, &str, &str); 38] = [
 ];
 
 pub fn translation_prompt(source: &str, target: &str, text: &str) -> Result<String> {
+    translation_prompt_with_style(source, target, None, text)
+}
+
+pub fn translation_prompt_with_style(
+    source: &str,
+    target: &str,
+    style_instruction: Option<&str>,
+    text: &str,
+) -> Result<String> {
     let target_names = HY_MT_LANGUAGES
         .iter()
         .find(|(code, _, _)| *code == target)
@@ -54,7 +63,22 @@ pub fn translation_prompt(source: &str, target: &str, text: &str) -> Result<Stri
     }
     let chinese_prompt =
         matches!(source, "zh" | "zh-Hant" | "yue") || matches!(target, "zh" | "zh-Hant" | "yue");
-    Ok(if chinese_prompt {
+    let style_instruction = style_instruction
+        .map(str::trim)
+        .filter(|style| !style.is_empty());
+    Ok(if let Some(style) = style_instruction {
+        if chinese_prompt {
+            format!(
+                "请将以下文本翻译为{}。\n注意翻译的风格要严格符合〖{style}〗\n{text}",
+                target_names.1
+            )
+        } else {
+            format!(
+                "Please translate the following text into {}. Note that the translation style must strictly conform to [{style}]:\n{text}",
+                target_names.0
+            )
+        }
+    } else if chinese_prompt {
         format!(
             "将以下文本翻译为{}，注意只需要输出翻译后的结果，不要额外解释：\n\n{text}",
             target_names.1
@@ -75,6 +99,7 @@ pub fn translate_units(
     inference: &mut dyn HyMtInference,
     source: &str,
     target: &str,
+    style_instruction: Option<&str>,
     texts: &[String],
     cancelled: &AtomicBool,
     mut on_progress: impl FnMut(usize, usize),
@@ -84,7 +109,12 @@ pub fn translate_units(
         if cancelled.load(Ordering::Relaxed) {
             bail!("translation cancelled");
         }
-        let prompt = translation_prompt(source, target, text)?;
+        let prompt = match style_instruction {
+            Some(style) if !style.trim().is_empty() => {
+                translation_prompt_with_style(source, target, Some(style), text)?
+            }
+            _ => translation_prompt(source, target, text)?,
+        };
         translations.push(inference.translate(&prompt, cancelled)?);
         on_progress(index + 1, texts.len());
     }
@@ -93,7 +123,10 @@ pub fn translate_units(
 
 #[cfg(test)]
 mod tests {
-    use super::{HY_MT_LANGUAGES, HyMtInference, translate_units, translation_prompt};
+    use super::{
+        HY_MT_LANGUAGES, HyMtInference, translate_units, translation_prompt,
+        translation_prompt_with_style,
+    };
     use std::sync::atomic::AtomicBool;
 
     struct Fake;
@@ -114,10 +147,20 @@ mod tests {
             translation_prompt("zh-Hant", "en", "你好").unwrap(),
             "将以下文本翻译为英语，注意只需要输出翻译后的结果，不要额外解释：\n\n你好"
         );
+        assert_eq!(
+            translation_prompt_with_style("fr", "ja", Some("formal, use honorifics"), "bonjour")
+                .unwrap(),
+            "Please translate the following text into Japanese. Note that the translation style must strictly conform to [formal, use honorifics]:\nbonjour"
+        );
+        assert_eq!(
+            translation_prompt_with_style("zh-Hant", "en", Some("正式、使用敬语"), "你好").unwrap(),
+            "请将以下文本翻译为英语。\n注意翻译的风格要严格符合〖正式、使用敬语〗\n你好"
+        );
         let result = translate_units(
             &mut Fake,
             "fr",
             "ja",
+            None,
             &["un".into(), "deux".into()],
             &AtomicBool::new(false),
             |_, _| {},

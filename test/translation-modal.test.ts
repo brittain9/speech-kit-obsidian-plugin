@@ -23,6 +23,40 @@ const SNAPSHOT: TranslationSnapshot = {
 };
 
 describe('TranslationModal mutation safety', () => {
+  it('shows the HY-MT2 style instruction and disables it during translation', async () => {
+    Setting.reset();
+    const model = {
+      ...createModalModel(),
+      displayName: 'Tencent HY-MT 2',
+      familyId: 'tencent_hy_mt' as const,
+      runtimeId: 'llama_cpp' as const,
+    };
+    const onStyleInstructionChange = vi.fn(async () => {});
+    const modal = createModal({
+      configuration: { model, sourceLanguage: 'en', targetLanguage: 'es' },
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      getStyleInstruction: () => 'formal',
+      installedModelOptions: [model],
+      jobModel: model,
+      onStyleInstructionChange,
+      runTranslation: () => new Promise(() => {}),
+    });
+
+    modal.open();
+    const setting = Setting.instances
+      .filter((candidate) => candidate.name === 'Advanced style instruction')
+      .at(-1);
+    if (setting === undefined) throw new Error('Expected the HY-MT2 style setting.');
+    expect(setting.textAreaComponents[0]?.inputEl.value).toBe('formal');
+    expect(setting.textAreaComponents[0]?.inputEl.disabled).toBe(true);
+    setting.textAreaComponents[0]?.change('casual');
+    expect(onStyleInstructionChange).not.toHaveBeenCalled();
+    modal.close();
+  });
+
   it('lists only installed translation models without a management action', () => {
     Setting.reset();
     const installedModel = createModalModel();
@@ -600,6 +634,8 @@ function createModal({
   onLanguageChange = vi.fn(async () => {}),
   onReadAloud = vi.fn(),
   onRestart = vi.fn(),
+  getStyleInstruction = () => '',
+  onStyleInstructionChange = vi.fn(async () => {}),
   onTranslateCurrent = vi.fn(),
   runTranslation,
   translationInstallRequirement,
@@ -619,6 +655,10 @@ function createModal({
   onModelChange?: ConstructorParameters<typeof TranslationModal>[1]['onModelChange'];
   onReadAloud?: ConstructorParameters<typeof TranslationModal>[1]['onReadAloud'];
   onRestart?: ConstructorParameters<typeof TranslationModal>[1]['onRestart'];
+  getStyleInstruction?: ConstructorParameters<typeof TranslationModal>[1]['getStyleInstruction'];
+  onStyleInstructionChange?: ConstructorParameters<
+    typeof TranslationModal
+  >[1]['onStyleInstructionChange'];
   onTranslateCurrent?: ConstructorParameters<typeof TranslationModal>[1]['onTranslateCurrent'];
   runTranslation: (options: TranslationJobRunOptions) => Promise<TranslationJobResult>;
   translationInstallRequirement?: ConstructorParameters<
@@ -640,6 +680,7 @@ function createModal({
     },
     editor: editor as never,
     feedback: { show: vi.fn() },
+    getStyleInstruction,
     installedModelOptions,
     job,
     onApplied: vi.fn(),
@@ -650,6 +691,7 @@ function createModal({
     onInstallPack,
     onModelChange,
     onReadAloud,
+    onStyleInstructionChange,
     onTranslateCurrent,
     onRestart,
     snapshot: SNAPSHOT,

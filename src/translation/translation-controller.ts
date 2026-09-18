@@ -1,7 +1,10 @@
 import type { App, Editor, EditorPosition } from 'obsidian';
 import type { ModelInstallManager } from '../models/model-install-manager';
 import { type CatalogModelRecord, matchesModelTriple } from '../models/model-management-types';
-import type { PluginSettings } from '../settings/plugin-settings';
+import {
+  normalizeTranslationStyleInstruction,
+  type PluginSettings,
+} from '../settings/plugin-settings';
 import { t } from '../shared/i18n';
 import type { PluginLogger } from '../shared/plugin-logger';
 import type { UserFeedback } from '../shared/user-feedback';
@@ -40,6 +43,7 @@ interface TranslationAdapterContext {
     | Pick<SidecarConnection, 'cancelTranslation' | 'startTranslation' | 'subscribe'>
     | undefined;
   sourceLanguage: TranslationLanguage;
+  styleInstruction?: string;
   targetLanguage: TranslationLanguage;
   texts: string[];
 }
@@ -67,6 +71,7 @@ const TRANSLATION_ADAPTERS: Readonly<Record<string, TranslationAdapter>> = {
     settings,
     sidecarConnection,
     sourceLanguage,
+    styleInstruction,
     targetLanguage,
     texts,
   }) => {
@@ -86,6 +91,7 @@ const TRANSLATION_ADAPTERS: Readonly<Record<string, TranslationAdapter>> = {
       ...options,
       sidecarConnection,
       sourceLanguage,
+      ...(styleInstruction === undefined ? {} : { styleInstruction }),
       targetLanguage,
       texts,
       translationId: createTranslationId(),
@@ -175,6 +181,9 @@ export class TranslationController {
     this.clearActive();
     const settings = this.dependencies.getSettings();
     const model = selectedTranslationModel(this.dependencies.modelManager.getState(), settings);
+    const styleInstruction = normalizeTranslationStyleInstruction(
+      settings.translationStyleInstruction,
+    );
     const resolved = resolveTranslationLanguages(
       settings.dictationLanguage,
       sourceOverride ?? settings.translationSourceLanguage,
@@ -187,7 +196,14 @@ export class TranslationController {
       sourceLanguage,
       targetLanguage,
       run: (options) =>
-        this.runTranslation(snapshot.source, model, sourceLanguage, targetLanguage, options),
+        this.runTranslation(
+          snapshot.source,
+          model,
+          sourceLanguage,
+          targetLanguage,
+          styleInstruction,
+          options,
+        ),
     });
     const active: ActiveTranslation = {
       configuration: { model, sourceLanguage, targetLanguage },
@@ -264,6 +280,8 @@ export class TranslationController {
       translationInstallRequirement: (model, sourceLanguage, targetLanguage) =>
         this.installRequirement(model, sourceLanguage, targetLanguage),
       onReadAloud: this.dependencies.onReadAloud,
+      getStyleInstruction: () => this.dependencies.getSettings().translationStyleInstruction,
+      onStyleInstructionChange: (value) => this.persistTranslationStyleInstruction(value),
       onTranslateCurrent: (sourceLanguage, targetLanguage) => {
         this.begin(
           active.editor,
@@ -294,6 +312,12 @@ export class TranslationController {
       ...this.dependencies.getSettings(),
       translationSourceLanguage: sourceLanguage,
       translationTargetLanguage: targetLanguage,
+    });
+  }
+  private persistTranslationStyleInstruction(value: string): Promise<void> {
+    return this.dependencies.saveSettings({
+      ...this.dependencies.getSettings(),
+      translationStyleInstruction: normalizeTranslationStyleInstruction(value),
     });
   }
   private snapshotFromCurrentEditor(active: ActiveTranslation): TranslationSnapshot {
@@ -342,6 +366,7 @@ export class TranslationController {
     model: CatalogModelRecord | null,
     sourceLanguage: TranslationLanguage,
     targetLanguage: TranslationLanguage,
+    styleInstruction: string,
     options: TranslationJobRunOptions,
   ): Promise<TranslationJobResult> {
     if (model === null) return { kind: 'missing_model' };
@@ -373,6 +398,9 @@ export class TranslationController {
         settings: this.dependencies.getSettings(),
         sidecarConnection: this.dependencies.sidecarConnection,
         sourceLanguage,
+        ...(model.familyId === 'tencent_hy_mt' && styleInstruction.length > 0
+          ? { styleInstruction }
+          : {}),
         targetLanguage,
         texts,
       });

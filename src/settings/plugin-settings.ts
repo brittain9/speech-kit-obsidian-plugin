@@ -139,6 +139,7 @@ export const LLM_TOTAL_CONTEXT_CAP_MAX = 30_000;
 export const LLM_TEMPERATURE_MAX = 2;
 export const MAX_LLM_NETWORK_TIMEOUT_SEC = 600;
 export const MIN_LLM_NETWORK_TIMEOUT_SEC = 5;
+export const TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS = 500;
 
 export interface AudioInputDevice {
   deviceId: string;
@@ -178,7 +179,7 @@ export interface PluginSettings {
   modelStorePathOverride: string;
   readAloudLanguage: DictationLanguage;
   retainLastUtterance: boolean;
-  schemaVersion: 8;
+  schemaVersion: 9;
   selectedModel: SelectedModel | null;
   // Last-known-good capabilities for `selectedModel`, captured on a successful
   // probe. Lets startup skip re-probing the sidecar (which forces a full
@@ -201,6 +202,7 @@ export interface PluginSettings {
   timestampSessionHeader: boolean;
   timestampSparseIntervalMs: number;
   translationSourceLanguage: TranslationLanguage | null;
+  translationStyleInstruction: string;
   translationTargetLanguage: TranslationLanguage | null;
   transcriptFormatting: TranscriptFormattingMode;
   highlightSpokenText: boolean;
@@ -248,7 +250,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   modelStorePathOverride: '',
   readAloudLanguage: 'auto',
   retainLastUtterance: true,
-  schemaVersion: 8,
+  schemaVersion: 9,
   selectedModel: null,
   selectedModelCapabilitiesSnapshot: null,
   selectedTtsModel: null,
@@ -268,6 +270,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   timestampSessionHeader: true,
   timestampSparseIntervalMs: DEFAULT_TIMESTAMP_SPARSE_INTERVAL_MS,
   translationSourceLanguage: null,
+  translationStyleInstruction: '',
   translationTargetLanguage: null,
   transcriptFormatting: 'smart',
   highlightSpokenText: true,
@@ -381,7 +384,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       DEFAULT_PLUGIN_SETTINGS.retainLastUtterance,
     ),
     // Bump `schemaVersion` and add a migration step when renaming a key or changing default semantics.
-    schemaVersion: 8,
+    schemaVersion: 9,
     selectedModel: readSelectedModel(raw.selectedModel),
     // Automatic detection became a capability separate from language tags in
     // schema 4. Older snapshots cannot prove that exact-model behavior, so
@@ -391,12 +394,16 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.schemaVersion === 5 ||
       raw.schemaVersion === 6 ||
       raw.schemaVersion === 7 ||
-      raw.schemaVersion === 8
+      raw.schemaVersion === 8 ||
+      raw.schemaVersion === 9
         ? readSelectedModelCapabilitiesSnapshot(raw.selectedModelCapabilitiesSnapshot)
         : null,
     selectedTtsModel: readSelectedModel(raw.selectedTtsModel),
     selectedTtsModelCapabilitiesSnapshot:
-      raw.schemaVersion === 6 || raw.schemaVersion === 7 || raw.schemaVersion === 8
+      raw.schemaVersion === 6 ||
+      raw.schemaVersion === 7 ||
+      raw.schemaVersion === 8 ||
+      raw.schemaVersion === 9
         ? readSelectedModelCapabilitiesSnapshot(raw.selectedTtsModelCapabilitiesSnapshot)
         : null,
     selectedTtsVoice:
@@ -446,6 +453,9 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       MAX_TIMESTAMP_SPARSE_INTERVAL_MS,
     ),
     translationSourceLanguage: normalizeTranslationLanguage(raw.translationSourceLanguage),
+    translationStyleInstruction: normalizeTranslationStyleInstruction(
+      raw.translationStyleInstruction,
+    ),
     translationTargetLanguage: normalizeTranslationLanguage(raw.translationTargetLanguage),
     transcriptFormatting: isTranscriptFormattingMode(raw.transcriptFormatting)
       ? raw.transcriptFormatting
@@ -559,6 +569,11 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 
 function readString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value.trim() : fallback;
+}
+
+export function normalizeTranslationStyleInstruction(value: unknown): string {
+  if (typeof value !== 'string') return DEFAULT_PLUGIN_SETTINGS.translationStyleInstruction;
+  return value.trim().slice(0, TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS);
 }
 
 function readSecretId(value: unknown, fallback: string): string {

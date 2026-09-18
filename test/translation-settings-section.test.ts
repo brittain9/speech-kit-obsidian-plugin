@@ -84,6 +84,38 @@ function state(installed: boolean): ModelManagerState {
   };
 }
 
+function hyMtState(installed: boolean): ModelManagerState {
+  const base = state(installed);
+  const baseModel = base.catalog.models[0];
+  if (baseModel === undefined) throw new Error('Expected a translation model.');
+  const model = {
+    ...baseModel,
+    displayName: 'Tencent HY-MT 2',
+    familyId: 'tencent_hy_mt' as const,
+    runtimeId: 'llama_cpp' as const,
+  };
+  return {
+    ...base,
+    catalog: { ...base.catalog, models: [model] },
+    installedModels: installed
+      ? base.installedModels.map((candidate) => ({
+          ...candidate,
+          familyId: 'tencent_hy_mt',
+          modelId: model.modelId,
+          runtimeId: 'llama_cpp',
+        }))
+      : [],
+    selectedTranslationModel: installed
+      ? {
+          familyId: model.familyId,
+          kind: 'catalog_model' as const,
+          modelId: model.modelId,
+          runtimeId: model.runtimeId,
+        }
+      : null,
+  };
+}
+
 describe('Translation settings', () => {
   it('shows the installed model and deep-links model management to Translation', async () => {
     Setting.reset();
@@ -171,5 +203,43 @@ describe('Translation settings', () => {
     );
     await Setting.named('Translation model').buttonComponents[0]?.click();
     expect(openModelPicker).toHaveBeenCalledWith({ initialTask: 'translation' });
+  });
+
+  it('shows and persists the advanced style instruction only for HY-MT2', async () => {
+    Setting.reset();
+    let settings = { ...DEFAULT_PLUGIN_SETTINGS, translationStyleInstruction: 'formal' };
+    const persistStyleInstruction = vi.fn(async (value: string) => {
+      settings = { ...settings, translationStyleInstruction: value };
+    });
+    const container = new TestElement();
+    const manager = {
+      getState: () => hyMtState(true),
+      subscribe: () => () => {},
+    } as unknown as ModelInstallManager;
+
+    renderTranslationSettings(container as unknown as HTMLDivElement, {
+      getSettings: () => settings,
+      manager,
+      openModelPicker: vi.fn(async () => {}),
+      persistLanguages: vi.fn(async () => {}),
+      persistStyleInstruction,
+    });
+
+    const setting = Setting.named('Advanced style instruction');
+    expect(setting.textAreaComponents[0]?.inputEl.value).toBe('formal');
+    setting.textAreaComponents[0]?.change('  casual\nuse tú  ');
+    await vi.waitFor(() => expect(persistStyleInstruction).toHaveBeenCalledWith('casual\nuse tú'));
+
+    Setting.reset();
+    renderTranslationSettings(container as unknown as HTMLDivElement, {
+      getSettings: () => settings,
+      manager: { ...manager, getState: () => state(true) } as unknown as ModelInstallManager,
+      openModelPicker: vi.fn(async () => {}),
+      persistLanguages: vi.fn(async () => {}),
+      persistStyleInstruction,
+    });
+    expect(
+      Setting.instances.some((candidate) => candidate.name === 'Advanced style instruction'),
+    ).toBe(false);
   });
 });

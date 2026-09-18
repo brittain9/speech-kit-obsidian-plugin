@@ -147,6 +147,9 @@ export const en = {
   'translation.modal.failed': 'Translation failed.',
   'translation.modal.missingModel': 'Install the local translation pack to use this language pair.',
   'translation.modal.chooseModel': 'Choose a translation model',
+  'translation.modal.styleInstruction.name': 'Advanced style instruction',
+  'translation.modal.styleInstruction.desc':
+    'Optional HY-MT2 guidance for the next translation. Changes are saved for subsequent jobs.',
   'translation.modal.languagePackRequired': '{source} → {target} needs a {size} language download.',
   'translation.modal.downloadLanguagePack': 'Download language pack · {size}',
   'translation.modal.downloadingLanguagePack': 'Downloading language pack…',
@@ -230,6 +233,9 @@ export const en = {
   'settings.translation.target.name': 'Default target language',
   'settings.translation.target.desc':
     'The language Speech Kit translates into by default. Every translation preview shows the active pair.',
+  'settings.translation.styleInstruction.name': 'Advanced style instruction',
+  'settings.translation.styleInstruction.desc':
+    'Optional HY-MT2 guidance applied to future translations. Leave blank to use the default prompt.',
   'models.manage.dictationModels': 'Speech to text',
   'models.manage.readAloudModels': 'Text to speech',
   'models.manage.translationModels': 'Translation',
