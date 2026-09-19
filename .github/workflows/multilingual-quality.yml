@@ -1,13 +1,10 @@
 name: multilingual-quality
 
 # Exhaustive real-model certification is intentionally independent of release
-# publication. Run it on demand for high-risk ASR or TTS changes; the weekly
-# schedule provides continuing coverage without delaying releases or pull
-# requests.
+# publication. Run it on demand for high-risk ASR or TTS changes; it is manual
+# evidence rather than routine pull-request or scheduled CI.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 6 * * 1' # Mondays 06:00 UTC
 
 permissions:
   contents: read

@@ -112,5 +112,5 @@ code change.
   rather than exact strings. The intent is regression detection (garbage output,
   empty transcripts, broken wiring), not enforcing a specific decoder revision.
 - **`#[ignore]` by default.** The model dependency and inference cost keep the
-  e2e tier out of the fast `cargo test` path; CI runs it in the dedicated
-  `sidecar-e2e` workflow (manual + weekly), with the model cached.
+  e2e tier out of the fast `cargo test` path; run it through the dedicated,
+  manually dispatched `sidecar-e2e` workflow, with the model cached.

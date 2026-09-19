@@ -48,12 +48,46 @@ jobs:
         run: npm run verify:frontend-output
 
   sidecar-quality:
+    # Every PR gets one portable native correctness lane. The full platform
+    # matrix below runs only after merge or when explicitly dispatched.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # These native-only commands use Node's built-in process APIs to launch
+      # Cargo; no package dependency installation, npm cache, or npm upgrade is
+      # needed here. frontend-quality remains the JavaScript dependency gate.
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node-npm
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-sidecar-rust
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: rustfmt, clippy
+          cache-workspaces: native -> target
+          cache-shared-key: engine-cohere-transcribe
+
+      # build:sidecar selects gpu-metal on darwin automatically, so this
+      # Linux lane verifies the portable CPU binary on every pull request.
+      - name: Build sidecar
+        run: node scripts/build-sidecar.mjs
+
+      - name: Run Rust quality gates
+        run: node scripts/check-rust.mjs
+
+  sidecar-platform-quality:
+    # Pull requests use sidecar-quality's Linux lane. main and explicit manual
+    # runs expand coverage to the macOS Metal and Windows builds.
+    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            rust_cache_key: engine-cohere-transcribe
           - os: windows-latest
             rust_cache_key: engine-cohere-transcribe-windows
           - os: macos-15
@@ -65,12 +99,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node.js + npm
+      - name: Setup Node.js
         uses: ./.github/actions/setup-node-npm
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'true'
-          upgrade-npm: 'true'
 
       - name: Setup Rust
         uses: ./.github/actions/setup-sidecar-rust
@@ -80,13 +112,10 @@ jobs:
           cache-workspaces: native -> target
           cache-shared-key: ${{ matrix.rust_cache_key }}
 
-      - name: Install JavaScript dependencies
-        run: npm ci
-
-      # build:sidecar selects gpu-metal on darwin automatically, so this single
-      # step covers the macOS Metal build exactly once across the matrix.
+      # build:sidecar selects gpu-metal on darwin automatically, so this
+      # matrix covers the macOS Metal build exactly once after merge.
       - name: Build sidecar
-        run: npm run build:sidecar
+        run: node scripts/build-sidecar.mjs
 
       - name: Run Rust quality gates
-        run: npm run check:rust
+        run: node scripts/check-rust.mjs
