@@ -450,9 +450,10 @@ export class LocalSttSettingTab extends PluginSettingTab {
           translationTargetLanguage: targetLanguage,
         });
       },
-      persistStyleInstruction: async (translationStyleInstruction) => {
+      persistStyle: async (translationStyle, translationStyleInstruction) => {
         await this.dependencies.saveSettings({
           ...this.dependencies.getSettings(),
+          translationStyle,
           translationStyleInstruction,
         });
       },

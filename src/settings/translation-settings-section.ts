@@ -16,9 +16,12 @@ import {
   translationTargetsFor,
 } from '../translation/languages';
 import {
+  isTranslationStyle,
+  normalizeTranslationStyle,
   normalizeTranslationStyleInstruction,
   type PluginSettings,
   TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS,
+  type TranslationStyle,
 } from './plugin-settings';
 import { addTextAreaSetting } from './setting-helpers';
 
@@ -30,7 +33,7 @@ export interface TranslationSettingsDependencies {
     sourceLanguage: TranslationLanguage,
     targetLanguage: TranslationLanguage,
   ) => Promise<void>;
-  persistStyleInstruction?: (value: string) => Promise<void>;
+  persistStyle?: (style: TranslationStyle, instruction: string) => Promise<void>;
 }
 
 export function translationSettingsFingerprint(
@@ -114,18 +117,43 @@ export function renderTranslationSettings(
       });
 
     if (selectedModel?.familyId === 'tencent_hy_mt') {
-      addTextAreaSetting(container, {
-        name: t('settings.translation.styleInstruction.name'),
-        desc: t('settings.translation.styleInstruction.desc'),
-        rows: 3,
-        value: settings.translationStyleInstruction,
-        onElement: (element) => {
-          element.maxLength = TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS;
-        },
-        onChange: (value) => {
-          void dependencies.persistStyleInstruction?.(normalizeTranslationStyleInstruction(value));
-        },
-      });
+      new Setting(container)
+        .setName(t('settings.translation.style.name'))
+        .setDesc(t('settings.translation.style.desc'))
+        .addDropdown((dropdown) => {
+          dropdown
+            .addOption('default', t('settings.translation.style.default'))
+            .addOption('formal', t('settings.translation.style.formal'))
+            .addOption('casual', t('settings.translation.style.casual'))
+            .addOption('custom', t('settings.translation.style.custom'))
+            .setValue(settings.translationStyle)
+            .onChange(async (value) => {
+              if (!isTranslationStyle(value)) return;
+              await dependencies.persistStyle?.(
+                value,
+                dependencies.getSettings().translationStyleInstruction,
+              );
+              render();
+            });
+        });
+
+      if (settings.translationStyle === 'custom') {
+        addTextAreaSetting(container, {
+          name: t('settings.translation.styleInstruction.name'),
+          desc: t('settings.translation.styleInstruction.desc'),
+          rows: 3,
+          value: settings.translationStyleInstruction,
+          onElement: (element) => {
+            element.maxLength = TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS;
+          },
+          onChange: (value) => {
+            void dependencies.persistStyle?.(
+              normalizeTranslationStyle(dependencies.getSettings().translationStyle),
+              normalizeTranslationStyleInstruction(value),
+            );
+          },
+        });
+      }
     }
   };
 

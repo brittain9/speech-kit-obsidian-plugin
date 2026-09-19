@@ -57,3 +57,39 @@ pub enum HelperEvent {
         message: String,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::HelperCommand;
+
+    #[test]
+    fn translate_style_instruction_uses_camel_case_and_stays_optional() {
+        let base = serde_json::json!({
+            "type": "translate",
+            "translationId": "translation-1",
+            "modelPath": "/tmp/hy-mt.gguf",
+            "sourceLanguage": "en",
+            "targetLanguage": "es",
+            "texts": ["Hello"],
+            "useGpu": false,
+        });
+
+        let HelperCommand::Translate {
+            style_instruction, ..
+        } = serde_json::from_value(base.clone()).expect("omitted style should parse")
+        else {
+            panic!("expected translate command");
+        };
+        assert_eq!(style_instruction, None);
+
+        let mut styled = base;
+        styled["styleInstruction"] = serde_json::json!("casual");
+        let HelperCommand::Translate {
+            style_instruction, ..
+        } = serde_json::from_value(styled).expect("style should parse")
+        else {
+            panic!("expected translate command");
+        };
+        assert_eq!(style_instruction.as_deref(), Some("casual"));
+    }
+}

@@ -13,6 +13,7 @@ use crate::engine::capabilities::{
     EngineCapabilities, ModelFamilyCapabilities, ModelFamilyId, RequestWarning,
     RuntimeCapabilities, RuntimeId,
 };
+use crate::hy_mt::MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS;
 use crate::model_store::InstalledModelRecord;
 use crate::session::SpeakingStyle;
 
@@ -621,8 +622,22 @@ impl CommandEnvelope {
         let envelope: Self =
             serde_json::from_str(json_text).context("failed to deserialize command envelope")?;
 
-        Ok(envelope.command)
+        validate_command(envelope.command)
     }
+}
+
+fn validate_command(command: Command) -> Result<Command> {
+    if let Command::StartTranslation {
+        style_instruction: Some(style_instruction),
+        ..
+    } = &command
+    {
+        ensure!(
+            style_instruction.chars().count() <= MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS,
+            "translation style instruction exceeds {MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS} characters"
+        );
+    }
+    Ok(command)
 }
 
 impl EventEnvelope {
@@ -818,11 +833,11 @@ mod tests {
     use super::{
         AUDIO_FRAME_KIND, AccelerationPreference, AudioFrame, Command, Event, EventEnvelope,
         FRAME_HEADER_LENGTH, IncomingFrame, JSON_FRAME_KIND, ListeningMode, MAX_FRAME_PAYLOAD,
-        ModelInstallState, ModelProbeStatus, PCM_BYTES_PER_FRAME, QueueBackpressureTier,
-        SYNTHESIS_AUDIO_FRAME_KIND, SelectedModel, SessionStopReason, SourceRange, SpeakingStyle,
-        TimestampGranularity, TimestampSource, TranscriptSegment, TranscriptWord,
-        encode_audio_frame_envelope, read_frame, write_event_frame, write_frame,
-        write_synthesis_audio_frame,
+        MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS, ModelInstallState, ModelProbeStatus,
+        PCM_BYTES_PER_FRAME, QueueBackpressureTier, SYNTHESIS_AUDIO_FRAME_KIND, SelectedModel,
+        SessionStopReason, SourceRange, SpeakingStyle, TimestampGranularity, TimestampSource,
+        TranscriptSegment, TranscriptWord, encode_audio_frame_envelope, read_frame,
+        write_event_frame, write_frame, write_synthesis_audio_frame,
     };
     use crate::engine::capabilities::{ModelFamilyId, RuntimeId};
     use uuid::Uuid;
@@ -994,6 +1009,57 @@ mod tests {
         assert_eq!(speed, 1.25);
         assert_eq!(language, "en");
         assert_eq!(chunks[0].source_range, SourceRange { from: 10, to: 29 });
+    }
+
+    #[test]
+    fn start_translation_style_instruction_is_optional_and_bounded() {
+        let base = serde_json::json!({
+            "type": "start_translation",
+            "translationId": "translation-1",
+            "modelSelection": {
+                "kind": "catalog_model",
+                "runtimeId": "llama_cpp",
+                "familyId": "tencent_hy_mt",
+                "modelId": "hy-mt-2"
+            },
+            "sourceLanguage": "en",
+            "targetLanguage": "es",
+            "texts": ["Hello"],
+        });
+
+        let parse = |payload: serde_json::Value| {
+            let payload = serde_json::to_vec(&payload).expect("payload should serialize");
+            let mut framed = Vec::new();
+            write_frame(&mut framed, JSON_FRAME_KIND, &payload).expect("frame should write");
+            read_frame(&mut framed.as_slice())
+        };
+
+        let IncomingFrame::Command(Command::StartTranslation {
+            style_instruction, ..
+        }) = parse(base.clone())
+            .expect("omitted style instruction should parse")
+            .expect("frame should exist")
+        else {
+            panic!("expected start_translation");
+        };
+        assert_eq!(style_instruction, None);
+
+        let mut styled = base.clone();
+        styled["styleInstruction"] = serde_json::json!("formal");
+        let IncomingFrame::Command(Command::StartTranslation {
+            style_instruction, ..
+        }) = parse(styled)
+            .expect("style instruction should parse")
+            .expect("frame should exist")
+        else {
+            panic!("expected start_translation");
+        };
+        assert_eq!(style_instruction.as_deref(), Some("formal"));
+
+        let mut oversized = base;
+        oversized["styleInstruction"] =
+            serde_json::json!("x".repeat(MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS + 1));
+        assert!(parse(oversized).is_err());
     }
 
     #[test]

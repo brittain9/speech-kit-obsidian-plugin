@@ -4,6 +4,8 @@ import { type CatalogModelRecord, matchesModelTriple } from '../models/model-man
 import {
   normalizeTranslationStyleInstruction,
   type PluginSettings,
+  resolveTranslationStyleInstruction,
+  type TranslationStyle,
 } from '../settings/plugin-settings';
 import { t } from '../shared/i18n';
 import type { PluginLogger } from '../shared/plugin-logger';
@@ -124,6 +126,7 @@ interface ActiveTranslation {
 interface TranslationConfiguration {
   model: CatalogModelRecord | null;
   sourceLanguage: TranslationLanguage;
+  styleInstruction: string;
   targetLanguage: TranslationLanguage;
 }
 
@@ -167,6 +170,7 @@ export class TranslationController {
     snapshot: TranslationSnapshot,
     sourceOverride?: TranslationLanguage,
     targetOverride?: TranslationLanguage,
+    styleInstructionOverride?: string,
   ): void {
     if (snapshot.source.length > MAX_TRANSLATION_CHARACTERS) {
       this.dependencies.feedback.show({
@@ -182,7 +186,11 @@ export class TranslationController {
     const settings = this.dependencies.getSettings();
     const model = selectedTranslationModel(this.dependencies.modelManager.getState(), settings);
     const styleInstruction = normalizeTranslationStyleInstruction(
-      settings.translationStyleInstruction,
+      styleInstructionOverride ??
+        resolveTranslationStyleInstruction(
+          settings.translationStyle,
+          settings.translationStyleInstruction,
+        ),
     );
     const resolved = resolveTranslationLanguages(
       settings.dictationLanguage,
@@ -206,7 +214,7 @@ export class TranslationController {
         ),
     });
     const active: ActiveTranslation = {
-      configuration: { model, sourceLanguage, targetLanguage },
+      configuration: { model, sourceLanguage, styleInstruction, targetLanguage },
       editor,
       job,
       release: () => {},
@@ -259,7 +267,12 @@ export class TranslationController {
             runtimeId: model.runtimeId,
           });
         }
-        active.configuration = { model, sourceLanguage, targetLanguage };
+        active.configuration = {
+          model,
+          sourceLanguage,
+          styleInstruction: active.configuration.styleInstruction,
+          targetLanguage,
+        };
       },
       onCancelPackInstall: () => this.dependencies.modelManager.cancel(),
       onInstallPack: async (model, sourceLanguage, targetLanguage) => {
@@ -275,24 +288,37 @@ export class TranslationController {
         };
         await this.dependencies.modelManager.installAndWait(selection, requirement.artifactIds);
         await this.dependencies.modelManager.select(selection);
-        active.configuration = { model, sourceLanguage, targetLanguage };
+        active.configuration = {
+          model,
+          sourceLanguage,
+          styleInstruction: active.configuration.styleInstruction,
+          targetLanguage,
+        };
       },
       translationInstallRequirement: (model, sourceLanguage, targetLanguage) =>
         this.installRequirement(model, sourceLanguage, targetLanguage),
       onReadAloud: this.dependencies.onReadAloud,
+      getStyle: () => this.dependencies.getSettings().translationStyle,
       getStyleInstruction: () => this.dependencies.getSettings().translationStyleInstruction,
-      onStyleInstructionChange: (value) => this.persistTranslationStyleInstruction(value),
-      onTranslateCurrent: (sourceLanguage, targetLanguage) => {
+      onStyleChange: (style, instruction) => this.persistTranslationStyle(style, instruction),
+      onTranslateCurrent: (sourceLanguage, targetLanguage, styleInstruction) => {
         this.begin(
           active.editor,
           this.snapshotFromCurrentEditor(active),
           sourceLanguage,
           targetLanguage,
+          styleInstruction,
         );
       },
-      onRestart: (source, target) => {
+      onRestart: (source, target, styleInstruction) => {
         void this.persistTranslationLanguages(source, target);
-        this.begin(active.editor, this.snapshotFromCurrentEditor(active), source, target);
+        this.begin(
+          active.editor,
+          this.snapshotFromCurrentEditor(active),
+          source,
+          target,
+          styleInstruction,
+        );
       },
     });
     this.activeModal = modal;
@@ -314,10 +340,16 @@ export class TranslationController {
       translationTargetLanguage: targetLanguage,
     });
   }
-  private persistTranslationStyleInstruction(value: string): Promise<void> {
+  private persistTranslationStyle(
+    translationStyle: TranslationStyle,
+    translationStyleInstruction: string,
+  ): Promise<void> {
     return this.dependencies.saveSettings({
       ...this.dependencies.getSettings(),
-      translationStyleInstruction: normalizeTranslationStyleInstruction(value),
+      translationStyle,
+      translationStyleInstruction: normalizeTranslationStyleInstruction(
+        translationStyleInstruction,
+      ),
     });
   }
   private snapshotFromCurrentEditor(active: ActiveTranslation): TranslationSnapshot {

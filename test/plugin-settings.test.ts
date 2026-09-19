@@ -16,6 +16,7 @@ import {
   MIN_SMART_PARAGRAPH_PAUSE_MS,
   resetLlmPostprocessDefaults,
   resolvePluginSettings,
+  resolveTranslationStyleInstruction,
   TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS,
   validateTimestampIntervalSeconds,
 } from '../src/settings/plugin-settings';
@@ -53,11 +54,20 @@ describe('resolvePluginSettings', () => {
   });
 
   it('defaults missing schemaVersion to the current settings schema', () => {
-    expect(resolvePluginSettings({}).schemaVersion).toBe(9);
+    expect(resolvePluginSettings({}).schemaVersion).toBe(10);
   });
 
-  it('defaults and normalizes the HY-MT2 style instruction', () => {
+  it('defaults and normalizes HY-MT2 translation styles', () => {
+    expect(resolvePluginSettings({}).translationStyle).toBe('default');
     expect(resolvePluginSettings({}).translationStyleInstruction).toBe('');
+    expect(resolvePluginSettings({ translationStyle: 'formal' }).translationStyle).toBe('formal');
+    expect(resolvePluginSettings({ translationStyle: 'unexpected' }).translationStyle).toBe(
+      'default',
+    );
+    expect(
+      resolvePluginSettings({ translationStyleInstruction: '  formal\n  use usted  ' })
+        .translationStyle,
+    ).toBe('custom');
     expect(
       resolvePluginSettings({ translationStyleInstruction: '  formal\n  use usted  ' })
         .translationStyleInstruction,
@@ -69,6 +79,12 @@ describe('resolvePluginSettings', () => {
       resolvePluginSettings({ translationStyleInstruction: 'x'.repeat(600) })
         .translationStyleInstruction,
     ).toHaveLength(TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS);
+    expect(resolveTranslationStyleInstruction('default', 'ignored')).toBe('');
+    expect(resolveTranslationStyleInstruction('formal', '')).toContain('formal register');
+    expect(resolveTranslationStyleInstruction('casual', '')).toContain('casual, conversational');
+    expect(resolveTranslationStyleInstruction('custom', '  use European Portuguese  ')).toBe(
+      'use European Portuguese',
+    );
   });
 
   it('migrates missing or invalid dictation language to English', () => {
@@ -163,7 +179,7 @@ describe('resolvePluginSettings', () => {
     expect(
       resolvePluginSettings({ autoCopyFinalizedUtterances: 'yes' }).autoCopyFinalizedUtterances,
     ).toBe(false);
-    expect(resolvePluginSettings({ autoCopyFinalizedUtterances: true }).schemaVersion).toBe(9);
+    expect(resolvePluginSettings({ autoCopyFinalizedUtterances: true }).schemaVersion).toBe(10);
   });
 
   it('migrates legacy speaker label setting to diarization', () => {

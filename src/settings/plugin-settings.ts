@@ -102,6 +102,17 @@ export const SPEAKING_STYLES = [
   'patient',
 ] as const satisfies readonly SpeakingStyle[];
 
+export const TRANSLATION_STYLES = ['default', 'formal', 'casual', 'custom'] as const;
+
+export type TranslationStyle = (typeof TRANSLATION_STYLES)[number];
+
+const TRANSLATION_STYLE_INSTRUCTIONS: Readonly<Record<TranslationStyle, string>> = {
+  default: '',
+  formal: 'Use a formal register appropriate to the target language.',
+  casual: 'Use a casual, conversational register appropriate to the target language.',
+  custom: '',
+};
+
 export const DEFAULT_LLM_ACTIVE_PRESET_REF = formatStyleRef({
   kind: 'builtin',
   id: DEFAULT_LLM_BUILTIN_PRESET_ID,
@@ -179,7 +190,7 @@ export interface PluginSettings {
   modelStorePathOverride: string;
   readAloudLanguage: DictationLanguage;
   retainLastUtterance: boolean;
-  schemaVersion: 9;
+  schemaVersion: 10;
   selectedModel: SelectedModel | null;
   // Last-known-good capabilities for `selectedModel`, captured on a successful
   // probe. Lets startup skip re-probing the sidecar (which forces a full
@@ -202,6 +213,7 @@ export interface PluginSettings {
   timestampSessionHeader: boolean;
   timestampSparseIntervalMs: number;
   translationSourceLanguage: TranslationLanguage | null;
+  translationStyle: TranslationStyle;
   translationStyleInstruction: string;
   translationTargetLanguage: TranslationLanguage | null;
   transcriptFormatting: TranscriptFormattingMode;
@@ -250,7 +262,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   modelStorePathOverride: '',
   readAloudLanguage: 'auto',
   retainLastUtterance: true,
-  schemaVersion: 9,
+  schemaVersion: 10,
   selectedModel: null,
   selectedModelCapabilitiesSnapshot: null,
   selectedTtsModel: null,
@@ -270,6 +282,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   timestampSessionHeader: true,
   timestampSparseIntervalMs: DEFAULT_TIMESTAMP_SPARSE_INTERVAL_MS,
   translationSourceLanguage: null,
+  translationStyle: 'default',
   translationStyleInstruction: '',
   translationTargetLanguage: null,
   transcriptFormatting: 'smart',
@@ -384,7 +397,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       DEFAULT_PLUGIN_SETTINGS.retainLastUtterance,
     ),
     // Bump `schemaVersion` and add a migration step when renaming a key or changing default semantics.
-    schemaVersion: 9,
+    schemaVersion: 10,
     selectedModel: readSelectedModel(raw.selectedModel),
     // Automatic detection became a capability separate from language tags in
     // schema 4. Older snapshots cannot prove that exact-model behavior, so
@@ -395,7 +408,8 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.schemaVersion === 6 ||
       raw.schemaVersion === 7 ||
       raw.schemaVersion === 8 ||
-      raw.schemaVersion === 9
+      raw.schemaVersion === 9 ||
+      raw.schemaVersion === 10
         ? readSelectedModelCapabilitiesSnapshot(raw.selectedModelCapabilitiesSnapshot)
         : null,
     selectedTtsModel: readSelectedModel(raw.selectedTtsModel),
@@ -403,7 +417,8 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.schemaVersion === 6 ||
       raw.schemaVersion === 7 ||
       raw.schemaVersion === 8 ||
-      raw.schemaVersion === 9
+      raw.schemaVersion === 9 ||
+      raw.schemaVersion === 10
         ? readSelectedModelCapabilitiesSnapshot(raw.selectedTtsModelCapabilitiesSnapshot)
         : null,
     selectedTtsVoice:
@@ -453,6 +468,10 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       MAX_TIMESTAMP_SPARSE_INTERVAL_MS,
     ),
     translationSourceLanguage: normalizeTranslationLanguage(raw.translationSourceLanguage),
+    translationStyle: normalizeTranslationStyle(
+      raw.translationStyle,
+      raw.translationStyleInstruction,
+    ),
     translationStyleInstruction: normalizeTranslationStyleInstruction(
       raw.translationStyleInstruction,
     ),
@@ -574,6 +593,23 @@ function readString(value: unknown, fallback: string): string {
 export function normalizeTranslationStyleInstruction(value: unknown): string {
   if (typeof value !== 'string') return DEFAULT_PLUGIN_SETTINGS.translationStyleInstruction;
   return value.trim().slice(0, TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS);
+}
+
+export function normalizeTranslationStyle(
+  value: unknown,
+  legacyInstruction: unknown = undefined,
+): TranslationStyle {
+  if (isTranslationStyle(value)) return value;
+  return normalizeTranslationStyleInstruction(legacyInstruction).length > 0 ? 'custom' : 'default';
+}
+
+export function resolveTranslationStyleInstruction(
+  style: TranslationStyle,
+  customInstruction: string,
+): string {
+  return style === 'custom'
+    ? normalizeTranslationStyleInstruction(customInstruction)
+    : TRANSLATION_STYLE_INSTRUCTIONS[style];
 }
 
 function readSecretId(value: unknown, fallback: string): string {
@@ -886,6 +922,10 @@ function readUserPresets(value: unknown): LlmPreset[] {
 
 export function isSpeakingStyle(value: unknown): value is SpeakingStyle {
   return typeof value === 'string' && (SPEAKING_STYLES as readonly string[]).includes(value);
+}
+
+export function isTranslationStyle(value: unknown): value is TranslationStyle {
+  return typeof value === 'string' && (TRANSLATION_STYLES as readonly string[]).includes(value);
 }
 
 export function isDictationAnchor(value: unknown): value is DictationAnchor {

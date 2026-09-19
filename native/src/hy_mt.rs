@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 
 pub const HY_MT_LANGUAGES: [(&str, &str, &str); 38] = [
     ("zh", "Chinese", "中文"),
@@ -43,6 +43,8 @@ pub const HY_MT_LANGUAGES: [(&str, &str, &str); 38] = [
     ("yue", "Cantonese", "粤语"),
 ];
 
+pub const MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS: usize = 500;
+
 pub fn translation_prompt(source: &str, target: &str, text: &str) -> Result<String> {
     translation_prompt_with_style(source, target, None, text)
 }
@@ -63,18 +65,16 @@ pub fn translation_prompt_with_style(
     }
     let chinese_prompt =
         matches!(source, "zh" | "zh-Hant" | "yue") || matches!(target, "zh" | "zh-Hant" | "yue");
-    let style_instruction = style_instruction
-        .map(str::trim)
-        .filter(|style| !style.is_empty());
+    let style_instruction = normalized_style_instruction(style_instruction)?;
     Ok(if let Some(style) = style_instruction {
         if chinese_prompt {
             format!(
-                "请将以下文本翻译为{}。\n注意翻译的风格要严格符合〖{style}〗\n{text}",
+                "请将以下文本翻译为{}。注意翻译的风格要严格符合〖{style}〗。只输出翻译结果，不要额外解释：\n\n{text}",
                 target_names.1
             )
         } else {
             format!(
-                "Please translate the following text into {}. Note that the translation style must strictly conform to [{style}]:\n{text}",
+                "Translate the following text into {}. The translation style must strictly conform to [{style}]. Only output the translated result without any additional explanation:\n\n{text}",
                 target_names.0
             )
         }
@@ -89,6 +89,19 @@ pub fn translation_prompt_with_style(
             target_names.0
         )
     })
+}
+
+fn normalized_style_instruction(style_instruction: Option<&str>) -> Result<Option<&str>> {
+    let style_instruction = style_instruction
+        .map(str::trim)
+        .filter(|style| !style.is_empty());
+    if let Some(style_instruction) = style_instruction {
+        ensure!(
+            style_instruction.chars().count() <= MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS,
+            "translation style instruction exceeds {MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS} characters"
+        );
+    }
+    Ok(style_instruction)
 }
 
 pub trait HyMtInference {
@@ -124,8 +137,8 @@ pub fn translate_units(
 #[cfg(test)]
 mod tests {
     use super::{
-        HY_MT_LANGUAGES, HyMtInference, translate_units, translation_prompt,
-        translation_prompt_with_style,
+        HY_MT_LANGUAGES, HyMtInference, MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS, translate_units,
+        translation_prompt, translation_prompt_with_style,
     };
     use std::sync::atomic::AtomicBool;
 
@@ -150,11 +163,20 @@ mod tests {
         assert_eq!(
             translation_prompt_with_style("fr", "ja", Some("formal, use honorifics"), "bonjour")
                 .unwrap(),
-            "Please translate the following text into Japanese. Note that the translation style must strictly conform to [formal, use honorifics]:\nbonjour"
+            "Translate the following text into Japanese. The translation style must strictly conform to [formal, use honorifics]. Only output the translated result without any additional explanation:\n\nbonjour"
         );
         assert_eq!(
             translation_prompt_with_style("zh-Hant", "en", Some("正式、使用敬语"), "你好").unwrap(),
-            "请将以下文本翻译为英语。\n注意翻译的风格要严格符合〖正式、使用敬语〗\n你好"
+            "请将以下文本翻译为英语。注意翻译的风格要严格符合〖正式、使用敬语〗。只输出翻译结果，不要额外解释：\n\n你好"
+        );
+        assert!(
+            translation_prompt_with_style(
+                "fr",
+                "ja",
+                Some(&"x".repeat(MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS + 1)),
+                "bonjour",
+            )
+            .is_err()
         );
         let result = translate_units(
             &mut Fake,

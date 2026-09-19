@@ -205,11 +205,15 @@ describe('Translation settings', () => {
     expect(openModelPicker).toHaveBeenCalledWith({ initialTask: 'translation' });
   });
 
-  it('shows and persists the advanced style instruction only for HY-MT2', async () => {
+  it('offers HY-MT2 style presets and preserves a custom instruction', async () => {
     Setting.reset();
-    let settings = { ...DEFAULT_PLUGIN_SETTINGS, translationStyleInstruction: 'formal' };
-    const persistStyleInstruction = vi.fn(async (value: string) => {
-      settings = { ...settings, translationStyleInstruction: value };
+    let settings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      translationStyle: 'custom' as const,
+      translationStyleInstruction: 'formal',
+    };
+    const persistStyle = vi.fn(async (translationStyle, translationStyleInstruction) => {
+      settings = { ...settings, translationStyle, translationStyleInstruction };
     });
     const container = new TestElement();
     const manager = {
@@ -222,13 +226,24 @@ describe('Translation settings', () => {
       manager,
       openModelPicker: vi.fn(async () => {}),
       persistLanguages: vi.fn(async () => {}),
-      persistStyleInstruction,
+      persistStyle,
     });
 
+    const style = Setting.named('Translation style');
+    expect(style.dropdownComponents[0]?.selectEl.options.map((option) => option.label)).toEqual([
+      'Standard',
+      'Formal',
+      'Casual',
+      'Custom',
+    ]);
+    expect(style.dropdownComponents[0]?.selectEl.value).toBe('custom');
     const setting = Setting.named('Advanced style instruction');
     expect(setting.textAreaComponents[0]?.inputEl.value).toBe('formal');
     setting.textAreaComponents[0]?.change('  casual\nuse tú  ');
-    await vi.waitFor(() => expect(persistStyleInstruction).toHaveBeenCalledWith('casual\nuse tú'));
+    await vi.waitFor(() => expect(persistStyle).toHaveBeenCalledWith('custom', 'casual\nuse tú'));
+
+    style.dropdownComponents[0]?.change('formal');
+    await vi.waitFor(() => expect(persistStyle).toHaveBeenCalledWith('formal', 'casual\nuse tú'));
 
     Setting.reset();
     renderTranslationSettings(container as unknown as HTMLDivElement, {
@@ -236,10 +251,10 @@ describe('Translation settings', () => {
       manager: { ...manager, getState: () => state(true) } as unknown as ModelInstallManager,
       openModelPicker: vi.fn(async () => {}),
       persistLanguages: vi.fn(async () => {}),
-      persistStyleInstruction,
+      persistStyle,
     });
-    expect(
-      Setting.instances.some((candidate) => candidate.name === 'Advanced style instruction'),
-    ).toBe(false);
+    expect(Setting.instances.some((candidate) => candidate.name === 'Translation style')).toBe(
+      false,
+    );
   });
 });

@@ -147,9 +147,16 @@ export const en = {
   'translation.modal.failed': 'Translation failed.',
   'translation.modal.missingModel': 'Install the local translation pack to use this language pair.',
   'translation.modal.chooseModel': 'Choose a translation model',
+  'translation.modal.style.name': 'Translation style',
+  'translation.modal.style.desc':
+    'Choose the tone for the next translation. Changes are saved for subsequent jobs.',
+  'translation.modal.style.default': 'Standard',
+  'translation.modal.style.formal': 'Formal',
+  'translation.modal.style.casual': 'Casual',
+  'translation.modal.style.custom': 'Custom',
   'translation.modal.styleInstruction.name': 'Advanced style instruction',
   'translation.modal.styleInstruction.desc':
-    'Optional HY-MT2 guidance for the next translation. Changes are saved for subsequent jobs.',
+    'Optional HY-MT2 guidance for custom translations. For example: use European Portuguese.',
   'translation.modal.languagePackRequired': '{source} → {target} needs a {size} language download.',
   'translation.modal.downloadLanguagePack': 'Download language pack · {size}',
   'translation.modal.downloadingLanguagePack': 'Downloading language pack…',
@@ -233,9 +240,16 @@ export const en = {
   'settings.translation.target.name': 'Default target language',
   'settings.translation.target.desc':
     'The language Speech Kit translates into by default. Every translation preview shows the active pair.',
+  'settings.translation.style.name': 'Translation style',
+  'settings.translation.style.desc':
+    'Choose the tone for HY-MT2 translations. Custom opens a free-form instruction.',
+  'settings.translation.style.default': 'Standard',
+  'settings.translation.style.formal': 'Formal',
+  'settings.translation.style.casual': 'Casual',
+  'settings.translation.style.custom': 'Custom',
   'settings.translation.styleInstruction.name': 'Advanced style instruction',
   'settings.translation.styleInstruction.desc':
-    'Optional HY-MT2 guidance applied to future translations. Leave blank to use the default prompt.',
+    'Optional HY-MT2 guidance applied to future custom translations.',
   'models.manage.dictationModels': 'Speech to text',
   'models.manage.readAloudModels': 'Text to speech',
   'models.manage.translationModels': 'Translation',

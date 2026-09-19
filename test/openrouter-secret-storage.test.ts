@@ -54,17 +54,17 @@ describe('LLM Secret Storage integration', () => {
     expect(result.shouldPersist).toBe(true);
   });
 
-  it('requests one normalized rewrite for settings schemas before version 9', () => {
+  it('requests one normalized rewrite for settings schemas before version 10', () => {
     const result = loadPluginSettings(
       { schemaVersion: 6 },
       { getSecret: () => null, setSecret: vi.fn() },
     );
 
-    expect(result.settings.schemaVersion).toBe(9);
+    expect(result.settings.schemaVersion).toBe(10);
     expect(result.shouldPersist).toBe(true);
   });
 
-  it('does not rewrite already-normalized schema 9 settings', () => {
+  it('does not rewrite already-normalized schema 10 settings', () => {
     const result = loadPluginSettings(DEFAULT_PLUGIN_SETTINGS, {
       getSecret: () => null,
       setSecret: vi.fn(),
