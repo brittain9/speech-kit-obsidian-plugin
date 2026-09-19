@@ -341,11 +341,23 @@ export class TestInputElement extends TestElement {
   }
 }
 
+export class TestTextAreaElement extends TestElement {
+  override disabled = false;
+  maxLength = 0;
+  rows = 0;
+  value = '';
+
+  constructor(ownerDocument = new TestDocument()) {
+    super(ownerDocument, 'textarea');
+  }
+}
+
 export class TextComponent {
   readonly inputEl = new TestInputElement();
   private changeHandler: (value: string) => unknown = () => {};
 
   change(value: string): void {
+    if (this.inputEl.disabled) return;
     this.inputEl.value = value;
     this.changeHandler(value);
   }
@@ -366,6 +378,32 @@ export class TextComponent {
 
   setPlaceholder(placeholder: string): this {
     this.inputEl.placeholder = placeholder;
+    return this;
+  }
+
+  setValue(value: string): this {
+    this.inputEl.value = value;
+    return this;
+  }
+}
+
+export class TextAreaComponent {
+  readonly inputEl = new TestTextAreaElement();
+  private changeHandler: (value: string) => unknown = () => {};
+
+  change(value: string): void {
+    if (this.inputEl.disabled) return;
+    this.inputEl.value = value;
+    this.changeHandler(value);
+  }
+
+  onChange(callback: (value: string) => unknown): this {
+    this.changeHandler = callback;
+    return this;
+  }
+
+  setDisabled(disabled: boolean): this {
+    this.inputEl.disabled = disabled;
     return this;
   }
 
@@ -575,6 +613,7 @@ export class Setting {
   readonly nameEl = new TestElement();
   readonly settingEl = new TestElement();
   readonly sliderComponents: SliderComponent[] = [];
+  readonly textAreaComponents: TextAreaComponent[] = [];
   readonly textComponents: TextComponent[] = [];
   readonly toggleComponents: ToggleComponent[] = [];
   name = '';
@@ -637,6 +676,13 @@ export class Setting {
   addText(callback: (text: TextComponent) => void): this {
     const text = new TextComponent();
     this.textComponents.push(text);
+    callback(text);
+    return this;
+  }
+
+  addTextArea(callback: (text: TextAreaComponent) => void): this {
+    const text = new TextAreaComponent();
+    this.textAreaComponents.push(text);
     callback(text);
     return this;
   }

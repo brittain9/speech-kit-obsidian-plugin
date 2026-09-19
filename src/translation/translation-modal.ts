@@ -1,5 +1,14 @@
 import { type App, type Editor, type EditorPosition, Modal, Setting, setIcon } from 'obsidian';
 import { type CatalogModelRecord, matchesModelTriple } from '../models/model-management-types';
+import {
+  isTranslationStyle,
+  normalizeTranslationStyle,
+  normalizeTranslationStyleInstruction,
+  resolveTranslationStyleInstruction,
+  TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS,
+  type TranslationStyle,
+} from '../settings/plugin-settings';
+import { addTextAreaSetting } from '../settings/setting-helpers';
 import { formatBytes } from '../shared/format-utils';
 import { t, tPlural } from '../shared/i18n';
 import type { UserFeedback } from '../shared/user-feedback';
@@ -30,10 +39,13 @@ interface TranslationModalDependencies {
   configuration: {
     model: CatalogModelRecord | null;
     sourceLanguage: TranslationLanguage;
+    styleInstruction: string;
     targetLanguage: TranslationLanguage;
   };
   editor: Editor;
   feedback: Pick<UserFeedback, 'show'>;
+  getStyle?: () => TranslationStyle;
+  getStyleInstruction?: () => string;
   installedModelOptions: readonly CatalogModelRecord[];
   job: TranslationJob;
   onApplied: () => void;
@@ -55,8 +67,17 @@ interface TranslationModalDependencies {
     target: TranslationLanguage,
   ) => Promise<void>;
   onReadAloud: (text: string, language: TranslationLanguage) => Promise<void> | void;
-  onTranslateCurrent: (source: TranslationLanguage, target: TranslationLanguage) => void;
-  onRestart: (source: TranslationLanguage, target: TranslationLanguage) => void;
+  onStyleChange?: (style: TranslationStyle, instruction: string) => Promise<void> | void;
+  onTranslateCurrent: (
+    source: TranslationLanguage,
+    target: TranslationLanguage,
+    styleInstruction: string,
+  ) => void;
+  onRestart: (
+    source: TranslationLanguage,
+    target: TranslationLanguage,
+    styleInstruction: string,
+  ) => void;
   snapshot: TranslationSnapshot;
   translationInstallRequirement: (
     model: CatalogModelRecord,
@@ -81,6 +102,8 @@ export class TranslationModal extends Modal {
   private draftModel: CatalogModelRecord | null;
   private draftSourceLanguage: TranslationLanguage;
   private draftTargetLanguage: TranslationLanguage;
+  private draftStyle: TranslationStyle;
+  private draftStyleInstruction: string;
   private installingPack = false;
   private closed = false;
 
@@ -93,6 +116,10 @@ export class TranslationModal extends Modal {
     this.draftModel = dependencies.configuration.model;
     this.draftSourceLanguage = dependencies.configuration.sourceLanguage;
     this.draftTargetLanguage = dependencies.configuration.targetLanguage;
+    this.draftStyle = normalizeTranslationStyle(dependencies.getStyle?.());
+    this.draftStyleInstruction = normalizeTranslationStyleInstruction(
+      dependencies.getStyleInstruction?.() ?? '',
+    );
   }
   override onOpen(): void {
     this.closed = false;
@@ -227,6 +254,42 @@ export class TranslationModal extends Modal {
         this.renderState();
       });
     });
+    if (this.draftModel?.familyId === 'tencent_hy_mt') {
+      new Setting(this.selectorsEl)
+        .setName(t('translation.modal.style.name'))
+        .setDesc(t('translation.modal.style.desc'))
+        .addDropdown((dropdown) => {
+          dropdown
+            .addOption('default', t('translation.modal.style.default'))
+            .addOption('formal', t('translation.modal.style.formal'))
+            .addOption('casual', t('translation.modal.style.casual'))
+            .addOption('custom', t('translation.modal.style.custom'))
+            .setValue(this.draftStyle)
+            .onChange((value) => {
+              if (!isTranslationStyle(value)) return;
+              this.draftStyle = value;
+              this.persistStyle();
+              this.renderSelectors();
+              this.renderStyleChange();
+            });
+        });
+      if (this.draftStyle === 'custom') {
+        addTextAreaSetting(this.selectorsEl, {
+          name: t('translation.modal.styleInstruction.name'),
+          desc: t('translation.modal.styleInstruction.desc'),
+          rows: 3,
+          value: this.draftStyleInstruction,
+          onElement: (element) => {
+            element.maxLength = TRANSLATION_STYLE_INSTRUCTION_MAX_CHARS;
+          },
+          onChange: (value) => {
+            this.draftStyleInstruction = normalizeTranslationStyleInstruction(value);
+            this.persistStyle();
+            this.renderStyleChange();
+          },
+        });
+      }
+    }
     const languagePair = this.selectorsEl.createDiv({
       cls: 'local-stt-translation-modal__language-pair',
     });
@@ -292,6 +355,24 @@ export class TranslationModal extends Modal {
     });
     this.renderHeading();
     this.renderState();
+  }
+  private currentStyleInstruction(): string {
+    return resolveTranslationStyleInstruction(this.draftStyle, this.draftStyleInstruction);
+  }
+  private persistStyle(): void {
+    void Promise.resolve(
+      this.dependencies.onStyleChange?.(this.draftStyle, this.draftStyleInstruction),
+    ).catch((error: unknown) => {
+      this.dependencies.feedback.show({
+        cause: error,
+        intent: 'error',
+        message: t('common.actionFailed'),
+      });
+    });
+  }
+  private renderStyleChange(): void {
+    this.renderReadAloudAction();
+    this.renderActions();
   }
   private renderState(): void {
     if (this.outputEl !== null) {
@@ -472,6 +553,7 @@ export class TranslationModal extends Modal {
               this.dependencies.onTranslateCurrent(
                 this.draftSourceLanguage,
                 this.draftTargetLanguage,
+                this.currentStyleInstruction(),
               );
             }),
         );
@@ -513,6 +595,7 @@ export class TranslationModal extends Modal {
             this.dependencies.onTranslateCurrent(
               this.draftSourceLanguage,
               this.draftTargetLanguage,
+              this.currentStyleInstruction(),
             );
           }),
       );
@@ -555,7 +638,7 @@ export class TranslationModal extends Modal {
   private restart(source: TranslationLanguage, target: TranslationLanguage): void {
     if (this.state.phase === 'loading' || this.state.phase === 'translating') return;
     this.close();
-    this.dependencies.onRestart(source, target);
+    this.dependencies.onRestart(source, target, this.currentStyleInstruction());
   }
   private async installPack(): Promise<void> {
     if (this.draftModel === null || this.installingPack) return;
@@ -570,7 +653,11 @@ export class TranslationModal extends Modal {
       );
       if (this.closed) return;
       this.close();
-      this.dependencies.onTranslateCurrent(this.draftSourceLanguage, this.draftTargetLanguage);
+      this.dependencies.onTranslateCurrent(
+        this.draftSourceLanguage,
+        this.draftTargetLanguage,
+        this.currentStyleInstruction(),
+      );
     } catch (error) {
       if (!this.closed && (error as { name?: unknown })?.name !== 'ModelInstallCancelledError') {
         this.dependencies.feedback.show({
@@ -594,7 +681,8 @@ export class TranslationModal extends Modal {
     return (
       !sameTranslationModel(this.draftModel, this.dependencies.job.model) ||
       this.draftSourceLanguage !== this.dependencies.job.sourceLanguage ||
-      this.draftTargetLanguage !== this.dependencies.job.targetLanguage
+      this.draftTargetLanguage !== this.dependencies.job.targetLanguage ||
+      this.currentStyleInstruction() !== this.dependencies.configuration.styleInstruction
     );
   }
   private draftModelIsInstalled(): boolean {

@@ -23,6 +23,52 @@ const SNAPSHOT: TranslationSnapshot = {
 };
 
 describe('TranslationModal mutation safety', () => {
+  it('offers an editable HY-MT2 custom style while translation is in progress', async () => {
+    Setting.reset();
+    const model = {
+      ...createModalModel(),
+      displayName: 'Tencent HY-MT 2',
+      familyId: 'tencent_hy_mt' as const,
+      runtimeId: 'llama_cpp' as const,
+    };
+    const onStyleChange = vi.fn(async () => {});
+    const modal = createModal({
+      configuration: {
+        model,
+        sourceLanguage: 'en',
+        styleInstruction: 'formal',
+        targetLanguage: 'es',
+      },
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      getStyle: () => 'custom',
+      getStyleInstruction: () => 'formal',
+      installedModelOptions: [model],
+      jobModel: model,
+      onStyleChange,
+      runTranslation: () => new Promise(() => {}),
+    });
+
+    modal.open();
+    const style = Setting.instances
+      .filter((candidate) => candidate.name === 'Translation style')
+      .at(-1);
+    if (style === undefined) throw new Error('Expected the HY-MT2 style setting.');
+    expect(style.dropdownComponents[0]?.selectEl.value).toBe('custom');
+    expect(style.dropdownComponents[0]?.selectEl.disabled).toBe(false);
+    const instruction = Setting.instances
+      .filter((candidate) => candidate.name === 'Advanced style instruction')
+      .at(-1);
+    if (instruction === undefined) throw new Error('Expected the custom style instruction.');
+    expect(instruction.textAreaComponents[0]?.inputEl.value).toBe('formal');
+    expect(instruction.textAreaComponents[0]?.inputEl.disabled).toBe(false);
+    instruction.textAreaComponents[0]?.change('casual');
+    expect(onStyleChange).toHaveBeenCalledWith('custom', 'casual');
+    modal.close();
+  });
+
   it('lists only installed translation models without a management action', () => {
     Setting.reset();
     const installedModel = createModalModel();
@@ -312,7 +358,7 @@ describe('TranslationModal mutation safety', () => {
     const output = (modal.contentEl as unknown as TestElement).querySelector('textarea');
     expect(output?.attributes.has('readonly')).toBe(true);
     await Setting.buttonNamed('Translate again').click();
-    expect(onRestart).toHaveBeenCalledExactlyOnceWith('en', 'es');
+    expect(onRestart).toHaveBeenCalledExactlyOnceWith('en', 'es', '');
     expect(replaceRange).not.toHaveBeenCalled();
   });
 
@@ -458,7 +504,7 @@ describe('TranslationModal mutation safety', () => {
     ).toBeDefined();
 
     await Setting.buttonNamed('Translate again').click();
-    expect(onTranslateCurrent).toHaveBeenCalledWith('en', 'es');
+    expect(onTranslateCurrent).toHaveBeenCalledWith('en', 'es', '');
   });
 
   it('offers the exact language pack instead of the whole Firefox bundle', async () => {
@@ -496,7 +542,7 @@ describe('TranslationModal mutation safety', () => {
 
     await Setting.buttonNamed('Download language pack · 41 B').click();
     expect(onInstallPack).toHaveBeenCalledExactlyOnceWith(model, 'en', 'es');
-    expect(onTranslateCurrent).toHaveBeenCalledExactlyOnceWith('en', 'es');
+    expect(onTranslateCurrent).toHaveBeenCalledExactlyOnceWith('en', 'es', '');
   });
 
   it('reports partial results but never writes them into the note', async () => {
@@ -600,12 +646,18 @@ function createModal({
   onLanguageChange = vi.fn(async () => {}),
   onReadAloud = vi.fn(),
   onRestart = vi.fn(),
+  getStyle = () => 'default' as const,
+  getStyleInstruction = () => '',
+  onStyleChange = vi.fn(async () => {}),
   onTranslateCurrent = vi.fn(),
   runTranslation,
   translationInstallRequirement,
 }: {
   canReadAloud?: ConstructorParameters<typeof TranslationModal>[1]['canReadAloud'];
-  configuration?: ConstructorParameters<typeof TranslationModal>[1]['configuration'];
+  configuration?: Omit<
+    ConstructorParameters<typeof TranslationModal>[1]['configuration'],
+    'styleInstruction'
+  > & { styleInstruction?: string };
   editor: {
     getValue: () => string;
     replaceRange: ReturnType<typeof vi.fn>;
@@ -619,6 +671,9 @@ function createModal({
   onModelChange?: ConstructorParameters<typeof TranslationModal>[1]['onModelChange'];
   onReadAloud?: ConstructorParameters<typeof TranslationModal>[1]['onReadAloud'];
   onRestart?: ConstructorParameters<typeof TranslationModal>[1]['onRestart'];
+  getStyle?: ConstructorParameters<typeof TranslationModal>[1]['getStyle'];
+  getStyleInstruction?: ConstructorParameters<typeof TranslationModal>[1]['getStyleInstruction'];
+  onStyleChange?: ConstructorParameters<typeof TranslationModal>[1]['onStyleChange'];
   onTranslateCurrent?: ConstructorParameters<typeof TranslationModal>[1]['onTranslateCurrent'];
   runTranslation: (options: TranslationJobRunOptions) => Promise<TranslationJobResult>;
   translationInstallRequirement?: ConstructorParameters<
@@ -633,13 +688,17 @@ function createModal({
   });
   return new TranslationModal({} as never, {
     canReadAloud,
-    configuration: configuration ?? {
+    configuration: {
       model: jobModel,
       sourceLanguage: 'en',
+      styleInstruction: '',
       targetLanguage: 'es',
+      ...configuration,
     },
     editor: editor as never,
     feedback: { show: vi.fn() },
+    getStyle,
+    getStyleInstruction,
     installedModelOptions,
     job,
     onApplied: vi.fn(),
@@ -650,6 +709,7 @@ function createModal({
     onInstallPack,
     onModelChange,
     onReadAloud,
+    onStyleChange,
     onTranslateCurrent,
     onRestart,
     snapshot: SNAPSHOT,

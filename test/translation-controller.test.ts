@@ -88,6 +88,8 @@ describe('TranslationController', () => {
     const setDetachedStatus = vi.fn();
     const settings = {
       ...DEFAULT_PLUGIN_SETTINGS,
+      translationStyle: 'formal' as const,
+      translationStyleInstruction: 'formal, use usted',
       selectedTranslationModel: {
         familyId: 'tencent_hy_mt' as const,
         kind: 'catalog_model' as const,
@@ -133,6 +135,11 @@ describe('TranslationController', () => {
 
     controller.translateNote(editor as never);
     await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledTimes(1));
+    expect(startTranslation.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        styleInstruction: 'Use a formal register appropriate to the target language.',
+      }),
+    );
     Modal.instances.at(-1)?.close();
     expect(cancelTranslation).not.toHaveBeenCalled();
     expect(setDetachedStatus).toHaveBeenLastCalledWith(

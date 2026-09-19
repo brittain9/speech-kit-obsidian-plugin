@@ -6,6 +6,7 @@ import { translateWithHyMt } from '../src/translation/hy-mt-client';
 describe('translateWithHyMt', () => {
   it('ignores unrelated sidecar errors while waiting for its keyed result', async () => {
     let listener: ((event: SidecarEvent) => void) | undefined;
+    const startTranslation = vi.fn(async () => {});
     const translation = translateWithHyMt({
       accelerationPreference: 'auto',
       modelSelection: {
@@ -18,7 +19,7 @@ describe('translateWithHyMt', () => {
       onReady: vi.fn(),
       sidecarConnection: {
         cancelTranslation: vi.fn(),
-        startTranslation: vi.fn(async () => {}),
+        startTranslation,
         subscribe: (next: (event: SidecarEvent) => void) => {
           listener = next;
           return vi.fn();
@@ -30,6 +31,10 @@ describe('translateWithHyMt', () => {
       texts: ['Translate this.'],
       translationId: 'translation-1',
     });
+
+    expect(startTranslation).toHaveBeenCalledWith(
+      expect.not.objectContaining({ styleInstruction: expect.anything() }),
+    );
 
     listener?.({
       code: 'transcription_failure',
@@ -43,6 +48,48 @@ describe('translateWithHyMt', () => {
       type: 'translation_complete',
     });
 
+    await expect(translation).resolves.toEqual(['Traduzca esto.']);
+  });
+
+  it('forwards an explicit HY-MT style instruction', async () => {
+    let listener: ((event: SidecarEvent) => void) | undefined;
+    const startTranslation = vi.fn(async () => {});
+    const translation = translateWithHyMt({
+      accelerationPreference: 'auto',
+      modelSelection: {
+        familyId: 'tencent_hy_mt',
+        kind: 'catalog_model',
+        modelId: 'tencent-hy-mt-2-1.8b-q4-k-m',
+        runtimeId: 'llama_cpp',
+      },
+      onProgress: vi.fn(),
+      onReady: vi.fn(),
+      sidecarConnection: {
+        cancelTranslation: vi.fn(),
+        startTranslation,
+        subscribe: (next: (event: SidecarEvent) => void) => {
+          listener = next;
+          return vi.fn();
+        },
+      } as never,
+      signal: new AbortController().signal,
+      sourceLanguage: 'en',
+      styleInstruction: 'Use a formal register appropriate to the target language.',
+      targetLanguage: 'es',
+      texts: ['Translate this.'],
+      translationId: 'translation-1',
+    });
+
+    expect(startTranslation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        styleInstruction: 'Use a formal register appropriate to the target language.',
+      }),
+    );
+    listener?.({
+      translations: ['Traduzca esto.'],
+      translationId: 'translation-1',
+      type: 'translation_complete',
+    });
     await expect(translation).resolves.toEqual(['Traduzca esto.']);
   });
 

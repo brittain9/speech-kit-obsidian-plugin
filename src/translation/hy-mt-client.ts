@@ -27,6 +27,7 @@ interface HyMtTranslationOptions {
   >;
   signal: AbortSignal;
   sourceLanguage: TranslationLanguage;
+  styleInstruction?: string;
   targetLanguage: TranslationLanguage;
   texts: string[];
   translationId: string;
@@ -83,6 +84,9 @@ export async function translateWithHyMt(options: HyMtTranslationOptions): Promis
           ? {}
           : { modelStorePathOverride: options.modelStorePathOverride }),
         sourceLanguage: options.sourceLanguage,
+        ...(options.styleInstruction === undefined
+          ? {}
+          : { styleInstruction: options.styleInstruction }),
         targetLanguage: options.targetLanguage,
         texts: options.texts,
         translationId: options.translationId,

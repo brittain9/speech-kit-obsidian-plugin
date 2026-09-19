@@ -220,6 +220,7 @@ export interface StartTranslationCommand extends EnvelopeBase<'start_translation
   modelSelection: SelectedModel;
   modelStorePathOverride?: string;
   sourceLanguage: TranslationLanguage;
+  styleInstruction?: string;
   targetLanguage: TranslationLanguage;
   texts: string[];
   translationId: string;
