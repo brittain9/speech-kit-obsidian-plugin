@@ -709,6 +709,7 @@ export class ModelInstallManager {
       return { ...currentSettings, selectedModel: selection };
     });
     if (!committed) return { ...probeResult, committed: false };
+    if (!canCommit(this.deps.getSettings())) return { ...probeResult, committed: true };
     if (task === 'translation') {
       this.notify();
     } else {
