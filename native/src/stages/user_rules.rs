@@ -615,7 +615,9 @@ mod tests {
     use super::*;
     use crate::audio_metadata::VoiceActivityEvidence;
     use crate::engine::capabilities::{LanguageSupport, ModelFamilyCapabilities, ModelTask};
-    use crate::protocol::{StageOutcome, StageStatus, TimestampGranularity, TimestampSource};
+    use crate::protocol::{
+        StageOutcome, StageStatus, TimestampGranularity, TimestampSource, validate_correction_rules,
+    };
     use crate::stages::{post_engine_processors, run_post_engine};
     use uuid::Uuid;
 
@@ -926,18 +928,19 @@ mod tests {
     #[test]
     fn many_nonmatching_rules_reuse_the_current_scalar_count() {
         let input = "a".repeat(100_000);
-        let rules = (0..100).map(|_| rule("b", "x")).collect::<Vec<_>>();
+        let rules = (0..100)
+            .map(|index| rule(&format!("missing-{index}"), "x"))
+            .collect::<Vec<_>>();
+        validate_correction_rules(&rules).expect("pathological rules should pass typed validation");
+        let compiled = compile_correction_rules(&rules);
         let before = NORMALIZED_INPUT_VECTOR_CONSTRUCTIONS.with(std::cell::Cell::get);
         let mut budget = UtteranceBudget::new(input.chars().count());
-        let result = apply_rules_to_segment(
-            &segment(&input),
-            &compile_correction_rules(&rules),
-            &mut budget,
-        )
-        .expect("nonmatching rules should stay within the search budget");
+        let result = apply_rules_to_segment(&segment(&input), &compiled, &mut budget)
+            .expect("nonmatching rules should stay within the search budget");
 
         assert_eq!(result.segment.text, input);
         assert_eq!(result.replacement_count, 0);
+        assert_eq!(budget.search_steps, 0);
         assert_eq!(
             NORMALIZED_INPUT_VECTOR_CONSTRUCTIONS.with(std::cell::Cell::get),
             before + 1
