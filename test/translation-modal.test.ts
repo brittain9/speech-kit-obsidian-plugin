@@ -309,11 +309,13 @@ describe('TranslationModal mutation safety', () => {
 
   it('shows a dedicated in-progress panel instead of an empty preview while translating', () => {
     Setting.reset();
+    const model = createModalModel();
     const modal = createModal({
       editor: {
         getValue: () => SNAPSHOT.source,
         replaceRange: vi.fn(),
       },
+      installedModelOptions: [model],
       runTranslation: () => new Promise(() => {}),
     });
 
@@ -326,6 +328,11 @@ describe('TranslationModal mutation safety', () => {
         ?.classList.contains('is-active'),
     ).toBe(true);
     expect(content.querySelector('.local-stt-translation-modal__spinner')).not.toBeNull();
+    expect(modelDropdown()?.selectEl.options.map((option) => option.label)).toEqual([
+      'Firefox Translations',
+      'Choose a translation model',
+    ]);
+    expect(modelDropdown()?.selectEl.disabled).toBe(true);
     expect(content.querySelector('.local-stt-translation-modal__swap')?.disabled).toBe(true);
     expect(
       Setting.instances
@@ -539,6 +546,39 @@ describe('TranslationModal mutation safety', () => {
     expect(onLanguageChange).toHaveBeenCalledExactlyOnceWith('es', 'en');
   });
 
+  it('disables Translate again while model selection is pending', async () => {
+    Setting.reset();
+    const first = createModalModel({ modelId: 'model-a' });
+    const second = { ...createModalModel(), modelId: 'model-b' };
+    const selection = deferred<boolean>();
+    const onModelChange = vi.fn(() => selection.promise);
+    const onTranslateCurrent = vi.fn();
+    const modal = createModal({
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      installedModelOptions: [first, second],
+      onModelChange,
+      onTranslateCurrent,
+      runTranslation: vi.fn(async () => ({
+        kind: 'translated' as const,
+        sourceUnitsKept: 0,
+        text: 'Translated with Model A.',
+      })),
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(Setting.buttonNamed('Replace').disabled).toBe(false));
+    selectModel(second);
+    expect(latestAction('Translate again').disabled).toBe(true);
+    await latestAction('Translate again').click();
+    expect(onTranslateCurrent).not.toHaveBeenCalled();
+
+    selection.resolve(true);
+    await vi.waitFor(() => expect(latestAction('Translate again').disabled).toBe(false));
+  });
+
   it('keeps the latest model draft when an older selection fails after a newer swap', async () => {
     Setting.reset();
     const first = createModalModel({ displayName: 'Model A', modelId: 'model-a' });
@@ -672,7 +712,7 @@ describe('TranslationModal mutation safety', () => {
         phase: 'installing',
       },
     };
-    const onInstallPack = vi.fn(async () => {});
+    const onInstallPack = vi.fn(async () => true);
     createModal({
       editor: {
         getValue: () => SNAPSHOT.source,
@@ -853,14 +893,14 @@ describe('TranslationModal mutation safety', () => {
       ),
     ).toBeDefined();
 
-    await Setting.buttonNamed('Translate again').click();
+    await latestAction('Translate again').click();
     expect(onTranslateCurrent).toHaveBeenCalledWith('en', 'es', '');
   });
 
   it('offers the exact language pack instead of the whole Firefox bundle', async () => {
     Setting.reset();
     const model = createModalModel();
-    const onInstallPack = vi.fn(async () => {});
+    const onInstallPack = vi.fn(async () => true);
     const onTranslateCurrent = vi.fn();
     const modal = createModal({
       configuration: { model, sourceLanguage: 'en', targetLanguage: 'es' },
@@ -893,6 +933,42 @@ describe('TranslationModal mutation safety', () => {
     await Setting.buttonNamed('Download language pack · 41 B').click();
     expect(onInstallPack).toHaveBeenCalledExactlyOnceWith(model, 'en', 'es');
     expect(onTranslateCurrent).toHaveBeenCalledExactlyOnceWith('en', 'es', '');
+  });
+
+  it('does not close or auto-retry when pack-model selection is stale', async () => {
+    Setting.reset();
+    const model = createModalModel();
+    const onInstallPack = vi.fn(async () => false);
+    const onTranslateCurrent = vi.fn();
+    const modal = createModal({
+      configuration: { model, sourceLanguage: 'en', targetLanguage: 'es' },
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      installedModelOptions: [model],
+      jobModel: model,
+      onInstallPack,
+      onTranslateCurrent,
+      runTranslation: vi.fn(async () => ({ kind: 'missing_model' as const })),
+      translationInstallRequirement: () => ({
+        artifactIds: ['en_es_model'],
+        downloadBytes: 41,
+        kind: 'pack' as const,
+      }),
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(latestAction('Download language pack · 41 B')).toBeDefined());
+    await latestAction('Download language pack · 41 B').click();
+
+    expect(onInstallPack).toHaveBeenCalledOnce();
+    expect(onTranslateCurrent).not.toHaveBeenCalled();
+    expect(
+      (modal.contentEl as unknown as TestElement).findByText(
+        'English → Español needs a 41 B language download.',
+      ),
+    ).toBeDefined();
   });
 
   it('reports partial results but never writes them into the note', async () => {
@@ -992,7 +1068,9 @@ function createModal({
   jobModel = createModalModel(),
   installedModelOptions = [],
   modelManager = createTestModelManager(installedModelOptions),
-  onInstallPack = vi.fn(async () => {}),
+  modelSelectionPending = false,
+  subscribeConfiguration = () => () => {},
+  onInstallPack = vi.fn(async () => true),
   onModelChange = vi.fn(async () => true),
   onLanguageChange = vi.fn(async () => {}),
   onReadAloud = vi.fn(),
@@ -1019,6 +1097,8 @@ function createModal({
     getState(): ModelManagerState;
     subscribe(listener: () => void): () => void;
   };
+  modelSelectionPending?: boolean;
+  subscribeConfiguration?: (listener: () => void) => () => void;
   onInstallPack?: ConstructorParameters<typeof TranslationModal>[1]['onInstallPack'];
   onLanguageChange?: ConstructorParameters<typeof TranslationModal>[1]['onLanguageChange'];
   onModelChange?: ConstructorParameters<typeof TranslationModal>[1]['onModelChange'];
@@ -1054,6 +1134,8 @@ function createModal({
     getStyleInstruction,
     job,
     modelManager,
+    isModelSelectionPending: () => modelSelectionPending,
+    subscribeConfiguration,
     onApplied: vi.fn(),
     onCancelPackInstall: vi.fn(async () => {}),
     onClosed: vi.fn(),

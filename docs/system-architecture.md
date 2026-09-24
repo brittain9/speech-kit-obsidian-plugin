@@ -525,21 +525,30 @@ The modal's localized swap control reverses the draft source and target only
 when the exact selected runtime/family/model is installed and its catalog
 metadata declares the reverse direction. It uses the ordinary language-change
 persistence path and leaves any completed preview visible but stale. Swap,
-language changes, and exact-pack installation are disabled while inference,
-local model selection, or any live model install is active. The modal observes
-`ModelInstallManager` state and subscriptions, including the short interval
-before the sidecar emits an install event, so installed options and operation
-state do not become stale while the modal remains open.
+language changes, Translate again, and exact-pack installation are disabled
+while inference, local model selection, or any live model install is active.
+The modal observes `ModelInstallManager` state and subscriptions, including the
+short interval before the sidecar emits an install event, so installed options
+and operation state do not become stale while the modal remains open.
+
+The controller owns the active language/model configuration and exposes it to
+open modal generations. Closing one modal does not invalidate a pending probe:
+its replacement subscribes to controller-owned pending/configuration state,
+reconciles any committed selection, and cannot start a conflicting selection.
+After a pack download finishes, that pending scope also covers the installed
+pack model's selection probe before the replacement modal is re-enabled.
 
 Model selection is monotonic. Every requested translation model receives a
 modal and controller generation; only the latest successful, committed probe
 may update draft state, active configuration, or persisted model selection.
 `ModelInstallManager.select()` reports whether its guarded settings commit was
 current, so a late successful probe is ignored rather than treated as a newer
-selection. Failed or successful stale completions cannot roll back or overwrite
-a later model choice, and an explicit fresh translation job resolves the model
-from the persisted latest selection. Note text never crosses the network; HY-MT
-protocol and logs do not record source or translated text.
+selection. Post-install selection checks both its committed result and the
+controller generation before changing configuration, closing the old modal, or
+retrying inference. Failed or successful stale completions cannot roll back or
+overwrite a later model choice, and an explicit fresh translation job resolves
+the model from the persisted latest selection. Note text never crosses the
+network; HY-MT protocol and logs do not record source or translated text.
 
 ---
 

@@ -118,9 +118,12 @@ interface TranslationControllerDependencies {
 }
 interface ActiveTranslation {
   configuration: TranslationConfiguration;
+  configurationListeners: Set<() => void>;
   editor: Editor;
   job: TranslationJob;
   modelSelectionGeneration: number;
+  modelSelectionPendingGeneration: number | null;
+  modelSelectionTarget: CatalogModelRecord | null;
   release: () => void;
   snapshot: TranslationSnapshot;
 }
@@ -216,21 +219,70 @@ export class TranslationController {
     });
     const active: ActiveTranslation = {
       configuration: { model, sourceLanguage, styleInstruction, targetLanguage },
+      configurationListeners: new Set(),
       editor,
       job,
       modelSelectionGeneration: 0,
+      modelSelectionPendingGeneration: null,
+      modelSelectionTarget: null,
       release: () => {},
       snapshot,
     };
-    active.release = job.subscribe((state) => {
+    const releaseJob = job.subscribe((state) => {
       if (this.active !== active) return;
       if (this.activeModal === null)
         this.dependencies.setDetachedStatus?.(state, () => this.openModal());
     });
+    const releaseModelManager = this.dependencies.modelManager.subscribe(() => {
+      this.reconcilePersistedModelSelection(active);
+    });
+    active.release = () => {
+      releaseJob();
+      releaseModelManager();
+    };
     this.active = active;
     this.openModal();
     job.start();
   }
+  private isCurrentModelSelection(active: ActiveTranslation, generation: number): boolean {
+    return this.active === active && active.modelSelectionGeneration === generation;
+  }
+
+  private notifyConfiguration(active: ActiveTranslation): void {
+    for (const listener of active.configurationListeners) listener();
+  }
+
+  private reconcilePersistedModelSelection(active: ActiveTranslation): void {
+    if (this.active !== active) return;
+    const model = selectedTranslationModel(
+      this.dependencies.modelManager.getState(),
+      this.dependencies.getSettings(),
+    );
+    if (
+      model === null ||
+      sameTranslationModel(model, active.configuration.model) ||
+      sameTranslationModel(model, active.modelSelectionTarget)
+    )
+      return;
+    ++active.modelSelectionGeneration;
+    const { sourceLanguage, targetLanguage } = resolveTranslationLanguages(
+      this.dependencies.getSettings().dictationLanguage,
+      active.configuration.sourceLanguage,
+      active.configuration.targetLanguage,
+      model,
+    );
+    Object.assign(active.configuration, { model, sourceLanguage, targetLanguage });
+    this.notifyConfiguration(active);
+  }
+
+  private finishModelSelection(active: ActiveTranslation, generation: number): boolean {
+    if (this.active !== active || active.modelSelectionPendingGeneration !== generation)
+      return false;
+    active.modelSelectionPendingGeneration = null;
+    active.modelSelectionTarget = null;
+    return true;
+  }
+
   private openModal(): void {
     const active = this.active;
     if (active === null || this.activeModal !== null) return;
@@ -242,9 +294,16 @@ export class TranslationController {
       job: active.job,
       configuration: active.configuration,
       modelManager: this.dependencies.modelManager,
+      isModelSelectionPending: () => active.modelSelectionPendingGeneration !== null,
       snapshot: active.snapshot,
       onApplied: () => this.clearActive(),
       onDismissed: () => this.clearActive(),
+      subscribeConfiguration: (listener) => {
+        active.configurationListeners.add(listener);
+        return () => {
+          active.configurationListeners.delete(listener);
+        };
+      },
       onClosed: () => {
         if (this.activeModal === modal) {
           this.activeModal = null;
@@ -253,39 +312,41 @@ export class TranslationController {
         }
       },
       onLanguageChange: (sourceLanguage, targetLanguage) => {
-        active.configuration = {
-          ...active.configuration,
-          sourceLanguage,
-          targetLanguage,
-        };
+        Object.assign(active.configuration, { sourceLanguage, targetLanguage });
+        this.notifyConfiguration(active);
         return this.persistTranslationLanguages(sourceLanguage, targetLanguage);
       },
       onModelChange: async (model, sourceLanguage, targetLanguage) => {
         const generation = ++active.modelSelectionGeneration;
-        let committed = true;
-        if (this.modelIsInstalled(model)) {
-          const result = await this.dependencies.modelManager.select({
-            familyId: model.familyId,
-            kind: 'catalog_model',
-            modelId: model.modelId,
-            runtimeId: model.runtimeId,
-          });
-          committed = result.committed;
+        active.modelSelectionPendingGeneration = generation;
+        active.modelSelectionTarget = model;
+        this.notifyConfiguration(active);
+        try {
+          const result = this.modelIsInstalled(model)
+            ? await this.dependencies.modelManager.select({
+                familyId: model.familyId,
+                kind: 'catalog_model',
+                modelId: model.modelId,
+                runtimeId: model.runtimeId,
+              })
+            : null;
+          if (!this.isCurrentModelSelection(active, generation)) {
+            if (this.finishModelSelection(active, generation)) this.notifyConfiguration(active);
+            return false;
+          }
+          if (result?.committed === false) {
+            this.finishModelSelection(active, generation);
+            this.notifyConfiguration(active);
+            return false;
+          }
+          Object.assign(active.configuration, { model, sourceLanguage, targetLanguage });
+          this.finishModelSelection(active, generation);
+          this.notifyConfiguration(active);
+          return true;
+        } catch (error) {
+          if (this.finishModelSelection(active, generation)) this.notifyConfiguration(active);
+          throw error;
         }
-        if (
-          this.active !== active ||
-          active.modelSelectionGeneration !== generation ||
-          !committed
-        ) {
-          return false;
-        }
-        active.configuration = {
-          model,
-          sourceLanguage,
-          styleInstruction: active.configuration.styleInstruction,
-          targetLanguage,
-        };
-        return true;
       },
       onCancelPackInstall: () => this.dependencies.modelManager.cancel(),
       onInstallPack: async (model, sourceLanguage, targetLanguage) => {
@@ -299,14 +360,30 @@ export class TranslationController {
           modelId: model.modelId,
           runtimeId: model.runtimeId,
         };
-        await this.dependencies.modelManager.installAndWait(selection, requirement.artifactIds);
-        await this.dependencies.modelManager.select(selection);
-        active.configuration = {
-          model,
-          sourceLanguage,
-          styleInstruction: active.configuration.styleInstruction,
-          targetLanguage,
-        };
+        const generation = ++active.modelSelectionGeneration;
+        active.modelSelectionPendingGeneration = generation;
+        active.modelSelectionTarget = model;
+        this.notifyConfiguration(active);
+        try {
+          await this.dependencies.modelManager.installAndWait(selection, requirement.artifactIds);
+          if (!this.isCurrentModelSelection(active, generation)) {
+            if (this.finishModelSelection(active, generation)) this.notifyConfiguration(active);
+            return false;
+          }
+          const result = await this.dependencies.modelManager.select(selection);
+          const current = this.isCurrentModelSelection(active, generation);
+          const finished = this.finishModelSelection(active, generation);
+          if (!current || !result.committed) {
+            if (finished) this.notifyConfiguration(active);
+            return false;
+          }
+          Object.assign(active.configuration, { model, sourceLanguage, targetLanguage });
+          this.notifyConfiguration(active);
+          return true;
+        } catch (error) {
+          if (this.finishModelSelection(active, generation)) this.notifyConfiguration(active);
+          throw error;
+        }
       },
       translationInstallRequirement: (model, sourceLanguage, targetLanguage) =>
         this.installRequirement(model, sourceLanguage, targetLanguage),
@@ -315,6 +392,7 @@ export class TranslationController {
       getStyleInstruction: () => this.dependencies.getSettings().translationStyleInstruction,
       onStyleChange: (style, instruction) => this.persistTranslationStyle(style, instruction),
       onTranslateCurrent: (sourceLanguage, targetLanguage, styleInstruction) => {
+        if (active.modelSelectionPendingGeneration !== null) return;
         this.begin(
           active.editor,
           this.snapshotFromCurrentEditor(active),
@@ -324,6 +402,7 @@ export class TranslationController {
         );
       },
       onRestart: (source, target, styleInstruction) => {
+        if (active.modelSelectionPendingGeneration !== null) return;
         void this.persistTranslationLanguages(source, target);
         this.begin(
           active.editor,
@@ -340,6 +419,7 @@ export class TranslationController {
   private clearActive(): void {
     const active = this.active;
     this.active = null;
+    active?.configurationListeners.clear();
     active?.release();
     this.dependencies.setDetachedStatus?.(null, () => {});
   }
@@ -473,6 +553,18 @@ function selectedTranslationModel(
     ) ?? null
   );
 }
+function sameTranslationModel(
+  left: CatalogModelRecord | null,
+  right: CatalogModelRecord | null,
+): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      matchesModelTriple(right, left.runtimeId, left.familyId, left.modelId))
+  );
+}
+
 function createTranslationId(): string {
   return (
     window.crypto?.randomUUID?.() ??

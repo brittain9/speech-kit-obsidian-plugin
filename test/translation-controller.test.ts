@@ -4,6 +4,7 @@ vi.mock('virtual:bergamot-worker-source', () => ({
   BERGAMOT_WORKER_SOURCE: '',
 }));
 
+import type { CatalogModelRecord } from '../src/models/model-management-types';
 import type { PluginSettings } from '../src/settings/plugin-settings';
 import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import type { SidecarEvent } from '../src/sidecar/protocol';
@@ -334,6 +335,188 @@ describe('TranslationController', () => {
     expect(race.startTranslation).toHaveBeenCalledTimes(2);
   });
 
+  it('reopens a completed selection without starting duplicate inference', async () => {
+    const race = createControllerSelectionRace();
+    await race.openCompletedPreview();
+    Modal.instances.at(-1)?.close();
+    race.reopen();
+
+    expect(race.startTranslation).toHaveBeenCalledOnce();
+    expect(race.modelDropdownDisabled()).toBe(false);
+    expect(race.latestAction('Replace').disabled).toBe(false);
+  });
+
+  it('reconciles a closed modal with a selection committed after reopen', async () => {
+    const race = createControllerSelectionRace();
+    await race.openCompletedPreview();
+    race.selectModel(race.modelB);
+    Modal.instances.at(-1)?.close();
+
+    race.reopen();
+    expect(race.startTranslation).toHaveBeenCalledOnce();
+    expect(race.modelDropdownDisabled()).toBe(true);
+    expect(race.swapDisabled()).toBe(true);
+
+    race.resolveB(true);
+    await race.waitForModel(race.modelB);
+    expect(race.modelDropdownDisabled()).toBe(false);
+    expect(race.swapDisabled()).toBe(false);
+    expect(race.settings.selectedTranslationModel).toEqual(selectionFor(race.modelB));
+
+    await race.latestAction('Translate again').click();
+    expect(race.startTranslation).toHaveBeenCalledTimes(2);
+    expect(race.startTranslation.mock.calls[1]?.[0].modelSelection).toEqual(
+      selectionFor(race.modelB),
+    );
+  });
+
+  it('reconciles a newer C selection instead of committing a stale pack probe', async () => {
+    Modal.instances.length = 0;
+    Setting.reset();
+    const modelA = translationModel('model-a', 'Model A');
+    const modelC = translationModel('model-c', 'Model C');
+    const modelB = {
+      ...translationModel('firefox-pack', 'Firefox Pack'),
+      artifacts: [
+        {
+          artifactId: 'en-es-pack',
+          downloadUrl: 'https://example.com/en-es-pack',
+          filename: 'en-es-pack',
+          required: false,
+          role: 'translation_model' as const,
+          sha256: '1'.repeat(64),
+          sizeBytes: 10,
+        },
+      ],
+      familyId: 'firefox_translations' as const,
+      runtimeId: 'bergamot_wasm' as const,
+      translationPacks: [
+        { artifactIds: ['en-es-pack'], source: 'en' as const, target: 'es' as const },
+      ],
+      translationSupport: {
+        kind: 'pairs' as const,
+        pairs: [
+          { source: 'en' as const, target: 'es' as const },
+          { source: 'es' as const, target: 'en' as const },
+        ],
+      },
+    } as CatalogModelRecord;
+    let settings: PluginSettings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      selectedTranslationModel: selectionFor(modelB),
+    };
+    let installedB = false;
+    const install = deferred<void>();
+    const packProbe = deferred<{ committed: boolean }>();
+    const cProbe = deferred<{ committed: boolean }>();
+    const listeners: ((event: SidecarEvent) => void)[] = [];
+    const modelManagerListeners: (() => void)[] = [];
+    const startTranslation = vi.fn(
+      async (_payload: { modelSelection: unknown; translationId: string }) => {},
+    );
+    const modelManager = {
+      getState: () => ({
+        activeInstall: null,
+        catalog: { models: [modelA, modelB, modelC] },
+        installedModels: [modelA, modelC, ...(installedB ? [modelB] : [])],
+        installRequestPending: false,
+        selectedTranslationModel: settings.selectedTranslationModel,
+      }),
+      installAndWait: vi.fn(() => install.promise),
+      select: vi.fn((selection: ReturnType<typeof selectionFor>) => {
+        if (selection.modelId === modelB.modelId)
+          return packProbe.promise.then((result) => {
+            if (result.committed)
+              settings = { ...settings, selectedTranslationModel: selectionFor(modelB) };
+            return result;
+          });
+        return cProbe.promise.then((result) => {
+          if (result.committed) {
+            settings = { ...settings, selectedTranslationModel: selectionFor(modelC) };
+            for (const listener of modelManagerListeners) listener();
+          }
+          return result;
+        });
+      }),
+      subscribe: (listener: () => void) => {
+        modelManagerListeners.push(listener);
+        return () => {
+          modelManagerListeners.splice(modelManagerListeners.indexOf(listener), 1);
+        };
+      },
+    };
+    const controller = new TranslationController({
+      app: {} as never,
+      canReadAloud: () => false,
+      feedback: { show: vi.fn() },
+      getSettings: () => settings,
+      logger: { error: vi.fn(), warn: vi.fn() } as never,
+      modelManager: modelManager as never,
+      onReadAloud: vi.fn(),
+      saveSettings: vi.fn(async () => {}),
+      sidecarConnection: {
+        cancelTranslation: vi.fn(),
+        startTranslation,
+        subscribe: (next: (event: SidecarEvent) => void) => {
+          listeners.push(next);
+          return () => {};
+        },
+      } as never,
+    });
+    const editor = { getValue: () => 'Translate this note.', replaceRange: vi.fn() };
+
+    controller.translateNote(editor as never);
+    await vi.waitFor(() =>
+      expect(Setting.buttonNamed('Download language pack · 10 B')).toBeDefined(),
+    );
+    await Setting.buttonNamed('Download language pack · 10 B').click();
+    expect(modelManager.installAndWait).toHaveBeenCalledOnce();
+    expect(modelManager.select).not.toHaveBeenCalled();
+
+    Modal.instances.at(-1)?.close();
+    controller.translateNote(editor as never);
+    expect(startTranslation).not.toHaveBeenCalled();
+    expect(
+      Setting.instances.filter((setting) => setting.name === 'Translation model').at(-1)
+        ?.dropdownComponents[0]?.selectEl.disabled,
+    ).toBe(true);
+
+    installedB = true;
+    install.resolve();
+    await vi.waitFor(() => expect(modelManager.select).toHaveBeenCalledWith(selectionFor(modelB)));
+    expect(
+      Setting.instances.filter((setting) => setting.name === 'Translation model').at(-1)
+        ?.dropdownComponents[0]?.selectEl.disabled,
+    ).toBe(true);
+    void modelManager.select(selectionFor(modelC));
+    cProbe.resolve({ committed: true });
+    await vi.waitFor(() => {
+      const dropdown = Setting.instances
+        .filter((setting) => setting.name === 'Translation model')
+        .at(-1)?.dropdownComponents[0];
+      expect(dropdown?.selectEl.value).toBe(translationModelKey(modelC));
+      expect(dropdown?.selectEl.disabled).toBe(true);
+    });
+    expect(settings.selectedTranslationModel).toEqual(selectionFor(modelC));
+
+    packProbe.resolve({ committed: false });
+    await vi.waitFor(() => {
+      const action = Setting.instances
+        .filter((setting) => setting.buttonComponents.length > 0)
+        .at(-1)
+        ?.buttonComponents.find((button) => button.text === 'Translate again');
+      expect(action?.disabled).toBe(false);
+    });
+    await Setting.instances
+      .filter((setting) => setting.buttonComponents.length > 0)
+      .at(-1)
+      ?.buttonComponents.find((button) => button.text === 'Translate again')
+      ?.click();
+    expect(startTranslation).toHaveBeenCalledOnce();
+    expect(startTranslation.mock.calls[0]?.[0].modelSelection).toEqual(selectionFor(modelC));
+    expect(settings.selectedTranslationModel).toEqual(selectionFor(modelC));
+  });
+
   it('ignores a stale successful B selection after C has already won', async () => {
     const race = createControllerSelectionRace();
     await race.openCompletedPreview();
@@ -444,7 +627,12 @@ function createControllerSelectionRace() {
       selectedTranslationModel: settings.selectedTranslationModel,
     }),
     select: vi.fn((selection: ReturnType<typeof selectionFor>) => {
-      if (selection.modelId === modelB.modelId) return secondProbe.promise;
+      if (selection.modelId === modelB.modelId)
+        return secondProbe.promise.then((result) => {
+          if (result.committed)
+            settings = { ...settings, selectedTranslationModel: selectionFor(modelB) };
+          return result;
+        });
       return thirdProbe.promise.then((result) => {
         if (result.committed)
           settings = { ...settings, selectedTranslationModel: selectionFor(modelC) };
@@ -492,6 +680,27 @@ function createControllerSelectionRace() {
       });
       await vi.waitFor(() => expect(Setting.buttonNamed('Replace')).toBeDefined());
     },
+    reopen() {
+      controller.translateNote({
+        getValue: () => 'Translate this note.',
+        replaceRange: vi.fn(),
+      } as never);
+    },
+    modelDropdownDisabled() {
+      return (
+        Setting.instances.filter((setting) => setting.name === 'Translation model').at(-1)
+          ?.dropdownComponents[0]?.selectEl.disabled ?? false
+      );
+    },
+    swapDisabled() {
+      const modal = Modal.instances.at(-1);
+      if (modal === undefined) throw new Error('Expected the translation preview modal.');
+      return (
+        (modal.contentEl as unknown as TestElement).querySelector(
+          '.local-stt-translation-modal__swap',
+        )?.disabled ?? false
+      );
+    },
     resolveB(committed: boolean) {
       secondProbe.resolve({ committed });
     },
@@ -515,12 +724,22 @@ function createControllerSelectionRace() {
       }
       dropdown.change(option.value);
     },
-    async waitForModelC() {
+    async waitForModel(model: ReturnType<typeof translationModel>) {
       await vi.waitFor(() => {
         const dropdown = Setting.instances
           .filter((setting) => setting.name === 'Translation model')
           .at(-1)?.dropdownComponents[0];
-        expect(dropdown?.selectEl.value).toBe(translationModelKey(modelC));
+        expect(dropdown?.selectEl.value).toBe(translationModelKey(model));
+      });
+    },
+    async waitForModelC() {
+      await this.waitForModel(modelC);
+      await vi.waitFor(() => {
+        const action = Setting.instances
+          .filter((setting) => setting.buttonComponents.length > 0)
+          .at(-1)
+          ?.buttonComponents.find((button) => button.text === 'Translate again');
+        expect(action?.disabled).toBe(false);
       });
     },
     latestAction(label: string) {
@@ -534,7 +753,7 @@ function createControllerSelectionRace() {
   };
 }
 
-function translationModelKey(model: ReturnType<typeof translationModel>): string {
+function translationModelKey(model: CatalogModelRecord): string {
   return JSON.stringify([model.runtimeId, model.familyId, model.modelId]);
 }
 
@@ -574,7 +793,7 @@ function translationModel(modelId: string, displayName: string) {
   };
 }
 
-function selectionFor(model: ReturnType<typeof translationModel>) {
+function selectionFor(model: CatalogModelRecord) {
   return {
     familyId: model.familyId,
     kind: 'catalog_model' as const,
@@ -583,7 +802,7 @@ function selectionFor(model: ReturnType<typeof translationModel>) {
   };
 }
 
-function installedRecord(model: ReturnType<typeof translationModel>) {
+function installedRecord(model: CatalogModelRecord) {
   return {
     familyId: model.familyId,
     modelId: model.modelId,

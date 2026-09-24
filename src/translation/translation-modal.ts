@@ -49,9 +49,11 @@ interface TranslationModalDependencies {
   getStyleInstruction?: () => string;
   job: TranslationJob;
   modelManager: Pick<ModelInstallManager, 'getState' | 'subscribe'>;
+  isModelSelectionPending: () => boolean;
   onApplied: () => void;
   onCancelPackInstall: () => Promise<void> | void;
   onClosed: () => void;
+  subscribeConfiguration: (listener: () => void) => () => void;
   onDismissed: () => void;
   onLanguageChange: (
     source: TranslationLanguage,
@@ -61,7 +63,7 @@ interface TranslationModalDependencies {
     model: CatalogModelRecord,
     source: TranslationLanguage,
     target: TranslationLanguage,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   onModelChange: (
     model: CatalogModelRecord,
     source: TranslationLanguage,
@@ -98,6 +100,7 @@ export class TranslationModal extends Modal {
   private reviewedOutput: string | null = null;
   private releaseJob: (() => void) | null = null;
   private releaseModelManager: (() => void) | null = null;
+  private releaseConfiguration: (() => void) | null = null;
   private state: TranslationJobState;
   private statusEl: HTMLElement | null = null;
   private elapsedTimer: number | null = null;
@@ -141,6 +144,13 @@ export class TranslationModal extends Modal {
       this.renderSelectors();
       this.renderActions();
     });
+    this.releaseConfiguration = this.dependencies.subscribeConfiguration(() => {
+      if (this.closed) return;
+      if (!this.reconcileConfiguration()) {
+        this.renderSelectors();
+        this.renderActions();
+      }
+    });
     this.releaseJob = this.dependencies.job.subscribe((state) => {
       this.state = state;
       this.syncElapsedTimer();
@@ -152,6 +162,8 @@ export class TranslationModal extends Modal {
     this.closed = true;
     this.releaseModelManager?.();
     this.releaseModelManager = null;
+    this.releaseConfiguration?.();
+    this.releaseConfiguration = null;
     this.releaseJob?.();
     this.releaseJob = null;
     this.stopElapsedTimer();
@@ -219,11 +231,33 @@ export class TranslationModal extends Modal {
         target: translationLanguageLabel(this.draftTargetLanguage),
       });
   }
+  private reconcileConfiguration(): boolean {
+    if (this.modelSelectionPending || this.installingPack) return false;
+    const configuration = this.dependencies.configuration;
+    if (
+      sameTranslationModel(this.draftModel, configuration.model) &&
+      this.draftSourceLanguage === configuration.sourceLanguage &&
+      this.draftTargetLanguage === configuration.targetLanguage
+    ) {
+      return false;
+    }
+    this.draftModel = configuration.model;
+    this.draftSourceLanguage = configuration.sourceLanguage;
+    this.draftTargetLanguage = configuration.targetLanguage;
+    this.committedModel = configuration.model;
+    this.committedSourceLanguage = configuration.sourceLanguage;
+    this.committedTargetLanguage = configuration.targetLanguage;
+    this.renderHeading();
+    this.renderState();
+    return true;
+  }
   private renderSelectors(): void {
     if (this.selectorsEl === null) return;
     this.selectorsEl.empty();
     const operationActive = this.operationIsActive();
-    const controlsActive = operationActive || this.modelSelectionPending;
+    const selectionPending =
+      this.modelSelectionPending || this.dependencies.isModelSelectionPending();
+    const controlsActive = operationActive || selectionPending;
     const modelSetting = new Setting(this.selectorsEl).setName(
       t('settings.translation.model.name'),
     );
@@ -234,7 +268,11 @@ export class TranslationModal extends Modal {
       }
       dropdown.addOption('', t('translation.modal.chooseModel'));
       dropdown.setValue(this.draftModel === null ? '' : translationModelKey(this.draftModel));
-      dropdown.setDisabled(operationActive || options.length === 0);
+      dropdown.setDisabled(
+        operationActive ||
+          (selectionPending && !this.modelSelectionPending) ||
+          options.length === 0,
+      );
       dropdown.onChange((value) => {
         void this.changeDraftModel(value);
       });
@@ -344,7 +382,11 @@ export class TranslationModal extends Modal {
   }
 
   private async changeDraftModel(value: string): Promise<void> {
-    if (this.operationIsActive()) return;
+    if (
+      this.operationIsActive() ||
+      (this.dependencies.isModelSelectionPending() && !this.modelSelectionPending)
+    )
+      return;
     const model = this.installedTranslationModels().find(
       (candidate) => translationModelKey(candidate) === value,
     );
@@ -377,6 +419,7 @@ export class TranslationModal extends Modal {
         this.acceptDraftConfiguration();
         return;
       }
+      if (this.reconcileConfiguration()) return;
     } catch (error) {
       if (!this.isCurrentModelSelection(generation, model)) return;
       this.dependencies.feedback.show({
@@ -414,7 +457,14 @@ export class TranslationModal extends Modal {
     );
   }
   private swapLanguages(): void {
-    if (!this.canSwapLanguages(this.operationIsActive() || this.modelSelectionPending)) return;
+    if (
+      !this.canSwapLanguages(
+        this.operationIsActive() ||
+          this.modelSelectionPending ||
+          this.dependencies.isModelSelectionPending(),
+      )
+    )
+      return;
     [this.draftSourceLanguage, this.draftTargetLanguage] = [
       this.draftTargetLanguage,
       this.draftSourceLanguage,
@@ -623,7 +673,11 @@ export class TranslationModal extends Modal {
               }),
             )
             .setCta()
-            .setDisabled(this.modelInstallIsActive() || this.modelSelectionPending)
+            .setDisabled(
+              this.modelInstallIsActive() ||
+                this.modelSelectionPending ||
+                this.dependencies.isModelSelectionPending(),
+            )
             .onClick(() => void this.installPack()),
         );
       } else if (this.draftModel !== null && this.draftModelIsInstalled()) {
@@ -632,14 +686,8 @@ export class TranslationModal extends Modal {
           button
             .setButtonText(t('translation.modal.translateAgain'))
             .setCta()
-            .onClick(() => {
-              this.close();
-              this.dependencies.onTranslateCurrent(
-                this.draftSourceLanguage,
-                this.draftTargetLanguage,
-                this.currentStyleInstruction(),
-              );
-            }),
+            .setDisabled(this.modelSelectionPending || this.dependencies.isModelSelectionPending())
+            .onClick(() => this.requestFreshTranslation()),
         );
       } else {
         this.renderStatus(t('translation.modal.missingModel'));
@@ -657,6 +705,7 @@ export class TranslationModal extends Modal {
         button
           .setButtonText(t('translation.modal.translateAgain'))
           .setCta()
+          .setDisabled(this.modelSelectionPending || this.dependencies.isModelSelectionPending())
           .onClick(() => this.restart(this.draftSourceLanguage, this.draftTargetLanguage)),
       );
       actions.addButton((button) =>
@@ -674,14 +723,8 @@ export class TranslationModal extends Modal {
         button
           .setButtonText(t('translation.modal.translateAgain'))
           .setCta()
-          .onClick(() => {
-            this.close();
-            this.dependencies.onTranslateCurrent(
-              this.draftSourceLanguage,
-              this.draftTargetLanguage,
-              this.currentStyleInstruction(),
-            );
-          }),
+          .setDisabled(this.modelSelectionPending || this.dependencies.isModelSelectionPending())
+          .onClick(() => this.requestFreshTranslation()),
       );
       actions.addButton((button) =>
         button.setButtonText(t('translation.modal.copy')).onClick(() => void this.copy()),
@@ -719,8 +762,23 @@ export class TranslationModal extends Modal {
       }),
     );
   }
+  private requestFreshTranslation(): void {
+    if (this.modelSelectionPending || this.dependencies.isModelSelectionPending()) return;
+    this.close();
+    this.dependencies.onTranslateCurrent(
+      this.draftSourceLanguage,
+      this.draftTargetLanguage,
+      this.currentStyleInstruction(),
+    );
+  }
   private restart(source: TranslationLanguage, target: TranslationLanguage): void {
-    if (this.state.phase === 'loading' || this.state.phase === 'translating') return;
+    if (
+      this.state.phase === 'loading' ||
+      this.state.phase === 'translating' ||
+      this.modelSelectionPending ||
+      this.dependencies.isModelSelectionPending()
+    )
+      return;
     this.close();
     this.dependencies.onRestart(source, target, this.currentStyleInstruction());
   }
@@ -729,19 +787,20 @@ export class TranslationModal extends Modal {
       this.draftModel === null ||
       this.installingPack ||
       this.modelInstallIsActive() ||
-      this.modelSelectionPending
+      this.modelSelectionPending ||
+      this.dependencies.isModelSelectionPending()
     )
       return;
     this.installingPack = true;
     this.renderSelectors();
     this.renderActions();
     try {
-      await this.dependencies.onInstallPack(
+      const committed = await this.dependencies.onInstallPack(
         this.draftModel,
         this.draftSourceLanguage,
         this.draftTargetLanguage,
       );
-      if (this.closed) return;
+      if (!committed || this.closed) return;
       this.close();
       this.dependencies.onTranslateCurrent(
         this.draftSourceLanguage,
@@ -758,7 +817,7 @@ export class TranslationModal extends Modal {
       }
     } finally {
       this.installingPack = false;
-      if (!this.closed) {
+      if (!this.closed && !this.reconcileConfiguration()) {
         this.renderSelectors();
         this.renderState();
       }
