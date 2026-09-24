@@ -6,7 +6,8 @@ status: accepted
 
 The optional YouTube VOD source uses a user-selected absolute `yt-dlp`
 executable, but it is not a YouTube API connector and is not a core
-availability promise. The product must present it as experimental, disclose
+availability promise. It is disabled by default and can be disabled from
+Settings. The product must present it as experimental, disclose
 that the unofficial helper contacts YouTube and may break, and require a
 one-time confirmation that the user owns or is authorized to process the
 video. Public visibility is not permission. The policy version is persisted

@@ -224,6 +224,7 @@ export interface PluginSettings {
   useLlmNoteContext: boolean;
   useNoteAsContext: boolean;
   youtubeHelperPath: string;
+  youtubeMediaSourceEnabled: boolean;
   youtubePolicyVersion: string | null;
 }
 
@@ -296,6 +297,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   useLlmNoteContext: false,
   useNoteAsContext: true,
   youtubeHelperPath: '',
+  youtubeMediaSourceEnabled: false,
   youtubePolicyVersion: null,
 };
 
@@ -397,6 +399,10 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       DEFAULT_PLUGIN_SETTINGS.mediaLlmProcessing,
     ),
     youtubeHelperPath: readAbsolutePath(raw.youtubeHelperPath),
+    youtubeMediaSourceEnabled: readBoolean(
+      raw.youtubeMediaSourceEnabled,
+      DEFAULT_PLUGIN_SETTINGS.youtubeMediaSourceEnabled,
+    ),
     youtubePolicyVersion: readPolicyVersion(raw.youtubePolicyVersion),
     modelStorePathOverride: readString(
       raw.modelStorePathOverride,

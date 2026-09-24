@@ -463,6 +463,7 @@ export default class LocalSttPlugin extends Plugin {
       hasRawTranscriptRecovery: () => this.rawTranscriptRecovery.hasRecovery(),
       isAudioFileTranscriptionActive: () =>
         this.audioFileTranscriptionController?.isCaptureActive() ?? false,
+      isYouTubeMediaSourceEnabled: () => this.settings.youtubeMediaSourceEnabled,
       isReadAloudActive: () => this.requireReadAloudController().isActive(),
       plugin: this,
       readAloud: (editor) => this.requireReadAloudController().read(editor),

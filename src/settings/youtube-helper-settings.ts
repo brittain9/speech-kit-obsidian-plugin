@@ -12,6 +12,7 @@ import {
 import { t } from '../shared/i18n';
 import type { PluginSettings } from './plugin-settings';
 import type { SettingAccess } from './setting-helpers';
+import { addToggleSetting } from './setting-helpers';
 
 export interface YouTubeHelperSettingsDependencies {
   readonly access: SettingAccess;
@@ -22,6 +23,11 @@ export function renderYouTubeHelperSettings(
   parent: HTMLElement,
   dependencies: YouTubeHelperSettingsDependencies,
 ): Setting {
+  addToggleSetting(parent, dependencies.access, {
+    desc: 'Experimental and disabled by default. Enable only after selecting a supported helper and accepting the one-time rights policy in the command modal.',
+    key: 'youtubeMediaSourceEnabled',
+    name: 'Enable experimental YouTube media source',
+  });
   const setting = new Setting(parent)
     .setName('Experimental YouTube media source')
     .setDesc(
@@ -78,8 +84,8 @@ export function renderYouTubeHelperSettings(
 }
 
 export function youtubeHelperDescription(settings: PluginSettings): string {
-  if (settings.youtubeHelperPath.length === 0) {
-    return 'Experimental YouTube media is disabled until an absolute yt-dlp path is selected in Settings.';
+  if (!settings.youtubeMediaSourceEnabled || settings.youtubeHelperPath.length === 0) {
+    return 'Experimental YouTube media is disabled until explicitly enabled with an absolute yt-dlp path in Settings.';
   }
   return `Experimental YouTube media enabled with helper path ${settings.youtubeHelperPath}. The helper is unofficial and may stop working.`;
 }
