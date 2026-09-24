@@ -57,8 +57,13 @@ outer reads are errored on release, and release is an idempotent, best-effort
 shared promise. Startup cleanup is age/mtime based, uses a stable owner marker
 with process-start metadata and a heartbeat, and does not trust a PID-only
 owner marker; recent or actively heartbeated jobs are preserved while stale
-jobs remain sweepable even when their recorded PID has been reused. The
-command modal returns the selected helper, probed version, and consent only
+jobs remain sweepable even when their recorded PID has been reused. Heartbeat
+validation rejects malformed markers, invalid instance/PID/start identities,
+future timestamps beyond a small clock-skew allowance, and stale timestamps.
+On Linux, recursive contents cleanup runs in a bounded, shell-less child
+whose cwd is the held root descriptor through procfs. Platforms without that
+descriptor-relative primitive retain the private root rather than issuing an
+unsafe pathname-recursive delete. The command modal returns the selected helper, probed version, and consent only
 after a non-canceled submit; closing it invalidates probes and persists neither
 value. A tracked modal registry prevents repeated concurrent command probes
 and closes every session on disable. Disabling the source rechecks the kill

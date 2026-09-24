@@ -55,6 +55,7 @@ export const YOUTUBE_CONSENT_ID = 'youtube-policy-confirmation';
 export const YOUTUBE_ABANDONED_JOB_MIN_AGE_MS = 6 * 60 * 60 * 1_000;
 export const YOUTUBE_OWNER_HEARTBEAT_INTERVAL_MS = 30_000;
 export const YOUTUBE_OWNER_HEARTBEAT_FRESH_MS = 2 * 60 * 1_000;
+const YOUTUBE_OWNER_CLOCK_SKEW_MS = 5_000;
 
 export type YouTubeFailureCode =
   | 'invalid_or_unsupported_url'
@@ -276,6 +277,7 @@ export class YouTubeMediaSource implements MediaSource {
       let baseLease: MediaLease;
       try {
         baseLease = await createLease({
+          cleanup: { signal: activeController.signal },
           provenance: {
             acquiredAt: new Date(this.now()).toISOString(),
             adapterVersion: this.adapterVersion,
@@ -297,7 +299,7 @@ export class YouTubeMediaSource implements MediaSource {
             .release()
             .then(async () => {
               await stopOwnerHeartbeat(heartbeat);
-              await removeMediaJob(rootCapability);
+              await removeMediaJob(rootCapability, { signal: activeController.signal });
             })
             .catch(() => {})
             .finally(() => {
@@ -331,7 +333,9 @@ export class YouTubeMediaSource implements MediaSource {
         heartbeat = null;
         this.jobInUse = false;
         this.activeAbortController = null;
-        if (jobRoot !== null) await removeJobBestEffort(jobRoot);
+        if (jobRoot !== null) {
+          await removeJobBestEffort(jobRoot, { signal: activeController.signal });
+        }
       }
     }
   }
@@ -363,19 +367,66 @@ export async function sweepAbandonedYouTubeJobs(
   }
 }
 
+export function isYouTubeOwnerHeartbeatFresh(value: unknown, now: number): boolean {
+  if (!isValidOwnerMarker(value, now)) return false;
+  return now - value.heartbeatAt < YOUTUBE_OWNER_HEARTBEAT_FRESH_MS;
+}
+
 async function hasFreshOwnerHeartbeat(jobRoot: string, now: number): Promise<boolean> {
   try {
-    const marker = JSON.parse(await readFile(join(jobRoot, 'owner.json'), 'utf8')) as {
-      heartbeatAt?: unknown;
-    };
-    return (
-      typeof marker.heartbeatAt === 'number' &&
-      Number.isFinite(marker.heartbeatAt) &&
-      now - marker.heartbeatAt < YOUTUBE_OWNER_HEARTBEAT_FRESH_MS
-    );
+    const marker = JSON.parse(await readFile(join(jobRoot, 'owner.json'), 'utf8')) as unknown;
+    return isYouTubeOwnerHeartbeatFresh(marker, now);
   } catch {
     return false;
   }
+}
+
+interface OwnerMarker {
+  readonly createdAt: number;
+  readonly heartbeatAt: number;
+  readonly instanceId: string;
+  readonly pid: number;
+  readonly processStartedAt: number;
+  readonly speechKitJob: true;
+}
+
+function isValidOwnerMarker(value: unknown, now: number): value is OwnerMarker {
+  if (typeof value !== 'object' || value === null) return false;
+  const marker = value as Partial<OwnerMarker>;
+  const pid = marker.pid;
+  if (
+    marker.speechKitJob !== true ||
+    !isValidOwnerTimestamp(marker.createdAt, now) ||
+    !isValidOwnerTimestamp(marker.heartbeatAt, now) ||
+    !isValidOwnerTimestamp(marker.processStartedAt, now) ||
+    typeof marker.instanceId !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+      marker.instanceId,
+    ) ||
+    typeof pid !== 'number' ||
+    !Number.isSafeInteger(pid) ||
+    pid <= 0 ||
+    marker.createdAt < marker.processStartedAt - YOUTUBE_OWNER_CLOCK_SKEW_MS ||
+    marker.heartbeatAt < marker.createdAt - YOUTUBE_OWNER_CLOCK_SKEW_MS
+  ) {
+    return false;
+  }
+  if (pid === process.pid) {
+    const currentProcessStartedAt = Date.now() - process.uptime() * 1_000;
+    if (Math.abs(currentProcessStartedAt - marker.processStartedAt) > YOUTUBE_OWNER_CLOCK_SKEW_MS) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isValidOwnerTimestamp(value: unknown, now: number): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= now + YOUTUBE_OWNER_CLOCK_SKEW_MS
+  );
 }
 
 export function buildYouTubeAcquisitionArgs(options: {
@@ -694,9 +745,12 @@ async function findAcquiredMedia(jobRoot: string): Promise<{ path: string }> {
   return { path: join(jobRoot, candidates[0]?.name ?? '') };
 }
 
-async function removeJobBestEffort(jobRoot: JobRootCapability): Promise<void> {
+async function removeJobBestEffort(
+  jobRoot: JobRootCapability,
+  cleanup: { readonly signal?: AbortSignal } = {},
+): Promise<void> {
   try {
-    await removeMediaJob(jobRoot);
+    await removeMediaJob(jobRoot, cleanup);
   } catch {
     // Cleanup is best effort across supported operating systems.
   }

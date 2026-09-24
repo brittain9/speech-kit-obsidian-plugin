@@ -100,6 +100,14 @@ async function collectProcessOutput(
       spawnProcess,
       taskkill,
     });
+    void terminationPromise.then(
+      () => {
+        if (!settled) finish(null, true);
+      },
+      () => {
+        if (!settled) finish(null, true);
+      },
+    );
     if (scheduleForce && forceTimer === undefined) {
       forceTimer = window.setTimeout(() => {
         forceTimer = undefined;

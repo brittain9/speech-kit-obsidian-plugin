@@ -86,6 +86,22 @@ describe('managed process runner', () => {
     expect(kill).not.toHaveBeenCalled();
     kill.mockRestore();
   });
+  it('settles after a bounded timeout when a child never closes', async () => {
+    const child = new FakeChild();
+    child.pid = 7654;
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const spawnProcess = vi.fn(() => child) as unknown as typeof spawn;
+    const result = await runManagedProcess(
+      '/private/helper',
+      [],
+      { platform: 'linux', shell: false, spawnProcess },
+      { maxOutputBytes: 100, timeoutMs: 5 },
+    );
+    expect(result.timedOut).toBe(true);
+    expect(kill).toHaveBeenCalledWith(-7654, 'SIGTERM');
+    kill.mockRestore();
+  });
+
   it('falls back to the direct child when Windows taskkill fails before close', async () => {
     const child = new FakeChild();
     child.pid = 2468;
