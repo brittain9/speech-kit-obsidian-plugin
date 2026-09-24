@@ -1687,6 +1687,86 @@ describe('ModelInstallManager', () => {
       });
     });
 
+    it('commits an explicit selection when a background init starts during its probe', async () => {
+      const selection = sampleSelection();
+      harness = createManagerHarness();
+      configureSidecarForInit(harness.sidecarConnection);
+      const deferredProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
+      harness.sidecarConnection.probeModelSelection.mockReturnValueOnce(deferredProbe.promise);
+
+      const selecting = harness.manager.select(selection);
+      const backgroundInit = harness.manager.init();
+      await backgroundInit;
+      deferredProbe.resolve(sampleReadyProbeResult(selection));
+      await selecting;
+
+      expect(harness.getSettings().selectedModel).toEqual(selection);
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
+      expect(harness.manager.getState().selectedModelCapabilities).toEqual({ status: 'none' });
+    });
+
+    it.each(['ready', 'unavailable'] as const)(
+      'does not let a stale startup capability %s overwrite a newer same-model selection',
+      async (resultKind) => {
+        const selection = sampleSelection();
+        const initialCapabilities = sampleMergedCapabilities();
+        harness = createManagerHarness({ selectedModel: selection });
+        configureSidecarForInit(harness.sidecarConnection);
+        const staleProbe = deferred<ModelProbeResultEvent>();
+        harness.sidecarConnection.probeModelSelection.mockReturnValueOnce(staleProbe.promise);
+
+        await harness.manager.init();
+        expect(harness.manager.getState().selectedModelCapabilities).toEqual({
+          selection,
+          status: 'pending',
+        });
+
+        const changedCapabilities = {
+          ...initialCapabilities,
+          family: {
+            ...initialCapabilities.family,
+            supportsWordTimestamps: !initialCapabilities.family.supportsWordTimestamps,
+          },
+        };
+        harness.sidecarConnection.probeModelSelection.mockResolvedValueOnce({
+          ...sampleReadyProbeResult(selection),
+          mergedCapabilities: changedCapabilities,
+          type: 'model_probe_result' as const,
+        });
+        await harness.manager.select(selection);
+
+        staleProbe.resolve(
+          resultKind === 'ready'
+            ? {
+                ...sampleReadyProbeResult(selection),
+                mergedCapabilities: initialCapabilities,
+                type: 'model_probe_result' as const,
+              }
+            : {
+                ...sampleReadyProbeResult(selection),
+                available: false,
+                installed: false,
+                mergedCapabilities: null,
+                message: 'The startup model is no longer available.',
+                status: 'missing',
+                type: 'model_probe_result' as const,
+              },
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(harness.getSettings().selectedModel).toEqual(selection);
+        expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+          capabilities: changedCapabilities,
+          selection,
+        });
+        expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+          capabilities: changedCapabilities,
+          selection,
+          status: 'ready',
+        });
+      },
+    );
+
     it.each(['ready', 'unavailable'] as const)(
       'does not let a stale explicit selection capability %s overwrite a newer init',
       async (resultKind) => {
@@ -1733,7 +1813,11 @@ describe('ModelInstallManager', () => {
                 type: 'model_probe_result' as const,
               };
         deferredProbe.resolve(probeResult);
-        await selecting;
+        if (resultKind === 'unavailable') {
+          await expect(selecting).rejects.toThrow('Model is no longer available.');
+        } else {
+          await selecting;
+        }
 
         expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
           capabilities: initialCapabilities,
