@@ -243,7 +243,7 @@ describe('TranslationController', () => {
     expect(startTranslation.mock.calls[1]?.[0].texts).toEqual(['Updated version.']);
   });
 
-  it('persists a swapped preview direction through the language-change path', async () => {
+  it('persists a swap and restores keyboard focus after synchronous controller notification', async () => {
     Modal.instances.length = 0;
     Setting.reset();
     const listeners: ((event: SidecarEvent) => void)[] = [];
@@ -302,6 +302,7 @@ describe('TranslationController', () => {
     const swap = (modal.contentEl as unknown as TestElement).querySelector(
       '.local-stt-translation-modal__swap',
     );
+    swap?.focus();
     swap?.dispatchEvent({ key: ' ', type: 'keydown' });
 
     await vi.waitFor(() => {
@@ -312,6 +313,11 @@ describe('TranslationController', () => {
         }),
       );
     });
+    const renderedSwap = (modal.contentEl as unknown as TestElement).querySelector(
+      '.local-stt-translation-modal__swap',
+    );
+    expect(renderedSwap).not.toBe(swap);
+    expect(renderedSwap?.ownerDocument.activeElement).toBe(renderedSwap);
     expect(startTranslation).toHaveBeenCalledOnce();
   });
 
@@ -333,6 +339,50 @@ describe('TranslationController', () => {
     await Promise.resolve();
     expect(race.settings.selectedTranslationModel).toEqual(selectionFor(race.modelC));
     expect(race.startTranslation).toHaveBeenCalledTimes(2);
+  });
+
+  it('reconciles an external C selection when the local B request fails', async () => {
+    const race = createControllerSelectionRace();
+    await race.openCompletedPreview();
+    race.selectModel(race.modelB);
+    race.selectExternalC();
+    race.resolveExternalC(true);
+    await vi.waitFor(() =>
+      expect(race.settings.selectedTranslationModel).toEqual(selectionFor(race.modelC)),
+    );
+
+    race.rejectB(new Error('local B probe failed'));
+    await race.waitForModel(race.modelC);
+    await race.waitForFreshRetry();
+    expect(race.startTranslation).toHaveBeenCalledOnce();
+
+    await race.latestAction('Translate again').click();
+    expect(race.startTranslation).toHaveBeenCalledTimes(2);
+    expect(race.startTranslation.mock.calls[1]?.[0].modelSelection).toEqual(
+      selectionFor(race.modelC),
+    );
+  });
+
+  it('reconciles an external B selection when the modal-owned B request returns false', async () => {
+    const race = createControllerSelectionRace();
+    await race.openCompletedPreview();
+    race.selectModel(race.modelB);
+    race.selectExternalB();
+    race.resolveExternalB(true);
+    await vi.waitFor(() =>
+      expect(race.settings.selectedTranslationModel).toEqual(selectionFor(race.modelB)),
+    );
+
+    race.resolveB(false);
+    await race.waitForModel(race.modelB);
+    await race.waitForFreshRetry();
+    expect(race.startTranslation).toHaveBeenCalledOnce();
+
+    await race.latestAction('Translate again').click();
+    expect(race.startTranslation).toHaveBeenCalledTimes(2);
+    expect(race.startTranslation.mock.calls[1]?.[0].modelSelection).toEqual(
+      selectionFor(race.modelB),
+    );
   });
 
   it('reopens a completed selection without starting duplicate inference', async () => {
@@ -608,7 +658,10 @@ function createControllerSelectionRace() {
   };
   const secondProbe = deferred<{ committed: boolean }>();
   const thirdProbe = deferred<{ committed: boolean }>();
+  const externalBProbe = deferred<{ committed: boolean }>();
+  const externalCProbe = deferred<{ committed: boolean }>();
   const listeners: ((event: SidecarEvent) => void)[] = [];
+  const modelManagerListeners: (() => void)[] = [];
   let translationId = '';
   const startTranslation = vi.fn(
     async (payload: { modelSelection: unknown; translationId: string }) => {
@@ -626,20 +679,36 @@ function createControllerSelectionRace() {
       installRequestPending: false,
       selectedTranslationModel: settings.selectedTranslationModel,
     }),
-    select: vi.fn((selection: ReturnType<typeof selectionFor>) => {
-      if (selection.modelId === modelB.modelId)
-        return secondProbe.promise.then((result) => {
-          if (result.committed)
-            settings = { ...settings, selectedTranslationModel: selectionFor(modelB) };
+    select: vi.fn(
+      (selection: ReturnType<typeof selectionFor>, source: 'local' | 'external' = 'local') => {
+        const probe =
+          selection.modelId === modelB.modelId
+            ? source === 'external'
+              ? externalBProbe
+              : secondProbe
+            : source === 'external'
+              ? externalCProbe
+              : thirdProbe;
+        return probe.promise.then((result) => {
+          if (result.committed) {
+            settings = {
+              ...settings,
+              selectedTranslationModel: selectionFor(
+                selection.modelId === modelB.modelId ? modelB : modelC,
+              ),
+            };
+            for (const listener of modelManagerListeners) listener();
+          }
           return result;
         });
-      return thirdProbe.promise.then((result) => {
-        if (result.committed)
-          settings = { ...settings, selectedTranslationModel: selectionFor(modelC) };
-        return result;
-      });
-    }),
-    subscribe: () => () => {},
+      },
+    ),
+    subscribe: (listener: () => void) => {
+      modelManagerListeners.push(listener);
+      return () => {
+        modelManagerListeners.splice(modelManagerListeners.indexOf(listener), 1);
+      };
+    },
   };
   const controller = new TranslationController({
     app: {} as never,
@@ -709,6 +778,27 @@ function createControllerSelectionRace() {
     },
     resolveC(committed: boolean) {
       thirdProbe.resolve({ committed });
+    },
+    selectExternalB() {
+      void modelManager.select(selectionFor(modelB), 'external');
+    },
+    resolveExternalB(committed: boolean) {
+      externalBProbe.resolve({ committed });
+    },
+    selectExternalC() {
+      void modelManager.select(selectionFor(modelC), 'external');
+    },
+    resolveExternalC(committed: boolean) {
+      externalCProbe.resolve({ committed });
+    },
+    async waitForFreshRetry() {
+      await vi.waitFor(() => {
+        const action = Setting.instances
+          .filter((setting) => setting.buttonComponents.length > 0)
+          .at(-1)
+          ?.buttonComponents.find((button) => button.text === 'Translate again');
+        expect(action?.disabled).toBe(false);
+      });
     },
     selectModel(model: ReturnType<typeof translationModel>) {
       const modal = Modal.instances.at(-1);

@@ -252,7 +252,7 @@ export class TranslationController {
     for (const listener of active.configurationListeners) listener();
   }
 
-  private reconcilePersistedModelSelection(active: ActiveTranslation): void {
+  private reconcilePersistedModelSelection(active: ActiveTranslation, force = false): void {
     if (this.active !== active) return;
     const model = selectedTranslationModel(
       this.dependencies.modelManager.getState(),
@@ -261,7 +261,7 @@ export class TranslationController {
     if (
       model === null ||
       sameTranslationModel(model, active.configuration.model) ||
-      sameTranslationModel(model, active.modelSelectionTarget)
+      (!force && sameTranslationModel(model, active.modelSelectionTarget))
     )
       return;
     ++active.modelSelectionGeneration;
@@ -294,6 +294,10 @@ export class TranslationController {
       job: active.job,
       configuration: active.configuration,
       modelManager: this.dependencies.modelManager,
+      getModelSelectionState: () => ({
+        generation: active.modelSelectionGeneration,
+        pendingGeneration: active.modelSelectionPendingGeneration,
+      }),
       isModelSelectionPending: () => active.modelSelectionPendingGeneration !== null,
       snapshot: active.snapshot,
       onApplied: () => this.clearActive(),
@@ -331,10 +335,12 @@ export class TranslationController {
               })
             : null;
           if (!this.isCurrentModelSelection(active, generation)) {
+            this.reconcilePersistedModelSelection(active, true);
             if (this.finishModelSelection(active, generation)) this.notifyConfiguration(active);
             return false;
           }
           if (result?.committed === false) {
+            this.reconcilePersistedModelSelection(active, true);
             this.finishModelSelection(active, generation);
             this.notifyConfiguration(active);
             return false;
@@ -344,6 +350,7 @@ export class TranslationController {
           this.notifyConfiguration(active);
           return true;
         } catch (error) {
+          this.reconcilePersistedModelSelection(active, true);
           if (this.finishModelSelection(active, generation)) this.notifyConfiguration(active);
           throw error;
         }
@@ -374,6 +381,7 @@ export class TranslationController {
           const current = this.isCurrentModelSelection(active, generation);
           const finished = this.finishModelSelection(active, generation);
           if (!current || !result.committed) {
+            this.reconcilePersistedModelSelection(active, true);
             if (finished) this.notifyConfiguration(active);
             return false;
           }
@@ -381,6 +389,7 @@ export class TranslationController {
           this.notifyConfiguration(active);
           return true;
         } catch (error) {
+          this.reconcilePersistedModelSelection(active, true);
           if (this.finishModelSelection(active, generation)) this.notifyConfiguration(active);
           throw error;
         }

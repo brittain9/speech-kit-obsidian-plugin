@@ -1068,6 +1068,7 @@ function createModal({
   jobModel = createModalModel(),
   installedModelOptions = [],
   modelManager = createTestModelManager(installedModelOptions),
+  getModelSelectionState = () => ({ generation: 0, pendingGeneration: null }),
   modelSelectionPending = false,
   subscribeConfiguration = () => () => {},
   onInstallPack = vi.fn(async () => true),
@@ -1096,6 +1097,10 @@ function createModal({
   modelManager?: {
     getState(): ModelManagerState;
     subscribe(listener: () => void): () => void;
+  };
+  getModelSelectionState?: () => {
+    generation: number;
+    pendingGeneration: number | null;
   };
   modelSelectionPending?: boolean;
   subscribeConfiguration?: (listener: () => void) => () => void;
@@ -1134,6 +1139,7 @@ function createModal({
     getStyleInstruction,
     job,
     modelManager,
+    getModelSelectionState,
     isModelSelectionPending: () => modelSelectionPending,
     subscribeConfiguration,
     onApplied: vi.fn(),

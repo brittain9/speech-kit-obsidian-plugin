@@ -49,6 +49,10 @@ interface TranslationModalDependencies {
   getStyleInstruction?: () => string;
   job: TranslationJob;
   modelManager: Pick<ModelInstallManager, 'getState' | 'subscribe'>;
+  getModelSelectionState: () => {
+    generation: number;
+    pendingGeneration: number | null;
+  };
   isModelSelectionPending: () => boolean;
   onApplied: () => void;
   onCancelPackInstall: () => Promise<void> | void;
@@ -239,7 +243,11 @@ export class TranslationModal extends Modal {
       this.draftSourceLanguage === configuration.sourceLanguage &&
       this.draftTargetLanguage === configuration.targetLanguage
     ) {
-      return false;
+      this.committedModel = configuration.model;
+      this.committedSourceLanguage = configuration.sourceLanguage;
+      this.committedTargetLanguage = configuration.targetLanguage;
+      this.renderState();
+      return true;
     }
     this.draftModel = configuration.model;
     this.draftSourceLanguage = configuration.sourceLanguage;
@@ -355,10 +363,6 @@ export class TranslationModal extends Modal {
       cls: 'local-stt-translation-modal__swap-label',
       text: swapLabel,
     });
-    if (this.restoreSwapFocus) {
-      swapButton.focus();
-      this.restoreSwapFocus = false;
-    }
     swapButton.addEventListener('click', () => this.swapLanguages());
     const target = languagePair.createDiv({
       cls: 'local-stt-translation-modal__language-control',
@@ -379,6 +383,16 @@ export class TranslationModal extends Modal {
           }
         });
     });
+  }
+
+  private restoreSwapFocusAfterRender(): void {
+    if (!this.restoreSwapFocus) return;
+    const swapButton = this.selectorsEl?.querySelector<HTMLButtonElement>(
+      '.local-stt-translation-modal__swap',
+    );
+    if (swapButton === null || swapButton === undefined) return;
+    swapButton.focus();
+    this.restoreSwapFocus = false;
   }
 
   private async changeDraftModel(value: string): Promise<void> {
@@ -407,21 +421,49 @@ export class TranslationModal extends Modal {
     this.modelSelectionPending = true;
     this.renderState();
 
+    let requestGeneration = this.dependencies.getModelSelectionState().generation;
     try {
-      const committed = await this.dependencies.onModelChange(
+      const request = this.dependencies.onModelChange(
         model,
         this.draftSourceLanguage,
         this.draftTargetLanguage,
       );
-      if (!this.isCurrentModelSelection(generation, model)) return;
+      requestGeneration = this.dependencies.getModelSelectionState().generation;
+      const committed = await request;
+      const controllerSuperseded =
+        this.dependencies.getModelSelectionState().generation !== requestGeneration;
+      if (!this.isCurrentModelSelection(generation, model)) {
+        if (this.modelSelectionGeneration === generation && controllerSuperseded) {
+          this.modelSelectionPending = false;
+          this.reconcileConfiguration();
+        }
+        return;
+      }
       this.modelSelectionPending = false;
+      if (controllerSuperseded) {
+        this.reconcileConfiguration();
+        return;
+      }
       if (committed) {
         this.acceptDraftConfiguration();
         return;
       }
       if (this.reconcileConfiguration()) return;
     } catch (error) {
-      if (!this.isCurrentModelSelection(generation, model)) return;
+      const controllerSuperseded =
+        this.dependencies.getModelSelectionState().generation !== requestGeneration;
+      if (!this.isCurrentModelSelection(generation, model)) {
+        if (this.modelSelectionGeneration === generation && controllerSuperseded) {
+          this.modelSelectionPending = false;
+          this.reconcileConfiguration();
+        }
+        return;
+      }
+      this.modelSelectionPending = false;
+      if (controllerSuperseded) {
+        this.reconcileConfiguration();
+        return;
+      }
       this.dependencies.feedback.show({
         cause: error,
         intent: 'error',
@@ -488,6 +530,7 @@ export class TranslationModal extends Modal {
     });
     this.renderHeading();
     this.renderState();
+    this.restoreSwapFocusAfterRender();
   }
   private currentStyleInstruction(): string {
     return resolveTranslationStyleInstruction(this.draftStyle, this.draftStyleInstruction);
