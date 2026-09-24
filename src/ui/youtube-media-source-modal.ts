@@ -18,6 +18,7 @@ export interface YouTubeMediaSourceRequest {
   readonly consent: YouTubeConsentGrant;
   readonly helperPath: string;
   readonly helperVersion: string;
+  readonly inputUrl: string;
   readonly ref: YouTubeVideoRef;
 }
 
@@ -281,6 +282,7 @@ class YouTubeMediaSourceModal extends Modal {
         consent: explicitYouTubeRightsConfirmation(),
         helperPath: normalizeYouTubeHelperPath(this.helperPath) ?? this.helperPath,
         helperVersion: this.helperVersion,
+        inputUrl: this.url.trim(),
         ref: video,
       };
       if (!this.isCurrent(generation, this.lifecycle.signal)) return;

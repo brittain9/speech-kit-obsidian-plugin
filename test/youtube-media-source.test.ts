@@ -1,5 +1,6 @@
+import type { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import {
   chmod,
   link,
@@ -25,6 +26,7 @@ import {
   createPathBackedMediaLease,
   type JobCleanupOptions,
   openValidatedMediaFile,
+  readOwnerMarker,
   removeMediaJob,
 } from '../src/media/path-backed-media-lease';
 import {
@@ -56,6 +58,37 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
   const result: T[] = [];
   for await (const event of events) result.push(event);
   return result;
+}
+
+function successfulCleanupSpawn(
+  parentRoot?: string,
+  retainedEntryNames?: ReadonlySet<string>,
+): typeof spawn {
+  return vi.fn(() => {
+    const child = new EventEmitter() as EventEmitter & {
+      kill: ReturnType<typeof vi.fn>;
+      pid: number | undefined;
+      stderr: null;
+      stdout: null;
+    };
+    child.pid = undefined;
+    child.stdout = null;
+    child.stderr = null;
+    child.kill = vi.fn();
+    queueMicrotask(() => {
+      if (parentRoot !== undefined) {
+        for (const entry of readdirSync(parentRoot, { withFileTypes: true })) {
+          if (retainedEntryNames?.has(entry.name)) continue;
+          const entryPath = join(parentRoot, entry.name);
+          if (entry.isDirectory()) rmSync(entryPath, { force: true, recursive: true });
+          else rmSync(entryPath, { force: true });
+        }
+      }
+      child.emit('exit', 0);
+      child.emit('close', 0);
+    });
+    return child;
+  }) as unknown as typeof spawn;
 }
 
 async function expectSafeCleanupOutcome(root: string): Promise<void> {
@@ -379,7 +412,7 @@ describe('YouTube path-backed MediaLease', () => {
     const movedRoot = join(root, 'job-original');
     const spawnMock = vi.fn(
       (_command: string, _args: readonly string[], options?: { cwd?: string }) => {
-        expect(options?.cwd).toContain('/proc/');
+        expect(options?.cwd).toBe('/dev/fd/3');
         expect(options?.cwd).not.toContain(root);
         const child = new ImmediateChild();
         child.once('close', () => {
@@ -400,7 +433,7 @@ describe('YouTube path-backed MediaLease', () => {
     expect(spawnMock).toHaveBeenCalledOnce();
   });
 
-  it('uses a private tombstone and fixed Windows cleanup argv', async () => {
+  it('uses the fixed descriptor child on injected Windows cleanup', async () => {
     class ImmediateChild extends EventEmitter {
       pid: number | undefined;
       stdout = null;
@@ -417,11 +450,20 @@ describe('YouTube path-backed MediaLease', () => {
     const calls: Array<{
       args: readonly string[];
       command: string;
-      options?: { cwd?: string };
+      options?: { cwd?: string; stdio?: readonly unknown[] };
     }> = [];
     const spawnMock = vi.fn(
-      (command: string, args: readonly string[], options?: { cwd?: string }): ImmediateChild => {
+      (
+        command: string,
+        args: readonly string[],
+        options?: { cwd?: string; stdio?: readonly unknown[] },
+      ): ImmediateChild => {
         calls.push({ args, command, ...(options === undefined ? {} : { options }) });
+        if (command === process.execPath) {
+          for (const entry of readdirSync(jobRoot, { withFileTypes: true })) {
+            rmSync(join(jobRoot, entry.name), { force: true, recursive: true });
+          }
+        }
         const child = new ImmediateChild();
         child.pid = command.endsWith('taskkill.exe') ? undefined : 424_245;
         queueMicrotask(() => {
@@ -436,13 +478,82 @@ describe('YouTube path-backed MediaLease', () => {
       spawnProcess: spawnMock as unknown as NonNullable<JobCleanupOptions['spawnProcess']>,
       timeoutMs: 100,
     });
-    const cleanupCall = calls.find(({ command }) => command.endsWith('rmdir.exe'));
-    expect(cleanupCall?.args[0]).toBe('/s');
-    expect(cleanupCall?.args[1]).toBe('/q');
-    expect(cleanupCall?.args[2]).toContain('.speech-kit-quarantine-');
-    expect(cleanupCall?.args[2]).not.toBe(jobRoot);
-    expect(cleanupCall?.options?.cwd).toBeUndefined();
+    const cleanupCall = calls.find(({ command }) => command === process.execPath);
+    expect(cleanupCall?.args[0]).toBe('-e');
+    expect(cleanupCall?.args[1]).toContain('fstatSync(3)');
+    expect(cleanupCall?.args[1]).toContain("statSync('.')");
+    expect(cleanupCall?.options?.cwd).toBe('/dev/fd/3');
+    expect(cleanupCall?.options?.stdio?.[3]).toEqual(expect.any(Number));
     await expect(readdir(jobRoot)).rejects.toThrow();
+  });
+
+  it('keeps marker reads on the held descriptor after root replacement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-marker-replacement-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    const ownerPath = join(jobRoot, 'owner.json');
+    const originalOwner = validOwnerMarker();
+    await writeFile(ownerPath, JSON.stringify(originalOwner));
+    const capability = await claimJobRoot(jobRoot);
+    const movedRoot = join(root, 'job-original');
+    await rename(jobRoot, movedRoot);
+    await (await import('node:fs/promises')).mkdir(jobRoot);
+    const replacementOwner = {
+      ...originalOwner,
+      instanceId: '123e4567-e89b-42d3-a456-426614174099',
+    };
+    await writeFile(join(jobRoot, 'owner.json'), JSON.stringify(replacementOwner));
+    await expect(readOwnerMarker(capability)).resolves.toEqual(originalOwner);
+    await removeMediaJob(capability, { spawnProcess: successfulCleanupSpawn(root) });
+    await expect(readFile(join(jobRoot, 'owner.json'))).resolves.toEqual(
+      Buffer.from(JSON.stringify(replacementOwner)),
+    );
+  });
+
+  it('fails closed on an injected macOS child identity mismatch', async () => {
+    class IdentityMismatchChild extends EventEmitter {
+      pid: number | undefined;
+      stdout = null;
+      stderr = null;
+      kill = vi.fn();
+    }
+
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-macos-identity-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    await writeFile(join(jobRoot, 'owner.json'), JSON.stringify(validOwnerMarker()));
+    const sourcePath = join(jobRoot, 'source.webm');
+    await writeFile(sourcePath, 'keep');
+    const capability = await claimJobRoot(jobRoot);
+    const calls: string[] = [];
+    const spawnMock = vi.fn(
+      (
+        command: string,
+        args: readonly string[],
+        options?: { cwd?: string; stdio?: readonly unknown[] },
+      ) => {
+        calls.push(command);
+        expect(args[1]).toContain('fstatSync(3)');
+        expect(args[1]).toContain("statSync('.')");
+        expect(options?.cwd).toBe('/dev/fd/3');
+        expect(options?.stdio?.[3]).toEqual(expect.any(Number));
+        const child = new IdentityMismatchChild();
+        queueMicrotask(() => {
+          child.emit('exit', 75);
+          child.emit('close', 75);
+        });
+        return child;
+      },
+    );
+    await removeMediaJob(capability, {
+      platform: 'darwin',
+      spawnProcess: spawnMock as unknown as NonNullable<JobCleanupOptions['spawnProcess']>,
+      timeoutMs: 100,
+    });
+    expect(calls).toEqual([process.execPath]);
+    await expect(readFile(sourcePath)).resolves.toEqual(Buffer.from('keep'));
   });
 
   it('never removes a symlink replacement during cleanup', async () => {
@@ -526,10 +637,14 @@ describe('YouTube path-backed MediaLease', () => {
     const release = lease.release();
     await expect(withTimeout(release, 500)).resolves.toBeUndefined();
     expect(spawnMock).toHaveBeenCalledWith(
-      '/usr/bin/find',
-      expect.any(Array),
-      expect.objectContaining({ cwd: expect.stringContaining('/proc/') }),
+      process.execPath,
+      ['-e', expect.stringContaining('fstatSync(3)')],
+      expect.objectContaining({
+        cwd: '/dev/fd/3',
+        stdio: ['ignore', 'ignore', 'ignore', expect.any(Number)],
+      }),
     );
+    expect(spawnMock.mock.calls[0]?.[1]?.[1]).toContain("statSync('.')");
     expect(spawnMock.mock.calls[0]?.[2]).not.toHaveProperty('cwd', root);
     expect(child.kill).toHaveBeenCalled();
     kill.mockRestore();
@@ -557,7 +672,11 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const helper = await makeHelper(false);
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-test-'));
     temporaryPaths.push(root);
-    const source = new YouTubeMediaSource({ getHelperPath: () => helper, tempRoot: root });
+    const source = new YouTubeMediaSource({
+      cleanupSpawnProcess: successfulCleanupSpawn(root),
+      getHelperPath: () => helper,
+      tempRoot: root,
+    });
     const events: AcquisitionEvent<YouTubeMediaLease>[] = [];
     for await (const event of source.acquire(youtubeRequest(new AbortController().signal))) {
       events.push(event);
@@ -601,17 +720,42 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const validationRoot = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-validation-'));
     temporaryPaths.push(validationRoot);
     const validationSource = new YouTubeMediaSource({
+      cleanupSpawnProcess: successfulCleanupSpawn(validationRoot),
       getHelperPath: () => validationHelper,
       tempRoot: validationRoot,
     });
     await expect(collect(validationSource.acquire(invalidRequest))).rejects.toMatchObject({
       code: 'invalid_or_unsupported_url',
     });
+    for (const [field, value] of [
+      ['canonicalUrl', 'https://evil.example/watch?v=dQw4w9WgXcQ'],
+      ['host', 'evil.example'],
+      ['inputUrl', 'https://evil.example/'],
+      ['kind', 'attacker_kind'],
+    ] as const) {
+      const forgedRequest = {
+        ...youtubeRequest(new AbortController().signal),
+        provider: {
+          ...youtubeRequest(new AbortController().signal).provider,
+          ref: {
+            ...youtubeRequest(new AbortController().signal).provider.ref,
+            [field]: value,
+          },
+        },
+      } as unknown as YouTubeMediaAcquireRequest;
+      await expect(collect(validationSource.acquire(forgedRequest))).rejects.toMatchObject({
+        code: 'invalid_or_unsupported_url',
+      });
+    }
 
     const liveHelper = await makeHelper(false, { is_live: true, live_status: 'is_live' });
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-live-'));
     temporaryPaths.push(root);
-    const source = new YouTubeMediaSource({ getHelperPath: () => liveHelper, tempRoot: root });
+    const source = new YouTubeMediaSource({
+      cleanupSpawnProcess: successfulCleanupSpawn(root),
+      getHelperPath: () => liveHelper,
+      tempRoot: root,
+    });
     await expect(
       collect(source.acquire(youtubeRequest(new AbortController().signal))),
     ).rejects.toMatchObject({
@@ -621,6 +765,7 @@ describe('YouTubeMediaSource with a local fake helper', () => {
 
     const mismatchedHelper = await makeHelper(false, { id: 'aaaaaaaaaaa' });
     const mismatchedSource = new YouTubeMediaSource({
+      cleanupSpawnProcess: successfulCleanupSpawn(root),
       getHelperPath: () => mismatchedHelper,
       tempRoot: root,
     });
@@ -645,6 +790,7 @@ describe('YouTubeMediaSource with a local fake helper', () => {
       ...youtubeRequest(new AbortController().signal),
       provider: {
         helperVersion: '2026.08.19',
+        inputUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         ref: parseYouTubeVideoUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ'),
       },
     } as unknown as YouTubeMediaAcquireRequest;
@@ -663,7 +809,11 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     await writeFile(join(recent, 'owner.json'), JSON.stringify({ pid: process.pid }));
     await utimes(recent, new Date(20_000), new Date(20_000));
     await utimes(old, new Date(0), new Date(0));
-    await sweepAbandonedYouTubeJobs(root, { minAgeMs: 10, now: () => 200_000 });
+    await sweepAbandonedYouTubeJobs(root, {
+      cleanupSpawnProcess: successfulCleanupSpawn(root),
+      minAgeMs: 10,
+      now: () => 200_000,
+    });
     await expect(readdir(root)).resolves.toEqual([
       'speech-kit-youtube-old',
       'speech-kit-youtube-recent',
@@ -739,7 +889,23 @@ describe('YouTubeMediaSource with a local fake helper', () => {
       }),
     );
     await utimes(unrelatedLive, new Date(0), new Date(0));
-    await sweepAbandonedYouTubeJobs(root, { minAgeMs: 10, now: () => 200_000 });
+    await sweepAbandonedYouTubeJobs(root, {
+      cleanupSpawnProcess: successfulCleanupSpawn(
+        root,
+        new Set([
+          'speech-kit-youtube-active-old',
+          'speech-kit-youtube-corrupt',
+          'speech-kit-youtube-current',
+          'speech-kit-youtube-foreign',
+          'speech-kit-youtube-future',
+          'speech-kit-youtube-old',
+          'speech-kit-youtube-recent',
+          'speech-kit-youtube-unrelated',
+        ]),
+      ),
+      minAgeMs: 10,
+      now: () => 200_000,
+    });
     const remaining = await readdir(root);
     expect(remaining).toEqual([
       'speech-kit-youtube-active-old',
@@ -756,7 +922,10 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-partial-'));
     temporaryPaths.push(root);
     await expect(
-      createPrivateJobRoot(root, { subdirectories: ['owner.json'] }),
+      createPrivateJobRoot(root, {
+        cleanupSpawnProcess: successfulCleanupSpawn(root),
+        subdirectories: ['owner.json'],
+      }),
     ).rejects.toMatchObject({ code: 'tool_failed' });
     await expectSafeCleanupOutcome(root);
   });
@@ -766,6 +935,7 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const wallRoot = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-wall-'));
     temporaryPaths.push(wallRoot);
     const wallSource = new YouTubeMediaSource({
+      cleanupSpawnProcess: successfulCleanupSpawn(wallRoot),
       getHelperPath: () => wallHelper,
       tempRoot: wallRoot,
       wallTimeMs: 50,
@@ -780,6 +950,7 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const outputRoot = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-output-'));
     temporaryPaths.push(outputRoot);
     const outputSource = new YouTubeMediaSource({
+      cleanupSpawnProcess: successfulCleanupSpawn(outputRoot),
       getHelperPath: () => outputHelper,
       maxOutputBytes: 100,
       tempRoot: outputRoot,
@@ -794,6 +965,7 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const sizeRoot = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-size-'));
     temporaryPaths.push(sizeRoot);
     const sizeSource = new YouTubeMediaSource({
+      cleanupSpawnProcess: successfulCleanupSpawn(sizeRoot),
       getHelperPath: () => sizeHelper,
       tempRoot: sizeRoot,
     });
@@ -807,6 +979,7 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const failRoot = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-tool-'));
     temporaryPaths.push(failRoot);
     const failSource = new YouTubeMediaSource({
+      cleanupSpawnProcess: successfulCleanupSpawn(failRoot),
       getHelperPath: () => failHelper,
       tempRoot: failRoot,
     });
@@ -821,7 +994,11 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const helper = await makeHelper(true);
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-cancel-source-'));
     temporaryPaths.push(root);
-    const source = new YouTubeMediaSource({ getHelperPath: () => helper, tempRoot: root });
+    const source = new YouTubeMediaSource({
+      cleanupSpawnProcess: successfulCleanupSpawn(root),
+      getHelperPath: () => helper,
+      tempRoot: root,
+    });
     const acquisition = collect(source.acquire(youtubeRequest(new AbortController().signal)));
     setTimeout(() => source.cancel(), 300);
     await expect(acquisition).rejects.toMatchObject({ code: 'cancelled' });
@@ -833,7 +1010,11 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-cancel-'));
     temporaryPaths.push(root);
     const controller = new AbortController();
-    const source = new YouTubeMediaSource({ getHelperPath: () => helper, tempRoot: root });
+    const source = new YouTubeMediaSource({
+      cleanupSpawnProcess: successfulCleanupSpawn(root),
+      getHelperPath: () => helper,
+      tempRoot: root,
+    });
     const acquisition = (async () => {
       for await (const _event of source.acquire(youtubeRequest(controller.signal))) {
         // The source owns the child until it exits or cancellation is observed.
@@ -853,7 +1034,10 @@ async function createLease(
 ) {
   const validatedMediaFile = await openValidatedMediaFile(jobRoot, mediaPath, maxBytes);
   return await createPathBackedMediaLease({
-    ...(cleanup === undefined ? {} : { cleanup }),
+    cleanup: {
+      ...(cleanup === undefined ? {} : cleanup),
+      spawnProcess: cleanup?.spawnProcess ?? successfulCleanupSpawn(jobRoot),
+    },
     provenance: {
       acquiredAt: new Date().toISOString(),
       adapterVersion: 'test',
@@ -872,6 +1056,7 @@ function youtubeRequest(signal: AbortSignal): YouTubeMediaAcquireRequest {
     provider: {
       consent: explicitYouTubeRightsConfirmation(),
       helperVersion: '2026.08.19',
+      inputUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       ref: parseYouTubeVideoUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ'),
     },
     signal,

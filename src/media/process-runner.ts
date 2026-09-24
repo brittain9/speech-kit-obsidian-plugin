@@ -14,6 +14,7 @@ export interface ManagedProcessResult {
 }
 
 export interface ManagedProcessOptions {
+  readonly closeTimeoutMs?: number;
   readonly maxOutputBytes: number;
   readonly signal?: AbortSignal;
   readonly stderrLimitBytes?: number;
@@ -28,6 +29,8 @@ export interface ManagedProcessSpawnOptions extends SpawnOptions {
   readonly taskkillEnvironment?: NodeJS.ProcessEnv;
   readonly taskkillPath?: string;
 }
+
+const PROCESS_CLOSE_TIMEOUT_MS = 2_000;
 
 interface TaskkillOptions {
   readonly command: string;
@@ -76,8 +79,10 @@ async function collectProcessOutput(
   let settled = false;
   let exitObserved = false;
   let observedExitCode: number | null = null;
+  let closeDeadlineTimer: number | undefined;
   let forceTimer: number | undefined;
   let timeoutTimer: number | undefined;
+  let forceCleanupPromise: Promise<boolean> | null = null;
   let terminationPromise: Promise<boolean> | null = null;
   let exitCleanupPromise: Promise<boolean> | null = null;
   let resolveResult!: (result: ManagedProcessResult) => void;
@@ -92,7 +97,7 @@ async function collectProcessOutput(
     forceTimer = undefined;
   };
   const terminate = (signal: ProcessSignal, scheduleForce: boolean): void => {
-    if (settled || exitObserved) return;
+    if (settled || exitObserved || terminationPromise !== null) return;
     terminationPromise = killProcessTree({
       allowDirectChild: true,
       child,
@@ -103,14 +108,22 @@ async function collectProcessOutput(
       taskkill,
     }).then((succeeded) => {
       cleanupFailed ||= !succeeded;
-      if (!settled) finish(null, true);
       return succeeded;
     });
+    closeDeadlineTimer = window.setTimeout(
+      () => {
+        closeDeadlineTimer = undefined;
+        if (settled) return;
+        cleanupFailed = true;
+        finish(null, true);
+      },
+      Math.max(1, limits.closeTimeoutMs ?? PROCESS_CLOSE_TIMEOUT_MS),
+    );
     if (scheduleForce && forceTimer === undefined) {
       forceTimer = window.setTimeout(() => {
         forceTimer = undefined;
         if (settled || exitObserved) return;
-        void killProcessTree({
+        forceCleanupPromise = killProcessTree({
           allowDirectChild: true,
           child,
           childPid,
@@ -120,6 +133,7 @@ async function collectProcessOutput(
           taskkill,
         }).then((succeeded) => {
           cleanupFailed ||= !succeeded;
+          return succeeded;
         });
       }, 1_000);
     }
@@ -128,6 +142,10 @@ async function collectProcessOutput(
     if (settled) return;
     settled = true;
     clearForceTimer();
+    if (closeDeadlineTimer !== undefined) {
+      window.clearTimeout(closeDeadlineTimer);
+      closeDeadlineTimer = undefined;
+    }
     if (timeoutTimer !== undefined) {
       window.clearTimeout(timeoutTimer);
       timeoutTimer = undefined;
@@ -140,7 +158,13 @@ async function collectProcessOutput(
     child.removeListener('close', onClose);
     // No kill is initiated from close. Normal descendant cleanup starts at
     // exit, while cancellation/timeout cleanup starts while the child is live.
-    const cleanup = exitCleanupPromise ?? terminationPromise ?? Promise.resolve();
+    const cleanup = Promise.all(
+      [exitCleanupPromise, terminationPromise, forceCleanupPromise].filter(
+        (value): value is Promise<boolean> => value !== null,
+      ),
+    ).then((results) => {
+      for (const succeeded of results) cleanupFailed ||= !succeeded;
+    });
     void cleanup.finally(() => {
       resolveResult({
         cancelled,
@@ -164,7 +188,6 @@ async function collectProcessOutput(
     if (stdoutBytes > limits.maxOutputBytes) {
       outputLimitExceeded = true;
       terminate('SIGKILL', false);
-      finish(null, true);
       return;
     }
     stdout += value;
@@ -177,7 +200,6 @@ async function collectProcessOutput(
     if (stderrBytes > stderrLimit) {
       outputLimitExceeded = true;
       terminate('SIGKILL', false);
-      finish(null, true);
       return;
     }
     stderr += value;
@@ -191,6 +213,11 @@ async function collectProcessOutput(
     if (settled) return;
     exitObserved = true;
     observedExitCode = code;
+    if (terminationPromise !== null) return;
+    if (platform === 'win32') {
+      exitCleanupPromise = Promise.resolve(true);
+      return;
+    }
     exitCleanupPromise = killProcessTree({
       allowDirectChild: false,
       child,

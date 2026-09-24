@@ -27,15 +27,17 @@ selected absolute helper with `--version`, accepts a pinned-compatible
 version, and uses the shared bounded process runner with `shell: false` and
 fixed argument arrays. The runner uses detached POSIX process groups and
 fixed-argv Windows `taskkill` tree handling, bounds cumulative output, and
-clears process-tree and forced-kill timers on settlement. It never starts
-synchronous process scans; POSIX cleanup uses the detached process group, and
-normal descendant cleanup starts at the child `exit` event before `close` so
-PID reuse cannot receive a post-close kill. Windows `taskkill` uses an absolute
-system executable and a sanitized environment rather than inherited `PATH`. If
-`taskkill /T` itself fails, a live child receives one direct-kill last resort;
-the result is marked cleanup-failed and cannot produce a media handoff. On
-normal child exit, descendant cleanup failure is likewise surfaced rather than
-accepted as success. The command ignores
+clears process-tree and forced-kill timers on settlement. Cancellation and
+timeout wait for the child's `close` event (or a bounded close deadline) after
+signalling; a child that cannot close is cleanup-failed and cannot produce a
+media handoff. It never starts synchronous process scans; POSIX cleanup uses
+the detached process group, and normal descendant cleanup starts at the child
+`exit` event before `close` so PID reuse cannot receive a post-close kill.
+Windows `taskkill` uses an absolute system executable and a sanitized
+environment rather than inherited `PATH`; normal Windows child exit does not
+invoke `taskkill` against the already-exited PID. If `taskkill /T` itself fails
+while the child is live, a live child receives one direct-kill last resort; the
+result is marked cleanup-failed and cannot produce a media handoff. The command ignores
 user configuration, caches, plugins, remote components, cookies, playlists,
 mark-watched/live behavior, metadata sidecars, thumbnails, archives,
 postprocessors, and external downloaders. It uses one audio-only stream, one
@@ -65,13 +67,16 @@ validation rejects malformed markers, invalid instance/PID/start identities,
 future timestamps beyond a small clock-skew allowance, and stale timestamps.
 Startup sweeping requires the same valid identity-checked marker; corrupt or
 foreign prefix matches are retained for manual recovery rather than deleted.
-On Linux, recursive contents cleanup runs in a bounded, shell-less child
-whose cwd is the held root descriptor through procfs. On platforms without
-that descriptor-relative primitive, cleanup first atomically renames the
-identity-validated root to a private tombstone, revalidates the tombstone
-against the held descriptor, and only then runs a fixed shell-less cleanup
-command against that tombstone. The original replaceable pathname is never
-passed to recursive deletion. The command modal returns the selected helper, probed version, and consent only
+On supported runtimes, recursive contents cleanup runs in a bounded, shell-less
+child using the current Node executable and a fixed built-in script. The held
+root directory descriptor is inherited as fd 3; the child `fstat`s that
+descriptor, `stat`s its descriptor-backed cwd, and exits without deletion if
+their identities differ. It removes only `readdir` entries relative to that
+stable cwd. The parent keeps the root descriptor open, bounds the child and
+waits for its actual close, and after success revalidates the root pathname
+against the held descriptor before removing only the empty root. The original
+replaceable pathname is never passed to recursive deletion, and a failed child
+leaves the root for manual recovery. The command modal returns the selected helper, probed version, and consent only
 after a non-canceled submit; closing it invalidates probes and persists neither
 value. A tracked modal registry prevents repeated concurrent command probes
 and closes every session on disable. Disabling the source rechecks the kill

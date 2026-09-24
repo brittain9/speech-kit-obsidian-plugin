@@ -1,15 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readdir,
-  readFile,
-  rename,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { chmod, mkdir, mkdtemp, open, readdir, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { t } from '../shared/i18n';
@@ -28,6 +20,8 @@ import {
   openValidatedMediaFile,
   type PathBackedMediaLeaseOptions,
   PathMediaLeaseError,
+  readOwnerMarker,
+  releaseJobRootCapability,
   removeMediaJob,
 } from './path-backed-media-lease';
 import { runManagedProcess } from './process-runner';
@@ -36,12 +30,7 @@ import {
   probeYtDlpVersion,
   YouTubeHelperError,
 } from './youtube-helper';
-import {
-  canonicalYouTubeUrl,
-  isYouTubeVideoId,
-  parseYouTubeVideoUrl,
-  type YouTubeVideoRef,
-} from './youtube-url';
+import { canonicalYouTubeUrl, parseYouTubeVideoUrl, type YouTubeVideoRef } from './youtube-url';
 
 export const YOUTUBE_MEDIA_ADAPTER_VERSION = '1';
 export const YOUTUBE_POLICY_VERSION = '2026-09-24.experimental-v1';
@@ -86,6 +75,7 @@ export interface YouTubeConsentGrant {
 export interface YouTubeAcquisitionContext {
   readonly consent: YouTubeConsentGrant;
   readonly helperVersion: string;
+  readonly inputUrl: string;
   readonly ref: YouTubeVideoRef;
 }
 
@@ -133,6 +123,7 @@ export class YouTubeAcquisitionError extends Error {
 }
 
 export interface YouTubeMediaSourceDependencies {
+  readonly cleanupSpawnProcess?: typeof spawn;
   readonly getHelperPath: () => string;
   readonly tempRoot?: string;
   readonly spawnProcess?: typeof spawn;
@@ -157,6 +148,7 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
   readonly adapterVersion = YOUTUBE_MEDIA_ADAPTER_VERSION;
   readonly id = 'youtube_yt_dlp' as const;
   private readonly tempRoot: string;
+  private readonly cleanupSpawnProcess: typeof spawn;
   private readonly spawnProcess: typeof spawn;
   private readonly wallTimeMs: number;
   private readonly maxOutputBytes: number;
@@ -167,6 +159,7 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
 
   constructor(private readonly dependencies: YouTubeMediaSourceDependencies) {
     this.tempRoot = resolve(dependencies.tempRoot ?? tmpdir());
+    this.cleanupSpawnProcess = dependencies.cleanupSpawnProcess ?? spawn;
     this.spawnProcess = dependencies.spawnProcess ?? spawn;
     this.wallTimeMs = dependencies.wallTimeMs ?? YOUTUBE_MAX_WALL_TIME_MS;
     this.maxOutputBytes = dependencies.maxOutputBytes ?? YOUTUBE_MAX_STDOUT_BYTES;
@@ -232,9 +225,12 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
           'The selected yt-dlp version no longer matches the probed helper.',
         );
       }
-      jobRoot = await createPrivateJobRoot(this.tempRoot);
+      jobRoot = await createPrivateJobRoot(this.tempRoot, {
+        cleanupPlatform: this.platform,
+        cleanupSpawnProcess: this.cleanupSpawnProcess,
+      });
       const jobPath = jobRoot.path;
-      heartbeat = startOwnerHeartbeat(jobPath);
+      heartbeat = startOwnerHeartbeat(jobRoot);
       const plan = createPlan(video, this.id);
       yield { plan, type: 'plan' };
       yield { bytes: 0, phase: 'read', totalBytes: request.maxBytes, type: 'progress' };
@@ -257,6 +253,12 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
         wallTimeMs: this.wallTimeMs,
       });
       for (const event of execution.events) yield event;
+      if (execution.cleanupFailed) {
+        throw new YouTubeAcquisitionError(
+          'tool_failed',
+          'The YouTube helper process tree could not be cleaned up safely.',
+        );
+      }
       if (activeController.signal.aborted || execution.cancelled) {
         throw new YouTubeAcquisitionError('cancelled', 'The YouTube acquisition was cancelled.');
       }
@@ -264,12 +266,6 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
         throw new YouTubeAcquisitionError(
           'resource_limit',
           'The YouTube acquisition exceeded a safety limit.',
-        );
-      }
-      if (execution.cleanupFailed) {
-        throw new YouTubeAcquisitionError(
-          'tool_failed',
-          'The YouTube helper process tree could not be cleaned up safely.',
         );
       }
       if (execution.exitCode !== 0) throw mapHelperFailure(execution.stderr);
@@ -286,6 +282,10 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
       let baseLease: MediaLease;
       try {
         baseLease = await createLease({
+          cleanup: {
+            platform: this.platform,
+            spawnProcess: this.cleanupSpawnProcess,
+          },
           provenance: {
             acquiredAt: new Date(this.now()).toISOString(),
             adapterVersion: this.adapterVersion,
@@ -307,7 +307,10 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
             .release()
             .then(async () => {
               await stopOwnerHeartbeat(heartbeat);
-              await removeMediaJob(rootCapability);
+              await removeMediaJob(rootCapability, {
+                platform: this.platform,
+                spawnProcess: this.cleanupSpawnProcess,
+              });
             })
             .catch(() => {})
             .finally(() => {
@@ -342,7 +345,7 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
         this.jobInUse = false;
         this.activeAbortController = null;
         if (jobRoot !== null) {
-          await removeJobBestEffort(jobRoot);
+          await removeJobBestEffort(jobRoot, this.cleanupSpawnProcess, this.platform);
         }
       }
     }
@@ -351,7 +354,12 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
 
 export async function sweepAbandonedYouTubeJobs(
   tempRoot = tmpdir(),
-  options: { readonly minAgeMs?: number; readonly now?: () => number } = {},
+  options: {
+    readonly cleanupSpawnProcess?: typeof spawn;
+    readonly minAgeMs?: number;
+    readonly now?: () => number;
+    readonly platform?: NodeJS.Platform;
+  } = {},
 ): Promise<void> {
   const root = resolve(tempRoot);
   const now = options.now ?? Date.now;
@@ -364,10 +372,23 @@ export async function sweepAbandonedYouTubeJobs(
         .map(async (entry) => {
           const jobRoot = join(root, entry.name);
           const jobStat = await stat(jobRoot);
-          if (now() - jobStat.mtimeMs < minAgeMs) return;
-          if (await hasFreshOwnerHeartbeat(jobRoot, now())) return;
+          const sweepNow = now();
+          if (sweepNow - jobStat.mtimeMs < minAgeMs) return;
           const capability = await claimJobRoot(jobRoot);
-          await removeMediaJob(capability);
+          if (capability.root.dev !== jobStat.dev || capability.root.ino !== jobStat.ino) {
+            await releaseJobRootCapability(capability);
+            return;
+          }
+          if (await hasFreshOwnerHeartbeat(capability, sweepNow)) {
+            await releaseJobRootCapability(capability);
+            return;
+          }
+          await removeMediaJob(capability, {
+            ...(options.cleanupSpawnProcess === undefined
+              ? {}
+              : { spawnProcess: options.cleanupSpawnProcess }),
+            ...(options.platform === undefined ? {} : { platform: options.platform }),
+          });
         }),
     );
   } catch {
@@ -380,10 +401,12 @@ export function isYouTubeOwnerHeartbeatFresh(value: unknown, now: number): boole
   return now - value.heartbeatAt < YOUTUBE_OWNER_HEARTBEAT_FRESH_MS;
 }
 
-async function hasFreshOwnerHeartbeat(jobRoot: string, now: number): Promise<boolean> {
+async function hasFreshOwnerHeartbeat(
+  capability: JobRootCapability,
+  now: number,
+): Promise<boolean> {
   try {
-    const marker = JSON.parse(await readFile(join(jobRoot, 'owner.json'), 'utf8')) as unknown;
-    return isYouTubeOwnerHeartbeatFresh(marker, now);
+    return isYouTubeOwnerHeartbeatFresh(await readOwnerMarker(capability), now);
   } catch {
     return false;
   }
@@ -628,16 +651,16 @@ interface OwnerIdentity {
   readonly processStartedAt: number;
 }
 
-function startOwnerHeartbeat(jobRoot: string): OwnerHeartbeat {
+function startOwnerHeartbeat(capability: JobRootCapability): OwnerHeartbeat {
   let stopped = false;
   let pending = Promise.resolve();
-  const identity = readOwnerIdentity(jobRoot);
+  const identity = readOwnerIdentity(capability);
   const update = (): void => {
     if (stopped) return;
     pending = pending
       .then(async () => {
         if (stopped) return;
-        await writeOwnerHeartbeat(jobRoot, await identity);
+        await writeOwnerHeartbeat(capability, await identity);
       })
       .catch(() => {});
   };
@@ -656,10 +679,8 @@ async function stopOwnerHeartbeat(heartbeat: OwnerHeartbeat | null): Promise<voi
   await heartbeat?.stop();
 }
 
-async function readOwnerIdentity(jobRoot: string): Promise<OwnerIdentity> {
-  const marker = JSON.parse(
-    await readFile(join(jobRoot, 'owner.json'), 'utf8'),
-  ) as Partial<OwnerIdentity>;
+async function readOwnerIdentity(capability: JobRootCapability): Promise<OwnerIdentity> {
+  const marker = (await readOwnerMarker(capability)) as Partial<OwnerIdentity>;
   if (
     typeof marker.createdAt !== 'number' ||
     typeof marker.instanceId !== 'string' ||
@@ -676,26 +697,30 @@ async function readOwnerIdentity(jobRoot: string): Promise<OwnerIdentity> {
   };
 }
 
-async function writeOwnerHeartbeat(jobRoot: string, identity: OwnerIdentity): Promise<void> {
-  const ownerPath = join(jobRoot, 'owner.json');
-  const temporaryPath = `${ownerPath}.${randomUUID()}.tmp`;
-  await writeFile(
-    temporaryPath,
+async function writeOwnerHeartbeat(
+  capability: JobRootCapability,
+  identity: OwnerIdentity,
+): Promise<void> {
+  const serialized = Buffer.from(
     JSON.stringify({ ...identity, heartbeatAt: Date.now(), speechKitJob: true }),
-    { mode: 0o600 },
+    'utf8',
   );
-  await rename(temporaryPath, ownerPath);
+  await capability.owner.handle.truncate(0);
+  await capability.owner.handle.write(serialized, 0, serialized.length, 0);
 }
 
 export async function createPrivateJobRoot(
   tempRoot: string,
-  options: { readonly subdirectories?: readonly string[] } = {},
+  options: {
+    readonly cleanupPlatform?: NodeJS.Platform;
+    readonly cleanupSpawnProcess?: typeof spawn;
+    readonly subdirectories?: readonly string[];
+  } = {},
 ): Promise<JobRootCapability> {
   await mkdir(tempRoot, { recursive: true });
   const jobRoot = await mkdtemp(join(tempRoot, YOUTUBE_JOB_PREFIX));
   try {
-    await writeFile(
-      join(jobRoot, 'owner.json'),
+    const ownerMarker = Buffer.from(
       JSON.stringify({
         createdAt: Date.now(),
         heartbeatAt: Date.now(),
@@ -704,8 +729,22 @@ export async function createPrivateJobRoot(
         processStartedAt: Date.now() - process.uptime() * 1_000,
         speechKitJob: true,
       }),
-      { mode: 0o600 },
+      'utf8',
     );
+    const ownerHandle = await open(
+      join(jobRoot, 'owner.json'),
+      fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        (fsConstants.O_NOFOLLOW ?? 0),
+      0o600,
+    );
+    try {
+      await ownerHandle.write(ownerMarker, 0, ownerMarker.length, 0);
+      await ownerHandle.chmod(0o600);
+    } finally {
+      await ownerHandle.close();
+    }
     await chmod(jobRoot, 0o700);
     for (const directory of options.subdirectories ?? ['home', 'tmp', 'cache', 'config', 'data']) {
       await mkdir(join(jobRoot, directory), { recursive: true, mode: 0o700 });
@@ -714,7 +753,12 @@ export async function createPrivateJobRoot(
   } catch {
     try {
       const capability = await claimJobRoot(jobRoot);
-      await removeMediaJob(capability);
+      await removeMediaJob(capability, {
+        ...(options.cleanupPlatform === undefined ? {} : { platform: options.cleanupPlatform }),
+        ...(options.cleanupSpawnProcess === undefined
+          ? {}
+          : { spawnProcess: options.cleanupSpawnProcess }),
+      });
     } catch {
       // Partial-root cleanup remains best effort.
     }
@@ -753,9 +797,13 @@ async function findAcquiredMedia(jobRoot: string): Promise<{ path: string }> {
   return { path: join(jobRoot, candidates[0]?.name ?? '') };
 }
 
-async function removeJobBestEffort(jobRoot: JobRootCapability): Promise<void> {
+async function removeJobBestEffort(
+  jobRoot: JobRootCapability,
+  cleanupSpawnProcess: typeof spawn,
+  platform: NodeJS.Platform,
+): Promise<void> {
   try {
-    await removeMediaJob(jobRoot);
+    await removeMediaJob(jobRoot, { platform, spawnProcess: cleanupSpawnProcess });
   } catch {
     // Cleanup is best effort across supported operating systems.
   }
@@ -773,19 +821,34 @@ function createPlan(video: YouTubeVideoRef, sourceId: string): YouTubeMediaPlan 
 
 function isYouTubeMediaAcquireRequest(value: unknown): value is YouTubeMediaAcquireRequest {
   if (!isRecord(value) || !isRecord(value.provider) || !isRecord(value.provider.ref)) return false;
+  if (
+    value.kind !== 'interactive' ||
+    typeof value.maxBytes !== 'number' ||
+    !Number.isFinite(value.maxBytes) ||
+    typeof value.maxDurationMs !== 'number' ||
+    !Number.isFinite(value.maxDurationMs) ||
+    !isRecord(value.signal) ||
+    typeof value.signal.aborted !== 'boolean' ||
+    typeof value.signal.addEventListener !== 'function' ||
+    typeof value.signal.removeEventListener !== 'function' ||
+    typeof value.provider.helperVersion !== 'string' ||
+    typeof value.provider.inputUrl !== 'string'
+  ) {
+    return false;
+  }
+  let parsed: YouTubeVideoRef;
+  try {
+    parsed = parseYouTubeVideoUrl(value.provider.inputUrl);
+  } catch {
+    return false;
+  }
+  const ref = value.provider.ref;
   return (
-    value.kind === 'interactive' &&
-    typeof value.maxBytes === 'number' &&
-    Number.isFinite(value.maxBytes) &&
-    typeof value.maxDurationMs === 'number' &&
-    Number.isFinite(value.maxDurationMs) &&
-    isRecord(value.signal) &&
-    typeof value.signal.aborted === 'boolean' &&
-    typeof value.signal.addEventListener === 'function' &&
-    typeof value.signal.removeEventListener === 'function' &&
-    typeof value.provider.helperVersion === 'string' &&
-    typeof value.provider.ref.videoId === 'string' &&
-    isYouTubeVideoId(value.provider.ref.videoId)
+    ref.kind === parsed.kind &&
+    ref.videoId === parsed.videoId &&
+    ref.host === parsed.host &&
+    ref.canonicalUrl === parsed.canonicalUrl &&
+    ref.inputUrl === parsed.inputUrl
   );
 }
 

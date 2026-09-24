@@ -529,6 +529,7 @@ export default class LocalSttPlugin extends Plugin {
         await this.requireAudioFileTranscriptionController().transcribeProvider(youtubeMediaEntry, {
           consent: request.consent,
           helperVersion: request.helperVersion,
+          inputUrl: request.inputUrl,
           ref: request.ref,
         });
       },

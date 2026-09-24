@@ -24,7 +24,7 @@ describe('managed process runner', () => {
       '/private/helper',
       ['--version'],
       { platform: 'linux', shell: false, spawnProcess },
-      { maxOutputBytes: 5, stderrLimitBytes: 5, timeoutMs: 1_000 },
+      { closeTimeoutMs: 20, maxOutputBytes: 5, stderrLimitBytes: 5, timeoutMs: 1_000 },
     );
     child.stdout.emit('data', '123');
     child.stdout.emit('data', '456');
@@ -95,20 +95,21 @@ describe('managed process runner', () => {
       '/private/helper',
       [],
       { platform: 'linux', shell: false, spawnProcess },
-      { maxOutputBytes: 100, timeoutMs: 5 },
+      { closeTimeoutMs: 20, maxOutputBytes: 100, timeoutMs: 5 },
     );
     expect(result.timedOut).toBe(true);
     expect(kill).toHaveBeenCalledWith(-7654, 'SIGTERM');
     kill.mockRestore();
   });
 
-  it('does not use an incapable direct-child fallback when Windows taskkill fails', async () => {
+  it('does not taskkill a normally exited Windows child', async () => {
     const child = new FakeChild();
     child.pid = 2468;
-    const taskkill = new FakeChild();
-    const spawnProcess = vi.fn((command: string) =>
-      command.endsWith('taskkill.exe') ? taskkill : child,
-    ) as unknown as typeof spawn;
+    const calls: string[] = [];
+    const spawnProcess = vi.fn((command: string) => {
+      calls.push(command);
+      return child;
+    }) as unknown as typeof spawn;
     const resultPromise = runManagedProcess(
       'C:\\helper.exe',
       [],
@@ -116,11 +117,12 @@ describe('managed process runner', () => {
       { maxOutputBytes: 100, timeoutMs: 1_000 },
     );
     child.emit('exit', 0);
-    taskkill.emit('error', new Error('taskkill failed'));
     child.emit('close', 0);
-    await resultPromise;
-    // The fake child represents a surviving tree; no PID-only kill is attempted.
-    expect(child.kill).not.toHaveBeenCalled();
+    const result = await resultPromise;
+    expect(calls).toEqual(['C:\\helper.exe']);
+    expect(result.exitCode).toBe(0);
+    expect(result.cleanupFailed).toBe(false);
+    expect(result.failed).toBe(false);
   });
 
   it('fails closed when taskkill cannot spawn during a live timeout', async () => {
@@ -134,7 +136,7 @@ describe('managed process runner', () => {
       'C:\\helper.exe',
       [],
       { platform: 'win32', shell: false, spawnProcess },
-      { maxOutputBytes: 100, timeoutMs: 5 },
+      { closeTimeoutMs: 20, maxOutputBytes: 100, timeoutMs: 5 },
     );
     expect(result.timedOut).toBe(true);
     expect(result.cleanupFailed).toBe(true);
@@ -154,7 +156,7 @@ describe('managed process runner', () => {
       'C:\\helper.exe',
       [],
       { platform: 'win32', shell: false, spawnProcess },
-      { maxOutputBytes: 100, signal: controller.signal, timeoutMs: 1_000 },
+      { closeTimeoutMs: 20, maxOutputBytes: 100, signal: controller.signal, timeoutMs: 1_000 },
     );
     controller.abort();
     taskkill.emit('error', new Error('taskkill failed'));
@@ -164,27 +166,26 @@ describe('managed process runner', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGTERM');
   });
 
-  it('reports normal Windows descendant cleanup failure instead of success', async () => {
+  it('rejects a Windows child that ignores termination and never closes', async () => {
     const child = new FakeChild();
     child.pid = 2471;
     const taskkill = new FakeChild();
     const spawnProcess = vi.fn((command: string) =>
       command.endsWith('taskkill.exe') ? taskkill : child,
     ) as unknown as typeof spawn;
+    const controller = new AbortController();
     const resultPromise = runManagedProcess(
       'C:\\helper.exe',
       [],
       { platform: 'win32', shell: false, spawnProcess },
-      { maxOutputBytes: 100, timeoutMs: 1_000 },
+      { closeTimeoutMs: 20, maxOutputBytes: 100, signal: controller.signal, timeoutMs: 1_000 },
     );
-    child.emit('exit', 0);
-    taskkill.emit('close', 1);
-    child.emit('close', 0);
+    controller.abort();
+    taskkill.emit('close', 0);
     const result = await resultPromise;
-    expect(result.exitCode).toBe(0);
+    expect(result.cancelled).toBe(true);
     expect(result.cleanupFailed).toBe(true);
     expect(result.failed).toBe(true);
-    expect(child.kill).not.toHaveBeenCalled();
   });
 
   it('uses fixed taskkill argv without a shell on Windows', async () => {
@@ -206,6 +207,7 @@ describe('managed process runner', () => {
         return command.endsWith('taskkill.exe') ? taskkill : child;
       },
     ) as unknown as typeof spawn;
+    const controller = new AbortController();
     const resultPromise = runManagedProcess(
       'C:\\helper.exe',
       ['--version'],
@@ -216,13 +218,18 @@ describe('managed process runner', () => {
         taskkillEnvironment: { PATH: '', SystemRoot: 'C:\\Windows' },
         taskkillPath: 'C:\\Windows\\System32\\taskkill.exe',
       },
-      { maxOutputBytes: 100, timeoutMs: 1_000 },
+      {
+        closeTimeoutMs: 100,
+        maxOutputBytes: 100,
+        signal: controller.signal,
+        timeoutMs: 1_000,
+      },
     );
-    child.emit('exit', 0);
-    child.emit('close', 0);
+    controller.abort();
     taskkill.emit('close', 0);
+    child.emit('close', 0);
     const result = await resultPromise;
-    expect(result.exitCode).toBe(0);
+    expect(result.cancelled).toBe(true);
     const taskkillCall = calls.find(({ command }) => command.endsWith('taskkill.exe'));
     expect(taskkillCall).toMatchObject({
       args: ['/pid', '1234', '/T', '/F'],

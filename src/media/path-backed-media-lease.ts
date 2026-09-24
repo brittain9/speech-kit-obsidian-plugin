@@ -1,8 +1,8 @@
 import type { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { type FileHandle, lstat, open, readFile, realpath, rename, rmdir } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { type FileHandle, lstat, open, realpath, rmdir } from 'node:fs/promises';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 
 import type { MediaLease, MediaProvenance, MediaReadStream } from './media-source';
@@ -17,6 +17,7 @@ const jobRootCapabilities = new WeakSet<object>();
 
 const JOB_CLEANUP_TIMEOUT_MS = 5_000;
 const OWNER_CLOCK_SKEW_MS = 5_000;
+const OWNER_MARKER_MAX_BYTES = 16 * 1024;
 
 export interface JobCleanupOptions {
   readonly platform?: NodeJS.Platform;
@@ -27,9 +28,9 @@ export interface JobCleanupOptions {
 export function supportsDescriptorRelativeCleanup(
   platform: NodeJS.Platform = process.platform,
 ): boolean {
-  // Linux exposes a parent's held directory descriptor through procfs. macOS
-  // and Windows do not provide a portable Node descriptor-relative cwd.
-  return platform === 'linux';
+  // Descriptor inheritance is attempted on every supported desktop runtime;
+  // the child verifies identity before it can remove anything.
+  return platform === 'linux' || platform === 'darwin' || platform === 'win32';
 }
 
 export class PathMediaLeaseError extends Error {
@@ -58,8 +59,13 @@ export interface ValidatedRoot {
   readonly realPath: string;
 }
 
+export interface OwnerMarkerFile {
+  readonly handle: FileHandle;
+}
+
 export interface JobRootCapability {
   readonly [jobRootCapabilityBrand]: true;
+  readonly owner: OwnerMarkerFile;
   readonly path: string;
   readonly root: ValidatedRoot;
 }
@@ -263,12 +269,18 @@ export async function openValidatedMediaFile(
 
 export async function claimJobRoot(jobRoot: string): Promise<JobRootCapability> {
   const root = await openValidatedRoot(resolve(jobRoot));
+  let owner: OwnerMarkerFile | null = null;
   try {
-    await assertOwnerMarker(root.path);
-    const capability = { path: root.path, root } as JobRootCapability;
+    await assertCurrentRoot(root);
+    owner = await openOwnerMarker(root);
+    await assertCurrentRoot(root);
+    await assertOwnerMarker(await readHeldFile(owner.handle));
+    await assertCurrentRoot(root);
+    const capability = { owner, path: root.path, root } as JobRootCapability;
     jobRootCapabilities.add(capability);
     return capability;
   } catch (error) {
+    await owner?.handle.close().catch(() => {});
     await root.handle.close().catch(() => {});
     throw error;
   }
@@ -285,9 +297,11 @@ export async function removeMediaJob(
     );
   }
   try {
+    await capability.owner.handle.close().catch(() => {});
     await removeValidatedRoot(capability.root, cleanup);
   } finally {
     await capability.root.handle.close().catch(() => {});
+    jobRootCapabilities.delete(capability);
   }
 }
 
@@ -295,9 +309,51 @@ function isValidatedMediaFile(value: unknown): value is ValidatedMediaFile {
   return typeof value === 'object' && value !== null && validatedMediaFiles.has(value);
 }
 
-async function assertOwnerMarker(jobRoot: string): Promise<void> {
+async function openOwnerMarker(root: ValidatedRoot): Promise<OwnerMarkerFile> {
+  const ownerPath = join(root.path, 'owner.json');
+  const before = await safeLstat(ownerPath);
+  assertOwnerFileStat(before);
+  const handle = await open(ownerPath, fsConstants.O_RDWR | safeNoFollowFlag());
   try {
-    const marker = JSON.parse(await readFile(join(jobRoot, 'owner.json'), 'utf8')) as {
+    const descriptor = await handle.stat();
+    assertOwnerFileStat(descriptor);
+    if (descriptor.dev !== before.dev || descriptor.ino !== before.ino) {
+      throw new PathMediaLeaseError(
+        'integrity_failed',
+        'The owner marker changed during validation.',
+      );
+    }
+    await assertCurrentRoot(root);
+    const after = await safeLstat(ownerPath);
+    assertOwnerFileStat(after);
+    if (after.dev !== descriptor.dev || after.ino !== descriptor.ino) {
+      throw new PathMediaLeaseError(
+        'integrity_failed',
+        'The owner marker changed during validation.',
+      );
+    }
+    return { handle };
+  } catch (error) {
+    await handle.close().catch(() => {});
+    throw error;
+  }
+}
+
+async function readHeldFile(handle: FileHandle): Promise<string> {
+  const size = (await handle.stat()).size;
+  const buffer = Buffer.alloc(size);
+  let offset = 0;
+  while (offset < size) {
+    const result = await handle.read(buffer, offset, size - offset, offset);
+    if (result.bytesRead === 0) break;
+    offset += result.bytesRead;
+  }
+  return buffer.subarray(0, offset).toString('utf8');
+}
+
+async function assertOwnerMarker(serialized: string): Promise<void> {
+  try {
+    const marker = JSON.parse(serialized) as {
       createdAt?: unknown;
       heartbeatAt?: unknown;
       instanceId?: unknown;
@@ -340,6 +396,40 @@ async function assertOwnerMarker(jobRoot: string): Promise<void> {
       cause: error,
     });
   }
+}
+
+function assertOwnerFileStat(stat: {
+  ino: number;
+  isFile(): boolean;
+  isSymbolicLink(): boolean;
+  nlink: number;
+  size: number;
+}): void {
+  if (
+    !stat.isFile() ||
+    stat.isSymbolicLink() ||
+    stat.nlink !== 1 ||
+    stat.size > OWNER_MARKER_MAX_BYTES
+  ) {
+    throw new PathMediaLeaseError('integrity_failed', 'The owner marker is not a private file.');
+  }
+}
+
+export async function readOwnerMarker(capability: JobRootCapability): Promise<unknown> {
+  if (!jobRootCapabilities.has(capability)) {
+    throw new PathMediaLeaseError(
+      'integrity_failed',
+      'A validated job-root capability is required.',
+    );
+  }
+  return JSON.parse(await readHeldFile(capability.owner.handle)) as unknown;
+}
+
+export async function releaseJobRootCapability(capability: JobRootCapability): Promise<void> {
+  if (!jobRootCapabilities.has(capability)) return;
+  jobRootCapabilities.delete(capability);
+  await capability.owner.handle.close().catch(() => {});
+  await capability.root.handle.close().catch(() => {});
 }
 
 async function openValidatedRoot(jobRoot: string): Promise<ValidatedRoot> {
@@ -395,15 +485,12 @@ async function removeValidatedRoot(
   try {
     await assertCurrentRoot(root);
     const platform = cleanup.platform ?? process.platform;
-    if (supportsDescriptorRelativeCleanup(platform)) {
-      await removeRootContentsFromHeldRoot(root, cleanup, platform);
-      await assertCurrentRoot(root);
-      await rmdir(root.path);
-      return;
-    }
-    await removeViaPrivateTombstone(root, cleanup, platform);
+    if (!supportsDescriptorRelativeCleanup(platform)) return;
+    await removeRootContentsFromHeldDescriptor(root, cleanup, platform);
+    await assertCurrentRoot(root);
+    await rmdir(root.path);
   } catch {
-    // A missing, replaced, or failed-cleanup root is intentionally quarantined.
+    // A missing, replaced, or failed-cleanup root is intentionally left untouched.
   }
 }
 
@@ -416,59 +503,18 @@ async function assertCurrentRoot(root: ValidatedRoot): Promise<void> {
   }
 }
 
-async function removeRootContentsFromHeldRoot(
+const DESCRIPTOR_CLEANUP_SCRIPT = `
+const fs = require('node:fs');
+const root = fs.fstatSync(3);
+const cwd = fs.statSync('.');
+if (!root.isDirectory() || root.dev !== cwd.dev || root.ino !== cwd.ino) process.exit(75);
+for (const entry of fs.readdirSync('.')) fs.rmSync(entry, { recursive: true, force: true });
+`;
+
+async function removeRootContentsFromHeldDescriptor(
   root: ValidatedRoot,
   cleanup: JobCleanupOptions,
   platform: NodeJS.Platform,
-): Promise<void> {
-  await runCleanupProcess(
-    '/usr/bin/find',
-    ['.', '-mindepth', '1', '-maxdepth', '1', '-exec', '/bin/rm', '-rf', '--', '{}', '+'],
-    cleanup,
-    platform,
-    `/proc/${process.pid}/fd/${root.handle.fd}`,
-  );
-}
-
-async function removeViaPrivateTombstone(
-  root: ValidatedRoot,
-  cleanup: JobCleanupOptions,
-  platform: NodeJS.Platform,
-): Promise<void> {
-  const tombstonePath = join(
-    dirname(root.path),
-    `.speech-kit-quarantine-${basename(root.path)}-${randomUUID()}`,
-  );
-  await assertCurrentRoot(root);
-  await rename(root.path, tombstonePath);
-
-  let tombstoneRoot: ValidatedRoot | null = null;
-  try {
-    tombstoneRoot = await openValidatedRoot(tombstonePath);
-    if (tombstoneRoot.dev !== root.dev || tombstoneRoot.ino !== root.ino) {
-      throw new PathMediaLeaseError(
-        'integrity_failed',
-        'The quarantined job root no longer matches the held descriptor.',
-      );
-    }
-    await assertCurrentRoot(tombstoneRoot);
-    const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
-    const command = platform === 'win32' ? `${systemRoot}\\System32\\rmdir.exe` : '/bin/rm';
-    const args = platform === 'win32' ? ['/s', '/q', tombstonePath] : ['-rf', '--', tombstonePath];
-    await runCleanupProcess(command, args, cleanup, platform);
-    await assertCurrentRoot(tombstoneRoot);
-    await rmdir(tombstonePath);
-  } finally {
-    await tombstoneRoot?.handle.close().catch(() => {});
-  }
-}
-
-async function runCleanupProcess(
-  command: string,
-  args: readonly string[],
-  cleanup: JobCleanupOptions,
-  platform: NodeJS.Platform,
-  cwd?: string,
 ): Promise<void> {
   const controller = new AbortController();
   const timeoutMs = Math.min(
@@ -477,8 +523,14 @@ async function runCleanupProcess(
   );
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
+  const stdio: ['ignore', 'ignore', 'ignore', number] = [
+    'ignore',
+    'ignore',
+    'ignore',
+    root.handle.fd,
+  ];
   const spawnOptions = {
-    ...(cwd === undefined ? {} : { cwd }),
+    cwd: '/dev/fd/3',
     env: {
       LANG: 'C',
       LC_ALL: 'C',
@@ -487,16 +539,22 @@ async function runCleanupProcess(
     },
     platform,
     shell: false,
-    stdio: 'ignore' as const,
+    stdio,
     windowsHide: true,
     ...(cleanup.spawnProcess === undefined ? {} : { spawnProcess: cleanup.spawnProcess }),
   };
   try {
-    const result = await runManagedProcess(command, args, spawnOptions, {
-      maxOutputBytes: 1,
-      signal: controller.signal,
-      timeoutMs,
-    });
+    const result = await runManagedProcess(
+      process.execPath,
+      ['-e', DESCRIPTOR_CLEANUP_SCRIPT],
+      spawnOptions,
+      {
+        closeTimeoutMs: timeoutMs,
+        maxOutputBytes: 1,
+        signal: controller.signal,
+        timeoutMs,
+      },
+    );
     if (
       result.cancelled ||
       result.cleanupFailed ||
@@ -505,7 +563,7 @@ async function runCleanupProcess(
       result.timedOut ||
       result.exitCode !== 0
     ) {
-      throw new Error('job cleanup command failed');
+      throw new Error('descriptor job cleanup failed');
     }
   } finally {
     window.clearTimeout(timer);
