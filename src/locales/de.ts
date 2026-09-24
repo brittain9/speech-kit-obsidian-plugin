@@ -325,6 +325,10 @@ export const de = {
   'ribbon.listening': 'Speech Kit – hört zu',
   'ribbon.speechDetected': 'Speech Kit – Sprache erkannt',
   'ribbon.error': 'Speech Kit – Fehler',
+  'ribbon.queue.normal': 'Warteschlange normal',
+  'ribbon.queue.catchingUp': 'Holt auf',
+  'ribbon.queue.fallingBehind': 'Transkription kommt nicht hinterher',
+  'ribbon.queue.saturated': 'Warteschlange voll – Diktat pausieren',
   'validation.wholeNumberRange': 'Geben Sie eine ganze Zahl von {min} bis {max} ein.',
   'validation.numberRange': 'Geben Sie eine Zahl von {min} bis {max} ein.',
   'llm.managedByPreset':
@@ -826,6 +830,7 @@ export const de = {
   'translation.modal.sourceNote': 'Quellnotiz',
   'translation.modal.previewAria': 'Übersetzungsvorschau',
   'translation.modal.readAloud': 'Übersetzung auf {language} vorlesen',
+  'translation.modal.reopen': 'Übersetzung öffnen: {status}',
   'translation.modal.preparing': 'Lokale Übersetzung wird vorbereitet…',
   'translation.modal.loading': 'Lokales Modell wird geladen…',
   'translation.modal.translating': 'Wird übersetzt…',

@@ -82,7 +82,7 @@ import {
   type SidecarVersionDrift,
 } from './sidecar/sidecar-version-drift';
 import { TranslationController } from './translation/translation-controller';
-import type { TranslationJobState } from './translation/translation-job';
+import { TranslationStatusController } from './translation/translation-status';
 import { READ_ALOUD_SPEED_PRESETS, readAloudControlLabels } from './tts/read-aloud-control-labels';
 import { ReadAloudController, type ReadAloudState } from './tts/read-aloud-controller';
 import { didReadAloudSettingsChange, resolveReadAloudVoiceId } from './tts/read-aloud-selection';
@@ -133,7 +133,7 @@ export default class LocalSttPlugin extends Plugin {
   private sidecarInstallManager: SidecarInstallManager | null = null;
   private readonly temporaryLeafPinLeaseManager = new TemporaryLeafPinLeaseManager();
   private translationController: TranslationController | null = null;
-  private translationStatus: HTMLElement | null = null;
+  private translationStatus: TranslationStatusController | null = null;
 
   override async onload(): Promise<void> {
     const persistedData: unknown = await this.loadData();
@@ -302,7 +302,7 @@ export default class LocalSttPlugin extends Plugin {
       },
     });
     this.readAloudStatus = this.addStatusBarItem();
-    this.translationStatus = this.addStatusBarItem();
+    this.translationStatus = new TranslationStatusController(this.addStatusBarItem());
     this.readAloudStatus.addClass('local-stt-read-aloud-status');
     this.readAloudController = new ReadAloudController({
       feedback: this.feedback,
@@ -332,7 +332,7 @@ export default class LocalSttPlugin extends Plugin {
       modelManager: this.requireModelInstallManager(),
       onReadAloud: (text, language) => this.requireReadAloudController().readText(text, language),
       saveSettings: (nextSettings) => this.updateSettings(nextSettings),
-      setDetachedStatus: (state, reopen) => this.renderTranslationStatus(state, reopen),
+      setDetachedStatus: (state, reopen) => this.translationStatus?.update(state, reopen),
       sidecarConnection: this.requireSidecarConnection(),
     });
 
@@ -913,36 +913,6 @@ export default class LocalSttPlugin extends Plugin {
     });
     setIcon(stop, 'square');
     stop.addEventListener('click', () => this.requireReadAloudController().stop());
-  }
-
-  private renderTranslationStatus(state: TranslationJobState | null, reopen: () => void): void {
-    const status = this.translationStatus;
-    if (status === null) return;
-    status.toggle(state !== null);
-    status.setAttribute('aria-live', 'polite');
-    status.setAttribute('role', 'status');
-    status.onclick = state === null ? null : reopen;
-    if (state === null) {
-      status.textContent = '';
-      return;
-    }
-    status.textContent =
-      state.phase === 'translating' && state.total > 1
-        ? t('translation.modal.translatingProgress', {
-            completed: state.completed,
-            total: state.total,
-          })
-        : state.phase === 'completed'
-          ? t('translation.modal.ready')
-          : state.phase === 'failed'
-            ? t('translation.modal.failed')
-            : state.phase === 'cancelled'
-              ? t('translation.modal.canceled')
-              : state.phase === 'missing_model'
-                ? t('translation.modal.missingModel')
-                : state.phase === 'translating'
-                  ? t('translation.modal.translating')
-                  : t('translation.modal.loading');
   }
 
   private installedReadAloudModels(): CatalogModelRecord[] {

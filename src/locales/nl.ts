@@ -322,6 +322,10 @@ export const nl = {
   'ribbon.listening': 'Speech Kit — luistert',
   'ribbon.speechDetected': 'Speech Kit — spraak gedetecteerd',
   'ribbon.error': 'Speech Kit — fout',
+  'ribbon.queue.normal': 'Wachtrij normaal',
+  'ribbon.queue.catchingUp': 'Probeert in te halen',
+  'ribbon.queue.fallingBehind': 'Transcriptie loopt achter',
+  'ribbon.queue.saturated': 'Wachtrij vol — pauzeer het dicteren',
   'validation.wholeNumberRange': 'Voer een geheel getal in, van {min} tot {max}.',
   'validation.numberRange': 'Voer een getal in van {min} tot {max}.',
   'llm.managedByPreset':
@@ -812,6 +816,7 @@ export const nl = {
   'translation.modal.sourceNote': 'Bronnotitie',
   'translation.modal.previewAria': 'Vertaalvoorbeeld',
   'translation.modal.readAloud': 'Vertaling voorlezen in {language}',
+  'translation.modal.reopen': 'Vertaling heropenen: {status}',
   'translation.modal.preparing': 'Lokale vertaling voorbereiden…',
   'translation.modal.loading': 'Lokaal model laden…',
   'translation.modal.translating': 'Vertalen…',

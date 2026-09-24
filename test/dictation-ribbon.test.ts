@@ -127,19 +127,19 @@ describe('DictationRibbonController a11y during hold', () => {
     const { controller, element } = makeController();
     controller.setState('listening');
     controller.setState('speech_detected');
-    expect(element.attributes['aria-label']).toBe('Speech Kit — hearing speech');
-    expect(element.title).toBe('Speech Kit — hearing speech');
+    expect(element.attributes['aria-label']).toBe('Speech Kit — hearing speech · Queue normal');
+    expect(element.title).toBe('Speech Kit — hearing speech · Queue normal');
 
     controller.setState('listening');
     // Visual still held on speech_detected — animation/CSS keeps drifting bars.
     expect(element.dataset.localSttState).toBe('speech_detected');
     // But a screen reader / tooltip must see truth right away.
-    expect(element.attributes['aria-label']).toBe('Speech Kit — listening');
-    expect(element.title).toBe('Speech Kit — listening');
+    expect(element.attributes['aria-label']).toBe('Speech Kit — listening · Queue normal');
+    expect(element.title).toBe('Speech Kit — listening · Queue normal');
 
     vi.advanceTimersByTime(5_000);
     expect(element.dataset.localSttState).toBe('listening');
-    expect(element.attributes['aria-label']).toBe('Speech Kit — listening');
+    expect(element.attributes['aria-label']).toBe('Speech Kit — listening · Queue normal');
   });
 });
 
@@ -211,16 +211,38 @@ describe('DictationRibbonController hold lifecycle interactions', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('setQueueTier during the hold does not rewrite the live SVG', () => {
+  it('removes warning copy when the queue returns to normal', () => {
+    const { controller, element } = makeController();
+    controller.setState('listening');
+
+    controller.setQueueTier('saturated');
+    expect(element.attributes['aria-label']).toBe(
+      'Speech Kit — listening · Queue full — pause dictation',
+    );
+
+    controller.setQueueTier('normal');
+    expect(element.attributes['aria-label']).toBe('Speech Kit — listening · Queue normal');
+  });
+
+  it.each([
+    ['normal', 'Speech Kit — listening · Queue normal'],
+    ['catching_up', 'Speech Kit — listening · Catching up'],
+    ['falling_behind', 'Speech Kit — listening · Transcription is falling behind'],
+    ['saturated', 'Speech Kit — listening · Queue full — pause dictation'],
+  ] as const)('exposes the %s queue tier without rewriting the live SVG', (tier, label) => {
     const { controller, element } = makeController();
     controller.setState('listening');
     controller.setState('speech_detected');
     controller.setState('listening');
     const snapshot = element.innerHTML;
+    vi.mocked(setIcon).mockClear();
 
-    controller.setQueueTier('catching_up');
-    controller.setQueueTier('saturated');
+    controller.setQueueTier(tier);
+
+    expect(element.attributes['aria-label']).toBe(label);
+    expect(element.title).toBe(label);
     expect(element.innerHTML).toBe(snapshot);
+    expect(setIcon).not.toHaveBeenCalled();
   });
 
   it('cancels the hold immediately when reduced-motion turns on mid-hold', () => {
