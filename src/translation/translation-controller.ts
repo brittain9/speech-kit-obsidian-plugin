@@ -137,6 +137,7 @@ interface TranslationConfiguration {
 export class TranslationController {
   private active: ActiveTranslation | null = null;
   private activeModal: TranslationModal | null = null;
+  private terminalFocus: (() => void) | null = null;
   constructor(private readonly dependencies: TranslationControllerDependencies) {}
 
   translateSelection(editor: Editor): void {
@@ -244,13 +245,16 @@ export class TranslationController {
       configuration: active.configuration,
       installedModelOptions: this.installedTranslationModels(),
       snapshot: active.snapshot,
-      onApplied: () => this.clearActive(),
-      onDismissed: () => this.clearActive(),
+      onApplied: () => this.clearActive(true),
+      onDismissed: () => this.clearActive(true),
       onClosed: () => {
         if (this.activeModal === modal) {
           this.activeModal = null;
-          if (this.active === active)
+          if (this.active === active) {
             this.dependencies.setDetachedStatus?.(active.job.state(), () => this.openModal());
+          } else {
+            this.restoreTerminalFocus();
+          }
         }
       },
       onLanguageChange: (sourceLanguage, targetLanguage) => {
@@ -328,11 +332,22 @@ export class TranslationController {
     modal.open();
     this.dependencies.setDetachedStatus?.(null, () => {}, { preserveFocus: true });
   }
-  private clearActive(): void {
+  private clearActive(terminal = false): void {
     const active = this.active;
     this.active = null;
     active?.release();
+    if (terminal && active !== null) {
+      this.terminalFocus = () => active.editor.focus();
+      this.dependencies.setDetachedStatus?.(null, () => {}, { preserveFocus: true });
+      return;
+    }
+    this.terminalFocus = null;
     this.dependencies.setDetachedStatus?.(null, () => {});
+  }
+  private restoreTerminalFocus(): void {
+    const focus = this.terminalFocus;
+    this.terminalFocus = null;
+    focus?.();
   }
   private persistTranslationLanguages(
     sourceLanguage: TranslationLanguage,
