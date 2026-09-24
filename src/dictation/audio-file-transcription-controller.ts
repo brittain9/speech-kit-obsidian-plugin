@@ -24,6 +24,7 @@ import type {
   MediaSource,
   MediaTranscriptionProgress,
 } from '../media/media-source';
+import type { YouTubeAcquisitionContext, YouTubeMediaSource } from '../media/youtube-media-source';
 import {
   type SelectedModel,
   type SelectedModelCapabilities,
@@ -96,9 +97,9 @@ interface AudioFileModelConfiguration {
   readonly speakingStyle: PluginSettings['speakingStyle'];
 }
 
-export type MediaTranscriptionRequest = Partial<
-  Pick<MediaAcquireRequest, 'consentId' | 'ref' | 'rights'>
->;
+type MediaAcquisitionOverrides = Partial<Omit<MediaAcquireRequest, 'kind' | 'signal'>> & {
+  readonly provider?: unknown;
+};
 
 interface PendingAudioFileStart {
   readonly abortController: AbortController;
@@ -127,6 +128,7 @@ export interface AudioFileTranscriptionControllerDependencies {
   readonly onRawTranscriptRecoveryAvailable?: (receipt: RawTranscriptRecoveryReceipt) => void;
   readonly onSidecarMissing?: () => void;
   readonly mediaSource: MediaSource;
+  readonly youtubeSource?: YouTubeMediaSource;
   readonly mediaLlmCoordinator?: MediaLlmCoordinator;
   readonly onMediaProgress?: (progress: MediaTranscriptionProgress | null) => void;
   readonly sessionStopTimeoutMs: number;
@@ -207,19 +209,20 @@ export class AudioFileTranscriptionController {
   }
 
   async transcribe(): Promise<void> {
-    await this.startTranscription(this.dependencies.mediaSource, {});
+    await this.startTranscription(this.dependencies.mediaSource);
   }
 
-  async transcribeFromSource(
-    source: MediaSource,
-    request: MediaTranscriptionRequest,
-  ): Promise<void> {
-    await this.startTranscription(source, request);
+  async transcribeYouTube(context: YouTubeAcquisitionContext): Promise<void> {
+    const source = this.dependencies.youtubeSource;
+    if (source === undefined) {
+      throw new Error('YouTube media source is unavailable.');
+    }
+    await this.startTranscription(source, { provider: context });
   }
 
   private async startTranscription(
     source: MediaSource,
-    request: MediaTranscriptionRequest,
+    request?: MediaAcquisitionOverrides,
   ): Promise<void> {
     if (this.activeTranscribeCompletion !== null) return;
     const operation = this.runTranscribe(source, request);
@@ -237,7 +240,7 @@ export class AudioFileTranscriptionController {
 
   private async runTranscribe(
     source: MediaSource,
-    request: MediaTranscriptionRequest,
+    request?: MediaAcquisitionOverrides,
   ): Promise<void> {
     // Keep this guard before the busy check: mobile callers must not mutate a
     // running desktop workflow or open a native-only picker accidentally.
@@ -296,7 +299,10 @@ export class AudioFileTranscriptionController {
       this.applyState('preparing');
 
       this.emitProgress('decode');
-      decodedAudio = await this.decodeMediaLease(mediaLease, abortController.signal);
+      decodedAudio = await this.decodeMediaLease(
+        createProviderNeutralDecoderLease(mediaLease),
+        abortController.signal,
+      );
       const configuration = this.resolveModelConfiguration();
       if (!selectedModelEquals(initialConfiguration.modelSelection, configuration.modelSelection)) {
         throw new AudioFileWorkflowError('audio-file-model-changed');
@@ -490,7 +496,7 @@ export class AudioFileTranscriptionController {
   private async acquireMediaLease(
     signal: AbortSignal,
     source: MediaSource,
-    request: MediaTranscriptionRequest,
+    request?: MediaAcquisitionOverrides,
   ): Promise<MediaLease | null> {
     for await (const event of source.acquire({
       ...MEDIA_ACQUISITION_LIMITS,
@@ -934,6 +940,16 @@ export class AudioFileTranscriptionController {
       this.dependencies.onMediaProgress?.(null);
     }
   }
+}
+
+function createProviderNeutralDecoderLease(lease: MediaLease): MediaLease {
+  return {
+    encodedBytes: lease.encodedBytes,
+    mediaId: lease.mediaId,
+    openReadStream: () => lease.openReadStream(),
+    provenance: lease.provenance,
+    release: () => lease.release(),
+  };
 }
 
 function createRendererOptions(

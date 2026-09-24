@@ -1,5 +1,3 @@
-import type { SourceRef } from './media-source';
-
 export const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/u;
 export const YOUTUBE_CANONICAL_HOST = 'www.youtube.com';
 export const YOUTUBE_CANONICAL_URL_PREFIX = 'https://www.youtube.com/watch?v=';
@@ -129,8 +127,4 @@ function hasDisallowedWatchQuery(searchParams: URLSearchParams): boolean {
     if (key !== VIDEO_ID_PARAMETER) return true;
   }
   return false;
-}
-
-export function isYouTubeSourceRef(ref: SourceRef): ref is YouTubeVideoRef {
-  return ref.kind === 'youtube_video_id' && isYouTubeVideoId(ref.videoId);
 }

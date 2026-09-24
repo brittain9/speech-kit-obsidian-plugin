@@ -24,25 +24,25 @@ export function renderYouTubeHelperSettings(
   dependencies: YouTubeHelperSettingsDependencies,
 ): Setting {
   addToggleSetting(parent, dependencies.access, {
-    desc: 'Experimental and disabled by default. Enable only after selecting a supported helper and accepting the one-time rights policy in the command modal.',
+    desc: t('youtube.settings.enableDesc'),
     key: 'youtubeMediaSourceEnabled',
-    name: 'Enable experimental YouTube media source',
+    name: t('youtube.settings.enableName'),
   });
   const setting = new Setting(parent)
-    .setName('Experimental YouTube media source')
-    .setDesc(
-      'Unofficial yt-dlp helper. Select an absolute executable path; suggestions are discovered from PATH without executing candidates. No bundled installer or retention is provided.',
-    );
+    .setName(t('youtube.settings.helperName'))
+    .setDesc(t('youtube.settings.helperDesc'));
   const status = parent.createDiv({ cls: 'local-stt-youtube-helper-status' });
   const suggestions = discoverYtDlpCandidates();
   if (suggestions.length > 0) {
-    status.createDiv({ text: `Existing PATH suggestions: ${suggestions.join(', ')}` });
+    status.createDiv({
+      text: t('youtube.settings.suggestions', { suggestions: suggestions.join(', ') }),
+    });
   }
   const policy = dependencies.getSettings().youtubePolicyVersion;
   status.createDiv({
     text: hasYouTubeRightsConfirmation(policy)
-      ? `Rights confirmation: accepted for ${YOUTUBE_POLICY_VERSION}.`
-      : 'Rights confirmation: required before the first YouTube job.',
+      ? t('youtube.settings.policyAccepted', { policy: YOUTUBE_POLICY_VERSION })
+      : t('youtube.settings.policyRequired'),
   });
 
   const currentPath = dependencies.getSettings().youtubeHelperPath;
@@ -50,33 +50,35 @@ export function renderYouTubeHelperSettings(
   const checkHelper = async (): Promise<void> => {
     const normalized = normalizeYouTubeHelperPath(selectedPath);
     if (normalized === null) {
-      status.setText('Choose an absolute executable path. No path was saved.');
+      status.setText(t('youtube.settings.pathRequired'));
       return;
     }
     try {
       const result = await probeYtDlpVersion(normalized);
-      status.setText(`Helper ready: ${result.version} (${result.path})`);
+      status.setText(
+        t('youtube.settings.helperReady', { version: result.version, path: result.path }),
+      );
     } catch {
-      status.setText('The selected helper could not be run or is not a supported version.');
+      status.setText(t('youtube.settings.helperError'));
     }
   };
   setting.addText((text) => {
-    text.setPlaceholder('/absolute/path/to/yt-dlp');
+    text.setPlaceholder(t('youtube.modal.helperPlaceholder'));
     text.setValue(currentPath);
     text.onChange(async (value) => {
       const normalized = normalizeYouTubeHelperPath(value);
       if (normalized === null) {
-        status.setText('Choose an absolute executable path. No path was saved.');
+        status.setText(t('youtube.settings.pathRequired'));
         text.setValue(selectedPath);
         return;
       }
       selectedPath = normalized;
       await dependencies.access.persistOne('youtubeHelperPath', normalized);
-      status.setText('Selected helper path saved. Check the version explicitly.');
+      status.setText(t('youtube.settings.pathSaved'));
     });
   });
   setting.addButton((button) =>
-    button.setButtonText('Check helper').onClick(() => {
+    button.setButtonText(t('youtube.settings.checkHelper')).onClick(() => {
       void checkHelper();
     }),
   );
@@ -85,9 +87,9 @@ export function renderYouTubeHelperSettings(
 
 export function youtubeHelperDescription(settings: PluginSettings): string {
   if (!settings.youtubeMediaSourceEnabled || settings.youtubeHelperPath.length === 0) {
-    return 'Experimental YouTube media is disabled until explicitly enabled with an absolute yt-dlp path in Settings.';
+    return t('youtube.settings.disabledDescription');
   }
-  return `Experimental YouTube media enabled with helper path ${settings.youtubeHelperPath}. The helper is unofficial and may stop working.`;
+  return t('youtube.settings.enabledDescription');
 }
 
 export function youtubeHelperSettingName(): string {

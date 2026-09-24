@@ -1,10 +1,12 @@
 import { AudioFileBackpressureTimeoutError } from '../audio/audio-file-backpressure';
 import { AudioFileError, isAudioFileCancellation } from '../audio/audio-file-decoder';
-import { YouTubeAcquisitionError } from '../media/youtube-media-source';
-import { t } from '../shared/i18n';
+import { YouTubeAcquisitionError, type YouTubeFailureCode } from '../media/youtube-media-source';
+import { type TranslationKey, t } from '../shared/i18n';
 import type { FeedbackRequest, UserFeedback } from '../shared/user-feedback';
 import { SidecarError } from '../sidecar/sidecar-connection';
 import { SidecarNotInstalledError } from '../sidecar/sidecar-paths';
+
+type YouTubeWorkflowTranslationKey = Extract<TranslationKey, `youtube.error.${string}`>;
 
 export type FileWorkflowTranslationKey =
   | 'audio-file-busy'
@@ -33,7 +35,7 @@ export type FileWorkflowTranslationKey =
   | 'audio-file-target-required'
   | 'audio-file-transcript-write-failed'
   | 'audio-file-surface-changed'
-  | 'youtube-acquisition-failed';
+  | YouTubeWorkflowTranslationKey;
 
 export class AudioFileWorkflowError extends Error {
   constructor(
@@ -117,6 +119,27 @@ export class AudioFileFailureMapper {
   }
 }
 
+const YOUTUBE_ERROR_KEYS: Readonly<Record<YouTubeFailureCode, YouTubeWorkflowTranslationKey>> = {
+  invalid_or_unsupported_url: 'youtube.error.invalid_url',
+  not_found_or_private: 'youtube.error.not_found_private',
+  region_restricted: 'youtube.error.region_restricted',
+  age_restricted: 'youtube.error.age_restricted',
+  membership_required: 'youtube.error.membership_required',
+  purchase_required: 'youtube.error.purchase_required',
+  drm_protected: 'youtube.error.drm_protected',
+  authentication_required: 'youtube.error.authentication_required',
+  rate_limited: 'youtube.error.rate_limited',
+  network_failed: 'youtube.error.network_failed',
+  extractor_changed: 'youtube.error.extractor_changed',
+  live_stream: 'youtube.error.live_stream',
+  rights_not_established: 'youtube.error.rights_not_established',
+  helper_unavailable: 'youtube.error.helper_unavailable',
+  helper_version_unsupported: 'youtube.error.helper_version_unsupported',
+  resource_limit: 'youtube.error.resource_limit',
+  tool_failed: 'youtube.error.tool_failed',
+  cancelled: 'youtube.error.cancelled',
+};
+
 function resolveWorkflowTranslationKey(error: unknown): FileWorkflowTranslationKey {
   if (error instanceof AudioFileWorkflowError) {
     return error.translationKey;
@@ -152,7 +175,7 @@ function resolveWorkflowTranslationKey(error: unknown): FileWorkflowTranslationK
     }
   }
   if (error instanceof YouTubeAcquisitionError) {
-    return 'youtube-acquisition-failed';
+    return YOUTUBE_ERROR_KEYS[error.code];
   }
   if (error instanceof AudioFileBackpressureTimeoutError) {
     return 'audio-file-queue-overload';

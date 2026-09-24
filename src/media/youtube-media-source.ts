@@ -1,23 +1,22 @@
-import { type ChildProcess, spawn } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readdir, stat } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { chmod, mkdir, mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { t } from '../shared/i18n';
 import type {
   AcquisitionEvent,
-  AcquisitionFailureCode,
   MediaAcquireRequest,
   MediaLease,
   MediaPlan,
-  MediaProvenance,
-  MediaRights,
   MediaSource,
-  SourceRef,
 } from './media-source';
 import {
   createPathBackedMediaLease,
+  openValidatedMediaFile,
   type PathBackedMediaLeaseOptions,
   PathMediaLeaseError,
 } from './path-backed-media-lease';
+import { runManagedProcess } from './process-runner';
 import {
   normalizeYouTubeHelperPath,
   probeYtDlpVersion,
@@ -25,8 +24,7 @@ import {
 } from './youtube-helper';
 import {
   canonicalYouTubeUrl,
-  InvalidYouTubeUrlError,
-  isYouTubeSourceRef,
+  isYouTubeVideoId,
   parseYouTubeVideoUrl,
   type YouTubeVideoRef,
 } from './youtube-url';
@@ -39,20 +37,76 @@ export const YOUTUBE_MAX_STDERR_BYTES = 64 * 1024;
 export const YOUTUBE_MAX_RETRIES = 0;
 export const YOUTUBE_RATE_LIMIT = '2M';
 export const YOUTUBE_JOB_PREFIX = 'speech-kit-youtube-';
+export const YOUTUBE_CONSENT_ID = 'youtube-policy-confirmation';
+export const YOUTUBE_ABANDONED_JOB_MIN_AGE_MS = 6 * 60 * 60 * 1_000;
+
+export type YouTubeFailureCode =
+  | 'invalid_or_unsupported_url'
+  | 'not_found_or_private'
+  | 'region_restricted'
+  | 'age_restricted'
+  | 'membership_required'
+  | 'purchase_required'
+  | 'drm_protected'
+  | 'authentication_required'
+  | 'rate_limited'
+  | 'network_failed'
+  | 'extractor_changed'
+  | 'live_stream'
+  | 'rights_not_established'
+  | 'helper_unavailable'
+  | 'helper_version_unsupported'
+  | 'resource_limit'
+  | 'tool_failed'
+  | 'cancelled';
+
+export interface YouTubeConsentGrant {
+  readonly consentId: typeof YOUTUBE_CONSENT_ID;
+  readonly policyVersion: typeof YOUTUBE_POLICY_VERSION;
+}
+
+export interface YouTubeAcquisitionContext {
+  readonly consent: YouTubeConsentGrant;
+  readonly ref: YouTubeVideoRef;
+}
+
+export type YouTubeMediaAcquireRequest = MediaAcquireRequest & {
+  readonly provider: YouTubeAcquisitionContext;
+};
+
+export interface YouTubeMediaPlan extends MediaPlan {
+  readonly canonicalUrl: string;
+  readonly host: string;
+  readonly videoId: string;
+}
+
+export interface YouTubeMediaLease extends MediaLease {
+  readonly youtubeProvenance: YouTubeMediaProvenance;
+}
+
+export interface YouTubeMediaProvenance {
+  readonly channel: { readonly id: string; readonly name: string };
+  readonly container: string;
+  readonly durationMs: number;
+  readonly helperVersion: string;
+  readonly publicUrl: string;
+  readonly title: string;
+  readonly videoId: string;
+}
 
 export function hasYouTubeRightsConfirmation(storedPolicyVersion: string | null): boolean {
   return storedPolicyVersion === YOUTUBE_POLICY_VERSION;
 }
 
-export function explicitYouTubeRightsConfirmation(): MediaRights {
-  return { kind: 'declared_by_source', policyVersion: YOUTUBE_POLICY_VERSION };
+export function explicitYouTubeRightsConfirmation(): YouTubeConsentGrant {
+  return { consentId: YOUTUBE_CONSENT_ID, policyVersion: YOUTUBE_POLICY_VERSION };
 }
 
 export class YouTubeAcquisitionError extends Error {
   override readonly cause?: unknown;
 
   constructor(
-    readonly code: AcquisitionFailureCode,
+    readonly code: YouTubeFailureCode,
     message: string,
     options?: { cause?: unknown },
   ) {
@@ -69,12 +123,16 @@ export interface YouTubeMediaSourceDependencies {
   readonly wallTimeMs?: number;
   readonly maxOutputBytes?: number;
   readonly now?: () => number;
+  readonly platform?: NodeJS.Platform;
 }
 
 export interface YouTubeHelperMetadata {
   readonly channel?: { readonly id?: string; readonly name?: string };
   readonly container?: string;
   readonly durationMs?: number;
+  readonly isLive?: boolean;
+  readonly liveStatus?: string;
+  readonly publicUrl?: string;
   readonly title?: string;
   readonly videoId?: string;
 }
@@ -87,7 +145,9 @@ export class YouTubeMediaSource implements MediaSource {
   private readonly wallTimeMs: number;
   private readonly maxOutputBytes: number;
   private readonly now: () => number;
+  private readonly platform: NodeJS.Platform;
   private jobInUse = false;
+  private activeAbortController: AbortController | null = null;
 
   constructor(private readonly dependencies: YouTubeMediaSourceDependencies) {
     this.tempRoot = resolve(dependencies.tempRoot ?? tmpdir());
@@ -95,18 +155,27 @@ export class YouTubeMediaSource implements MediaSource {
     this.wallTimeMs = dependencies.wallTimeMs ?? YOUTUBE_MAX_WALL_TIME_MS;
     this.maxOutputBytes = dependencies.maxOutputBytes ?? YOUTUBE_MAX_STDOUT_BYTES;
     this.now = dependencies.now ?? Date.now;
+    this.platform = dependencies.platform ?? process.platform;
   }
 
-  async inspect(ref: SourceRef, signal: AbortSignal): Promise<MediaPlan> {
+  async inspect(ref: YouTubeVideoRef, signal: AbortSignal): Promise<YouTubeMediaPlan> {
     throwIfCancelled(signal);
-    const video = requireYouTubeRef(ref);
-    return createPlan(video, this.id);
+    return createPlan(ref, this.id);
   }
 
+  cancel(): void {
+    this.activeAbortController?.abort(
+      new YouTubeAcquisitionError('cancelled', 'The YouTube acquisition was cancelled.'),
+    );
+  }
+
+  acquire(request: YouTubeMediaAcquireRequest): AsyncIterable<AcquisitionEvent<YouTubeMediaLease>>;
+  acquire(request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent>;
   async *acquire(request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent> {
-    throwIfCancelled(request.signal);
-    const video = requireYouTubeRef(request.ref);
-    assertRights(request.rights);
+    const typedRequest = requireYouTubeRequest(request);
+    throwIfCancelled(typedRequest.signal);
+    const video = typedRequest.provider.ref;
+    assertConsent(typedRequest.provider.consent);
     const helperPath = normalizeYouTubeHelperPath(this.dependencies.getHelperPath());
     if (this.jobInUse) {
       throw new YouTubeAcquisitionError(
@@ -121,31 +190,22 @@ export class YouTubeMediaSource implements MediaSource {
       );
     }
     this.jobInUse = true;
-
-    let helperVersion: string;
-    try {
-      const version = await probeYtDlpVersion(helperPath, {
-        signal: request.signal,
-        spawnProcess: this.spawnProcess,
-      });
-      helperVersion = version.version;
-    } catch (error) {
-      this.jobInUse = false;
-      throw mapHelperError(error, request.signal);
-    }
-
-    let jobRoot: string;
-    try {
-      jobRoot = await createPrivateJobRoot(this.tempRoot);
-    } catch {
-      this.jobInUse = false;
-      throw new YouTubeAcquisitionError(
-        'tool_failed',
-        'A private YouTube job directory could not be created.',
-      );
-    }
+    const activeController = new AbortController();
+    this.activeAbortController = activeController;
+    const forwardAbort = (): void => {
+      activeController.abort(request.signal.reason);
+    };
+    request.signal.addEventListener('abort', forwardAbort, { once: true });
+    let jobRoot: string | null = null;
     let handedOff = false;
     try {
+      const version = await probeYtDlpVersion(helperPath, {
+        platform: this.platform,
+        signal: activeController.signal,
+        spawnProcess: this.spawnProcess,
+      });
+      const helperVersion = version.version;
+      jobRoot = await createPrivateJobRoot(this.tempRoot);
       const plan = createPlan(video, this.id);
       yield { plan, type: 'plan' };
       yield { bytes: 0, phase: 'read', totalBytes: request.maxBytes, type: 'progress' };
@@ -156,111 +216,139 @@ export class YouTubeMediaSource implements MediaSource {
         maxDurationSeconds: request.maxDurationMs / 1_000,
         video,
       });
-      const child = this.spawnProcess(helperPath, args, {
+      const execution = await runHelper({
+        args,
+        command: helperPath,
         cwd: jobRoot,
-        detached: process.platform !== 'win32',
         env: sanitizedAcquisitionEnvironment(jobRoot),
-        shell: false,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
-      });
-      const execution = await runHelper(child, {
         maxOutputBytes: this.maxOutputBytes,
-        signal: request.signal,
+        platform: this.platform,
+        signal: activeController.signal,
+        spawnProcess: this.spawnProcess,
         wallTimeMs: this.wallTimeMs,
       });
       for (const event of execution.events) yield event;
-      if (request.signal.aborted)
+      if (activeController.signal.aborted || execution.cancelled) {
         throw new YouTubeAcquisitionError('cancelled', 'The YouTube acquisition was cancelled.');
-      if (execution.cancelled)
-        throw new YouTubeAcquisitionError('cancelled', 'The YouTube acquisition was cancelled.');
+      }
       if (execution.timedOut || execution.outputLimitExceeded) {
         throw new YouTubeAcquisitionError(
           'resource_limit',
           'The YouTube acquisition exceeded a safety limit.',
         );
       }
-      if (execution.exitCode !== 0) {
-        throw mapHelperFailure(execution.stderr);
-      }
+      if (execution.exitCode !== 0) throw mapHelperFailure(execution.stderr);
 
-      const metadata = execution.metadata;
-      if (metadata.videoId !== undefined && metadata.videoId !== video.videoId) {
-        throw new YouTubeAcquisitionError(
-          'extractor_changed',
-          'The YouTube helper returned a different video than requested.',
-        );
-      }
-      const durationMs = metadata.durationMs;
-      if (durationMs !== undefined && durationMs > request.maxDurationMs) {
+      const metadata = validateYouTubeMetadata(execution.metadata, video);
+      if (metadata.durationMs > request.maxDurationMs) {
         throw new YouTubeAcquisitionError(
           'resource_limit',
           'The YouTube video is longer than the safety limit.',
         );
       }
-      const media = await findAcquiredMedia(jobRoot, request.maxBytes);
-      await chmod(media.path, 0o600);
-      const provenance: MediaProvenance = {
-        ...metadata,
-        acquiredAt: new Date(this.now()).toISOString(),
-        adapterVersion: this.adapterVersion,
-        canonicalUrl: video.canonicalUrl,
-        helperVersion,
-        rights: explicitYouTubeRightsConfirmation(),
-        sourceId: this.id,
-        sourceRef: { kind: 'youtube_video_id', videoId: video.videoId },
-        temporaryMedia: true,
-      };
-      const baseLease = await createLease({
-        encodedBytes: media.size,
-        jobRoot,
-        maxBytes: request.maxBytes,
-        mediaPath: media.path,
-        provenance,
-      });
+      const media = await findAcquiredMedia(jobRoot);
+      const validated = await openValidatedMediaFile(jobRoot, media.path, request.maxBytes);
+      let baseLease: MediaLease;
+      try {
+        baseLease = await createLease({
+          encodedBytes: validated.size,
+          jobRoot,
+          maxBytes: request.maxBytes,
+          mediaHandle: validated.handle,
+          mediaPath: validated.path,
+          provenance: {
+            acquiredAt: new Date(this.now()).toISOString(),
+            adapterVersion: this.adapterVersion,
+            sourceId: this.id,
+            temporaryMedia: true,
+          },
+        });
+      } catch (error) {
+        await validated.handle.close().catch(() => {});
+        throw error;
+      }
       let releasePromise: Promise<void> | null = null;
       const releaseLease = (): Promise<void> => {
         if (releasePromise === null) {
           releasePromise = baseLease.release().finally(() => {
             this.jobInUse = false;
+            this.activeAbortController = null;
           });
         }
         return releasePromise;
       };
-      const lease: MediaLease = {
+      const lease: YouTubeMediaLease = {
         ...baseLease,
-        dispose: releaseLease,
         release: releaseLease,
+        youtubeProvenance: {
+          channel: metadata.channel,
+          container: metadata.container,
+          durationMs: metadata.durationMs,
+          helperVersion,
+          publicUrl: metadata.publicUrl,
+          title: metadata.title,
+          videoId: metadata.videoId,
+        },
       };
       handedOff = true;
       yield { lease, type: 'ready' };
     } catch (error) {
-      throw normalizeAcquisitionError(error, request.signal);
+      throw normalizeAcquisitionError(error, activeController.signal);
     } finally {
+      request.signal.removeEventListener('abort', forwardAbort);
       if (!handedOff) {
         this.jobInUse = false;
-        await removeJobBestEffort(jobRoot);
+        this.activeAbortController = null;
+        if (jobRoot !== null) await removeJobBestEffort(jobRoot);
       }
     }
   }
 }
 
-export async function sweepAbandonedYouTubeJobs(tempRoot = tmpdir()): Promise<void> {
+export async function sweepAbandonedYouTubeJobs(
+  tempRoot = tmpdir(),
+  options: { readonly minAgeMs?: number; readonly now?: () => number } = {},
+): Promise<void> {
   const root = resolve(tempRoot);
+  const now = options.now ?? Date.now;
+  const minAgeMs = options.minAgeMs ?? YOUTUBE_ABANDONED_JOB_MIN_AGE_MS;
   try {
     const entries = await readdir(root, { withFileTypes: true });
     await Promise.allSettled(
       entries
         .filter((entry) => entry.isDirectory() && entry.name.startsWith(YOUTUBE_JOB_PREFIX))
-        .map((entry) =>
-          import('./path-backed-media-lease').then(({ removeMediaJob }) =>
-            removeMediaJob(join(root, entry.name)),
-          ),
-        ),
+        .map(async (entry) => {
+          const jobRoot = join(root, entry.name);
+          const jobStat = await stat(jobRoot);
+          if (now() - jobStat.mtimeMs < minAgeMs) return;
+          if (await hasLiveOwner(jobRoot)) return;
+          const { removeMediaJob } = await import('./path-backed-media-lease');
+          await removeMediaJob(jobRoot);
+        }),
     );
   } catch {
     // Startup cleanup is best effort and must not prevent plugin loading.
   }
+}
+
+async function hasLiveOwner(jobRoot: string): Promise<boolean> {
+  try {
+    const marker = JSON.parse(await readFile(join(jobRoot, 'owner.json'), 'utf8')) as {
+      pid?: unknown;
+    };
+    const pid = marker.pid;
+    if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return false;
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return isProcessAliveError(error);
+  }
+}
+
+function isProcessAliveError(error: unknown): boolean {
+  return (
+    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'EPERM'
+  );
 }
 
 export function buildYouTubeAcquisitionArgs(options: {
@@ -314,7 +402,7 @@ export function buildYouTubeAcquisitionArgs(options: {
     `duration <= ${Math.max(1, Math.floor(options.maxDurationSeconds ?? 1_800))}`,
     '--newline',
     '--print',
-    'before_dl:%(.{id,title,channel,channel_id,duration,ext,webpage_url})j',
+    'before_dl:%(.{id,title,channel,channel_id,duration,ext,is_live,live_status,webpage_url})j',
     '--',
     canonicalUrl,
   ];
@@ -362,6 +450,9 @@ export function parseYouTubeHelperMetadata(output: string): YouTubeHelperMetadat
       ? Math.round(durationSeconds * 1_000)
       : undefined;
   const container = safeString(parsed.ext, 32);
+  const isLive = typeof parsed.is_live === 'boolean' ? parsed.is_live : undefined;
+  const liveStatus = safeString(parsed.live_status, 32);
+  const publicUrl = sanitizePublicUrl(safeString(parsed.webpage_url, 512));
   return {
     ...(videoId === undefined ? {} : { videoId }),
     ...(title === undefined ? {} : { title }),
@@ -375,6 +466,68 @@ export function parseYouTubeHelperMetadata(output: string): YouTubeHelperMetadat
         }),
     ...(durationMs === undefined ? {} : { durationMs }),
     ...(container === undefined ? {} : { container }),
+    ...(isLive === undefined ? {} : { isLive }),
+    ...(liveStatus === undefined ? {} : { liveStatus }),
+    ...(publicUrl === undefined ? {} : { publicUrl }),
+  };
+}
+
+function validateYouTubeMetadata(
+  metadata: YouTubeHelperMetadata,
+  requested: YouTubeVideoRef,
+): {
+  readonly channel: { readonly id: string; readonly name: string };
+  readonly container: string;
+  readonly durationMs: number;
+  readonly publicUrl: string;
+  readonly title: string;
+  readonly videoId: string;
+} {
+  if (
+    metadata.isLive === true ||
+    metadata.liveStatus === 'is_live' ||
+    metadata.liveStatus === 'is_upcoming'
+  ) {
+    throw new YouTubeAcquisitionError('live_stream', 'This YouTube video is not a completed VOD.');
+  }
+  if (
+    metadata.videoId !== requested.videoId ||
+    metadata.title === undefined ||
+    metadata.channel?.id === undefined ||
+    metadata.channel.name === undefined ||
+    metadata.durationMs === undefined ||
+    metadata.container === undefined ||
+    metadata.isLive !== false ||
+    metadata.liveStatus !== 'not_live' ||
+    metadata.publicUrl === undefined
+  ) {
+    throw new YouTubeAcquisitionError(
+      'extractor_changed',
+      'The YouTube helper returned incomplete or changed metadata.',
+    );
+  }
+  let publicVideo: YouTubeVideoRef;
+  try {
+    publicVideo = parseYouTubeVideoUrl(metadata.publicUrl);
+  } catch {
+    throw new YouTubeAcquisitionError(
+      'extractor_changed',
+      'The YouTube helper returned an invalid public URL.',
+    );
+  }
+  if (publicVideo.videoId !== requested.videoId) {
+    throw new YouTubeAcquisitionError(
+      'extractor_changed',
+      'The YouTube helper returned a different video than requested.',
+    );
+  }
+  return {
+    channel: { id: metadata.channel.id, name: metadata.channel.name },
+    container: metadata.container,
+    durationMs: metadata.durationMs,
+    publicUrl: publicVideo.canonicalUrl,
+    title: metadata.title,
+    videoId: metadata.videoId,
   };
 }
 
@@ -382,6 +535,9 @@ async function createPrivateJobRoot(tempRoot: string): Promise<string> {
   await mkdir(tempRoot, { recursive: true });
   const jobRoot = await mkdtemp(join(tempRoot, YOUTUBE_JOB_PREFIX));
   await chmod(jobRoot, 0o700);
+  await writeFile(join(jobRoot, 'owner.json'), JSON.stringify({ pid: process.pid }), {
+    mode: 0o600,
+  });
   for (const directory of ['home', 'tmp', 'cache', 'config', 'data']) {
     await mkdir(join(jobRoot, directory), { recursive: true, mode: 0o700 });
   }
@@ -402,10 +558,7 @@ async function createLease(options: PathBackedMediaLeaseOptions) {
   }
 }
 
-async function findAcquiredMedia(
-  jobRoot: string,
-  maxBytes: number,
-): Promise<{ path: string; size: number }> {
+async function findAcquiredMedia(jobRoot: string): Promise<{ path: string }> {
   const entries = await readdir(jobRoot, { withFileTypes: true });
   const candidates = entries.filter(
     (entry) => entry.isFile() && /^source\.[A-Za-z0-9_-]+$/u.test(entry.name),
@@ -416,15 +569,7 @@ async function findAcquiredMedia(
       'The YouTube helper did not produce one audio file.',
     );
   }
-  const path = join(jobRoot, candidates[0]?.name ?? '');
-  const fileStat = await stat(path);
-  if (!fileStat.isFile() || fileStat.size === 0 || fileStat.size > maxBytes) {
-    throw new YouTubeAcquisitionError(
-      'resource_limit',
-      'The YouTube media exceeded a safety limit.',
-    );
-  }
-  return { path, size: fileStat.size };
+  return { path: join(jobRoot, candidates[0]?.name ?? '') };
 }
 
 async function removeJobBestEffort(jobRoot: string): Promise<void> {
@@ -436,36 +581,33 @@ async function removeJobBestEffort(jobRoot: string): Promise<void> {
   }
 }
 
-function createPlan(video: YouTubeVideoRef, sourceId: MediaSource['id']): MediaPlan {
+function createPlan(video: YouTubeVideoRef, sourceId: string): YouTubeMediaPlan {
   return {
-    access: 'public_guest',
     canonicalUrl: video.canonicalUrl,
-    displayName: `YouTube video ${video.videoId}`,
+    displayName: t('youtube.modal.displayName', { videoId: video.videoId }),
     host: video.host,
-    restrictions: ['no_live', 'no_playlist', 'no_authentication', 'no_drm_bypass'],
-    requiresConsent: true,
     sourceId,
     videoId: video.videoId,
-    warnings: ['Experimental unofficial helper: yt-dlp contacts YouTube and may stop working.'],
   };
 }
 
-function requireYouTubeRef(ref: SourceRef | undefined): YouTubeVideoRef {
-  if (ref === undefined || !isYouTubeSourceRef(ref)) {
+function requireYouTubeRequest(request: MediaAcquireRequest): YouTubeMediaAcquireRequest {
+  const provider = (request as Partial<YouTubeMediaAcquireRequest>).provider;
+  if (
+    provider === undefined ||
+    provider.ref === undefined ||
+    !isYouTubeVideoId(provider.ref.videoId)
+  ) {
     throw new YouTubeAcquisitionError('invalid_or_unsupported_url', 'Enter one YouTube VOD URL.');
   }
-  try {
-    return parseYouTubeVideoUrl(`https://www.youtube.com/watch?v=${ref.videoId}`);
-  } catch (error) {
-    if (error instanceof InvalidYouTubeUrlError) {
-      throw new YouTubeAcquisitionError('invalid_or_unsupported_url', 'Enter one YouTube VOD URL.');
-    }
-    throw error;
-  }
+  return request as YouTubeMediaAcquireRequest;
 }
 
-function assertRights(rights: MediaRights | undefined): void {
-  if (rights?.kind !== 'declared_by_source' || rights.policyVersion !== YOUTUBE_POLICY_VERSION) {
+function assertConsent(consent: YouTubeConsentGrant | undefined): void {
+  if (
+    consent?.consentId !== YOUTUBE_CONSENT_ID ||
+    consent?.policyVersion !== YOUTUBE_POLICY_VERSION
+  ) {
     throw new YouTubeAcquisitionError(
       'rights_not_established',
       'Confirm that you own or are authorized to process this video.',
@@ -488,48 +630,18 @@ function normalizeAcquisitionError(error: unknown, signal: AbortSignal): unknown
   );
 }
 
-function mapHelperError(error: unknown, signal: AbortSignal): YouTubeAcquisitionError {
-  if (signal.aborted)
-    return new YouTubeAcquisitionError('cancelled', 'The YouTube acquisition was cancelled.');
-  if (error instanceof YouTubeHelperError) {
-    return new YouTubeAcquisitionError(error.code, error.message);
-  }
-  return new YouTubeAcquisitionError('tool_failed', 'The yt-dlp helper could not be started.');
-}
-
-function mapHelperFailure(stderr: string): YouTubeAcquisitionError {
+export function classifyYouTubeHelperFailure(stderr: string): YouTubeFailureCode {
   const text = stderr.toLowerCase();
-  if (text.includes('429') || text.includes('rate limit'))
-    return new YouTubeAcquisitionError('rate_limited', 'YouTube rate-limited the helper request.');
+  if (text.includes('429') || text.includes('rate limit')) return 'rate_limited';
+  if (text.includes('region') || text.includes('geo')) return 'region_restricted';
   if (text.includes('private') || text.includes('not found') || text.includes('unavailable'))
-    return new YouTubeAcquisitionError(
-      'not_found_or_private',
-      'The YouTube video is unavailable or private.',
-    );
-  if (text.includes('age'))
-    return new YouTubeAcquisitionError('age_restricted', 'The YouTube video is age-restricted.');
-  if (text.includes('member'))
-    return new YouTubeAcquisitionError(
-      'membership_required',
-      'The YouTube video requires membership.',
-    );
-  if (text.includes('purchase') || text.includes('rent'))
-    return new YouTubeAcquisitionError(
-      'purchase_required',
-      'The YouTube video requires a purchase or rental.',
-    );
-  if (text.includes('drm'))
-    return new YouTubeAcquisitionError('drm_protected', 'The YouTube video is DRM-protected.');
-  if (text.includes('region') || text.includes('geo'))
-    return new YouTubeAcquisitionError(
-      'region_restricted',
-      'The YouTube video is unavailable in this region.',
-    );
+    return 'not_found_or_private';
+  if (text.includes('age restricted') || text.includes('confirm your age')) return 'age_restricted';
+  if (text.includes('member')) return 'membership_required';
+  if (text.includes('purchase') || text.includes('rent')) return 'purchase_required';
+  if (text.includes('drm')) return 'drm_protected';
   if (text.includes('login') || text.includes('sign in') || text.includes('cookie'))
-    return new YouTubeAcquisitionError(
-      'authentication_required',
-      'The YouTube helper would require authentication.',
-    );
+    return 'authentication_required';
   if (
     text.includes('http error') ||
     text.includes('timed out') ||
@@ -537,19 +649,14 @@ function mapHelperFailure(stderr: string): YouTubeAcquisitionError {
     text.includes('network') ||
     text.includes('unable to download webpage')
   )
-    return new YouTubeAcquisitionError(
-      'network_failed',
-      'The YouTube helper could not reach the video service.',
-    );
-  if (text.includes('extract') || text.includes('unsupported url'))
-    return new YouTubeAcquisitionError(
-      'extractor_changed',
-      'The YouTube extractor changed or no longer supports this URL.',
-    );
-  return new YouTubeAcquisitionError(
-    'tool_failed',
-    'The yt-dlp helper could not complete the acquisition.',
-  );
+    return 'network_failed';
+  if (text.includes('extract') || text.includes('unsupported url')) return 'extractor_changed';
+  return 'tool_failed';
+}
+
+function mapHelperFailure(stderr: string): YouTubeAcquisitionError {
+  const code = classifyYouTubeHelperFailure(stderr);
+  return new YouTubeAcquisitionError(code, 'The yt-dlp helper could not complete the acquisition.');
 }
 
 interface HelperExecution {
@@ -562,87 +669,53 @@ interface HelperExecution {
   readonly timedOut: boolean;
 }
 
-async function runHelper(
-  child: ChildProcess,
-  options: { maxOutputBytes: number; signal: AbortSignal; wallTimeMs: number },
-): Promise<HelperExecution> {
-  let stdout = '';
-  let stderr = '';
-  let stdoutBytes = 0;
-  let stderrBytes = 0;
-  let outputLimitExceeded = false;
-  let timedOut = false;
-  let cancelled = false;
-  let exitCode: number | null = null;
+async function runHelper(options: {
+  readonly args: readonly string[];
+  readonly command: string;
+  readonly cwd: string;
+  readonly env: NodeJS.ProcessEnv;
+  readonly maxOutputBytes: number;
+  readonly platform: NodeJS.Platform;
+  readonly signal: AbortSignal;
+  readonly spawnProcess: typeof spawn;
+  readonly wallTimeMs: number;
+}): Promise<HelperExecution> {
   const events: AcquisitionEvent[] = [];
   let lastProgressBytes: number | undefined;
-  const started = Date.now();
-
-  const closePromise = new Promise<void>((resolvePromise) => {
-    let settled = false;
-    const finish = (code: number | null): void => {
-      if (settled) return;
-      settled = true;
-      exitCode = code;
-      window.clearInterval(pollTimer);
-      window.clearTimeout(wallTimer);
-      options.signal.removeEventListener('abort', abort);
-      resolvePromise();
-    };
-    const abort = (): void => {
-      cancelled = true;
-      killChild(child);
-    };
-    const pollTimer = window.setInterval(() => {
-      const progress = parseYouTubeProgress(stdout);
-      if (progress !== null && progress.bytes !== lastProgressBytes && events.length < 256) {
-        lastProgressBytes = progress.bytes;
-        events.push({ ...progress, type: 'progress' });
-      }
-      if (Date.now() - started > options.wallTimeMs) {
-        timedOut = true;
-        killChild(child);
-      }
-    }, 100);
-    const wallTimer = window.setTimeout(() => {
-      timedOut = true;
-      killChild(child);
-    }, options.wallTimeMs);
-    child.stdout?.on('data', (chunk: Buffer | string) => {
-      const value = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-      stdoutBytes += Buffer.byteLength(value);
-      if (stdoutBytes > options.maxOutputBytes) {
-        outputLimitExceeded = true;
-        killChild(child);
-        return;
-      }
-      stdout += value;
-    });
-    child.stderr?.on('data', (chunk: Buffer | string) => {
-      const value = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-      stderrBytes += Buffer.byteLength(value);
-      if (stderrBytes > YOUTUBE_MAX_STDERR_BYTES) {
-        outputLimitExceeded = true;
-        killChild(child);
-        return;
-      }
-      stderr += value;
-    });
-    child.once('error', () => finish(null));
-    child.once('close', (code) => finish(code));
-    options.signal.addEventListener('abort', abort, { once: true });
-    if (options.signal.aborted) abort();
-  });
-
-  await closePromise;
+  const result = await runManagedProcess(
+    options.command,
+    options.args,
+    {
+      cwd: options.cwd,
+      env: options.env,
+      platform: options.platform,
+      shell: false,
+      spawnProcess: options.spawnProcess,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    },
+    {
+      maxOutputBytes: options.maxOutputBytes,
+      onStdout: (stdout) => {
+        const progress = parseYouTubeProgress(stdout);
+        if (progress !== null && progress.bytes !== lastProgressBytes && events.length < 256) {
+          lastProgressBytes = progress.bytes;
+          events.push({ ...progress, type: 'progress' });
+        }
+      },
+      signal: options.signal,
+      stderrLimitBytes: YOUTUBE_MAX_STDERR_BYTES,
+      timeoutMs: options.wallTimeMs,
+    },
+  );
   return {
-    cancelled,
+    cancelled: result.cancelled,
     events,
-    exitCode,
-    metadata: parseYouTubeHelperMetadata(stdout),
-    outputLimitExceeded,
-    stderr,
-    timedOut,
+    exitCode: result.exitCode,
+    metadata: parseYouTubeHelperMetadata(result.stdout),
+    outputLimitExceeded: result.outputLimitExceeded,
+    stderr: result.stderr,
+    timedOut: result.timedOut,
   };
 }
 
@@ -674,32 +747,13 @@ function parseProgressBytes(value: string): number | undefined {
   return Math.round(amount * multiplier);
 }
 
-function killChild(child: ChildProcess): void {
-  if (child.pid !== undefined && process.platform !== 'win32') {
-    try {
-      process.kill(-child.pid, 'SIGTERM');
-      scheduleForcedKill(child);
-      return;
-    } catch {
-      // Fall through to the direct child kill used by test doubles and Windows.
-    }
+function sanitizePublicUrl(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    return parseYouTubeVideoUrl(value).canonicalUrl;
+  } catch {
+    return undefined;
   }
-  child.kill('SIGTERM');
-  scheduleForcedKill(child);
-}
-
-function scheduleForcedKill(child: ChildProcess): void {
-  window.setTimeout(() => {
-    if (child.pid !== undefined && process.platform !== 'win32') {
-      try {
-        process.kill(-child.pid, 'SIGKILL');
-        return;
-      } catch {
-        // Fall through to the direct child kill.
-      }
-    }
-    child.kill('SIGKILL');
-  }, 1_000);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

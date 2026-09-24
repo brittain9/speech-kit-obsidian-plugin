@@ -104,6 +104,7 @@ import { openYouTubeMediaSourceModal } from './ui/youtube-media-source-modal';
 export default class LocalSttPlugin extends Plugin {
   private audioCaptureStream: AudioCaptureStream | null = null;
   private audioFileTranscriptionController: AudioFileTranscriptionController | null = null;
+  private youtubeMediaSource: YouTubeMediaSource | null = null;
   private audioLevelMeter: SidecarAudioLevelMeter | null = null;
   private dictationController: DictationSessionController | null = null;
   /**
@@ -344,15 +345,17 @@ export default class LocalSttPlugin extends Plugin {
     const localMediaSource = new LocalMediaSource({
       pickFile: (signal) => pickLocalAudioFile(signal),
     });
-    const youtubeMediaSource = new YouTubeMediaSource({
+    this.youtubeMediaSource = new YouTubeMediaSource({
       getHelperPath: () => this.settings.youtubeHelperPath,
     });
+    const youtubeMediaSource = this.youtubeMediaSource;
     this.audioFileTranscriptionController = new AudioFileTranscriptionController({
       backpressureTimeoutMs: 30_000,
       confirmMediaLlm: (preview, signal) => confirmMediaLlmPreview(this.app, preview, signal),
       createLlmRouter: (settings) =>
         createConfiguredLlmRouter(settings, (secretId) => this.getSecret(secretId)),
       mediaSource: localMediaSource,
+      youtubeSource: youtubeMediaSource,
       createSession: ({ callbacks, placement, rendererOptions, sessionId, target }) =>
         Session.createFromTarget(this.app, target, {
           callbacks,
@@ -484,10 +487,12 @@ export default class LocalSttPlugin extends Plugin {
         const request = await openYouTubeMediaSourceModal(this.app, {
           getHelperPath: () => this.settings.youtubeHelperPath,
           getPolicyVersion: () => this.settings.youtubePolicyVersion,
-          onHelperSelected: async (path) => {
+          onHelperSelected: async (path, _version, signal) => {
+            if (signal.aborted) return;
             await this.updateSettings({ ...this.settings, youtubeHelperPath: path });
           },
-          onRightsConfirmed: async () => {
+          onRightsConfirmed: async (signal) => {
+            if (signal.aborted) return;
             await this.updateSettings({
               ...this.settings,
               youtubePolicyVersion: YOUTUBE_POLICY_VERSION,
@@ -495,14 +500,10 @@ export default class LocalSttPlugin extends Plugin {
           },
         });
         if (request === null) return;
-        await this.requireAudioFileTranscriptionController().transcribeFromSource(
-          youtubeMediaSource,
-          {
-            consentId: 'youtube-policy-confirmation',
-            ref: request.ref,
-            rights: request.rights,
-          },
-        );
+        await this.requireAudioFileTranscriptionController().transcribeYouTube({
+          consent: request.consent,
+          ref: request.ref,
+        });
       },
       translateNote: (editor) => this.requireTranslationController().translateNote(editor),
       translateSelection: (editor) =>
@@ -852,6 +853,9 @@ export default class LocalSttPlugin extends Plugin {
   ): Promise<void> {
     const previousSettings = this.settings;
     this.settings = resolvePluginSettings(nextSettings);
+    const youtubeWasDisabled =
+      previousSettings.youtubeMediaSourceEnabled && !this.settings.youtubeMediaSourceEnabled;
+    if (youtubeWasDisabled) this.youtubeMediaSource?.cancel();
     const llmWasDisabled = previousSettings.llmFeaturesEnabled && !this.settings.llmFeaturesEnabled;
     if (llmWasDisabled) {
       this.dictationController?.disableLlmForActiveSessions();

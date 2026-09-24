@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { lstat, open, realpath, rm } from 'node:fs/promises';
+import { type FileHandle, lstat, open, realpath, rm } from 'node:fs/promises';
 import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 
@@ -21,8 +21,15 @@ export interface PathBackedMediaLeaseOptions {
   readonly encodedBytes: number;
   readonly jobRoot: string;
   readonly maxBytes: number;
+  readonly mediaHandle?: FileHandle;
   readonly mediaPath: string;
   readonly provenance: MediaProvenance;
+}
+
+export interface ValidatedMediaFile {
+  readonly handle: FileHandle;
+  readonly path: string;
+  readonly size: number;
 }
 
 export async function createPathBackedMediaLease(
@@ -30,62 +37,70 @@ export async function createPathBackedMediaLease(
 ): Promise<MediaLease> {
   const jobRoot = resolve(options.jobRoot);
   const mediaPath = resolve(options.mediaPath);
-  await assertSafeMediaFile(jobRoot, mediaPath, options.maxBytes);
-  const encodedBytes = await getSafeFileSize(mediaPath, options.maxBytes);
-  if (options.encodedBytes !== encodedBytes) {
+  const validated =
+    options.mediaHandle === undefined
+      ? await openValidatedMediaFile(jobRoot, mediaPath, options.maxBytes)
+      : { handle: options.mediaHandle, path: mediaPath, size: options.encodedBytes };
+  if (options.encodedBytes !== validated.size) {
+    await validated.handle.close().catch(() => {});
     throw new PathMediaLeaseError('read_failed', 'The acquired media size changed unexpectedly.');
   }
 
   let released = false;
+  let handleClosed = false;
+  let streamOpened = false;
   let releasePromise: Promise<void> | null = null;
   const activeReaders = new Set<() => Promise<void>>();
 
+  const closeHandle = async (): Promise<void> => {
+    if (handleClosed) return;
+    handleClosed = true;
+    await validated.handle.close().catch(() => {});
+  };
   const release = (): Promise<void> => {
     if (releasePromise !== null) return releasePromise;
     releasePromise = (async () => {
       released = true;
       await Promise.allSettled([...activeReaders].map((close) => close()));
+      await closeHandle();
       await rm(jobRoot, { force: true, recursive: true });
     })();
     return releasePromise;
   };
 
   return {
-    dispose: release,
-    encodedBytes,
+    encodedBytes: validated.size,
     mediaId: randomUUID(),
     openReadStream: async (): Promise<MediaReadStream> => {
       if (released) throw new PathMediaLeaseError('released', 'The media lease has been released.');
-      const handle = await open(mediaPath, fsConstants.O_RDONLY | safeNoFollowFlag());
-      const stat = await handle.stat();
-      if (!stat.isFile() || stat.size > options.maxBytes) {
-        await handle.close();
+      if (streamOpened) {
         throw new PathMediaLeaseError(
-          'resource_limit',
-          'The acquired media exceeds its safety limit.',
+          'read_failed',
+          'The media lease already has an active reader.',
         );
       }
+      streamOpened = true;
       const sourceReader = Readable.toWeb(
-        handle.createReadStream({
+        validated.handle.createReadStream({
           autoClose: false,
           highWaterMark: 64 * 1024,
         }),
       ).getReader() as ReadableStreamDefaultReader<Uint8Array>;
       let streamClosed = false;
-      const closeHandle = async (): Promise<void> => {
+      const closeReader = async (): Promise<void> => {
         if (streamClosed) return;
         streamClosed = true;
+        activeReaders.delete(closeReader);
         await sourceReader.cancel().catch(() => {});
-        await handle.close().catch(() => {});
-      };
-      activeReaders.add(closeHandle);
-      if (released) {
         await closeHandle();
+      };
+      activeReaders.add(closeReader);
+      if (released) {
+        await closeReader();
         throw new PathMediaLeaseError('released', 'The media lease has been released.');
       }
 
-      const stream = new ReadableStream<Uint8Array>({
-        start: () => {},
+      return new ReadableStream<Uint8Array>({
         pull: async (controller) => {
           if (released) return;
           try {
@@ -93,31 +108,30 @@ export async function createPathBackedMediaLease(
             if (released) return;
             if (result.done) {
               controller.close();
-              await closeHandle();
+              await closeReader();
               return;
             }
             controller.enqueue(Uint8Array.from(result.value));
           } catch (error) {
             if (!released) controller.error(error);
-            await closeHandle();
+            await closeReader();
           }
         },
         cancel: async () => {
-          await closeHandle();
+          await closeReader();
         },
       });
-      return stream;
     },
     provenance: options.provenance,
     release,
   };
 }
 
-export async function assertSafeMediaFile(
+export async function openValidatedMediaFile(
   jobRoot: string,
   mediaPath: string,
   maxBytes: number,
-): Promise<void> {
+): Promise<ValidatedMediaFile> {
   if (!isAbsolute(jobRoot) || !isAbsolute(mediaPath)) {
     throw new PathMediaLeaseError('read_failed', 'The media path is not absolute.');
   }
@@ -127,9 +141,66 @@ export async function assertSafeMediaFile(
   }
   const rootReal = await realpath(jobRoot);
   const pathStat = await safeLstat(mediaPath);
-  if (!pathStat.isFile() || pathStat.isSymbolicLink()) {
-    throw new PathMediaLeaseError('read_failed', 'The acquired media is not a regular file.');
+  assertRegularMediaStat(pathStat, maxBytes);
+  const mediaReal = await assertPathContained(rootReal, mediaPath);
+
+  let handle: FileHandle | null = null;
+  try {
+    handle = await open(mediaPath, fsConstants.O_RDONLY | safeNoFollowFlag());
+    const descriptorStat = await handle.stat();
+    assertRegularMediaStat(descriptorStat, maxBytes);
+    if (descriptorStat.dev !== pathStat.dev || descriptorStat.ino !== pathStat.ino) {
+      throw new PathMediaLeaseError('read_failed', 'The acquired media changed during validation.');
+    }
+    const afterPathStat = await safeLstat(mediaPath);
+    assertRegularMediaStat(afterPathStat, maxBytes);
+    if (afterPathStat.dev !== descriptorStat.dev || afterPathStat.ino !== descriptorStat.ino) {
+      throw new PathMediaLeaseError('read_failed', 'The acquired media changed during validation.');
+    }
+    const afterReal = await assertPathContained(rootReal, mediaPath);
+    if (afterReal !== mediaReal) {
+      throw new PathMediaLeaseError('read_failed', 'The acquired media changed during validation.');
+    }
+    await handle.chmod(0o600);
+    return { handle, path: mediaPath, size: descriptorStat.size };
+  } catch (error) {
+    await handle?.close().catch(() => {});
+    if (error instanceof PathMediaLeaseError) throw error;
+    throw new PathMediaLeaseError('read_failed', 'The acquired media could not be validated.', {
+      cause: error,
+    });
   }
+}
+
+export async function assertSafeMediaFile(
+  jobRoot: string,
+  mediaPath: string,
+  maxBytes: number,
+): Promise<void> {
+  const validated = await openValidatedMediaFile(jobRoot, mediaPath, maxBytes);
+  await validated.handle.close();
+}
+
+export async function removeMediaJob(jobRoot: string): Promise<void> {
+  await rm(resolve(jobRoot), { force: true, recursive: true });
+}
+
+function assertRegularMediaStat(
+  stat: { isFile(): boolean; isSymbolicLink(): boolean; nlink: number; size: number },
+  maxBytes: number,
+): void {
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) {
+    throw new PathMediaLeaseError(
+      'read_failed',
+      'The acquired media is not a private regular file.',
+    );
+  }
+  if (stat.size > maxBytes) {
+    throw new PathMediaLeaseError('resource_limit', 'The acquired media exceeds its safety limit.');
+  }
+}
+
+async function assertPathContained(rootReal: string, mediaPath: string): Promise<string> {
   const mediaReal = await realpath(mediaPath);
   const relativePath = relative(rootReal, mediaReal);
   if (
@@ -140,24 +211,7 @@ export async function assertSafeMediaFile(
   ) {
     throw new PathMediaLeaseError('read_failed', 'The acquired media escaped its job root.');
   }
-  if (pathStat.size > maxBytes) {
-    throw new PathMediaLeaseError('resource_limit', 'The acquired media exceeds its safety limit.');
-  }
-}
-
-export async function removeMediaJob(jobRoot: string): Promise<void> {
-  await rm(resolve(jobRoot), { force: true, recursive: true });
-}
-
-async function getSafeFileSize(path: string, maxBytes: number): Promise<number> {
-  const stat = await safeLstat(path);
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new PathMediaLeaseError('read_failed', 'The acquired media is not a regular file.');
-  }
-  if (stat.size > maxBytes) {
-    throw new PathMediaLeaseError('resource_limit', 'The acquired media exceeds its safety limit.');
-  }
-  return stat.size;
+  return mediaReal;
 }
 
 async function safeLstat(path: string) {

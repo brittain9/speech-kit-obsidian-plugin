@@ -119,8 +119,10 @@ The local-file acquisition remains the stable default. An optional, explicitly
 selected YouTube VOD adapter is experimental and uses the same contract. Its
 unofficial `yt-dlp` helper is never bundled or auto-updated, accepts only a
 validated canonical video ID, and returns a temporary path-backed `MediaLease`.
-The adapter does not pass its URL, helper, path, or provenance to the decoder,
-ASR, renderer, or optional LLM.
+The adapter requires a current typed consent grant, rejects helper metadata
+that is not an exact non-live VOD identity match, and keeps YouTube-specific
+metadata outside the shared media contract. The adapter does not pass its URL,
+helper, path, or provenance to the decoder, ASR, renderer, or optional LLM.
 
 The media controller owns the provider-neutral sequence: acquire → local decode
 → the existing VAD/batch-ASR `Session` → timestamps, diarization, and smart

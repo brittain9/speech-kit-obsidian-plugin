@@ -40,7 +40,6 @@ describe('media lease decoding', () => {
       provenance: {
         acquiredAt: new Date(0).toISOString(),
         adapterVersion: '1',
-        rights: { kind: 'user_supplied_file' },
         sourceId: 'local_file',
         temporaryMedia: true,
       },

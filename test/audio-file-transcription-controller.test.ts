@@ -1204,17 +1204,17 @@ describe('AudioFileTranscriptionController', () => {
 
   it('adapts the local source lease into the provider-neutral pipeline and releases it', async () => {
     const release = vi.fn(async () => {});
-    const lease: MediaLease = {
+    const lease: MediaLease & { readonly youtubeProvenance: { readonly title: string } } = {
       encodedBytes: 44,
       mediaId: 'media-test',
       openReadStream: vi.fn(async () => new ReadableStream<Uint8Array>()),
       provenance: {
         acquiredAt: new Date(0).toISOString(),
         adapterVersion: '1',
-        rights: { kind: 'user_supplied_file' },
         sourceId: 'local_file',
         temporaryMedia: true,
       },
+      youtubeProvenance: { title: 'Private title' },
       release,
     };
     let acquisitionRequest: MediaAcquireRequest | null = null;
@@ -1233,7 +1233,7 @@ describe('AudioFileTranscriptionController', () => {
     };
     const progress: string[] = [];
     const decoded = createAudio();
-    const decodeMedia = vi.fn(async () => decoded);
+    const decodeMedia = vi.fn(async (_lease: MediaLease, _signal: AbortSignal) => decoded);
     const harness = createHarness({
       decoder: {
         decode: async () => decoded,
@@ -1264,7 +1264,15 @@ describe('AudioFileTranscriptionController', () => {
       ...MEDIA_ACQUISITION_LIMITS,
     });
     expect(harness.pickAudioFile).not.toHaveBeenCalled();
-    expect(decodeMedia).toHaveBeenCalledWith(lease, expect.any(AbortSignal));
+    expect(decodeMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        encodedBytes: lease.encodedBytes,
+        mediaId: lease.mediaId,
+        provenance: lease.provenance,
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(decodeMedia.mock.calls[0]?.[0]).not.toHaveProperty('youtubeProvenance');
     expect(release).toHaveBeenCalledOnce();
     expect(progress).toEqual(
       expect.arrayContaining(['acquire', 'decode', 'transcribe', 'format', 'insert']),

@@ -1,4 +1,15 @@
-import { chmod, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  link,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rename,
+  rm,
+  symlink,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,20 +19,32 @@ import type { AcquisitionEvent } from '../src/media/media-source';
 import { createPathBackedMediaLease } from '../src/media/path-backed-media-lease';
 import {
   discoverYtDlpCandidates,
+  interpretVersionResult,
   isCompatibleYtDlpVersion,
   parseYtDlpVersion,
 } from '../src/media/youtube-helper';
 import {
   buildYouTubeAcquisitionArgs,
+  classifyYouTubeHelperFailure,
   explicitYouTubeRightsConfirmation,
   hasYouTubeRightsConfirmation,
+  parseYouTubeHelperMetadata,
   sanitizedAcquisitionEnvironment,
+  sweepAbandonedYouTubeJobs,
   YOUTUBE_POLICY_VERSION,
+  type YouTubeMediaAcquireRequest,
+  type YouTubeMediaLease,
   YouTubeMediaSource,
 } from '../src/media/youtube-media-source';
 import { parseYouTubeVideoUrl } from '../src/media/youtube-url';
 
 const temporaryPaths: string[] = [];
+
+async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
+  const result: T[] = [];
+  for await (const event of events) result.push(event);
+  return result;
+}
 
 afterEach(async () => {
   await Promise.all(
@@ -64,7 +87,7 @@ describe('yt-dlp helper policy', () => {
     expect(hasYouTubeRightsConfirmation('old-policy')).toBe(false);
     expect(hasYouTubeRightsConfirmation(YOUTUBE_POLICY_VERSION)).toBe(true);
     expect(explicitYouTubeRightsConfirmation()).toEqual({
-      kind: 'declared_by_source',
+      consentId: 'youtube-policy-confirmation',
       policyVersion: YOUTUBE_POLICY_VERSION,
     });
   });
@@ -90,6 +113,45 @@ describe('yt-dlp helper policy', () => {
     expect(isCompatibleYtDlpVersion('2026.08.19')).toBe(true);
   });
 
+  it('rejects missing and unsupported helper versions', () => {
+    const base = {
+      cancelled: false,
+      exitCode: 0,
+      failed: false,
+      outputLimitExceeded: false,
+      stderr: '',
+      timedOut: false,
+    };
+    expect(() => interpretVersionResult('/private/helper', { ...base, stdout: '' })).toThrow();
+    expect(() =>
+      interpretVersionResult('/private/helper', { ...base, stdout: 'yt-dlp 2025.01.01' }),
+    ).toThrow();
+  });
+  it('maps helper failures to typed YouTube codes', () => {
+    for (const [message, code] of [
+      ['ERROR: Private video', 'not_found_or_private'],
+      ['Sign in to confirm your age', 'age_restricted'],
+      ['members-only content', 'membership_required'],
+      ['This video requires a purchase', 'purchase_required'],
+      ['This video is DRM protected', 'drm_protected'],
+      ['Video unavailable in your region', 'region_restricted'],
+      ['HTTP Error 429: Too Many Requests', 'rate_limited'],
+      ['Unable to download webpage: network error', 'network_failed'],
+      ['Unsupported URL extractor changed', 'extractor_changed'],
+      ['login required', 'authentication_required'],
+      ['fatal helper crash', 'tool_failed'],
+    ] as const) {
+      expect(classifyYouTubeHelperFailure(message)).toBe(code);
+    }
+  });
+
+  it('redacts signed URLs, tokens, and unallowlisted metadata from parsed output', () => {
+    const metadata = parseYouTubeHelperMetadata(
+      'before_dl:{"id":"dQw4w9WgXcQ","title":"Fixture","channel":"Channel","channel_id":"channel-1","duration":1,"ext":"webm","is_live":false,"live_status":"not_live","webpage_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ&token=SECRET"}',
+    );
+    expect(metadata).toMatchObject({ title: 'Fixture', videoId: 'dQw4w9WgXcQ' });
+    expect(JSON.stringify(metadata)).not.toContain('SECRET');
+  });
   it('uses a fixed safe command boundary and sanitized environment', () => {
     const video = parseYouTubeVideoUrl('https://youtu.be/dQw4w9WgXcQ');
     const args = buildYouTubeAcquisitionArgs({
@@ -147,7 +209,6 @@ describe('YouTube path-backed MediaLease', () => {
       provenance: {
         acquiredAt: new Date().toISOString(),
         adapterVersion: 'test',
-        rights: { kind: 'user_supplied_file' },
         sourceId: 'local_file',
         temporaryMedia: true,
       },
@@ -179,12 +240,86 @@ describe('YouTube path-backed MediaLease', () => {
         provenance: {
           acquiredAt: new Date().toISOString(),
           adapterVersion: 'test',
-          rights: { kind: 'user_supplied_file' },
           sourceId: 'local_file',
           temporaryMedia: true,
         },
       }),
     ).rejects.toMatchObject({ code: 'read_failed' });
+  });
+
+  it('rejects hard-linked media and keeps the validated descriptor after path replacement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-test-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    const outside = join(root, 'outside');
+    const mediaPath = join(jobRoot, 'source.webm');
+    await writeFile(outside, 'outside');
+    await link(outside, mediaPath);
+    await expect(
+      createPathBackedMediaLease({
+        encodedBytes: 7,
+        jobRoot,
+        maxBytes: 10,
+        mediaPath,
+        provenance: {
+          acquiredAt: new Date().toISOString(),
+          adapterVersion: 'test',
+          sourceId: 'local_file',
+          temporaryMedia: true,
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'read_failed' });
+
+    await rm(mediaPath);
+    await writeFile(mediaPath, 'original');
+    const lease = await createPathBackedMediaLease({
+      encodedBytes: 8,
+      jobRoot,
+      maxBytes: 10,
+      mediaPath,
+      provenance: {
+        acquiredAt: new Date().toISOString(),
+        adapterVersion: 'test',
+        sourceId: 'local_file',
+        temporaryMedia: true,
+      },
+    });
+    const replacement = join(root, 'replacement');
+    await writeFile(replacement, 'replaced');
+    await rename(replacement, mediaPath);
+    const reader = (await lease.openReadStream()).getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe('original');
+    await reader.cancel();
+    await lease.release();
+    await expect(lease.openReadStream()).rejects.toMatchObject({ code: 'released' });
+  });
+
+  it('removes active reader registrations at EOF and on cancel', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-test-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    const mediaPath = join(jobRoot, 'source.webm');
+    await writeFile(mediaPath, 'eof');
+    const lease = await createPathBackedMediaLease({
+      encodedBytes: 3,
+      jobRoot,
+      maxBytes: 10,
+      mediaPath,
+      provenance: {
+        acquiredAt: new Date().toISOString(),
+        adapterVersion: 'test',
+        sourceId: 'local_file',
+        temporaryMedia: true,
+      },
+    });
+    const eofReader = (await lease.openReadStream()).getReader();
+    expect((await eofReader.read()).done).toBe(false);
+    expect((await eofReader.read()).done).toBe(true);
+    const eofRelease = lease.release();
+    expect(lease.release()).toBe(eofRelease);
+    await eofRelease;
   });
 });
 
@@ -194,30 +329,159 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-test-'));
     temporaryPaths.push(root);
     const source = new YouTubeMediaSource({ getHelperPath: () => helper, tempRoot: root });
-    const events: AcquisitionEvent[] = [];
-    for await (const event of source.acquire({
-      kind: 'interactive',
-      maxBytes: 1_000,
-      maxDurationMs: 30_000,
-      ref: { kind: 'youtube_video_id', videoId: 'dQw4w9WgXcQ' },
-      rights: { kind: 'declared_by_source', policyVersion: YOUTUBE_POLICY_VERSION },
-      signal: new AbortController().signal,
-    })) {
+    const events: AcquisitionEvent<YouTubeMediaLease>[] = [];
+    for await (const event of source.acquire(youtubeRequest(new AbortController().signal))) {
       events.push(event);
     }
     expect(events.map((event) => event.type)).toEqual(['plan', 'progress', 'ready']);
     const ready = events.at(-1);
     if (ready?.type !== 'ready') throw new Error('Expected ready event');
     expect(ready.lease.provenance).toMatchObject({
-      canonicalUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-      helperVersion: '2026.08.19',
       sourceId: 'youtube_yt_dlp',
       temporaryMedia: true,
     });
-    expect(JSON.stringify(ready.lease.provenance)).not.toContain(root);
+    expect(ready.lease.youtubeProvenance).toMatchObject({
+      helperVersion: '2026.08.19',
+      publicUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      title: 'Fixture',
+      videoId: 'dQw4w9WgXcQ',
+    });
+    expect(Object.keys(ready.lease.provenance)).toEqual([
+      'acquiredAt',
+      'adapterVersion',
+      'sourceId',
+      'temporaryMedia',
+    ]);
+    expect(JSON.stringify(ready.lease.provenance)).not.toMatch(
+      /yt-dlp|Fixture|Channel|root|watch\?v=/i,
+    );
     const stream = await ready.lease.openReadStream();
     expect((await stream.getReader().read()).done).toBe(false);
     await ready.lease.release();
+  });
+
+  it('rejects live metadata and missing consent before accepting media', async () => {
+    const liveHelper = await makeHelper(false, { is_live: true, live_status: 'is_live' });
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-live-'));
+    temporaryPaths.push(root);
+    const source = new YouTubeMediaSource({ getHelperPath: () => liveHelper, tempRoot: root });
+    await expect(
+      collect(source.acquire(youtubeRequest(new AbortController().signal))),
+    ).rejects.toMatchObject({
+      code: 'live_stream',
+    });
+    await expect(readdir(root)).resolves.toEqual([]);
+
+    const mismatchedHelper = await makeHelper(false, { id: 'aaaaaaaaaaa' });
+    const mismatchedSource = new YouTubeMediaSource({
+      getHelperPath: () => mismatchedHelper,
+      tempRoot: root,
+    });
+    await expect(
+      collect(mismatchedSource.acquire(youtubeRequest(new AbortController().signal))),
+    ).rejects.toMatchObject({
+      code: 'extractor_changed',
+    });
+
+    const missingConsent = {
+      ...youtubeRequest(new AbortController().signal),
+      provider: {
+        ref: parseYouTubeVideoUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ'),
+      },
+    };
+    await expect(collect(source.acquire(missingConsent))).rejects.toMatchObject({
+      code: 'rights_not_established',
+    });
+  });
+
+  it('sweeps only old clearly abandoned jobs and preserves recent jobs', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-sweep-'));
+    temporaryPaths.push(root);
+    const recent = join(root, 'speech-kit-youtube-recent');
+    const old = join(root, 'speech-kit-youtube-old');
+    await mkdir(recent);
+    await mkdir(old);
+    await utimes(recent, new Date(20_000), new Date(20_000));
+    await utimes(old, new Date(0), new Date(0));
+    await sweepAbandonedYouTubeJobs(root, { minAgeMs: 10, now: () => 20_000 });
+    await expect(readdir(root)).resolves.toEqual(['speech-kit-youtube-recent']);
+    const current = join(root, 'speech-kit-youtube-current');
+    await mkdir(current);
+    await writeFile(join(current, 'owner.json'), JSON.stringify({ pid: process.pid }));
+    await utimes(current, new Date(0), new Date(0));
+    await sweepAbandonedYouTubeJobs(root, { minAgeMs: 10, now: () => 20_000 });
+    await expect(readdir(root)).resolves.toEqual([
+      'speech-kit-youtube-current',
+      'speech-kit-youtube-recent',
+    ]);
+  });
+  it('enforces wall, output, size, and tool limits with local fake helpers', async () => {
+    const wallHelper = await makeHelper(true);
+    const wallRoot = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-wall-'));
+    temporaryPaths.push(wallRoot);
+    const wallSource = new YouTubeMediaSource({
+      getHelperPath: () => wallHelper,
+      tempRoot: wallRoot,
+      wallTimeMs: 50,
+    });
+    await expect(
+      collect(wallSource.acquire(youtubeRequest(new AbortController().signal))),
+    ).rejects.toMatchObject({
+      code: 'resource_limit',
+    });
+
+    const outputHelper = await makeHelper(false, { title: 'x'.repeat(200) });
+    const outputRoot = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-output-'));
+    temporaryPaths.push(outputRoot);
+    const outputSource = new YouTubeMediaSource({
+      getHelperPath: () => outputHelper,
+      maxOutputBytes: 100,
+      tempRoot: outputRoot,
+    });
+    await expect(
+      collect(outputSource.acquire(youtubeRequest(new AbortController().signal))),
+    ).rejects.toMatchObject({
+      code: 'resource_limit',
+    });
+
+    const sizeHelper = await makeHelper(false, {}, 20);
+    const sizeRoot = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-size-'));
+    temporaryPaths.push(sizeRoot);
+    const sizeSource = new YouTubeMediaSource({
+      getHelperPath: () => sizeHelper,
+      tempRoot: sizeRoot,
+    });
+    await expect(
+      collect(
+        sizeSource.acquire({ ...youtubeRequest(new AbortController().signal), maxBytes: 10 }),
+      ),
+    ).rejects.toMatchObject({ code: 'resource_limit' });
+
+    const failHelper = await makeHelper(false, {}, 5, true);
+    const failRoot = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-tool-'));
+    temporaryPaths.push(failRoot);
+    const failSource = new YouTubeMediaSource({
+      getHelperPath: () => failHelper,
+      tempRoot: failRoot,
+    });
+    await expect(
+      collect(failSource.acquire(youtubeRequest(new AbortController().signal))),
+    ).rejects.toMatchObject({
+      code: 'tool_failed',
+    });
+  });
+
+  it('cancels an active source when the source-specific disable path calls cancel()', async () => {
+    const helper = await makeHelper(true);
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-cancel-source-'));
+    temporaryPaths.push(root);
+    const source = new YouTubeMediaSource({ getHelperPath: () => helper, tempRoot: root });
+    const acquisition = collect(source.acquire(youtubeRequest(new AbortController().signal)));
+    setTimeout(() => source.cancel(), 300);
+    await expect(acquisition).rejects.toMatchObject({ code: 'cancelled' });
+    expect(
+      (await readdir(root)).filter((entry) => entry.startsWith('speech-kit-youtube-')),
+    ).toEqual([]);
   });
 
   it('kills a real child on cancellation and does not leave a job directory', async () => {
@@ -227,14 +491,7 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const controller = new AbortController();
     const source = new YouTubeMediaSource({ getHelperPath: () => helper, tempRoot: root });
     const acquisition = (async () => {
-      for await (const _event of source.acquire({
-        kind: 'interactive',
-        maxBytes: 1_000,
-        maxDurationMs: 30_000,
-        ref: { kind: 'youtube_video_id', videoId: 'dQw4w9WgXcQ' },
-        rights: { kind: 'declared_by_source', policyVersion: YOUTUBE_POLICY_VERSION },
-        signal: controller.signal,
-      })) {
+      for await (const _event of source.acquire(youtubeRequest(controller.signal))) {
         // The source owns the child until it exits or cancellation is observed.
       }
     })();
@@ -246,10 +503,41 @@ describe('YouTubeMediaSource with a local fake helper', () => {
   });
 });
 
-async function makeHelper(slow: boolean): Promise<string> {
+function youtubeRequest(signal: AbortSignal): YouTubeMediaAcquireRequest {
+  return {
+    kind: 'interactive',
+    maxBytes: 1_000,
+    maxDurationMs: 30_000,
+    provider: {
+      consent: explicitYouTubeRightsConfirmation(),
+      ref: parseYouTubeVideoUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ'),
+    },
+    signal,
+  };
+}
+
+async function makeHelper(
+  slow: boolean,
+  metadata: Record<string, unknown> = {},
+  outputBytes = 5,
+  fail = false,
+  descendant = false,
+): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-helper-'));
   temporaryPaths.push(root);
   const helper = join(root, 'yt-dlp');
+  const metadataJson = JSON.stringify({
+    channel: 'Channel',
+    channel_id: 'channel-1',
+    duration: 1,
+    ext: 'webm',
+    id: 'dQw4w9WgXcQ',
+    is_live: false,
+    live_status: 'not_live',
+    title: 'Fixture',
+    webpage_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    ...metadata,
+  });
   await writeFile(
     helper,
     `#!/bin/sh
@@ -257,8 +545,9 @@ if [ "$1" = "--version" ]; then
   printf '%s\\n' 'yt-dlp 2026.08.19'
   exit 0
 fi
-printf '%s\\n' 'before_dl:{"id":"dQw4w9WgXcQ","title":"Fixture","channel":"Channel","channel_id":"channel-1","duration":1}'
-${slow ? 'sleep 10' : "printf '%s' audio > source.webm"}
+printf '%s\\n' 'before_dl:${metadataJson}'
+${descendant ? '(sleep 1; printf alive > descendant.txt) & sleep 0.05' : ''}
+${fail ? 'exit 1' : slow ? 'sleep 10' : `printf '%${outputBytes}s' audio > source.webm`}
 `,
     { mode: 0o700 },
   );

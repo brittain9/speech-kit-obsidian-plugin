@@ -52,8 +52,83 @@ export const en = {
     'Audio-file transcription stopped because its target note was deleted. Restore or recreate the note, then run the command again.',
   'audio-file-surface-changed':
     'Audio-file transcription stopped because the note changed in a way Speech Kit could not safely track. Restore the intended note and run the command again.',
-  'youtube-acquisition-failed':
-    'The experimental YouTube helper could not acquire this video. Check the selected helper, eligibility, and network restrictions, then try again.',
+  'youtube.error.invalid_url': 'Enter one valid YouTube VOD watch, youtu.be, or Shorts URL.',
+  'youtube.error.helper_unavailable':
+    'The selected yt-dlp helper is missing or could not be started. Select a supported absolute path in Settings.',
+  'youtube.error.helper_version_unsupported':
+    'The selected yt-dlp helper is too old. Select version 2026.08.19 or newer.',
+  'youtube.error.not_found_private':
+    'This YouTube video is unavailable or private. Use a video you own or are authorized to process.',
+  'youtube.error.authentication_required':
+    'This YouTube video requires login. Speech Kit does not use cookies or authenticated access.',
+  'youtube.error.age_restricted': 'This YouTube video is age-restricted and is not supported.',
+  'youtube.error.membership_required':
+    'This YouTube video requires membership and is not supported.',
+  'youtube.error.purchase_required':
+    'This YouTube video requires a purchase or rental and is not supported.',
+  'youtube.error.region_restricted':
+    'This YouTube video is unavailable in this region and is not supported.',
+  'youtube.error.drm_protected': 'This YouTube video is DRM-protected and is not supported.',
+  'youtube.error.rate_limited':
+    'YouTube rate-limited the helper request. Wait and try again later.',
+  'youtube.error.network_failed':
+    'The helper could not reach YouTube. Check the network and try again.',
+  'youtube.error.extractor_changed':
+    'The YouTube extractor changed or returned incomplete metadata. Try again later.',
+  'youtube.error.live_stream':
+    'This is an active or non-VOD YouTube stream. Live content is not supported.',
+  'youtube.error.rights_not_established':
+    'Confirm that you own or are authorized to process this video. Public visibility is not permission.',
+  'youtube.error.resource_limit':
+    'The YouTube video or helper output exceeded a safety limit. Choose a shorter or smaller video.',
+  'youtube.error.tool_failed':
+    'The experimental yt-dlp helper could not complete the acquisition. Check helper health and try again.',
+  'youtube.error.cancelled': 'The YouTube acquisition was cancelled.',
+  'youtube.modal.experimentalBadge': 'Experimental',
+  'youtube.modal.disclosure':
+    'Unofficial helper disclosure: yt-dlp contacts YouTube using an external executable and may stop working when YouTube changes. Speech Kit does not bundle or update it.',
+  'youtube.modal.urlDescription':
+    'Enter exactly one public YouTube VOD watch, youtu.be, or Shorts URL. Playlists, channels, live streams, and arbitrary URLs are not supported.',
+  'youtube.modal.helperName': 'yt-dlp executable',
+  'youtube.modal.helperPlaceholder': '/absolute/path/to/yt-dlp',
+  'youtube.modal.checkHelper': 'Check helper',
+  'youtube.modal.suggestions':
+    'Existing PATH suggestions (not executed during discovery): {suggestions}',
+  'youtube.modal.policyAccepted':
+    'Rights confirmation already accepted for policy {policy}; no repeated prompt will be shown.',
+  'youtube.modal.policyRequired':
+    'One-time rights confirmation: I own this video or am authorized to process it. Public visibility is not permission.',
+  'youtube.modal.rightsLabel': 'I own or am authorized to process this video',
+  'youtube.modal.urlName': 'YouTube VOD URL',
+  'youtube.modal.urlPlaceholder': 'https://www.youtube.com/watch?v=…',
+  'youtube.modal.summary': 'Canonical video: {canonicalUrl} · Host: {host} · ID: {videoId}',
+  'youtube.modal.invalidSummary': 'Enter one valid YouTube VOD URL.',
+  'youtube.modal.transcribe': 'Transcribe',
+  'youtube.modal.displayName': 'YouTube video {videoId}',
+  'youtube.modal.pathRequired': 'Choose an absolute helper path.',
+  'youtube.modal.helperReady': 'Helper ready: {version}',
+  'youtube.modal.helperError': 'The selected helper is missing, unsupported, or could not be run.',
+  'youtube.modal.submitError':
+    'Enter a valid single VOD URL, select a supported absolute helper, and confirm rights.',
+  'youtube.settings.enableName': 'Enable experimental YouTube media source',
+  'youtube.settings.enableDesc':
+    'Experimental and disabled by default. Enable only after selecting a supported helper and accepting the one-time rights policy in the command modal.',
+  'youtube.settings.helperName': 'Experimental YouTube media source',
+  'youtube.settings.helperDesc':
+    'Unofficial yt-dlp helper. Select an absolute executable path; suggestions are discovered from PATH without executing candidates. No bundled installer or retention is provided.',
+  'youtube.settings.suggestions': 'Existing PATH suggestions: {suggestions}',
+  'youtube.settings.policyAccepted': 'Rights confirmation: accepted for {policy}.',
+  'youtube.settings.policyRequired': 'Rights confirmation: required before the first YouTube job.',
+  'youtube.settings.checkHelper': 'Check helper',
+  'youtube.settings.pathRequired': 'Choose an absolute executable path. No path was saved.',
+  'youtube.settings.pathSaved': 'Selected helper path saved. Check the version explicitly.',
+  'youtube.settings.helperReady': 'Helper ready: {version} ({path})',
+  'youtube.settings.helperError':
+    'The selected helper could not be run or is not a supported version.',
+  'youtube.settings.disabledDescription':
+    'Experimental YouTube media is disabled until explicitly enabled with an absolute yt-dlp path in Settings.',
+  'youtube.settings.enabledDescription':
+    'Experimental YouTube media is enabled with the selected unofficial yt-dlp helper. It may stop working.',
   'media-llm-empty':
     'The media transcript is empty or the AI provider returned no text. The raw transcript was kept; record a non-empty transcript or check the provider and try again.',
   'media-llm-failed':

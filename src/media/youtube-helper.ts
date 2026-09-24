@@ -1,13 +1,20 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import type { spawn } from 'node:child_process';
 import { lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, isAbsolute, join, resolve } from 'node:path';
 
-import type { AcquisitionFailureCode } from './media-source';
+import { type ManagedProcessResult, runManagedProcess } from './process-runner';
 
 export const YOUTUBE_HELPER_PINNED_VERSION = '2026.08.19';
 export const YOUTUBE_HELPER_MAX_VERSION_OUTPUT_BYTES = 8 * 1024;
 export const YOUTUBE_HELPER_PROBE_TIMEOUT_MS = 10_000;
+
+export type YouTubeHelperFailureCode =
+  | 'helper_unavailable'
+  | 'helper_version_unsupported'
+  | 'tool_failed'
+  | 'cancelled'
+  | 'resource_limit';
 
 const VERSION_PATTERN = /(?:^|\s)yt-dlp\s+(\d{4}\.\d{2}\.\d{2})(?:\s|$)/iu;
 const BARE_VERSION_PATTERN = /^(\d{4}\.\d{2}\.\d{2})$/u;
@@ -16,14 +23,7 @@ export class YouTubeHelperError extends Error {
   override readonly cause?: unknown;
 
   constructor(
-    readonly code: Extract<
-      AcquisitionFailureCode,
-      | 'helper_unavailable'
-      | 'helper_version_unsupported'
-      | 'tool_failed'
-      | 'cancelled'
-      | 'resource_limit'
-    >,
+    readonly code: YouTubeHelperFailureCode,
     message: string,
     options?: { cause?: unknown },
   ) {
@@ -41,9 +41,10 @@ export interface YtDlpCandidateOptions {
 
 export interface YtDlpVersionProbeOptions {
   readonly cwd?: string;
+  readonly platform?: NodeJS.Platform;
   readonly signal?: AbortSignal;
-  readonly timeoutMs?: number;
   readonly spawnProcess?: typeof spawn;
+  readonly timeoutMs?: number;
 }
 
 export interface YtDlpVersion {
@@ -107,32 +108,61 @@ export async function probeYtDlpVersion(
     throw new YouTubeHelperError('cancelled', 'The yt-dlp version check was cancelled.');
   }
 
-  const spawnProcess = options.spawnProcess ?? spawn;
-  const timeoutMs = options.timeoutMs ?? YOUTUBE_HELPER_PROBE_TIMEOUT_MS;
-  const child = spawnProcess(path, ['--version'], {
-    cwd: options.cwd ?? tmpdir(),
-    env: sanitizedProbeEnvironment(),
-    shell: false,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
-  });
-  const result = await collectVersionOutput(child, timeoutMs, options.signal);
+  const result = await runManagedProcess(
+    path,
+    ['--version'],
+    {
+      cwd: options.cwd ?? tmpdir(),
+      env: sanitizedProbeEnvironment(),
+      ...(options.platform === undefined ? {} : { platform: options.platform }),
+      shell: false,
+      ...(options.spawnProcess === undefined ? {} : { spawnProcess: options.spawnProcess }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    },
+    {
+      maxOutputBytes: YOUTUBE_HELPER_MAX_VERSION_OUTPUT_BYTES,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      stderrLimitBytes: YOUTUBE_HELPER_MAX_VERSION_OUTPUT_BYTES,
+      timeoutMs: options.timeoutMs ?? YOUTUBE_HELPER_PROBE_TIMEOUT_MS,
+    },
+  );
+  return interpretVersionResult(path, result);
+}
+
+export function interpretVersionResult(path: string, result: ManagedProcessResult): YtDlpVersion {
   if (result.cancelled) {
     throw new YouTubeHelperError('cancelled', 'The yt-dlp version check was cancelled.');
   }
-  if (result.timedOut || result.failed || result.version === null) {
+  if (result.timedOut) {
+    throw new YouTubeHelperError('helper_unavailable', 'The selected yt-dlp executable timed out.');
+  }
+  if (result.outputLimitExceeded) {
+    throw new YouTubeHelperError(
+      'resource_limit',
+      'The yt-dlp version output exceeded its safety limit.',
+    );
+  }
+  if (result.failed || result.exitCode !== 0) {
     throw new YouTubeHelperError(
       'helper_unavailable',
       'The selected yt-dlp executable could not be run.',
     );
   }
-  if (!isCompatibleYtDlpVersion(result.version)) {
+  const version = parseYtDlpVersion(result.stdout);
+  if (version === null) {
+    throw new YouTubeHelperError(
+      'helper_unavailable',
+      'The selected yt-dlp executable returned no version.',
+    );
+  }
+  if (!isCompatibleYtDlpVersion(version)) {
     throw new YouTubeHelperError(
       'helper_version_unsupported',
       `yt-dlp ${YOUTUBE_HELPER_PINNED_VERSION} or newer is required.`,
     );
   }
-  return { path, version: result.version };
+  return { path, version };
 }
 
 function defaultExistingFile(path: string): boolean {
@@ -155,76 +185,6 @@ function sanitizedProbeEnvironment(): NodeJS.ProcessEnv {
     LANG: 'C',
     LC_ALL: 'C',
   };
-}
-
-async function collectVersionOutput(
-  child: ChildProcess,
-  timeoutMs: number,
-  signal: AbortSignal | undefined,
-): Promise<{ cancelled: boolean; failed: boolean; timedOut: boolean; version: string | null }> {
-  let stdout = '';
-  let stderrBytes = 0;
-  let settled = false;
-  let timedOut = false;
-  let cancelled = false;
-  let resolveResult!: (result: {
-    cancelled: boolean;
-    failed: boolean;
-    timedOut: boolean;
-    version: string | null;
-  }) => void;
-  const resultPromise = new Promise<{
-    cancelled: boolean;
-    failed: boolean;
-    timedOut: boolean;
-    version: string | null;
-  }>((resolve) => {
-    resolveResult = resolve;
-  });
-  const finish = (failed: boolean): void => {
-    if (settled) return;
-    settled = true;
-    window.clearTimeout(timer);
-    signal?.removeEventListener('abort', abort);
-    resolveResult({
-      cancelled,
-      failed,
-      timedOut,
-      version: parseYtDlpVersion(stdout),
-    });
-  };
-  const abort = (): void => {
-    cancelled = true;
-    child.kill('SIGTERM');
-  };
-  const timer = window.setTimeout(
-    () => {
-      timedOut = true;
-      child.kill('SIGKILL');
-    },
-    Math.max(1, timeoutMs),
-  );
-  signal?.addEventListener('abort', abort, { once: true });
-
-  child.stdout?.on('data', (chunk: Buffer | string) => {
-    const value = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-    if (Buffer.byteLength(value, 'utf8') > YOUTUBE_HELPER_MAX_VERSION_OUTPUT_BYTES) {
-      child.kill('SIGKILL');
-      finish(true);
-      return;
-    }
-    stdout += value;
-  });
-  child.stderr?.on('data', (chunk: Buffer | string) => {
-    stderrBytes += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
-    if (stderrBytes > YOUTUBE_HELPER_MAX_VERSION_OUTPUT_BYTES) {
-      child.kill('SIGKILL');
-      finish(true);
-    }
-  });
-  child.once('error', () => finish(true));
-  child.once('close', (code) => finish(code !== 0));
-  return await resultPromise;
 }
 
 function parseVersionParts(value: string): [number, number, number] | null {

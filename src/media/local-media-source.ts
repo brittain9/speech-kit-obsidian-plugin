@@ -78,7 +78,6 @@ function createLocalMediaLease(args: {
   const provenance: MediaProvenance = {
     acquiredAt: args.acquiredAt,
     adapterVersion: args.adapterVersion,
-    rights: { kind: 'user_supplied_file' },
     sourceId: args.sourceId,
     temporaryMedia: true,
   };
@@ -112,7 +111,6 @@ function createLocalMediaLease(args: {
       return tracked.stream;
     },
     release,
-    dispose: release,
   };
 }
 
