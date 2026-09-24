@@ -40,9 +40,7 @@ export class MicrophoneReadiness {
       });
     }
     if (this.mediaRequestAttempted && permissionState !== 'granted') {
-      const canRetryDevice =
-        permissionState === 'prompt' && isDeviceCaptureError(this.lastResult.error);
-      if (!canRetryDevice) return this.remember(this.lastResult);
+      return this.remember(this.lastResult);
     }
 
     const mediaDevices = this.navigator?.mediaDevices;
@@ -50,7 +48,7 @@ export class MicrophoneReadiness {
     if (mediaDevices === undefined || getUserMedia === undefined) {
       return this.remember({
         error: namedError('NotFoundError', 'Microphone capture is unavailable.'),
-        recovery: permissionState === null ? 'reopen' : 'retryDevice',
+        recovery: permissionState === 'granted' ? 'retryDevice' : 'reopen',
         status: 'unavailable',
       });
     }
@@ -112,8 +110,10 @@ function recoveryForCaptureError(
   error: unknown,
   permissionState: PermissionState | null,
 ): MicrophoneReadinessResult['recovery'] {
-  if (permissionState === null) return 'reopen';
-  return isDeviceCaptureError(error) ? 'retryDevice' : 'recheck';
+  if (isDeviceCaptureError(error)) {
+    return permissionState === 'granted' ? 'retryDevice' : 'reopen';
+  }
+  return permissionState === null ? 'reopen' : 'recheck';
 }
 
 function namedError(name: string, message: string): Error {

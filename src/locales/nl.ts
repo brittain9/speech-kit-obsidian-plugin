@@ -535,7 +535,7 @@ export const nl = {
   'setup.microphone.recheck':
     'Nadat u de toegang hebt gewijzigd, kiest u Opnieuw controleren. Deze wizard vraagt niet opnieuw om toestemming tenzij u Setup opnieuw opent.',
   'setup.microphone.reopenSetup':
-    'Deze runtime kan wijzigingen in toestemming niet melden. Open Setup opnieuw nadat u de toegang hebt gewijzigd; opnieuw controleren vraagt hier niet opnieuw om toestemming.',
+    'Wijzig de microfoonrechten of de apparaattoegang en open Setup daarna opnieuw. Opnieuw controleren vraagt hier niet opnieuw om toestemming.',
   'setup.microphone.retryDevice':
     'Sluit een microfoon aan of schakel deze in en kies daarna Opnieuw controleren. Als een andere app deze gebruikt, geef deze eerst vrij. Deze wizard vraagt niet opnieuw om toestemming.',
   'setup.wizard.recommendation.title': 'Aanbevolen voor uw installatie',

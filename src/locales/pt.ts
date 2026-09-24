@@ -535,7 +535,7 @@ export const pt = {
   'setup.microphone.recheck':
     'Depois de alterar o acesso, escolha Verificar novamente. Este assistente não voltará a mostrar um pedido de autorização a menos que reabra a configuração.',
   'setup.microphone.reopenSetup':
-    'Este ambiente não consegue comunicar alterações de autorização. Reabra a configuração depois de alterar o acesso; verificar novamente aqui não volta a pedir autorização.',
+    'Altere a permissão do microfone ou o acesso ao dispositivo e reabra a configuração. Verificar novamente aqui não volta a pedir autorização.',
   'setup.microphone.retryDevice':
     'Ligue ou ative um microfone e depois escolha Verificar novamente. Se outra aplicação o estiver a utilizar, liberte-o primeiro. Este assistente não voltará a mostrar um pedido de autorização.',
   'setup.wizard.recommendation.title': 'Recomendado para a sua configuração',

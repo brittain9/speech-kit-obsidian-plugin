@@ -745,7 +745,7 @@ export const hr = {
   'setup.microphone.recheck':
     'Nakon promjene pristupa odaberite Provjeri ponovno. Ovaj čarobnjak neće ponovno prikazati zahtjev za dopuštenje osim ako ponovno otvorite postavljanje.',
   'setup.microphone.reopenSetup':
-    'Ovo okruženje ne može prijaviti promjene dopuštenja. Nakon promjene pristupa ponovno otvorite postavljanje; nova provjera ovdje neće ponovno tražiti dopuštenje.',
+    'Promijenite dopuštenje za mikrofon ili pristup uređaju, a zatim ponovno otvorite postavljanje. Nova provjera ovdje neće ponovno tražiti dopuštenje.',
   'setup.microphone.retryDevice':
     'Priključite ili omogućite mikrofon, a zatim odaberite Provjeri ponovno. Ako ga koristi druga aplikacija, prvo ga oslobodite. Ovaj čarobnjak neće ponovno prikazati zahtjev za dopuštenje.',
   'setup.wizard.recommendation.title': 'Preporučeno za vaše postavljanje',

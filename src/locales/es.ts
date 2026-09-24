@@ -538,7 +538,7 @@ export const es = {
   'setup.microphone.recheck':
     'Después de cambiar el acceso, elija Comprobar de nuevo. Este asistente no volverá a mostrar una solicitud de permiso salvo que vuelva a abrir la configuración.',
   'setup.microphone.reopenSetup':
-    'Este entorno no puede informar de los cambios de permiso. Vuelva a abrir la configuración después de cambiar el acceso; comprobarlo de nuevo aquí no volverá a solicitar permiso.',
+    'Cambie el permiso del micrófono o el acceso al dispositivo y vuelva a abrir la configuración. Comprobarlo de nuevo aquí no volverá a solicitar permiso.',
   'setup.microphone.retryDevice':
     'Conecte o active un micrófono y después elija Comprobar de nuevo. Si otra aplicación lo está usando, libérelo primero. Este asistente no volverá a mostrar una solicitud de permiso.',
   'setup.wizard.recommendation.title': 'Recomendado para su configuración',

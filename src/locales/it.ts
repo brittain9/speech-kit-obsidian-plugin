@@ -536,7 +536,7 @@ export const it = {
   'setup.microphone.recheck':
     'Dopo aver modificato l’accesso, scegli Ricontrolla. Questo assistente non mostrerà di nuovo una richiesta di autorizzazione a meno che tu non riapra la configurazione.',
   'setup.microphone.reopenSetup':
-    'Questo ambiente non può segnalare le modifiche alle autorizzazioni. Riapri la configurazione dopo aver modificato l’accesso; ricontrollare qui non chiederà di nuovo autorizzazione.',
+    'Modifica l’autorizzazione del microfono o l’accesso al dispositivo, quindi riapri la configurazione. Ricontrollare qui non chiederà di nuovo autorizzazione.',
   'setup.microphone.retryDevice':
     'Collega o attiva un microfono, quindi scegli Ricontrolla. Se un’altra app lo sta usando, liberalo prima. Questo assistente non mostrerà di nuovo una richiesta di autorizzazione.',
   'setup.wizard.recommendation.title': 'Consigliato per la tua configurazione',

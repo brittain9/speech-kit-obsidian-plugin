@@ -544,7 +544,7 @@ export const de = {
   'setup.microphone.recheck':
     'Ändern Sie den Zugriff und wählen Sie dann „Erneut prüfen“. Dieser Assistent zeigt erst dann erneut eine Berechtigungsabfrage, wenn Sie Setup erneut öffnen.',
   'setup.microphone.reopenSetup':
-    'Diese Laufzeit kann Berechtigungsänderungen nicht melden. Öffnen Sie Setup nach der Zugriffsänderung erneut; eine erneute Prüfung hier fragt nicht noch einmal nach.',
+    'Ändern Sie die Mikrofonberechtigung oder den Gerätezugriff und öffnen Sie Setup danach erneut. Eine erneute Prüfung hier fragt nicht noch einmal nach Berechtigung.',
   'setup.microphone.retryDevice':
     'Schließen Sie ein Mikrofon an oder aktivieren Sie es, und wählen Sie dann „Erneut prüfen“. Wenn eine andere App es verwendet, geben Sie es zuerst frei. Dieser Assistent zeigt keine weitere Berechtigungsabfrage an.',
   'setup.wizard.welcomeTitle': 'Willkommen bei Speech Kit',

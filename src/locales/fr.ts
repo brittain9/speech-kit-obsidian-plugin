@@ -537,7 +537,7 @@ export const fr = {
   'setup.microphone.recheck':
     'Après avoir modifié l’accès, choisissez Revérifier. Cet assistant n’affichera pas une nouvelle demande d’autorisation sauf si vous rouvrez la configuration.',
   'setup.microphone.reopenSetup':
-    'Cet environnement ne peut pas signaler les changements d’autorisation. Rouvrez la configuration après avoir modifié l’accès ; une nouvelle vérification ici ne demandera pas une autorisation.',
+    'Modifiez l’autorisation du microphone ou l’accès à l’appareil, puis rouvrez la configuration. Une nouvelle vérification ici ne demandera pas une autorisation.',
   'setup.microphone.retryDevice':
     'Branchez ou activez un microphone, puis choisissez Revérifier. Si une autre application l’utilise, libérez-le d’abord. Cet assistant n’affichera pas une nouvelle demande d’autorisation.',
   'setup.wizard.recommendation.title': 'Recommandé pour votre configuration',

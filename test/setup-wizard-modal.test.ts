@@ -754,13 +754,13 @@ describe('SetupWizardModal first-run guidance', () => {
 
     await vi.waitFor(() => {
       expect(textContent(modal.contentEl as unknown as TestElement)).toContain(
-        'Connect or enable a microphone',
+        'Change the microphone permission or device access',
       );
       expect(button(modal, 'Check again')).toBeDefined();
     });
     await button(modal, 'Check again').click();
     await vi.waitFor(() => expect(button(modal, 'Check again')).toBeDefined());
-    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(getUserMedia).toHaveBeenCalledOnce();
   });
 
   it('localizes the model guidance and microphone recovery', () => {

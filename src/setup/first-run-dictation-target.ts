@@ -18,9 +18,7 @@ export async function prepareFirstRunDictationTarget(
   const exact = dependencies.vault.getAbstractFileByPath(scratchPath);
   const files = dependencies.vault.getAllLoadedFiles();
   const hasPathCaseCollision = files.some(
-    (file) =>
-      file.path !== scratchPath &&
-      file.path.toLocaleLowerCase() === scratchPath.toLocaleLowerCase(),
+    (file) => file.path !== scratchPath && file.path.toLowerCase() === scratchPath.toLowerCase(),
   );
   if (hasPathCaseCollision) return false;
 
@@ -51,6 +49,6 @@ function isMarkdownFile(value: TAbstractFile | null): value is TFile {
     typeof value === 'object' &&
     'extension' in value &&
     typeof value.extension === 'string' &&
-    value.extension.toLocaleLowerCase() === 'md'
+    value.extension.toLowerCase() === 'md'
   );
 }

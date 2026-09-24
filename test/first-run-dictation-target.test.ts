@@ -152,4 +152,25 @@ describe('first-run dictation target', () => {
     expect(harness.vault.create).not.toHaveBeenCalled();
     expect(harness.openLinkText).not.toHaveBeenCalled();
   });
+
+  it('uses locale-independent case folding for the fixed scratch path', async () => {
+    const turkishLowerCase = vi
+      .spyOn(String.prototype, 'toLocaleLowerCase')
+      .mockImplementation(function (this: string) {
+        return this.replaceAll('I', 'ı').toLowerCase();
+      });
+    const collision = file('SPEECH KIT SCRATCH NOTE.MD');
+    const harness = createHarness({ files: [collision], markdownFiles: [collision] });
+
+    try {
+      await expect(prepareFirstRunDictationTarget(harness.dependencies, '# Scratch')).resolves.toBe(
+        false,
+      );
+      expect(turkishLowerCase).not.toHaveBeenCalled();
+      expect(harness.vault.create).not.toHaveBeenCalled();
+      expect(harness.openLinkText).not.toHaveBeenCalled();
+    } finally {
+      turkishLowerCase.mockRestore();
+    }
+  });
 });
