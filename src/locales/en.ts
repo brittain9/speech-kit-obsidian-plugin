@@ -52,6 +52,8 @@ export const en = {
     'Audio-file transcription stopped because its target note was deleted. Restore or recreate the note, then run the command again.',
   'audio-file-surface-changed':
     'Audio-file transcription stopped because the note changed in a way Speech Kit could not safely track. Restore the intended note and run the command again.',
+  'youtube-acquisition-failed':
+    'The experimental YouTube helper could not acquire this video. Check the selected helper, eligibility, and network restrictions, then try again.',
   'media-llm-empty':
     'The media transcript is empty or the AI provider returned no text. The raw transcript was kept; record a non-empty transcript or check the provider and try again.',
   'media-llm-failed':
@@ -212,6 +214,7 @@ export const en = {
   'commands.checkSidecarHealth': 'Check sidecar health',
   'commands.restartSidecar': 'Restart sidecar',
   'commands.transcribeAudioFile': 'Transcribe local audio file',
+  'commands.transcribeYouTube': 'Transcribe YouTube video',
   'commands.cancelAudioFile': 'Cancel local audio-file transcription',
   'commands.readAloud': 'Read aloud from selection or note start',
   'commands.readAloudFromCursor': 'Read aloud from cursor',

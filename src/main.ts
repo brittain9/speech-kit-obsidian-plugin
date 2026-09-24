@@ -26,6 +26,11 @@ import { syncDictationLanguageWithObsidian } from './language/dictation-language
 import type { LlmCleanupFailure } from './llm/provider';
 import { createConfiguredLlmRouter } from './llm/runtime';
 import { LocalMediaSource } from './media/local-media-source';
+import {
+  sweepAbandonedYouTubeJobs,
+  YOUTUBE_POLICY_VERSION,
+  YouTubeMediaSource,
+} from './media/youtube-media-source';
 import { ManageModelsModal, type ModelPickerOptions } from './models/manage-models-modal';
 import { ModelInstallManager } from './models/model-install-manager';
 import {
@@ -94,6 +99,7 @@ import { DictationRibbonController } from './ui/dictation-ribbon';
 import { LOCAL_DICTATION_VIEW_TYPE, LocalDictationView } from './ui/local-dictation-view';
 import { confirmMediaLlmPreview } from './ui/media-llm-preview-modal';
 import { renderMediaProgressStatus } from './ui/media-progress-presenter';
+import { openYouTubeMediaSourceModal } from './ui/youtube-media-source-modal';
 
 export default class LocalSttPlugin extends Plugin {
   private audioCaptureStream: AudioCaptureStream | null = null;
@@ -152,6 +158,7 @@ export default class LocalSttPlugin extends Plugin {
       getLanguage(),
     );
     this.settings = languageSync.settings;
+    void sweepAbandonedYouTubeJobs();
     this.lastUtteranceRecovery.setEnabled(this.settings.retainLastUtterance);
     this.rawTranscriptRecovery.setEnabled(this.settings.retainLastUtterance);
     if (loadedSettings.shouldPersist || languageSync.shouldPersist) {
@@ -337,6 +344,9 @@ export default class LocalSttPlugin extends Plugin {
     const localMediaSource = new LocalMediaSource({
       pickFile: (signal) => pickLocalAudioFile(signal),
     });
+    const youtubeMediaSource = new YouTubeMediaSource({
+      getHelperPath: () => this.settings.youtubeHelperPath,
+    });
     this.audioFileTranscriptionController = new AudioFileTranscriptionController({
       backpressureTimeoutMs: 30_000,
       confirmMediaLlm: (preview, signal) => confirmMediaLlmPreview(this.app, preview, signal),
@@ -469,6 +479,30 @@ export default class LocalSttPlugin extends Plugin {
       stopReadAloud: () => this.requireReadAloudController().stop(),
       stopDictation: async () => this.requireDictationController().stopDictation(),
       transcribeAudioFile: async () => this.requireAudioFileTranscriptionController().transcribe(),
+      transcribeYouTube: async () => {
+        const request = await openYouTubeMediaSourceModal(this.app, {
+          getHelperPath: () => this.settings.youtubeHelperPath,
+          getPolicyVersion: () => this.settings.youtubePolicyVersion,
+          onHelperSelected: async (path) => {
+            await this.updateSettings({ ...this.settings, youtubeHelperPath: path });
+          },
+          onRightsConfirmed: async () => {
+            await this.updateSettings({
+              ...this.settings,
+              youtubePolicyVersion: YOUTUBE_POLICY_VERSION,
+            });
+          },
+        });
+        if (request === null) return;
+        await this.requireAudioFileTranscriptionController().transcribeFromSource(
+          youtubeMediaSource,
+          {
+            consentId: 'youtube-policy-confirmation',
+            ref: request.ref,
+            rights: request.rights,
+          },
+        );
+      },
       translateNote: (editor) => this.requireTranslationController().translateNote(editor),
       translateSelection: (editor) =>
         this.requireTranslationController().translateSelection(editor),

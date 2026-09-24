@@ -18,7 +18,12 @@ import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-reco
 import { dictationLanguageLabel, languageSupportIncludes } from '../language/dictation-language';
 import type { LlmRouter } from '../llm/router';
 import { MEDIA_ACQUISITION_LIMITS } from '../media/media-policy';
-import type { MediaLease, MediaSource, MediaTranscriptionProgress } from '../media/media-source';
+import type {
+  MediaAcquireRequest,
+  MediaLease,
+  MediaSource,
+  MediaTranscriptionProgress,
+} from '../media/media-source';
 import {
   type SelectedModel,
   type SelectedModelCapabilities,
@@ -90,6 +95,10 @@ interface AudioFileModelConfiguration {
   readonly modelStorePathOverride: string;
   readonly speakingStyle: PluginSettings['speakingStyle'];
 }
+
+export type MediaTranscriptionRequest = Partial<
+  Pick<MediaAcquireRequest, 'consentId' | 'ref' | 'rights'>
+>;
 
 interface PendingAudioFileStart {
   readonly abortController: AbortController;
@@ -198,8 +207,22 @@ export class AudioFileTranscriptionController {
   }
 
   async transcribe(): Promise<void> {
+    await this.startTranscription(this.dependencies.mediaSource, {});
+  }
+
+  async transcribeFromSource(
+    source: MediaSource,
+    request: MediaTranscriptionRequest,
+  ): Promise<void> {
+    await this.startTranscription(source, request);
+  }
+
+  private async startTranscription(
+    source: MediaSource,
+    request: MediaTranscriptionRequest,
+  ): Promise<void> {
     if (this.activeTranscribeCompletion !== null) return;
-    const operation = this.runTranscribe();
+    const operation = this.runTranscribe(source, request);
     this.activeTranscribeCompletion = operation;
     try {
       await operation;
@@ -212,7 +235,10 @@ export class AudioFileTranscriptionController {
     this.mediaLlmCoordinator.settingsChanged();
   }
 
-  private async runTranscribe(): Promise<void> {
+  private async runTranscribe(
+    source: MediaSource,
+    request: MediaTranscriptionRequest,
+  ): Promise<void> {
     // Keep this guard before the busy check: mobile callers must not mutate a
     // running desktop workflow or open a native-only picker accidentally.
     if (!Platform.isDesktopApp) {
@@ -255,7 +281,7 @@ export class AudioFileTranscriptionController {
       this.pendingStart = pending;
 
       this.emitProgress('acquire');
-      mediaLease = await this.acquireMediaLease(abortController.signal);
+      mediaLease = await this.acquireMediaLease(abortController.signal, source, request);
       if (mediaLease === null) return;
       this.throwIfCancelled(abortController.signal);
 
@@ -461,12 +487,16 @@ export class AudioFileTranscriptionController {
     if (this.activeSession === null) this.applyState('idle');
   }
 
-  private async acquireMediaLease(signal: AbortSignal): Promise<MediaLease | null> {
-    const source = this.dependencies.mediaSource;
+  private async acquireMediaLease(
+    signal: AbortSignal,
+    source: MediaSource,
+    request: MediaTranscriptionRequest,
+  ): Promise<MediaLease | null> {
     for await (const event of source.acquire({
       ...MEDIA_ACQUISITION_LIMITS,
       kind: 'interactive',
       signal,
+      ...request,
     })) {
       if (event.type === 'ready') {
         if (signal.aborted) {

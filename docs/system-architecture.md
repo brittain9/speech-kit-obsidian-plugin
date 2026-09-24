@@ -115,8 +115,12 @@ immediately after decode/VAD/ASR transcript projection and before optional
 post-completion AI work, with an idempotent cleanup promise covering success,
 failure, cancellation, and disposal. The ASR, renderer, and LLM layers never
 receive a provider URL, path, credential, subprocess, or remote response body.
-Local-file acquisition remains the only adapter in this release; referenced
-provider sources arrive in the next stacked PR.
+The local-file acquisition remains the stable default. An optional, explicitly
+selected YouTube VOD adapter is experimental and uses the same contract. Its
+unofficial `yt-dlp` helper is never bundled or auto-updated, accepts only a
+validated canonical video ID, and returns a temporary path-backed `MediaLease`.
+The adapter does not pass its URL, helper, path, or provenance to the decoder,
+ASR, renderer, or optional LLM.
 
 The media controller owns the provider-neutral sequence: acquire → local decode
 → the existing VAD/batch-ASR `Session` → timestamps, diarization, and smart

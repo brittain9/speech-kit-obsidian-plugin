@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isAbsolute, resolve } from 'node:path';
 import {
   DEFAULT_DICTATION_LANGUAGE,
   type DictationLanguage,
@@ -222,6 +223,8 @@ export interface PluginSettings {
   ttsSpeed: number;
   useLlmNoteContext: boolean;
   useNoteAsContext: boolean;
+  youtubeHelperPath: string;
+  youtubePolicyVersion: string | null;
 }
 
 export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
@@ -292,6 +295,8 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   ttsSpeed: 1,
   useLlmNoteContext: false,
   useNoteAsContext: true,
+  youtubeHelperPath: '',
+  youtubePolicyVersion: null,
 };
 
 export function resolvePluginSettings(data: unknown): PluginSettings {
@@ -391,6 +396,8 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.mediaLlmProcessing,
       DEFAULT_PLUGIN_SETTINGS.mediaLlmProcessing,
     ),
+    youtubeHelperPath: readAbsolutePath(raw.youtubeHelperPath),
+    youtubePolicyVersion: readPolicyVersion(raw.youtubePolicyVersion),
     modelStorePathOverride: readString(
       raw.modelStorePathOverride,
       DEFAULT_PLUGIN_SETTINGS.modelStorePathOverride,
@@ -594,6 +601,16 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 
 function readString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value.trim() : fallback;
+}
+
+function readAbsolutePath(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const path = value.trim();
+  return path.length > 0 && isAbsolute(path) ? resolve(path) : '';
+}
+
+function readPolicyVersion(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
 export function normalizeTranslationStyleInstruction(value: unknown): string {

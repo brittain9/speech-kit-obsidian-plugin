@@ -1,5 +1,6 @@
 import { AudioFileBackpressureTimeoutError } from '../audio/audio-file-backpressure';
 import { AudioFileError, isAudioFileCancellation } from '../audio/audio-file-decoder';
+import { YouTubeAcquisitionError } from '../media/youtube-media-source';
 import { t } from '../shared/i18n';
 import type { FeedbackRequest, UserFeedback } from '../shared/user-feedback';
 import { SidecarError } from '../sidecar/sidecar-connection';
@@ -31,7 +32,8 @@ export type FileWorkflowTranslationKey =
   | 'audio-file-target-deleted'
   | 'audio-file-target-required'
   | 'audio-file-transcript-write-failed'
-  | 'audio-file-surface-changed';
+  | 'audio-file-surface-changed'
+  | 'youtube-acquisition-failed';
 
 export class AudioFileWorkflowError extends Error {
   constructor(
@@ -74,7 +76,10 @@ export class AudioFileFailureMapper {
   }
 
   isCancellation(error: unknown): boolean {
-    return isAudioFileCancellation(error);
+    return (
+      isAudioFileCancellation(error) ||
+      (error instanceof YouTubeAcquisitionError && error.code === 'cancelled')
+    );
   }
 
   isQueueAbort(error: unknown): boolean {
@@ -145,6 +150,9 @@ function resolveWorkflowTranslationKey(error: unknown): FileWorkflowTranslationK
       case 'sidecar_failed':
         return 'audio-file-sidecar-failed';
     }
+  }
+  if (error instanceof YouTubeAcquisitionError) {
+    return 'youtube-acquisition-failed';
   }
   if (error instanceof AudioFileBackpressureTimeoutError) {
     return 'audio-file-queue-overload';

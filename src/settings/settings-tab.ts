@@ -74,6 +74,7 @@ import {
   renderTranslationSettings,
   type TranslationSettingsDependencies,
 } from './translation-settings-section';
+import { renderYouTubeHelperSettings } from './youtube-helper-settings';
 
 interface SettingsTabDependencies {
   feedback: Pick<UserFeedback, 'show'>;
@@ -576,6 +577,11 @@ export class LocalSttSettingTab extends PluginSettingTab {
         },
       },
     );
+
+    renderYouTubeHelperSettings(advancedSection, {
+      access: this.access,
+      getSettings: this.dependencies.getSettings,
+    });
 
     addToggleSetting(advancedSection, this.access, {
       name: t('settings.recoveryMemory.name'),

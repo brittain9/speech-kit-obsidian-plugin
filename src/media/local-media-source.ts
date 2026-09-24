@@ -112,6 +112,7 @@ function createLocalMediaLease(args: {
       return tracked.stream;
     },
     release,
+    dispose: release,
   };
 }
 
