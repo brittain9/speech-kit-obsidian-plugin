@@ -903,7 +903,6 @@ export const en = {
   'models.manage.installed': 'Installed',
   'models.manage.downloadable': 'Downloadable',
   'models.manage.compatibleLanguage': 'Compatible with {language}',
-  'models.manage.incompatibleLanguage': 'Not compatible with {language}',
   'models.manage.unsupportedLanguage':
     'Does not support {language}. Change Dictation language to install or use this model.',
   'models.manage.use': 'Use',

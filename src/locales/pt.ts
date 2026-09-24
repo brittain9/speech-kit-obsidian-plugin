@@ -860,7 +860,6 @@ export const pt = {
   'models.manage.installed': 'Instalado',
   'models.manage.downloadable': 'Transferível',
   'models.manage.compatibleLanguage': 'Compatível com {language}',
-  'models.manage.incompatibleLanguage': 'Não compatível com {language}',
   'models.manage.familiesLabel': 'Famílias de modelos',
   'models.manage.noneForLanguage': 'Não há modelos disponíveis para esta tarefa e idioma.',
   'models.manage.optionalVoice': 'Voz local opcional',

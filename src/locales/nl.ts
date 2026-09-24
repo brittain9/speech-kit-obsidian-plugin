@@ -857,7 +857,6 @@ export const nl = {
   'models.manage.installed': 'Geïnstalleerd',
   'models.manage.downloadable': 'Downloadbaar',
   'models.manage.compatibleLanguage': 'Compatibel met {language}',
-  'models.manage.incompatibleLanguage': 'Niet compatibel met {language}',
   'models.manage.familiesLabel': 'Modelfamilies',
   'models.manage.noneForLanguage': 'Er zijn geen modellen voor deze taak en taal beschikbaar.',
   'models.manage.optionalVoice': 'Optionele lokale stem',

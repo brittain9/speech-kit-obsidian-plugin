@@ -871,7 +871,6 @@ export const it = {
   'models.manage.installed': 'Installato',
   'models.manage.downloadable': 'Scaricabile',
   'models.manage.compatibleLanguage': 'Compatibile con {language}',
-  'models.manage.incompatibleLanguage': 'Non compatibile con {language}',
   'models.manage.familiesLabel': 'Famiglie di modelli',
   'models.manage.noneForLanguage': 'Nessun modello disponibile per questa attività e lingua.',
   'models.manage.optionalVoice': 'Voce locale facoltativa',

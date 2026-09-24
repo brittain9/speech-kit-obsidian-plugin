@@ -856,7 +856,6 @@ export const ja = {
   'models.manage.installed': 'インストール済み',
   'models.manage.downloadable': 'ダウンロード可能',
   'models.manage.compatibleLanguage': '{language} に対応',
-  'models.manage.incompatibleLanguage': '{language} に対応していません',
   'models.manage.familiesLabel': 'モデルファミリー',
   'models.manage.noneForLanguage': 'このタスクと言語で利用できるモデルはありません。',
   'models.manage.optionalVoice': '追加のローカル音声',

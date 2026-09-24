@@ -221,7 +221,6 @@ export const hr = {
   'models.manage.installed': 'Instalirano',
   'models.manage.downloadable': 'Može se preuzeti',
   'models.manage.compatibleLanguage': 'Kompatibilno s {language}',
-  'models.manage.incompatibleLanguage': 'Nije kompatibilno s {language}',
   'models.manage.familiesLabel': 'Obitelji modela',
   'models.manage.noneForLanguage': 'Nema dostupnih modela za ovaj zadatak i jezik.',
   'models.manage.installAllVoices': 'Instaliraj sve glasove',
