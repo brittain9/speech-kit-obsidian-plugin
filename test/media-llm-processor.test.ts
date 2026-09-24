@@ -206,6 +206,27 @@ describe('media LLM processing', () => {
     ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'range_unavailable' });
   });
 
+  it('omits note context when the effective total cap is zero', async () => {
+    const session = new FakeMediaSession();
+    const cleanup = vi.fn(async () => ({
+      model: 'm',
+      providerId: 'ollama' as const,
+      text: 'Result',
+    }));
+    await processMediaLlm(session, {
+      confirm: async () => true,
+      onRawTranscriptRecoveryAvailable: vi.fn(),
+      router: createFakeLlmRouter({ cleanup }),
+      signal: new AbortController().signal,
+      snapshot: { ...replaceSnapshot, totalContextCap: 0, useNoteContext: true },
+    });
+    expect(cleanup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: '<media_transcript>\nRaw media transcript\n</media_transcript>',
+      }),
+    );
+  });
+
   it('does not call the provider for an empty raw transcript', async () => {
     const session = new FakeMediaSession('   ');
     const cleanup = vi.fn(async () => ({

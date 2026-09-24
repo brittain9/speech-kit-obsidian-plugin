@@ -4,8 +4,7 @@ import https from 'node:https';
 import { formatErrorMessage } from '../shared/format-utils';
 import { CLEANUP_TIMEOUT_MS, type JsonRequestOptions, MAX_RESPONSE_BYTES } from './http-shared';
 import { ProviderError } from './provider';
-
-const MAX_ERROR_BODY_BYTES = 8 * 1024;
+import { BoundedResponseCollector, MAX_ERROR_BODY_BYTES } from './response-collector';
 
 /** CORS-free JSON transport for validated desktop-only custom endpoints. */
 export async function nodeHttpJson(
@@ -22,6 +21,8 @@ export async function nodeHttpJson(
   const maxBytes = options.maxBytes ?? MAX_RESPONSE_BYTES;
   const body = toRequestBody(init.body);
   const headers = requestHeaders(init.headers, body !== undefined);
+  const hostname = stripIpv6Brackets(parsed.hostname);
+  if (headers.host === undefined) headers.host = parsed.host;
   const transport = parsed.protocol === 'https:' ? https : http;
 
   return await new Promise<unknown>((resolve, reject) => {
@@ -56,7 +57,7 @@ export async function nodeHttpJson(
     request = transport.request(
       {
         headers,
-        hostname: parsed.hostname,
+        hostname,
         method: init.method ?? 'GET',
         path: `${parsed.pathname}${parsed.search}`,
         port: parsed.port,
@@ -73,33 +74,22 @@ export async function nodeHttpJson(
           return;
         }
 
-        const captureLimit = status >= 200 && status < 300 ? maxBytes : MAX_ERROR_BODY_BYTES;
-        const chunks: Buffer[] = [];
-        let capturedBytes = 0;
-        let totalBytes = 0;
+        const collector = new BoundedResponseCollector(
+          maxBytes,
+          status >= 200 && status < 300 ? maxBytes : MAX_ERROR_BODY_BYTES,
+        );
         incoming.on('data', (chunk: Buffer | string) => {
           if (settled) return;
-          const bytes = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
-          totalBytes += bytes.byteLength;
-          if (totalBytes > maxBytes) {
-            fail(
-              new ProviderError(
-                `Provider response exceeded ${maxBytes} bytes.`,
-                'invalid_response',
-              ),
-            );
-            return;
-          }
-          if (capturedBytes < captureLimit) {
-            const retained = bytes.subarray(0, captureLimit - capturedBytes);
-            chunks.push(retained);
-            capturedBytes += retained.byteLength;
+          try {
+            collector.append(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+          } catch (error) {
+            fail(error);
           }
         });
         incoming.on('error', fail);
         incoming.on('end', () => {
           if (settled) return;
-          const responseText = Buffer.concat(chunks, totalBytes).toString('utf8');
+          const responseText = collector.text();
           if (status < 200 || status >= 300) {
             fail(
               new ProviderError(`Provider returned HTTP ${status}.`, 'http_error', {
@@ -135,6 +125,10 @@ export async function nodeHttpJson(
     request.on('error', fail);
     request.end(body);
   });
+}
+
+function stripIpv6Brackets(hostname: string): string {
+  return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
 }
 
 function requestHeaders(init: HeadersInit | undefined, hasBody: boolean): Record<string, string> {

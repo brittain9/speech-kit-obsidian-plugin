@@ -196,7 +196,10 @@ describe('OpenAI-compatible node transport', () => {
         new OpenAiCompatibleProvider({ apiKey: '', baseUrl: `${server.baseUrl}/v1` }).cleanup(
           cleanupOptions(),
         ),
-      ).rejects.toMatchObject({ code: 'invalid_response' });
+      ).rejects.toMatchObject({
+        code: 'invalid_response',
+        message: expect.stringContaining('exceeded'),
+      });
     } finally {
       await server.close();
     }
@@ -211,6 +214,42 @@ describe('OpenAI-compatible node transport', () => {
       const custom = new OpenAiCompatibleProvider({ apiKey: '', baseUrl: `${server.baseUrl}/v1` });
       await expect(custom.cleanup(cleanupOptions())).rejects.toMatchObject({
         code: 'invalid_response',
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('strips IPv6 brackets while preserving the Host header and request path', async () => {
+    let server: Awaited<ReturnType<typeof startLocalServer>> | null = null;
+    try {
+      server = await startLocalServer((request, response) => {
+        expect(request.url).toBe('/v1/chat/completions');
+        expect(request.headers.host).toMatch(/^\[::1\]:\d+$/u);
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ choices: [{ message: { content: 'IPv6 result.' } }] }));
+      }, '::1');
+    } catch {
+      return;
+    }
+    try {
+      const custom = new OpenAiCompatibleProvider({ apiKey: '', baseUrl: `${server.baseUrl}/v1` });
+      await expect(custom.cleanup(cleanupOptions())).resolves.toBe('IPv6 result.');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('bounds non-2xx diagnostics without NUL padding', async () => {
+    const server = await startLocalServer((_request, response) => {
+      response.statusCode = 400;
+      response.end('e'.repeat(20_000));
+    });
+    try {
+      const custom = new OpenAiCompatibleProvider({ apiKey: '', baseUrl: `${server.baseUrl}/v1` });
+      await expect(custom.cleanup(cleanupOptions())).rejects.toMatchObject({
+        code: 'http_error',
+        responseText: expect.not.stringContaining('\\u0000'),
       });
     } finally {
       await server.close();
@@ -248,6 +287,7 @@ describe('OpenAI-compatible node transport', () => {
 
 async function startLocalServer(
   handler: (request: http.IncomingMessage, response: http.ServerResponse) => void,
+  host = '127.0.0.1',
 ): Promise<{ baseUrl: string; close: () => Promise<void> }> {
   const server = http.createServer(handler);
   const sockets = new Set<Socket>();
@@ -255,13 +295,20 @@ async function startLocalServer(
     sockets.add(socket);
     socket.once('close', () => sockets.delete(socket));
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve, reject) => {
+    const onError = (error: Error): void => reject(error);
+    server.once('error', onError);
+    server.listen(0, host, () => {
+      server.off('error', onError);
+      resolve();
+    });
+  });
   const address = server.address();
   if (address === null || typeof address === 'string') {
     throw new Error('Test server did not expose a TCP address.');
   }
   return {
-    baseUrl: `http://127.0.0.1:${address.port}`,
+    baseUrl: `http://${host.includes(':') ? `[${host}]` : host}:${address.port}`,
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => (error === undefined ? resolve() : reject(error)));

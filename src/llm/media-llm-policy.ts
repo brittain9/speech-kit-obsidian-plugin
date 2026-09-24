@@ -8,6 +8,16 @@ import { resolveLlmTransformSnapshot } from './transform-policy';
 export type MediaLlmDataEgress = 'local' | 'network' | 'unknown';
 export type MediaLlmPayload = 'transcript_only' | 'transcript_and_bounded_note_context';
 
+export interface MediaLlmContextPolicy {
+  readonly noteContextChars: number;
+  readonly totalContextCap: number;
+  readonly useNoteContext: boolean;
+}
+
+export function mediaLlmIncludesNoteContext(policy: MediaLlmContextPolicy): boolean {
+  return policy.useNoteContext && policy.noteContextChars > 0 && policy.totalContextCap > 0;
+}
+
 export interface MediaLlmDisclosure {
   readonly dataEgress: MediaLlmDataEgress;
   readonly model: string;
@@ -18,9 +28,9 @@ export interface MediaLlmDisclosure {
 export function resolveMediaLlmConfigurationDisclosures(
   settings: PluginSettings,
 ): MediaLlmDisclosure[] {
-  const useNoteContext = resolveLlmTransformSnapshot(settings).useNoteContext;
+  const context = resolveLlmTransformSnapshot(settings);
   return activeLlmProviderIds(settings.llmRoutingPolicy).map((providerId) =>
-    createDisclosure(settings, providerId, useNoteContext),
+    createDisclosure(settings, providerId, context),
   );
 }
 
@@ -35,9 +45,9 @@ export function resolveMediaLlmDisclosure(
   settings: PluginSettings,
   router: LlmRouter,
   transcriptChars: number,
-  useNoteContext: boolean,
+  context: MediaLlmContextPolicy,
 ): MediaLlmDisclosure {
-  return createDisclosure(settings, router.selectProviderId(transcriptChars), useNoteContext);
+  return createDisclosure(settings, router.selectProviderId(transcriptChars), context);
 }
 
 export function formatMediaLlmDisclosure(disclosure: MediaLlmDisclosure): string {
@@ -74,12 +84,14 @@ export function formatMediaLlmPayload(payload: MediaLlmPayload): string {
 function createDisclosure(
   settings: PluginSettings,
   providerId: LlmProviderId,
-  useNoteContext: boolean,
+  context: MediaLlmContextPolicy,
 ): MediaLlmDisclosure {
   return {
     dataEgress: resolveDataEgress(settings, providerId),
     model: getProviderModel(settings.llmProviderConfigurations, providerId),
-    payload: useNoteContext ? 'transcript_and_bounded_note_context' : 'transcript_only',
+    payload: mediaLlmIncludesNoteContext(context)
+      ? 'transcript_and_bounded_note_context'
+      : 'transcript_only',
     providerId,
   };
 }

@@ -1,5 +1,5 @@
 import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-recovery';
-import type { MediaLlmDisclosure } from '../llm/media-llm-policy';
+import { type MediaLlmDisclosure, mediaLlmIncludesNoteContext } from '../llm/media-llm-policy';
 import type { LlmPresetOutput } from '../llm/presets';
 import { ProviderError } from '../llm/provider';
 import type { LlmRouter, LlmRouterCleanupResult } from '../llm/router';
@@ -164,7 +164,13 @@ function readBoundedNoteContext(
   session: MediaLlmEditorSession,
   snapshot: MediaLlmSnapshot,
 ): string {
-  if (!snapshot.useNoteContext || snapshot.noteContextChars <= 0) {
+  if (
+    !mediaLlmIncludesNoteContext({
+      noteContextChars: snapshot.noteContextChars,
+      totalContextCap: snapshot.totalContextCap,
+      useNoteContext: snapshot.useNoteContext,
+    })
+  ) {
     return '';
   }
   const note = session.readNoteText(snapshot.noteContextChars);

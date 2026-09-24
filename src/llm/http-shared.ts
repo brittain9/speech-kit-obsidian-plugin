@@ -2,6 +2,7 @@ import { requestUrl } from 'obsidian';
 
 import { formatErrorMessage } from '../shared/format-utils';
 import { ProviderError } from './provider';
+import { BoundedResponseCollector, MAX_ERROR_BODY_BYTES } from './response-collector';
 
 export const CLEANUP_TIMEOUT_MS = 60_000;
 export const PROBE_TIMEOUT_MS = 3_000;
@@ -179,30 +180,23 @@ async function readResponseText(response: Response, maxBytes: number): Promise<s
   }
 
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let totalBytes = 0;
-  let text = '';
+  const collector = new BoundedResponseCollector(
+    maxBytes,
+    response.ok ? maxBytes : MAX_ERROR_BODY_BYTES,
+  );
 
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      totalBytes += value.byteLength;
-      if (totalBytes > maxBytes) {
+      if (done) break;
+      try {
+        collector.append(value);
+      } catch (error) {
         await reader.cancel();
-        throw new ProviderError(
-          `Provider response exceeded ${maxBytes} bytes.`,
-          'invalid_response',
-        );
+        throw error;
       }
-
-      text += decoder.decode(value, { stream: true });
     }
-    text += decoder.decode();
-    return text;
+    return collector.text();
   } finally {
     reader.releaseLock();
   }

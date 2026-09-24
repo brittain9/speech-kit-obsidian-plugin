@@ -59,12 +59,7 @@ export class MediaLlmCoordinator {
       return;
     }
     const transform = resolveLlmTransformSnapshot(settings);
-    const disclosure = resolveMediaLlmDisclosure(
-      settings,
-      router,
-      rawText.length,
-      transform.useNoteContext,
-    );
+    const disclosure = resolveMediaLlmDisclosure(settings, router, rawText.length, transform);
     const snapshot: MediaLlmSnapshot = {
       noteContextChars: transform.noteContextChars,
       output: transform.output,
