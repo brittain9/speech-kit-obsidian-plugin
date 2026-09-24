@@ -200,11 +200,20 @@ async function killProcessTree(
         resolve();
         return;
       }
+      const finish = (): void => {
+        window.clearTimeout(timer);
+        resolve();
+      };
+      const timer = window.setTimeout(() => {
+        taskkill.kill('SIGKILL');
+        child.kill(signal);
+        finish();
+      }, 1_000);
       taskkill.once('error', () => {
         child.kill(signal);
-        resolve();
+        finish();
       });
-      taskkill.once('close', () => resolve());
+      taskkill.once('close', finish);
     });
     return;
   }
