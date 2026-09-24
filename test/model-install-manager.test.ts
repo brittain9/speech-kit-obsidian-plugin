@@ -489,6 +489,35 @@ describe('ModelInstallManager', () => {
       expect(onStateChange).toHaveBeenCalledOnce();
     });
 
+    it('publishes failed state before rejecting installAndWait', async () => {
+      const error = new Error('external download failed');
+      let failureWasPublished = false;
+      const onStateChange = vi.fn(() => {
+        failureWasPublished = harness.manager.getState().failedInstall !== null;
+      });
+      harness.manager.subscribe(onStateChange);
+      harness.sidecarConnection.installModel.mockResolvedValueOnce(
+        sampleInstallUpdate({ state: 'queued' }),
+      );
+
+      const completion = harness.manager.installAndWait(sampleSelection());
+      const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected an install request');
+      emitInstallUpdate(harness, {
+        installId: request.installId,
+        message: error.message,
+        state: 'failed',
+      });
+
+      expect(failureWasPublished).toBe(true);
+      expect(harness.manager.getState().failedInstall).toMatchObject({
+        message: error.message,
+        selection: sampleSelection(),
+      });
+      await expect(completion).rejects.toThrow(error.message);
+      expect(onStateChange).toHaveBeenCalledOnce();
+    });
+
     it('resumes a rejected request when same-ID progress arrives late', async () => {
       harness.sidecarConnection.installModel.mockRejectedValueOnce(
         new Error('Timed out waiting for sidecar event'),

@@ -243,6 +243,22 @@ async function openReadyWizard(modal: SetupWizardModal): Promise<void> {
   await vi.waitFor(() => expect(button(modal, 'Try dictation now')).toBeDefined());
 }
 
+interface Deferred<T> {
+  promise: Promise<T>;
+  reject(reason?: unknown): void;
+  resolve(value: T): void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let rejectPromise: (reason?: unknown) => void = () => {};
+  let resolvePromise: (value: T) => void = () => {};
+  const promise = new Promise<T>((resolve, reject) => {
+    rejectPromise = reject;
+    resolvePromise = resolve;
+  });
+  return { promise, reject: rejectPromise, resolve: resolvePromise };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -458,34 +474,85 @@ describe('SetupWizardModal first-run guidance', () => {
     expect(recommendationStateSignature(state)).toContain('moonshine-small');
   });
 
-  it('surfaces an external recommendation failure as a retry action', async () => {
-    const installAndWait = vi.fn(async () => {});
-    const state = modelManagerState({
-      failedInstall: {
-        artifactIds: ['model'],
-        failureId: 'failed-install',
-        message: 'network reset',
-        selection: {
+  it('publishes an external recommendation failure before rendering its retry action', async () => {
+    vi.stubGlobal('navigator', { deviceMemory: 8, hardwareConcurrency: 8 });
+    let state = modelManagerState();
+    let hasSelectedModel = false;
+    let notify: (() => void) | undefined;
+    const sidecarInstalled = deferred<boolean>();
+    const installFailure = deferred<void>();
+    const failurePublished = deferred<void>();
+    let installAttempt = 0;
+    const installAndWait = vi.fn(() => {
+      if (installAttempt++ === 0) {
+        return installFailure.promise.catch((cause: unknown) => {
+          state = {
+            ...state,
+            failedInstall: {
+              artifactIds: ['model'],
+              failureId: 'failed-install',
+              message: 'network reset',
+              selection: {
+                familyId: 'moonshine',
+                kind: 'catalog_model',
+                modelId: 'moonshine-small',
+                runtimeId: 'onnx_runtime',
+              },
+            },
+          };
+          if (notify === undefined) throw new Error('Expected the wizard model subscription');
+          notify();
+          failurePublished.resolve();
+          throw cause;
+        });
+      }
+      hasSelectedModel = true;
+      state = {
+        ...state,
+        selectedModel: {
           familyId: 'moonshine',
           kind: 'catalog_model',
           modelId: 'moonshine-small',
           runtimeId: 'onnx_runtime',
         },
-      },
+      };
+      return Promise.resolve();
     });
     const manager = {
       getDictationLanguage: () => 'en',
       getState: () => state,
       installAndWait,
-      subscribe: () => () => {},
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
     } as unknown as ModelInstallManager;
-    const modal = new SetupWizardModal(modalDependencies(manager));
+    const modal = new SetupWizardModal(
+      modalDependencies(manager, {
+        hasSelectedModel: () => hasSelectedModel,
+        isSidecarInstalled: () => sidecarInstalled.promise,
+      }),
+    );
 
     modal.open();
-    await vi.waitFor(() => expect(button(modal, 'Retry install')).toBeDefined());
-    await button(modal, 'Retry install').click();
+    sidecarInstalled.resolve(true);
+    await sidecarInstalled.promise;
+    await Promise.resolve();
+    await button(modal, 'Install and use').click();
 
     expect(installAndWait).toHaveBeenCalledOnce();
+    installFailure.reject(new Error('network reset'));
+    await failurePublished.promise;
+    await Promise.resolve();
+    await button(modal, 'Retry install').click();
+
+    expect(installAndWait).toHaveBeenCalledTimes(2);
+    expect(state.selectedModel).toEqual({
+      familyId: 'moonshine',
+      kind: 'catalog_model',
+      modelId: 'moonshine-small',
+      runtimeId: 'onnx_runtime',
+    });
   });
 
   it('keeps an existing selection authoritative when recommendation state changes', async () => {
