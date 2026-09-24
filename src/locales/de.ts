@@ -639,6 +639,10 @@ export const de = {
   'models.manage.loadingCatalog': 'Modellkatalog wird geladen…',
   'models.manage.loadCatalogFailed': 'Modellkatalog konnte nicht geladen werden.',
   'models.manage.noneAvailable': 'Für diesen Motor sind keine Modelle verfügbar.',
+  'models.manage.installed': 'Installiert',
+  'models.manage.downloadable': 'Herunterladbar',
+  'models.manage.compatibleLanguage': 'Kompatibel mit {language}',
+  'models.manage.incompatibleLanguage': 'Nicht kompatibel mit {language}',
   'models.manage.unsupportedLanguage':
     ' · Unterstützt {language} nicht. Ändern Sie die Diktiersprache, um dieses Modell zu installieren oder zu verwenden.',
   'models.manage.use': 'Verwenden',

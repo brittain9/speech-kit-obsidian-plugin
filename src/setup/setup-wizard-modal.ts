@@ -254,39 +254,38 @@ export class SetupWizardModal extends Modal {
       this.renderStartingModelRecommendation(body);
     }
 
+    const recommendation = this.modelReady ? null : this.resolveStartingModelRecommendation();
     const actions = this.contentEl.createDiv({ cls: 'local-stt-wizard-actions' });
     actions
       .createEl('button', { text: t('common.back') })
       .addEventListener('click', () => this.goBack());
-    actions
-      .createEl('button', { text: t('setup.wizard.openModelPicker') })
-      .addEventListener('click', () => this.openModelPicker());
+    const customize = actions.createEl('button', { text: t('setup.wizard.openModelPicker') });
+    customize.addEventListener('click', () => this.openModelPicker());
 
     if (this.modelReady) {
       const next = actions.createEl('button', { cls: 'mod-cta', text: t('common.next') });
       next.addEventListener('click', () => this.goNext());
+    } else if (recommendation !== null) {
+      const installed = this.deps.modelInstallManager
+        .getState()
+        .installedModels.some((model) =>
+          matchesModelTriple(
+            model,
+            recommendation.model.runtimeId,
+            recommendation.model.familyId,
+            recommendation.model.modelId,
+          ),
+        );
+      const action = actions.createEl('button', {
+        cls: 'mod-cta',
+        text: recommendationActionLabel(installed, this.recommendationPending),
+      });
+      action.disabled = this.recommendationPending !== null;
+      action.addEventListener('click', () => {
+        void this.useStartingModel(recommendation, installed);
+      });
     } else {
-      const recommendation = this.resolveStartingModelRecommendation();
-      if (recommendation !== null) {
-        const installed = this.deps.modelInstallManager
-          .getState()
-          .installedModels.some((model) =>
-            matchesModelTriple(
-              model,
-              recommendation.model.runtimeId,
-              recommendation.model.familyId,
-              recommendation.model.modelId,
-            ),
-          );
-        const action = actions.createEl('button', {
-          cls: 'mod-cta',
-          text: recommendationActionLabel(installed, this.recommendationPending),
-        });
-        action.disabled = this.recommendationPending !== null;
-        action.addEventListener('click', () => {
-          void this.useStartingModel(recommendation, installed);
-        });
-      }
+      customize.addClass('mod-cta');
     }
   }
 
@@ -294,6 +293,10 @@ export class SetupWizardModal extends Modal {
     const state = this.deps.modelInstallManager.getState();
     if (state.loadStatus === 'loading') {
       body.createEl('p', { text: t('setup.wizard.recommendation.catalogLoading') });
+      return;
+    }
+    if (state.loadStatus === 'error') {
+      body.createEl('p', { text: t('models.manage.loadCatalogFailed') });
       return;
     }
 
@@ -339,10 +342,12 @@ export class SetupWizardModal extends Modal {
         size: formatBytes(recommendation.totalSizeBytes),
       }),
     });
-    card.createEl('p', {
-      cls: 'local-stt-wizard-step__muted',
-      text: t('setup.wizard.recommendation.cudaOptional'),
-    });
+    if (!Platform.isMacOS) {
+      card.createEl('p', {
+        cls: 'local-stt-wizard-step__muted',
+        text: t('setup.wizard.recommendation.cudaOptional'),
+      });
+    }
   }
 
   private resolveStartingModelRecommendation(): StartingModelRecommendation | null {

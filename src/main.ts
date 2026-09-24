@@ -567,7 +567,10 @@ export default class LocalSttPlugin extends Plugin {
     if (existing === null) {
       await this.app.vault.create(scratchPath, t('setup.ready.scratchNoteContent'));
     }
-    await this.app.workspace.openLinkText(scratchPath, '', true);
+    await this.app.workspace.openLinkText(scratchPath, '', true, {
+      active: true,
+      state: { mode: 'source' },
+    });
     return Session.hasDictationTarget(this.app);
   }
 

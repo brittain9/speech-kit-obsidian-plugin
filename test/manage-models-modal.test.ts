@@ -643,6 +643,7 @@ describe('model browser', () => {
         (modal.contentEl as unknown as TestElement).findByClass('search-input-clear-button'),
       ).toBeDefined();
       const row = Setting.named('Pocket TTS en');
+      expect(texts(row.descEl)).toContain('Installed');
       expect(row.extraButtonComponents).toHaveLength(1);
       expect(row.extraButtonComponents[0]?.tooltip).toBe('Details');
       await row.extraButtonComponents[0]?.click();

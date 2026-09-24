@@ -691,15 +691,18 @@ export class ManageModelsModal extends Modal {
       );
       setting.setDesc(fragment);
     } else {
-      const tags = this.buildTagsFragment(row.model);
+      const tags = this.buildTagsFragment(
+        row.model,
+        row.installed,
+        row.model.task !== 'stt' || supportsSelectedLanguage,
+      );
       if (!supportsSelectedLanguage) {
-        tags.append(
-          document.createTextNode(
-            t('models.manage.unsupportedLanguage', {
-              language: dictationLanguageLabel(selectedLanguage),
-            }),
-          ),
-        );
+        tags.createDiv({
+          cls: 'local-stt-model-warning',
+          text: t('models.manage.unsupportedLanguage', {
+            language: dictationLanguageLabel(selectedLanguage),
+          }),
+        });
       }
       setting.setDesc(tags);
     }
@@ -1182,9 +1185,24 @@ export class ManageModelsModal extends Modal {
     };
   }
 
-  private buildTagsFragment(model: CatalogModelRecord): DocumentFragment {
+  private buildTagsFragment(
+    model: CatalogModelRecord,
+    installed: boolean,
+    supportsSelectedLanguage: boolean,
+  ): DocumentFragment {
     const frag = createFragment();
     const tagsContainer = frag.createSpan({ cls: 'local-stt-tags' });
+    tagsContainer.createSpan({
+      text: t(installed ? 'models.manage.installed' : 'models.manage.downloadable'),
+    });
+    if (model.task === 'stt') {
+      const language = dictationLanguageLabel(this.deps.manager.getDictationLanguage());
+      tagsContainer.createSpan({
+        text: supportsSelectedLanguage
+          ? t('models.manage.compatibleLanguage', { language })
+          : t('models.manage.incompatibleLanguage', { language }),
+      });
+    }
     const policy = resolveModelPresentationPolicy(model);
 
     for (const tag of model.uxTags) {
