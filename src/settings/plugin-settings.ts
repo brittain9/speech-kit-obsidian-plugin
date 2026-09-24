@@ -37,6 +37,15 @@ import {
   type SpeakingStyle,
 } from '../sidecar/protocol';
 import { normalizeTranslationLanguage, type TranslationLanguage } from '../translation/languages';
+import {
+  inferPersonalCorrectionRuleOrder,
+  normalizePersonalCorrectionRules,
+  type PersonalCorrectionRule,
+  type PersonalCorrectionRuleDiagnostic,
+  type PersonalCorrectionRuleOrderEntry,
+  readPersonalCorrectionRuleDiagnostics,
+  readPersonalCorrectionRuleOrder,
+} from './personal-correction-rules';
 
 export const DICTATION_ANCHORS = ['at_cursor', 'end_of_note'] as const;
 
@@ -188,9 +197,12 @@ export interface PluginSettings {
   lastObsidianLanguage: string | null;
   localTranscriptSidebarBootstrapped: boolean;
   modelStorePathOverride: string;
+  personalCorrectionRules: PersonalCorrectionRule[];
+  personalCorrectionRuleDiagnostics: PersonalCorrectionRuleDiagnostic[];
+  personalCorrectionRuleOrder: PersonalCorrectionRuleOrderEntry[];
   readAloudLanguage: DictationLanguage;
   retainLastUtterance: boolean;
-  schemaVersion: 10;
+  schemaVersion: number;
   selectedModel: SelectedModel | null;
   // Last-known-good capabilities for `selectedModel`, captured on a successful
   // probe. Lets startup skip re-probing the sidecar (which forces a full
@@ -260,9 +272,12 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   lastObsidianLanguage: null,
   localTranscriptSidebarBootstrapped: false,
   modelStorePathOverride: '',
+  personalCorrectionRules: [],
+  personalCorrectionRuleDiagnostics: [],
+  personalCorrectionRuleOrder: [],
   readAloudLanguage: 'auto',
   retainLastUtterance: true,
-  schemaVersion: 10,
+  schemaVersion: 12,
   selectedModel: null,
   selectedModelCapabilitiesSnapshot: null,
   selectedTtsModel: null,
@@ -294,6 +309,11 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
 
 export function resolvePluginSettings(data: unknown): PluginSettings {
   const raw = isRecord(data) ? data : {};
+  const {
+    llmOpenRouterApiKey: _legacySecret,
+    llmPostprocessPrompt: _legacyPrompt,
+    ...preservedRaw
+  } = raw;
   const isFreshInstall = data === null || data === undefined;
   const smartParagraphPauses = normalizeSmartParagraphPauseSettings({
     lineBreakPauseMs: raw.smartParagraphLineBreakPauseMs,
@@ -307,8 +327,26 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
   const legacyModel =
     typeof raw.llmPostprocessModel === 'string' ? raw.llmPostprocessModel.trim() : '';
   const llmProviderConfigurations = readLlmProviderConfigurations(raw, legacyModel);
+  const personalCorrectionRules = normalizePersonalCorrectionRules(raw.personalCorrectionRules);
+  const personalCorrectionRuleDiagnostics =
+    personalCorrectionRules.diagnostics.length > 0
+      ? personalCorrectionRules.diagnostics
+      : readPersonalCorrectionRuleDiagnostics(raw.personalCorrectionRuleDiagnostics);
+  const persistedCorrectionOrder = readPersonalCorrectionRuleOrder(raw.personalCorrectionRuleOrder);
+  const personalCorrectionRuleOrder =
+    personalCorrectionRules.diagnostics.length > 0
+      ? personalCorrectionRules.order
+      : persistedCorrectionOrder.length > 0
+        ? persistedCorrectionOrder
+        : inferPersonalCorrectionRuleOrder(
+            personalCorrectionRules.rules.length,
+            personalCorrectionRuleDiagnostics,
+          );
 
   return {
+    // Preserve fields introduced by a newer plugin/schema. Known fields below
+    // are normalized, while unknown fields survive subsequent save cycles.
+    ...preservedRaw,
     accelerationPreference: readAccelerationPreference(raw.accelerationPreference),
     audioInputDevice: readAudioInputDevice(raw.audioInputDevice),
     includeSystemAudio: readIncludeSystemAudio(raw),
@@ -389,6 +427,9 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.modelStorePathOverride,
       DEFAULT_PLUGIN_SETTINGS.modelStorePathOverride,
     ),
+    personalCorrectionRules: personalCorrectionRules.rules,
+    personalCorrectionRuleDiagnostics,
+    personalCorrectionRuleOrder,
     readAloudLanguage: isDictationLanguage(raw.readAloudLanguage)
       ? raw.readAloudLanguage
       : DEFAULT_PLUGIN_SETTINGS.readAloudLanguage,
@@ -397,28 +438,18 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       DEFAULT_PLUGIN_SETTINGS.retainLastUtterance,
     ),
     // Bump `schemaVersion` and add a migration step when renaming a key or changing default semantics.
-    schemaVersion: 10,
+    schemaVersion: readSchemaVersion(raw.schemaVersion),
     selectedModel: readSelectedModel(raw.selectedModel),
     // Automatic detection became a capability separate from language tags in
     // schema 4. Older snapshots cannot prove that exact-model behavior, so
     // force one fresh probe during migration.
     selectedModelCapabilitiesSnapshot:
-      raw.schemaVersion === 4 ||
-      raw.schemaVersion === 5 ||
-      raw.schemaVersion === 6 ||
-      raw.schemaVersion === 7 ||
-      raw.schemaVersion === 8 ||
-      raw.schemaVersion === 9 ||
-      raw.schemaVersion === 10
+      typeof raw.schemaVersion === 'number' && raw.schemaVersion >= 4
         ? readSelectedModelCapabilitiesSnapshot(raw.selectedModelCapabilitiesSnapshot)
         : null,
     selectedTtsModel: readSelectedModel(raw.selectedTtsModel),
     selectedTtsModelCapabilitiesSnapshot:
-      raw.schemaVersion === 6 ||
-      raw.schemaVersion === 7 ||
-      raw.schemaVersion === 8 ||
-      raw.schemaVersion === 9 ||
-      raw.schemaVersion === 10
+      typeof raw.schemaVersion === 'number' && raw.schemaVersion >= 6
         ? readSelectedModelCapabilitiesSnapshot(raw.selectedTtsModelCapabilitiesSnapshot)
         : null,
     selectedTtsVoice:
@@ -588,6 +619,13 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 
 function readString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value.trim() : fallback;
+}
+
+function readSchemaVersion(value: unknown): number {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 12) return value;
+  // Schema 11 is the recoverable correction-rule migration. It is read
+  // leniently and written back as schema 12 with diagnostics for bad entries.
+  return DEFAULT_PLUGIN_SETTINGS.schemaVersion;
 }
 
 export function normalizeTranslationStyleInstruction(value: unknown): string {

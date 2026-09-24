@@ -9,7 +9,6 @@ import {
   listPresetEntries,
   resolveActivePresetEntry,
 } from '../llm/presets';
-import type { LlmPresetStateMutation } from '../settings/llm-preset-state';
 import {
   LLM_MIN_WORDS_MAX,
   LLM_TEMPERATURE_MAX,
@@ -18,6 +17,7 @@ import {
   LLM_USER_PRESET_MAX_LABEL_CHARS,
   type PluginSettings,
 } from '../settings/plugin-settings';
+import type { LlmPresetStateMutation } from '../settings/settings-state';
 import { t } from '../shared/i18n';
 import type { UserFeedback } from '../shared/user-feedback';
 import { ConfirmModal } from './confirm-modal';

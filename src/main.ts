@@ -35,7 +35,6 @@ import {
 } from './models/model-picker-routing';
 import { Session } from './session/session';
 import { logAccelerationFallbacks } from './settings/acceleration-info';
-import { LlmPresetStateStore } from './settings/llm-preset-state';
 import { restoreLlmTransformationDefaults } from './settings/llm-transformation-reset';
 import { handleMicrophoneDeviceFallback } from './settings/microphone-fallback';
 import { loadPluginSettings } from './settings/openrouter-secret-storage';
@@ -44,6 +43,7 @@ import {
   type PluginSettings,
   resolvePluginSettings,
 } from './settings/plugin-settings';
+import { SettingsStateStore } from './settings/settings-state';
 import { LocalSttSettingTab } from './settings/settings-tab';
 import {
   openSidecarUpdateModal,
@@ -117,7 +117,7 @@ export default class LocalSttPlugin extends Plugin {
   });
   private readonly llmCleanupFailureSubscribers = new Set<() => void>();
   private modelInstallManager: ModelInstallManager | null = null;
-  private presetStateStore: LlmPresetStateStore | null = null;
+  private settingsStateStore: SettingsStateStore | null = null;
   private readonly rawTranscriptRecovery = new RawTranscriptRecovery({
     feedback: this.feedback,
     getClipboard: () => window.navigator.clipboard,
@@ -149,7 +149,7 @@ export default class LocalSttPlugin extends Plugin {
     if (loadedSettings.shouldPersist || languageSync.shouldPersist) {
       await this.saveData(this.settings);
     }
-    this.presetStateStore = new LlmPresetStateStore({
+    this.settingsStateStore = new SettingsStateStore({
       commit: async (nextSettings, options) => {
         await this.applySettings(nextSettings, options);
       },
@@ -186,7 +186,7 @@ export default class LocalSttPlugin extends Plugin {
       onDeviceFallback: async (unavailableDeviceId) => {
         await handleMicrophoneDeviceFallback(unavailableDeviceId, {
           clearSelectionIfMatches: async (deviceId) =>
-            this.requirePresetStateStore().commitPreservingPresetStateIf(
+            this.requireSettingsStateStore().commitPreservingSettingsIf(
               (settings) => settings.audioInputDevice?.deviceId === deviceId,
               (settings) => ({ ...settings, audioInputDevice: null }),
             ),
@@ -199,7 +199,7 @@ export default class LocalSttPlugin extends Plugin {
     });
     this.modelInstallManager = new ModelInstallManager({
       commitSettingsIf: (condition, createNextSettings) =>
-        this.requirePresetStateStore().commitPreservingPresetStateIf(condition, createNextSettings),
+        this.requireSettingsStateStore().commitPreservingSettingsIf(condition, createNextSettings),
       getSettings: () => this.settings,
       logger: this.logger,
       saveSettings: async (nextSettings) => {
@@ -226,10 +226,10 @@ export default class LocalSttPlugin extends Plugin {
             await this.updateSettings(nextSettings);
           },
           mutatePresetState: async (mutation) => {
-            await this.requirePresetStateStore().mutate(mutation);
+            await this.requireSettingsStateStore().mutateLlmState(mutation);
           },
           synchronizePresets: async () => {
-            await this.requirePresetStateStore().synchronize();
+            await this.requireSettingsStateStore().synchronize();
           },
           subscribeLlmCleanupFailure: (callback) => {
             this.llmCleanupFailureSubscribers.add(callback);
@@ -349,13 +349,16 @@ export default class LocalSttPlugin extends Plugin {
         resolvePluginDirectory: () => this.resolvePluginDirectoryPath(),
         resetLlmTransformation: () =>
           restoreLlmTransformationDefaults({
-            mutateSettings: (mutation) => this.requirePresetStateStore().mutateSettings(mutation),
+            mutateSettings: (mutation) => this.requireSettingsStateStore().mutateSettings(mutation),
           }),
         restartSidecar: async () => {
           await this.restartSidecarConnection();
         },
         saveSettings: async (nextSettings) => {
           await this.updateSettings(nextSettings);
+        },
+        mutateSettings: async (mutation) => {
+          await this.requireSettingsStateStore().mutateSettings(mutation);
         },
         sidecarConnection: this.requireSidecarConnection(),
         sidecarInstallManager: this.requireSidecarInstallManager(),
@@ -724,7 +727,7 @@ export default class LocalSttPlugin extends Plugin {
   }
 
   private async updateSettings(nextSettings: PluginSettings): Promise<void> {
-    await this.requirePresetStateStore().commitPreservingPresetState(nextSettings);
+    await this.requireSettingsStateStore().commitPreservingSettings(nextSettings);
   }
 
   private getSecret(secretId: string): string {
@@ -739,16 +742,19 @@ export default class LocalSttPlugin extends Plugin {
     options: { persist: boolean },
   ): Promise<void> {
     const previousSettings = this.settings;
-    this.settings = resolvePluginSettings(nextSettings);
+    const resolvedSettings = resolvePluginSettings(nextSettings);
+    if (options.persist) {
+      // Persist before publishing the new live snapshot. A failed data.json
+      // write must not leave side effects or in-memory state ahead of disk.
+      await this.saveData(resolvedSettings);
+    }
+    this.settings = resolvedSettings;
     const llmWasDisabled = previousSettings.llmFeaturesEnabled && !this.settings.llmFeaturesEnabled;
     if (llmWasDisabled) {
       this.dictationController?.disableLlmForActiveSessions();
     }
     this.lastUtteranceRecovery.setEnabled(this.settings.retainLastUtterance);
     this.rawTranscriptRecovery.setEnabled(this.settings.retainLastUtterance);
-    if (options.persist) {
-      await this.saveData(this.settings);
-    }
     if (previousSettings.highlightSpokenText !== this.settings.highlightSpokenText) {
       this.readAloudFollowAlong?.setEnabled(this.settings.highlightSpokenText);
     }
@@ -992,11 +998,11 @@ export default class LocalSttPlugin extends Plugin {
     return installed?.installedVoiceIds ?? [];
   }
 
-  private requirePresetStateStore(): LlmPresetStateStore {
-    if (this.presetStateStore === null) {
-      throw new Error('Preset state store is not initialized');
+  private requireSettingsStateStore(): SettingsStateStore {
+    if (this.settingsStateStore === null) {
+      throw new Error('Settings state store is not initialized');
     }
-    return this.presetStateStore;
+    return this.settingsStateStore;
   }
 
   private requireSidecarConnection(): SidecarConnection {

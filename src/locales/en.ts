@@ -1,5 +1,11 @@
 export const en = {
   'notice.dictationNotActive': 'Dictation is not currently active.',
+  'notice.personalCorrectionRulesSnapshot':
+    'This session uses {enabled} of {total} personal correction rules. Changes apply to the next session.',
+  'notice.personalCorrectionRulesInvalid':
+    'Personal correction settings are invalid: {reason} Fix them before starting dictation.',
+  'notice.personalCorrectionRulesSkipped':
+    '{count} stored personal correction rules could not be read and were skipped. Repair them in Settings.',
   'notice.dictationStartFailed': 'Could not start dictation.',
   'notice.dictationStopFailed': 'Could not stop dictation.',
   'notice.finalizedUtteranceAutoCopyFailed':
@@ -315,6 +321,63 @@ export const en = {
   'settings.transcriptFormatting.newParagraph': 'New paragraph',
   'settings.transcriptFormatting.name': 'Transcript formatting',
   'settings.transcriptFormatting.desc': 'How phrases are joined together.',
+  'settings.corrections.name': 'Personal correction rules',
+  'settings.corrections.desc':
+    'Apply local, ordered literal corrections after transcription. Rules affect final segments in the next session; they are not ASR vocabulary or hotwords.',
+  'settings.corrections.manage': 'Manage correction rules',
+  'settings.corrections.modal.title': 'Personal correction rules',
+  'settings.corrections.modal.intro':
+    'These are deterministic local post-transcription corrections, not speech-recognition vocabulary. Rules run in order on each final transcript segment, before optional LLM cleanup. Changes apply to the next dictation session.',
+  'settings.corrections.modal.preview': 'Preview',
+  'settings.corrections.modal.previewInput': 'Example transcript',
+  'settings.corrections.modal.previewOutput': 'Corrected transcript',
+  'settings.corrections.modal.add': 'Add rule',
+  'settings.corrections.modal.empty': 'No correction rules yet.',
+  'settings.corrections.modal.countsOne': '{enabled} enabled · {total} rule',
+  'settings.corrections.modal.countsOther': '{enabled} enabled · {total} rules',
+  'settings.corrections.modal.previewSummaryOne': '{replacements} replacement from {rules} rule',
+  'settings.corrections.modal.previewSummaryOther':
+    '{replacements} replacements from {rules} rules',
+  'settings.corrections.modal.find': 'Find',
+  'settings.corrections.modal.replace': 'Replace with',
+  'settings.corrections.modal.enabled': 'Enabled',
+  'settings.corrections.modal.moveUp': 'Move up',
+  'settings.corrections.modal.moveDown': 'Move down',
+  'settings.corrections.modal.delete': 'Delete rule',
+  'settings.corrections.modal.saving': 'Saving…',
+  'settings.corrections.modal.saved': 'Saved',
+  'settings.corrections.modal.unsaved': 'Unsaved changes',
+  'settings.corrections.modal.retry': 'Save failed. Retry saving.',
+  'settings.corrections.modal.conflict':
+    'Correction rules changed elsewhere. Reopen this dialog before saving.',
+  'settings.corrections.field.enabled': 'Enabled',
+  'settings.corrections.field.find': 'Find',
+  'settings.corrections.field.id': 'Rule ID',
+  'settings.corrections.field.replace': 'Replace with',
+  'settings.corrections.field.rules': 'Rules',
+  'settings.corrections.validation.tooMany': 'Add no more than {max} rules.',
+  'settings.corrections.validation.invalidRule':
+    'This correction rule is not a readable rule object.',
+  'settings.corrections.validation.blankId': 'Each rule needs an ID.',
+  'settings.corrections.validation.invalidId': 'Rule ID must be text.',
+  'settings.corrections.validation.duplicateId': 'Rule IDs must be unique.',
+  'settings.corrections.validation.invalidEnabled': 'Enabled must be on or off.',
+  'settings.corrections.validation.blankFind': 'Find text cannot be blank.',
+  'settings.corrections.validation.invalidFind': 'Find text must be text.',
+  'settings.corrections.validation.blankReplace': 'Replacement text cannot be blank.',
+  'settings.corrections.validation.invalidReplace': 'Replacement text must be text.',
+  'settings.corrections.validation.loneSurrogate':
+    'Text contains an invalid Unicode surrogate and cannot be saved.',
+  'settings.corrections.validation.context': 'Rule {index}, {field}: {reason}',
+  'settings.corrections.validation.oversized': '{field} cannot exceed {max} characters.',
+  'settings.corrections.validation.duplicateFind':
+    'Find text must be unique; later rules cannot target the same text.',
+  'settings.corrections.validation.absoluteAmplification':
+    'The correction would exceed the {max}-character safety limit and was rejected.',
+  'settings.corrections.validation.relativeAmplification':
+    'The correction would expand text by more than {max}× and was rejected.',
+  'settings.corrections.validation.workBudget':
+    'The correction search exceeds the {max}-step safety limit and was rejected.',
   'settings.phraseFinalization.responsiveOption': 'Responsive — short pauses',
   'settings.phraseFinalization.balancedOption': 'Balanced — standard',
   'settings.phraseFinalization.patientOption': 'Patient — long pauses',
@@ -931,6 +994,11 @@ export const en = {
   'models.current.unavailable': 'Unavailable',
   'models.current.validateBeforeDictating': 'Validate the external model file before dictating.',
   'sidecarError.audio_too_long': 'Audio clip exceeds the maximum duration for this engine.',
+  'sidecarError.event_frame_too_large':
+    'The speech engine produced an event that exceeds the safe frame limit.',
+  'sidecarError.invalid_session_id': 'The session id is too long.',
+  'sidecarError.invalid_correction_rules':
+    'The personal correction rules are invalid. Fix them before starting dictation.',
   'sidecarError.engine_inference_failed': 'Local transcription failed.',
   'sidecarError.internal_error': 'The speech engine encountered an internal error.',
   'sidecarError.invalid_audio_buffer': 'Audio buffer was empty when transcription started.',

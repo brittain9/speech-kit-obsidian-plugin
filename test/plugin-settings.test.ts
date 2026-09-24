@@ -53,8 +53,15 @@ describe('resolvePluginSettings', () => {
     ).toBeNull();
   });
 
-  it('defaults missing schemaVersion to the current settings schema', () => {
-    expect(resolvePluginSettings({}).schemaVersion).toBe(10);
+  it('migrates every supported prior schema to schema 12', () => {
+    for (let schemaVersion = 1; schemaVersion < 12; schemaVersion += 1) {
+      const settings = resolvePluginSettings({ schemaVersion });
+      expect(settings.schemaVersion).toBe(12);
+      expect(settings.personalCorrectionRules).toEqual([]);
+    }
+    expect(resolvePluginSettings({ schemaVersion: 11 }).schemaVersion).toBe(12);
+    expect(resolvePluginSettings({ schemaVersion: 12 }).schemaVersion).toBe(12);
+    expect(resolvePluginSettings({ schemaVersion: 99 }).schemaVersion).toBe(99);
   });
 
   it('defaults and normalizes HY-MT2 translation styles', () => {
@@ -179,7 +186,219 @@ describe('resolvePluginSettings', () => {
     expect(
       resolvePluginSettings({ autoCopyFinalizedUtterances: 'yes' }).autoCopyFinalizedUtterances,
     ).toBe(false);
-    expect(resolvePluginSettings({ autoCopyFinalizedUtterances: true }).schemaVersion).toBe(10);
+    expect(resolvePluginSettings({ autoCopyFinalizedUtterances: true }).schemaVersion).toBe(12);
+  });
+
+  it('migrates personal correction rules without resetting other settings', () => {
+    const rules = [{ enabled: true, find: 'Speech Kit', id: 'rule-1', replace: 'Speech Kit' }];
+    const settings = resolvePluginSettings({
+      autoCopyFinalizedUtterances: true,
+      personalCorrectionRules: rules,
+      schemaVersion: 10,
+      selectedModel: {
+        familyId: 'whisper',
+        filePath: '/tmp/model.bin',
+        kind: 'external_file',
+        runtimeId: 'whisper_cpp',
+      },
+    });
+
+    expect(settings.schemaVersion).toBe(12);
+    expect(settings.personalCorrectionRules).toEqual(rules);
+    expect(settings.autoCopyFinalizedUtterances).toBe(true);
+    expect(settings.selectedModel).toEqual({
+      familyId: 'whisper',
+      filePath: '/tmp/model.bin',
+      kind: 'external_file',
+      runtimeId: 'whisper_cpp',
+    });
+  });
+
+  it('preserves unknown top-level and rule fields while migrating supported schemas', () => {
+    const settings = resolvePluginSettings({
+      schemaVersion: 4,
+      futureTopLevel: { keep: true },
+      personalCorrectionRules: [
+        {
+          enabled: true,
+          find: 'cat',
+          futureRuleField: 'keep',
+          id: 'rule-1',
+          replace: 'dog',
+        },
+      ],
+    });
+    expect((settings as unknown as Record<string, unknown>).futureTopLevel).toEqual({ keep: true });
+    expect(
+      (settings.personalCorrectionRules[0] as unknown as Record<string, unknown>).futureRuleField,
+    ).toBe('keep');
+  });
+
+  it('omits malformed persisted correction rules but preserves repair diagnostics', () => {
+    const settings = resolvePluginSettings({
+      personalCorrectionRules: [
+        { enabled: true, find: 'ok', id: 'valid', replace: 'yes' },
+        { enabled: true, find: ' ', id: 'blank', replace: 'yes' },
+        { enabled: true, find: 'ok', id: 'duplicate', replace: 'no' },
+      ],
+    });
+
+    expect(settings.personalCorrectionRules).toEqual([
+      { enabled: true, find: 'ok', id: 'valid', replace: 'yes' },
+    ]);
+    expect(settings.personalCorrectionRuleDiagnostics).toMatchObject([
+      { code: 'blank_find', field: 'find', index: 1 },
+      { code: 'duplicate_find', field: 'find', index: 2 },
+    ]);
+  });
+
+  it.each([11, 12])(
+    'keeps sessions recoverable when schema %s contains non-object rules',
+    (schemaVersion) => {
+      const settings = resolvePluginSettings({
+        personalCorrectionRules: [
+          null,
+          42,
+          [],
+          { enabled: true, find: 'ok', id: 'valid', replace: 'yes' },
+        ],
+        schemaVersion,
+      });
+
+      expect(settings.schemaVersion).toBe(12);
+      expect(settings.personalCorrectionRules).toHaveLength(1);
+      expect(settings.personalCorrectionRuleDiagnostics).toMatchObject([
+        { code: 'invalid_rule', raw: null },
+        { code: 'invalid_rule', raw: 42 },
+        { code: 'invalid_rule', raw: [] },
+      ]);
+    },
+  );
+
+  it('retains the first 100 valid rules and diagnoses overflow with original indexes', () => {
+    const valid = Array.from({ length: 101 }, (_, index) => ({
+      enabled: true,
+      find: `find-${index}`,
+      id: `rule-${index}`,
+      replace: `replace-${index}`,
+    }));
+    const settings = resolvePluginSettings({
+      personalCorrectionRules: [null, ...valid],
+      schemaVersion: 12,
+    });
+
+    expect(settings.personalCorrectionRules).toHaveLength(100);
+    expect(settings.personalCorrectionRules.at(-1)?.id).toBe('rule-99');
+    expect(settings.personalCorrectionRuleDiagnostics).toMatchObject([
+      { code: 'invalid_rule', index: 0 },
+      { code: 'too_many_rules', field: 'rules', index: 101 },
+    ]);
+    expect(settings.personalCorrectionRuleOrder).toHaveLength(102);
+  });
+
+  it('retains repair diagnostics after active rules have been normalized', () => {
+    const settings = resolvePluginSettings({
+      personalCorrectionRuleDiagnostics: [
+        {
+          code: 'blank_find',
+          field: 'find',
+          index: 1,
+          message: 'Find text cannot be blank.',
+          raw: { enabled: true, find: ' ', id: 'repair-me', replace: 'value' },
+        },
+      ],
+      personalCorrectionRules: [{ enabled: true, find: 'ok', id: 'valid', replace: 'yes' }],
+      schemaVersion: 12,
+    });
+
+    expect(settings.personalCorrectionRules).toHaveLength(1);
+    expect(settings.personalCorrectionRuleDiagnostics).toMatchObject([
+      { code: 'blank_find', index: 1, raw: { id: 'repair-me' } },
+    ]);
+  });
+
+  it('infers old normalized order from diagnostic indexes when no order is persisted', () => {
+    const settings = resolvePluginSettings({
+      personalCorrectionRuleDiagnostics: [
+        {
+          code: 'blank_find',
+          field: 'find',
+          index: 1,
+          message: 'Find text cannot be blank.',
+          raw: { enabled: true, find: ' ', id: 'repair-b', replace: 'd' },
+        },
+      ],
+      personalCorrectionRules: [
+        { enabled: true, find: 'a', id: 'a', replace: 'b' },
+        { enabled: true, find: 'c', id: 'c', replace: 'd' },
+      ],
+      schemaVersion: 12,
+    });
+
+    expect(settings.personalCorrectionRuleOrder).toEqual([
+      { index: 0, kind: 'active' },
+      { index: 1, kind: 'invalid' },
+      { index: 2, kind: 'active' },
+    ]);
+  });
+
+  it('loads huge, unsafe, duplicate, and sparse diagnostic indexes without index-sized recovery', () => {
+    const unsafeIndex = Number.MAX_SAFE_INTEGER + 1;
+    const settings = resolvePluginSettings({
+      personalCorrectionRules: [
+        { enabled: true, find: 'a', id: 'a', replace: 'b' },
+        { enabled: true, find: 'c', id: 'c', replace: 'd' },
+      ],
+      personalCorrectionRuleDiagnostics: [
+        {
+          code: 'invalid_rule',
+          field: 'rules',
+          index: 1_000_000_000,
+          message: 'first sparse diagnostic',
+          raw: null,
+        },
+        {
+          code: 'invalid_rule',
+          field: 'rules',
+          index: unsafeIndex,
+          message: 'unsafe diagnostic',
+          raw: 1,
+        },
+        {
+          code: 'invalid_rule',
+          field: 'rules',
+          index: 1_000_000_000,
+          message: 'duplicate diagnostic',
+          raw: 2,
+        },
+      ],
+    });
+
+    expect(settings.personalCorrectionRuleDiagnostics).toHaveLength(3);
+    expect(settings.personalCorrectionRuleOrder).toEqual([
+      { index: 0, kind: 'active' },
+      { index: 1, kind: 'active' },
+      { index: 1_000_000_000, kind: 'invalid' },
+      { index: 1_000_000_000, kind: 'invalid' },
+      { index: unsafeIndex, kind: 'invalid' },
+    ]);
+  });
+
+  it('preserves newer schema fields and diagnoses a non-array rule container', () => {
+    const settings = resolvePluginSettings({
+      futureCorrectionField: { keep: true },
+      personalCorrectionRules: { not: 'an array' },
+      schemaVersion: 99,
+    });
+
+    expect(settings.schemaVersion).toBe(99);
+    expect((settings as unknown as Record<string, unknown>).futureCorrectionField).toEqual({
+      keep: true,
+    });
+    expect(settings.personalCorrectionRules).toEqual([]);
+    expect(settings.personalCorrectionRuleDiagnostics).toMatchObject([
+      { code: 'invalid_rule', field: 'rules', index: 0 },
+    ]);
   });
 
   it('migrates legacy speaker label setting to diarization', () => {
@@ -349,8 +568,13 @@ describe('resolvePluginSettings', () => {
         transcriptFormatting: 'tab',
         useNoteAsContext: 'yes',
       }),
-    ).toEqual({
+    ).toMatchObject({
       ...DEFAULT_PLUGIN_SETTINGS,
+      llmOpenRouterSecretId: 'Invalid secret ID',
+      llmProviderModels: 'llama3',
+      llmRemoteFeaturesEnabled: 'yes',
+      llmRemoteThresholdChars: 'soon',
+      llmRouting: 'claude',
       llmRoutingPolicy: { kind: 'fixed', providerId: 'ollama' },
     });
   });
@@ -388,7 +612,7 @@ describe('resolvePluginSettings', () => {
       runtimeId: 'whisper_cpp' as const,
     };
 
-    for (const schemaVersion of [4, 5]) {
+    for (const schemaVersion of [4, 5, 11, 12]) {
       expect(
         resolvePluginSettings({
           schemaVersion,

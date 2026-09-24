@@ -342,6 +342,7 @@ fn start_session_command(
 ) -> Command {
     Command::StartSession {
         acceleration_preference: AccelerationPreference::CpuOnly,
+        correction_rules: Vec::new(),
         detailed_timestamps_enabled: false,
         diarization_enabled,
         diarization_max_speakers: None,

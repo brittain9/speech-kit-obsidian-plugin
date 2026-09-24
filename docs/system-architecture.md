@@ -29,7 +29,7 @@ flowchart LR
     subgraph Sidecar ["Native sidecar (Rust)"]
         VAD["VAD · speech boundaries"]
         INF["Inference · engine registry"]
-        STAGE["Post-engine stages<br/>(hallucination filter)"]
+        STAGE["Post-engine stages<br/>(hallucination filter → personal corrections)"]
         DIA["Diarization<br/>(optional)"]
         SYNTH["Pocket TTS / Supertonic synthesis<br/>+ time stretch"]
         HYMT["HY-MT helper supervisor<br/>(framed stdio)"]
@@ -132,7 +132,7 @@ reassemble frames across chunk boundaries.
 |---------|---------|
 | `health` | Liveness ping |
 | `get_system_info` | Enumerate compiled runtimes and family adapters with static capabilities |
-| `start_session` | Begin transcription (model, mode, sessionId, options) |
+| `start_session` | Begin transcription (model, mode, sessionId, options, ordered correction snapshot) |
 | `stop_session` | Graceful stop (drain pending transcriptions) |
 | `cancel_session` | Immediate cancel (discard pending) |
 | `context_response` | Reply to a `context_request` with the plugin-assembled context window |
@@ -374,9 +374,14 @@ silence window hides most of the latency.
 
 ### Stage 5: Post-Engine Stages
 
-After final inference, a chain of post-engine processors runs in canonical order
-on the finalized transcript. Streaming partials bypass this chain entirely.
-Each final stage may rewrite or drop segments but is validated against the prior
+The post-engine chain runs in canonical order. The hallucination filter runs
+on streaming partials with its hard-only subset and on final revisions with the
+full evidence-aware rules. The personal correction stage is final-only and runs
+immediately after hallucination filtering. It is a local, deterministic literal
+find/replace stage, not ASR vocabulary or a model prompt; the optional LLM
+cleanup receives its corrected output later in the plugin.
+
+Each text stage may rewrite or drop segments but is validated against the prior
 revision: it must not move timing boundaries, overlap segments, or run past the
 utterance duration. A panicking stage is caught and recorded as
 `Failed`; the chain continues. Every stage records a `StageOutcome`
@@ -392,8 +397,53 @@ combines Whisper/Cohere decoder diagnostics with per-segment voiced fraction and
 utterance-level VAD evidence. If nothing is dropped it records
 `Skipped { reason: "no_hallucinations" }`.
 
-`StageId::Punctuation` and `StageId::UserRules` exist as reserved identifiers but
-have no registered processor yet.
+The **personal correction stage** applies the ordered, session-start rule
+snapshot independently within each final transcript segment. It preserves all
+segment boundaries, timing, IDs, speakers, and word timing. Matching is literal,
+case-sensitive, ordered, and whole-word: Unicode `L`/`N` characters and `_` are
+word characters, NFD is used for comparison, and a candidate that starts or ends
+inside an original scalar's canonical expansion (or before a combining mark) is
+rejected rather than dropping the mark. The stage does not concatenate segments,
+run on partials, or cross the later diarization/LLM stages.
+
+The `start_session` command carries the complete `{ id, enabled, find, replace }`
+rule array. IDs are required and unique, `enabled` is required, finds are
+NFD-unique, and scalar limits are checked before a session is created. Invalid
+wire shapes produce a typed `invalid_correction_rules` protocol error with the
+rule code, field, and index before any session or worker exists; there is no
+unreachable `invalid_rule` transcript-stage path. The settings boundary also
+validates the final immutable snapshot immediately before serialization,
+reporting a localized correction-settings error instead of sending a malformed
+frame.
+
+Persisted settings use a recoverable schema-12 policy. Schema 11 and earlier
+correction entries are validated independently: the first 100 valid entries
+remain active, malformed and overflow entries are omitted from the active
+snapshot, and their raw values, original indexes, field context, and count are
+retained as repair diagnostics. Active and invalid drafts are reconstructed in
+their original persisted order, so repairing an invalid middle rule preserves
+cascade order. Dictation starts with the valid rules and a localized warning
+such as “N stored rules could not be read and were skipped; repair settings”;
+the invalid entries do not brick sessions. Unknown top-level fields and newer
+schema fields are preserved. Malformed wire values received from the sidecar are
+not treated as this recoverable persisted state: they are rejected with the
+typed protocol error.
+
+The stage enforces utterance-wide absolute output (`1,000,000` characters),
+relative amplification (`8x`), normalized-input, indexed-search, and frame
+budgets. It precompiles and NFD-normalizes each rule once per session, reuses the
+normalized segment while a rule makes no change, and uses a first-scalar index
+plus a work budget so many long near-matches cannot monopolize the worker. Search
+work is charged before candidate comparison as candidate count × normalized find
+length plus bounded boundary costs, with checked arithmetic. The budget includes
+segment text, the duplicate joined transcript field, word metadata, stage history,
+and conservative JSON/frame overhead. A budget failure records `UserRules: Failed`,
+leaves the original transcript untouched, and keeps the complete ordered stage
+history. `write_event_frame` applies the symmetric `MAX_FRAME_PAYLOAD` cap; only a
+pre-write payload-cap failure is replaced by a small typed frame-size error event.
+JSON, stdout, and synthesis I/O failures propagate, including failures after a
+partial write, so the protocol is never desynchronized. A successful correction
+is reflected in both `transcript_ready.text` and the LLM input.
 
 ---
 
@@ -565,6 +615,9 @@ A representative slice of user-facing settings (full list and defaults in
 | `diarizationMaxSpeakers` | `null` | Optional positive cap on session-stable speaker labels; `null` detects automatically |
 | `dictationAnchor` | `at_cursor` | Where transcript text lands (`at_cursor` / `end_of_note`) |
 | `transcriptFormatting` | `smart` | How utterance boundaries render |
+| `personalCorrectionRules` | `[]` | Ordered local literal find/replace rules applied to final segments in the next session |
+| `personalCorrectionRuleDiagnostics` | `[]` | Repair metadata for persisted entries omitted from the active rule snapshot |
+| `personalCorrectionRuleOrder` | `[]` | Original persisted indexes for active and invalid correction entries |
 | `timestampsEnabled` | `false` | Render timestamps in the note |
 | `timestampClock` | `elapsed` | `elapsed` session time vs `wallclock` |
 | `timestampDensity` | `sparse` | `sparse` (interval), `every_utterance`, or `paragraph` |
@@ -575,6 +628,15 @@ A representative slice of user-facing settings (full list and defaults in
 | `sidecarRequestTimeoutSeconds` | `300` | Command/response timeout |
 | `sidecarStartupTimeoutSeconds` | `4` | Health-check timeout on launch |
 | `developerMode` | `false` | Verbose logging |
+
+Settings surfaces that need to mutate one part of the resolved snapshot use the
+serialized `SettingsMutationFacade` in `src/settings/settings-mutation.ts` and
+`SettingsStateStore` in `src/settings/settings-state.ts`. The correction modal
+and the LLM preset surfaces share that ownership boundary; the store reloads
+and merges correction rules from `data.json` before each mutation so a stale
+window cannot overwrite a cross-window correction-rule write. Mutations are
+applied to the latest snapshot, then persisted by the plugin's transactional
+`applySettings` path.
 
 ---
 

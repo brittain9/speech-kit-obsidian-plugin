@@ -22,7 +22,8 @@ use crate::protocol::{
 };
 use crate::session::{FinalizedUtterance, LiveUtterance};
 use crate::stages::{
-    StageContext, StageEnablement, StageProcessor, post_engine_processors, run_post_engine,
+    CompiledPersonalCorrectionRules, StageContext, StageEnablement, StageProcessor,
+    post_engine_processors, run_post_engine,
 };
 use crate::transcription::{
     AUTOMATIC_LANGUAGE_TAG, EngineTranscriptOutput, GpuConfig, Transcript, TranscriptionError,
@@ -33,6 +34,8 @@ use crate::transcription::{
 pub struct SessionMetadata {
     pub runtime_id: RuntimeId,
     pub family_id: ModelFamilyId,
+    pub correction_rules: Vec<crate::protocol::PersonalCorrectionRule>,
+    pub compiled_correction_rules: CompiledPersonalCorrectionRules,
     pub gpu_config: GpuConfig,
     pub detailed_timestamps_enabled: bool,
     pub diarization_enabled: bool,
@@ -501,6 +504,8 @@ fn worker_main(
                         let mut transcript = assemble_transcript(TranscriptAssembly {
                             utterance_id,
                             engine_output,
+                            correction_rules: &session.metadata.correction_rules,
+                            compiled_correction_rules: &session.metadata.compiled_correction_rules,
                             engine_duration_ms,
                             is_final: true,
                             language: &session.metadata.language,
@@ -661,6 +666,8 @@ fn stream_audio(
         assemble_transcript(TranscriptAssembly {
             utterance_id,
             engine_output,
+            correction_rules: &[],
+            compiled_correction_rules: &Vec::new(),
             engine_duration_ms,
             is_final: false,
             language: &session.metadata.language,
@@ -755,6 +762,8 @@ fn finalize_streaming_utterance(
         assemble_transcript(TranscriptAssembly {
             utterance_id,
             engine_output,
+            correction_rules: &session.metadata.correction_rules,
+            compiled_correction_rules: &session.metadata.compiled_correction_rules,
             engine_duration_ms,
             is_final: true,
             language: &session.metadata.language,
@@ -859,6 +868,8 @@ fn offset_transcript_revision(mut transcript: Transcript, offset: u32) -> Transc
 struct TranscriptAssembly<'a> {
     utterance_id: Uuid,
     engine_output: EngineTranscriptOutput,
+    correction_rules: &'a [crate::protocol::PersonalCorrectionRule],
+    compiled_correction_rules: &'a CompiledPersonalCorrectionRules,
     engine_duration_ms: u64,
     is_final: bool,
     language: &'a str,
@@ -1020,6 +1031,8 @@ fn assemble_transcript(input: TranscriptAssembly<'_>) -> Transcript {
     };
     let ctx = StageContext {
         context: input.context,
+        correction_rules: input.correction_rules,
+        compiled_correction_rules: Some(input.compiled_correction_rules),
         family_capabilities: input.family_capabilities,
         stage_enabled: input.stage_enablement,
         is_final: input.is_final,
@@ -1132,6 +1145,8 @@ mod tests {
         let metadata = SessionMetadata {
             runtime_id: RuntimeId::OnnxRuntime,
             family_id: ModelFamilyId::Moonshine,
+            correction_rules: Vec::new(),
+            compiled_correction_rules: Vec::new(),
             gpu_config: GpuConfig::default(),
             detailed_timestamps_enabled: false,
             diarization_enabled: false,
@@ -1480,6 +1495,8 @@ mod tests {
         SessionMetadata {
             runtime_id: RuntimeId::OnnxRuntime,
             family_id: ModelFamilyId::Moonshine,
+            correction_rules: Vec::new(),
+            compiled_correction_rules: Vec::new(),
             gpu_config: GpuConfig::default(),
             detailed_timestamps_enabled: false,
             diarization_enabled: false,
@@ -1794,6 +1811,8 @@ mod tests {
             metadata: SessionMetadata {
                 runtime_id: RuntimeId::OnnxRuntime,
                 family_id: ModelFamilyId::Moonshine,
+                correction_rules: Vec::new(),
+                compiled_correction_rules: Vec::new(),
                 gpu_config: GpuConfig::default(),
                 detailed_timestamps_enabled: false,
                 diarization_enabled: false,
@@ -2079,6 +2098,8 @@ mod tests {
             context: None,
             engine_duration_ms: 7,
             engine_output: engine_output(),
+            correction_rules: &[],
+            compiled_correction_rules: &Vec::new(),
             family_capabilities: &whisper_caps(),
             is_final: true,
             language: "en",
@@ -2118,6 +2139,8 @@ mod tests {
             context: None,
             engine_duration_ms: 7,
             engine_output: engine_output(),
+            correction_rules: &[],
+            compiled_correction_rules: &Vec::new(),
             family_capabilities: &whisper_caps(),
             is_final: true,
             language: "en",
@@ -2149,6 +2172,8 @@ mod tests {
             context: None,
             engine_duration_ms: 7,
             engine_output: engine_output(),
+            correction_rules: &[],
+            compiled_correction_rules: &Vec::new(),
             family_capabilities: &whisper_caps(),
             is_final: true,
             language: "en",
@@ -2185,6 +2210,8 @@ mod tests {
             context: None,
             engine_duration_ms: 7,
             engine_output: engine_output(),
+            correction_rules: &[],
+            compiled_correction_rules: &Vec::new(),
             family_capabilities: &whisper_caps(),
             is_final: true,
             language: "en",
@@ -2219,6 +2246,8 @@ mod tests {
             context: None,
             engine_duration_ms: 7,
             engine_output: engine_output(),
+            correction_rules: &[],
+            compiled_correction_rules: &Vec::new(),
             family_capabilities: &whisper_caps(),
             is_final: true,
             language: "en",
@@ -2248,6 +2277,8 @@ mod tests {
             context: None,
             engine_duration_ms: 7,
             engine_output: engine_output(),
+            correction_rules: &[],
+            compiled_correction_rules: &Vec::new(),
             family_capabilities: &whisper_caps(),
             is_final: true,
             language: "en",
@@ -2307,6 +2338,8 @@ mod tests {
                 context: None,
                 engine_duration_ms: 7,
                 engine_output,
+                correction_rules: &[],
+                compiled_correction_rules: &Vec::new(),
                 family_capabilities: &whisper_caps(),
                 is_final: true,
                 language: "auto",

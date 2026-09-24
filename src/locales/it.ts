@@ -687,6 +687,13 @@ export const it = {
     'Convalida il file del modello esterno prima di dettare.',
   'sidecarError.audio_too_long':
     'La clip audio supera la durata massima prevista per questo motore.',
+
+  'sidecarError.event_frame_too_large':
+    'Il motore vocale ha prodotto un evento che supera il limite sicuro del frame.',
+  'sidecarError.invalid_session_id': 'L’ID della sessione è troppo lungo.',
+  'sidecarError.invalid_correction_rules':
+    'Le regole di correzione personali non sono valide. Correggile prima di iniziare la dettatura.',
+
   'sidecarError.engine_inference_failed': 'Trascrizione locale non riuscita.',
   'sidecarError.internal_error':
     'Si è verificato un errore interno del motore di riconoscimento vocale.',
@@ -861,4 +868,67 @@ export const it = {
     'Traduzione locale rapida con piccoli pacchetti linguistici su richiesta usando i modelli pubblicati in Firefox.',
   'catalog.family.firefox_translations.summary':
     'Traduce localmente il testo delle note con il motore compatto Bergamot e i modelli Firefox.',
+  'notice.personalCorrectionRulesSnapshot':
+    'Questa sessione usa {enabled} di {total} regole di correzione personali. Le modifiche verranno applicate alla prossima sessione.',
+  'notice.personalCorrectionRulesInvalid':
+    'Le impostazioni delle correzioni personali non sono valide: {reason} Correggile prima di iniziare la dettatura.',
+
+  'notice.personalCorrectionRulesSkipped':
+    '{count} regole di correzione personali memorizzate non sono state lette e sono state ignorate. Correggile nelle impostazioni.',
+  'settings.corrections.name': 'Regole di correzione personali',
+  'settings.corrections.desc':
+    'Applica correzioni letterali locali e ordinate dopo la trascrizione. Le regole si applicano ai segmenti finali della prossima sessione; non sono vocabolario ASR né hotword.',
+  'settings.corrections.manage': 'Gestisci regole di correzione',
+  'settings.corrections.modal.title': 'Regole di correzione personali',
+  'settings.corrections.modal.intro':
+    'Sono correzioni locali deterministiche successive alla trascrizione, non vocabolario per il riconoscimento vocale. Le regole vengono applicate in ordine a ogni segmento finale, prima della pulizia LLM opzionale. Le modifiche verranno applicate alla prossima sessione di dettatura.',
+  'settings.corrections.modal.preview': 'Anteprima',
+  'settings.corrections.modal.previewInput': 'Trascrizione di esempio',
+  'settings.corrections.modal.previewOutput': 'Trascrizione corretta',
+  'settings.corrections.modal.add': 'Aggiungi regola',
+  'settings.corrections.modal.empty': 'Nessuna regola di correzione.',
+  'settings.corrections.modal.countsOne': '{enabled} attive · {total} regola',
+  'settings.corrections.modal.countsOther': '{enabled} attive · {total} regole',
+  'settings.corrections.modal.previewSummaryOne': '{replacements} sostituzione da {rules} regola',
+  'settings.corrections.modal.previewSummaryOther': '{replacements} sostituzioni da {rules} regole',
+  'settings.corrections.modal.find': 'Trova',
+  'settings.corrections.modal.replace': 'Sostituisci con',
+  'settings.corrections.modal.enabled': 'Attiva',
+  'settings.corrections.modal.moveUp': 'Sposta su',
+  'settings.corrections.modal.moveDown': 'Sposta giù',
+  'settings.corrections.modal.delete': 'Elimina regola',
+  'settings.corrections.modal.saving': 'Salvataggio…',
+  'settings.corrections.modal.saved': 'Salvato',
+  'settings.corrections.modal.unsaved': 'Modifiche non salvate',
+  'settings.corrections.modal.retry': 'Salvataggio non riuscito. Riprova.',
+  'settings.corrections.modal.conflict':
+    'Le regole di correzione sono cambiate altrove. Riapri questa finestra prima di salvare.',
+  'settings.corrections.field.find': 'Trova',
+  'settings.corrections.field.enabled': 'Attiva',
+  'settings.corrections.field.id': 'ID regola',
+  'settings.corrections.field.replace': 'Sostituisci con',
+  'settings.corrections.field.rules': 'Regole',
+  'settings.corrections.validation.tooMany': 'Aggiungi al massimo {max} regole.',
+  'settings.corrections.validation.blankId': 'Ogni regola richiede un ID.',
+  'settings.corrections.validation.invalidRule':
+    'Questa regola di correzione non è un oggetto regola leggibile.',
+  'settings.corrections.validation.invalidId': "L'ID della regola deve essere testo.",
+  'settings.corrections.validation.invalidEnabled': 'Attivato deve essere sì o no.',
+  'settings.corrections.validation.invalidFind': 'Il testo da trovare deve essere testo.',
+  'settings.corrections.validation.duplicateId': 'Gli ID delle regole devono essere univoci.',
+  'settings.corrections.validation.blankFind': 'Il testo da trovare non può essere vuoto.',
+  'settings.corrections.validation.blankReplace': 'Il testo sostitutivo non può essere vuoto.',
+  'settings.corrections.validation.invalidReplace': 'Il testo sostitutivo deve essere testo.',
+  'settings.corrections.validation.loneSurrogate':
+    'Il testo contiene un surrogato Unicode non valido e non può essere salvato.',
+  'settings.corrections.validation.context': 'Regola {index}, {field}: {reason}',
+  'settings.corrections.validation.oversized': '{field} non può superare {max} caratteri.',
+  'settings.corrections.validation.duplicateFind':
+    'Il testo da trovare deve essere univoco; le regole successive non possono puntare allo stesso testo.',
+  'settings.corrections.validation.absoluteAmplification':
+    'La correzione supererebbe il limite di sicurezza di {max} caratteri ed è stata rifiutata.',
+  'settings.corrections.validation.relativeAmplification':
+    'La correzione amplierebbe il testo di oltre {max}× ed è stata rifiutata.',
+  'settings.corrections.validation.workBudget':
+    'La ricerca delle correzioni supera il limite di sicurezza di {max} passaggi ed è stata rifiutata.',
 } satisfies TranslationCatalog;

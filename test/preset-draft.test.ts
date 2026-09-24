@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { getLlmBuiltinPreset } from '../src/llm/presets';
-import type { LlmPresetState } from '../src/settings/llm-preset-state';
 import {
   LLM_USER_PRESET_MAX_COUNT,
   LLM_USER_PRESET_MAX_LABEL_CHARS,
 } from '../src/settings/plugin-settings';
+import type { LlmPresetState } from '../src/settings/settings-state';
 import {
   applyPresetDraftSave,
   draftFromPreset,

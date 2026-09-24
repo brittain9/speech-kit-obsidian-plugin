@@ -691,6 +691,11 @@ export const de = {
   'models.current.validateBeforeDictating':
     'Validieren Sie die externe Modelldatei, bevor Sie diktieren.',
   'sidecarError.audio_too_long': 'Der Audioclip überschreitet die maximale Dauer für diese Engine.',
+  'sidecarError.event_frame_too_large':
+    'Das Sprachmodul hat ein Ereignis erzeugt, das die sichere Frame-Grenze überschreitet.',
+  'sidecarError.invalid_session_id': 'Die Sitzungs-ID ist zu lang.',
+  'sidecarError.invalid_correction_rules':
+    'Die persönlichen Korrekturregeln sind ungültig. Korrigiere sie vor dem Start des Diktierens.',
   'sidecarError.engine_inference_failed': 'Lokale Transkription fehlgeschlagen.',
   'sidecarError.internal_error': 'Die Sprach-Engine hat einen internen Fehler festgestellt.',
   'sidecarError.invalid_audio_buffer':
@@ -862,4 +867,67 @@ export const de = {
     'Schnelle lokale Übersetzung mit kleinen Sprachpaketen auf Abruf und in Firefox veröffentlichten Modellen.',
   'catalog.family.firefox_translations.summary':
     'Übersetzt Notiztext lokal mit der kompakten Bergamot-Engine und Firefox-Modellen.',
+  'notice.personalCorrectionRulesSnapshot':
+    'Diese Sitzung verwendet {enabled} von {total} persönlichen Korrekturregeln. Änderungen gelten ab der nächsten Sitzung.',
+  'notice.personalCorrectionRulesInvalid':
+    'Persönliche Korrektureinstellungen sind ungültig: {reason} Bitte korrigiere sie vor dem Start des Diktierens.',
+
+  'notice.personalCorrectionRulesSkipped':
+    '{count} gespeicherte persönliche Korrekturregeln konnten nicht gelesen werden und wurden übersprungen. Repariere sie in den Einstellungen.',
+  'settings.corrections.name': 'Persönliche Korrekturregeln',
+  'settings.corrections.desc':
+    'Lokale, geordnete Korrekturen nach der Transkription. Regeln gelten für endgültige Segmente in der nächsten Sitzung; sie sind kein ASR-Vokabular und keine Hotwords.',
+  'settings.corrections.manage': 'Korrekturregeln verwalten',
+  'settings.corrections.modal.title': 'Persönliche Korrekturregeln',
+  'settings.corrections.modal.intro':
+    'Dies sind deterministische lokale Korrekturen nach der Transkription, kein Vokabular der Spracherkennung. Regeln laufen in Reihenfolge auf jedes endgültige Transkriptsegment, vor der optionalen LLM-Bereinigung. Änderungen gelten ab der nächsten Diktiersitzung.',
+  'settings.corrections.modal.preview': 'Vorschau',
+  'settings.corrections.modal.previewInput': 'Beispieltranskript',
+  'settings.corrections.modal.previewOutput': 'Korrigiertes Transkript',
+  'settings.corrections.modal.add': 'Regel hinzufügen',
+  'settings.corrections.modal.empty': 'Noch keine Korrekturregeln.',
+  'settings.corrections.modal.countsOne': '{enabled} aktiviert · {total} Regel',
+  'settings.corrections.modal.countsOther': '{enabled} aktiviert · {total} Regeln',
+  'settings.corrections.modal.previewSummaryOne': '{replacements} Ersetzung aus {rules} Regel',
+  'settings.corrections.modal.previewSummaryOther': '{replacements} Ersetzungen aus {rules} Regeln',
+  'settings.corrections.modal.find': 'Suchen',
+  'settings.corrections.modal.replace': 'Ersetzen mit',
+  'settings.corrections.modal.enabled': 'Aktiviert',
+  'settings.corrections.modal.moveUp': 'Nach oben',
+  'settings.corrections.modal.moveDown': 'Nach unten',
+  'settings.corrections.modal.delete': 'Regel löschen',
+  'settings.corrections.modal.saving': 'Speichern...',
+  'settings.corrections.modal.saved': 'Gespeichert',
+  'settings.corrections.modal.unsaved': 'Nicht gespeicherte Änderungen',
+  'settings.corrections.modal.retry': 'Speichern fehlgeschlagen. Erneut versuchen.',
+  'settings.corrections.modal.conflict':
+    'Die Korrekturregeln wurden an anderer Stelle geändert. Öffne dieses Fenster erneut, bevor du speicherst.',
+  'settings.corrections.field.find': 'Suchen',
+  'settings.corrections.field.enabled': 'Aktiviert',
+  'settings.corrections.field.id': 'Regel-ID',
+  'settings.corrections.field.replace': 'Ersetzen mit',
+  'settings.corrections.field.rules': 'Regeln',
+  'settings.corrections.validation.tooMany': 'Füge höchstens {max} Regeln hinzu.',
+  'settings.corrections.validation.blankId': 'Jede Regel benötigt eine ID.',
+  'settings.corrections.validation.invalidRule':
+    'Diese Korrekturregel ist kein lesbares Regobjekt.',
+  'settings.corrections.validation.invalidId': 'Die Regel-ID muss Text sein.',
+  'settings.corrections.validation.invalidEnabled': 'Eingeschaltet muss ein Ja/Nein-Wert sein.',
+  'settings.corrections.validation.invalidFind': 'Der Suchtext muss Text sein.',
+  'settings.corrections.validation.duplicateId': 'Regel-IDs müssen eindeutig sein.',
+  'settings.corrections.validation.blankFind': 'Der Suchtext darf nicht leer sein.',
+  'settings.corrections.validation.blankReplace': 'Der Ersatztext darf nicht leer sein.',
+  'settings.corrections.validation.invalidReplace': 'Der Ersatztext muss Text sein.',
+  'settings.corrections.validation.loneSurrogate':
+    'Der Text enthält ein ungültiges Unicode-Ersatzzeichen und kann nicht gespeichert werden.',
+  'settings.corrections.validation.context': 'Regel {index}, {field}: {reason}',
+  'settings.corrections.validation.oversized': '{field} darf höchstens {max} Zeichen lang sein.',
+  'settings.corrections.validation.duplicateFind':
+    'Der Suchtext muss eindeutig sein; spätere Regeln dürfen nicht denselben Text verwenden.',
+  'settings.corrections.validation.absoluteAmplification':
+    'Die Korrektur würde das Sicherheitslimit von {max} Zeichen überschreiten und wurde abgelehnt.',
+  'settings.corrections.validation.relativeAmplification':
+    'Die Korrektur würde den Text um mehr als {max}× vergrößern und wurde abgelehnt.',
+  'settings.corrections.validation.workBudget':
+    'Die Korrektursuche überschreitet das Sicherheitslimit von {max} Schritten und wurde abgelehnt.',
 } as const satisfies TranslationCatalog;

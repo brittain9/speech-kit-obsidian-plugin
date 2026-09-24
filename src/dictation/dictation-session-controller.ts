@@ -21,6 +21,10 @@ import { type LlmCleanupFailure, type LlmProviderId, ProviderError } from '../ll
 import type { LlmRouter } from '../llm/router';
 import type { Session, SessionAcceptResult } from '../session/session';
 import type { StageId, StageOutcome, TranscriptRevision } from '../session/session-journal';
+import {
+  PersonalCorrectionRuleError,
+  validatePersonalCorrectionRules,
+} from '../settings/personal-correction-rules';
 import type { PluginSettings, SmartParagraphPauseSettings } from '../settings/plugin-settings';
 import { formatErrorMessage } from '../shared/format-utils';
 import { t } from '../shared/i18n';
@@ -31,6 +35,7 @@ import type {
   ContextRequestEvent,
   ContextWindow,
   ContextWindowSource,
+  CorrectionRule,
   QueueBackpressureTier,
   SessionState,
   SidecarEvent,
@@ -79,6 +84,7 @@ interface ActiveSessionSnapshot {
   diarizationEnabled: PluginSettings['diarizationEnabled'];
   diarizationMaxSpeakers: PluginSettings['diarizationMaxSpeakers'];
   dictationLanguage: PluginSettings['dictationLanguage'];
+  correctionRules: CorrectionRule[];
   includeSystemAudio: PluginSettings['includeSystemAudio'];
   dictationAnchor: PluginSettings['dictationAnchor'];
   listeningMode: PluginSettings['listeningMode'];
@@ -402,11 +408,42 @@ export class DictationSessionController {
     if (startRevision !== this.startRevision) return;
 
     const sessionId = createSessionId();
-    const snapshot = createSessionSnapshot(
-      settings,
-      settings.selectedModel,
-      this.dependencies.createLlmRouter(settings),
-    );
+    let snapshot: ActiveSessionSnapshot;
+    try {
+      snapshot = createSessionSnapshot(
+        settings,
+        settings.selectedModel,
+        this.dependencies.createLlmRouter(settings),
+      );
+    } catch (error) {
+      if (!(error instanceof PersonalCorrectionRuleError)) throw error;
+      this.dependencies.feedback.show({
+        intent: 'error',
+        key: 'personal-correction-rules-invalid',
+        message: t('notice.personalCorrectionRulesInvalid', { reason: error.message }),
+      });
+      this.applyUiState('idle');
+      return;
+    }
+    if (settings.personalCorrectionRuleDiagnostics.length > 0) {
+      this.dependencies.feedback.show({
+        intent: 'warning',
+        key: 'personal-correction-rules-skipped',
+        message: t('notice.personalCorrectionRulesSkipped', {
+          count: settings.personalCorrectionRuleDiagnostics.length,
+        }),
+      });
+    }
+    if (snapshot.correctionRules.length > 0) {
+      this.dependencies.feedback.show({
+        intent: 'information',
+        key: 'personal-correction-rules-snapshot',
+        message: t('notice.personalCorrectionRulesSnapshot', {
+          enabled: snapshot.correctionRules.filter((rule) => rule.enabled).length,
+          total: snapshot.correctionRules.length,
+        }),
+      });
+    }
     let session: ControllerSession;
 
     try {
@@ -466,8 +503,17 @@ export class DictationSessionController {
     this.dependencies.logger?.debug('session', `starting dictation session ${sessionId}`);
 
     try {
+      // Validate the immutable snapshot immediately before serialization. This
+      // catches malformed persisted settings even if another settings writer
+      // changed the live object after the initial snapshot was created.
+      const correctionValidation = validatePersonalCorrectionRules(snapshot.correctionRules);
+      const firstCorrectionError = correctionValidation.errors[0];
+      if (firstCorrectionError !== undefined) {
+        throw new PersonalCorrectionRuleError(firstCorrectionError);
+      }
       await this.dependencies.sidecarConnection.startSession({
         accelerationPreference: snapshot.accelerationPreference,
+        correctionRules: snapshot.correctionRules,
         // Engine segment timing is always present when the model provides it.
         // This legacy protocol flag only enables dense word alignment, which no
         // supported timestamp frequency renders.
@@ -526,6 +572,15 @@ export class DictationSessionController {
         await this.dependencies.captureStream.stop();
       }
     } catch (error) {
+      if (error instanceof PersonalCorrectionRuleError) {
+        this.dependencies.feedback.show({
+          intent: 'error',
+          key: 'personal-correction-rules-invalid',
+          message: t('notice.personalCorrectionRulesInvalid', { reason: error.message }),
+        });
+        await this.cleanupFailedStart(sessionId, error);
+        return;
+      }
       await this.cleanupFailedStart(sessionId, error);
     }
   }
@@ -1711,6 +1766,12 @@ function createSessionSnapshot(
 
   return {
     accelerationPreference: settings.accelerationPreference,
+    correctionRules: settings.personalCorrectionRules.map(({ enabled, find, id, replace }) => ({
+      enabled,
+      find,
+      id,
+      replace,
+    })),
     diarizationEnabled: settings.diarizationEnabled,
     diarizationMaxSpeakers: settings.diarizationMaxSpeakers,
     dictationLanguage: settings.dictationLanguage,

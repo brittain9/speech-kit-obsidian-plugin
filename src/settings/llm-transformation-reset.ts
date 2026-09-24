@@ -1,12 +1,12 @@
-import type { PluginSettingsMutation } from './llm-preset-state';
 import {
   DEFAULT_LLM_ACTIVE_PRESET_REF,
   type PluginSettings,
   resetLlmPostprocessDefaults,
 } from './plugin-settings';
+import type { SettingsMutation } from './settings-mutation';
 
 interface LlmTransformationResetDependencies {
-  mutateSettings: (mutation: PluginSettingsMutation) => Promise<void>;
+  mutateSettings: (mutation: SettingsMutation) => Promise<void>;
 }
 
 export async function restoreLlmTransformationDefaults(

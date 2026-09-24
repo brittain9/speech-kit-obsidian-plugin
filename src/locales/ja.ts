@@ -679,6 +679,11 @@ export const ja = {
   'models.current.validateBeforeDictating':
     'ディクテーションを行う前に、外部モデル ファイルを検証してください。',
   'sidecarError.audio_too_long': 'オーディオ クリップがこのエンジンの最大継続時間を超えています。',
+  'sidecarError.event_frame_too_large':
+    '音声エンジンが安全なフレーム上限を超えるイベントを生成しました。',
+  'sidecarError.invalid_session_id': 'セッションIDが長すぎます。',
+  'sidecarError.invalid_correction_rules':
+    '個人訂正ルールが無効です。音声入力を開始する前に修正してください。',
   'sidecarError.engine_inference_failed': 'ローカルでの転写に失敗しました。',
   'sidecarError.internal_error': '音声エンジンで内部エラーが発生しました。',
   'sidecarError.invalid_audio_buffer':
@@ -846,4 +851,69 @@ export const ja = {
     'Firefox で公開されたモデルを使う、必要な言語だけをダウンロードする高速なローカル翻訳です。',
   'catalog.family.firefox_translations.summary':
     'コンパクトな Bergamot エンジンと Firefox モデルでノートのテキストをローカル翻訳します。',
+  'notice.personalCorrectionRulesSnapshot':
+    'このセッションでは、{total} 件中 {enabled} 件の個人訂正ルールを使用します。変更は次のセッションから適用されます。',
+  'notice.personalCorrectionRulesInvalid':
+    '個人訂正の設定が無効です: {reason} 音声入力を開始する前に修正してください。',
+
+  'notice.personalCorrectionRulesSkipped':
+    '保存された個人訂正ルール{count}件を読み取れなかったためスキップしました。設定で修復してください。',
+  'settings.corrections.name': '個人訂正ルール',
+  'settings.corrections.desc':
+    '文字起こし後に、ローカルの順序付きリテラル置換を適用します。ルールは次のセッションの最終セグメントに適用され、ASR の語彙やホットワードではありません。',
+  'settings.corrections.manage': '訂正ルールを管理',
+  'settings.corrections.modal.title': '個人訂正ルール',
+  'settings.corrections.modal.intro':
+    'これは音声認識の語彙ではなく、文字起こし後の決定的なローカル訂正です。ルールは任意の LLM クリーンアップより前に、各最終文字起こしセグメントへ順番に適用されます。変更は次の文字起こしセッションから適用されます。',
+  'settings.corrections.modal.preview': 'プレビュー',
+  'settings.corrections.modal.previewInput': '文字起こしの例',
+  'settings.corrections.modal.previewOutput': '訂正後の文字起こし',
+  'settings.corrections.modal.add': 'ルールを追加',
+  'settings.corrections.modal.empty': '訂正ルールはまだありません。',
+  'settings.corrections.modal.countsOne': '{enabled} 件有効 · {total} 件のルール',
+  'settings.corrections.modal.countsOther': '{enabled} 件有効 · {total} 件のルール',
+  'settings.corrections.modal.previewSummaryOne':
+    '{rules} 件のルールから {replacements} 件の置換。',
+  'settings.corrections.modal.previewSummaryOther':
+    '{rules} 件のルールから {replacements} 件の置換。',
+  'settings.corrections.modal.find': '検索文字列',
+  'settings.corrections.modal.replace': '置換文字列',
+  'settings.corrections.modal.enabled': '有効',
+  'settings.corrections.modal.moveUp': '上へ移動',
+  'settings.corrections.modal.moveDown': '下へ移動',
+  'settings.corrections.modal.delete': 'ルールを削除',
+  'settings.corrections.modal.saving': '保存中…',
+  'settings.corrections.modal.saved': '保存しました',
+  'settings.corrections.modal.unsaved': '未保存の変更',
+  'settings.corrections.modal.retry': '保存できませんでした。再試行してください。',
+  'settings.corrections.modal.conflict':
+    '訂正ルールが別の場所で変更されました。保存する前にこのダイアログを開き直してください。',
+  'settings.corrections.field.find': '検索文字列',
+  'settings.corrections.field.enabled': '有効',
+  'settings.corrections.field.id': 'ルール ID',
+  'settings.corrections.field.replace': '置換文字列',
+  'settings.corrections.field.rules': 'ルール',
+  'settings.corrections.validation.tooMany': 'ルールは最大 {max} 件まで追加できます。',
+  'settings.corrections.validation.blankId': '各ルールには ID が必要です。',
+  'settings.corrections.validation.invalidRule':
+    'この訂正ルールは読み取り可能なルールオブジェクトではありません。',
+  'settings.corrections.validation.invalidId': 'ルール ID はテキストである必要があります。',
+  'settings.corrections.validation.invalidEnabled': '有効はオンまたはオフである必要があります。',
+  'settings.corrections.validation.invalidFind': '検索文字列はテキストである必要があります。',
+  'settings.corrections.validation.duplicateId': 'ルール ID は一意である必要があります。',
+  'settings.corrections.validation.blankFind': '検索文字列を空にすることはできません。',
+  'settings.corrections.validation.blankReplace': '置換文字列を空にすることはできません。',
+  'settings.corrections.validation.invalidReplace': '置換文字列はテキストである必要があります。',
+  'settings.corrections.validation.loneSurrogate':
+    'テキストに無効な Unicode サロゲートが含まれているため保存できません。',
+  'settings.corrections.validation.context': 'ルール {index}、{field}: {reason}',
+  'settings.corrections.validation.oversized': '{field} は {max} 文字以内で入力してください。',
+  'settings.corrections.validation.duplicateFind':
+    '検索文字列は一意である必要があります。後のルールで同じ文字列を指定できません。',
+  'settings.corrections.validation.absoluteAmplification':
+    '修正結果が {max} 文字の安全制限を超えるため拒否されました。',
+  'settings.corrections.validation.relativeAmplification':
+    '修正によりテキストが {max} 倍超に拡大するため拒否されました。',
+  'settings.corrections.validation.workBudget':
+    '訂正検索が{max}ステップの安全制限を超えたため拒否されました。',
 } as const satisfies TranslationCatalog;

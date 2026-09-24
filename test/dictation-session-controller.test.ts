@@ -161,6 +161,77 @@ class FakeAudioLevelMeter {
 }
 
 describe('DictationSessionController', () => {
+  it('snapshots correction rules at session start and announces the snapshot', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const feedback = { show: vi.fn() };
+    const settings = createSettings({
+      personalCorrectionRules: [
+        { enabled: true, find: 'speech kit', id: 'rule-1', replace: 'Speech Kit' },
+        { enabled: false, find: 'old', id: 'rule-2', replace: 'new' },
+      ],
+      selectedModel: createExternalModelSelection(),
+    });
+    const controller = createController({
+      feedback,
+      getSettings: () => settings,
+      sidecarConnection,
+    });
+
+    await controller.startDictation();
+
+    expect(sidecarConnection.startSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        correctionRules: [
+          { enabled: true, find: 'speech kit', id: 'rule-1', replace: 'Speech Kit' },
+          { enabled: false, find: 'old', id: 'rule-2', replace: 'new' },
+        ],
+      }),
+    );
+    expect(feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: 'personal-correction-rules-snapshot',
+        message: expect.stringContaining('1'),
+      }),
+    );
+
+    await controller.stopDictation();
+  });
+
+  it('skips malformed persisted correction settings and starts with a warning', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const feedback = { show: vi.fn() };
+    const settings = createSettings({
+      personalCorrectionRuleDiagnostics: [
+        {
+          code: 'blank_find',
+          field: 'find',
+          index: 0,
+          message: 'Find text cannot be blank.',
+          raw: { enabled: true, find: ' ', id: 'blank', replace: 'value' },
+        },
+      ],
+      selectedModel: createExternalModelSelection(),
+    });
+    const controller = createController({
+      feedback,
+      getSettings: () => settings,
+      sidecarConnection,
+    });
+
+    await controller.startDictation();
+
+    expect(sidecarConnection.startSession).toHaveBeenCalledWith(
+      expect.objectContaining({ correctionRules: [] }),
+    );
+    expect(feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: 'warning',
+        key: 'personal-correction-rules-skipped',
+        message: expect.stringContaining('1'),
+      }),
+    );
+  });
+
   it('refuses a start synchronously while sidecar maintenance is active', async () => {
     const sidecarLifecycleGate = new SidecarLifecycleGate();
     const mutation = sidecarLifecycleGate.acquireMutation();
@@ -247,6 +318,37 @@ describe('DictationSessionController', () => {
     sidecarConnection.emit(transcriptReady(sessionId, 'raw transcript'));
     await vi.waitFor(() => expect(sessions[0]?.acceptedTexts).toEqual(['raw transcript']));
     expect(cleanup).not.toHaveBeenCalled();
+  });
+
+  it('feeds the corrected native transcript text into the LLM input', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const sessions: FakeSession[] = [];
+    const cleanup = vi.fn(async (options) => ({
+      model: 'model',
+      providerId: 'ollama' as const,
+      text: `clean: ${options.userMessage}`,
+    }));
+    const controller = createController({
+      createSession: (session) => sessions.push(session),
+      getSettings: () =>
+        createSettings({
+          llmFeaturesEnabled: true,
+          llmPostprocessMode: 'per_utterance',
+          llmPostprocessSkipMinWords: 0,
+          selectedModel: createExternalModelSelection(),
+        }),
+      llmRouter: createFakeLlmRouter({ cleanup }),
+      sidecarConnection,
+    });
+
+    await controller.startDictation();
+    const sessionId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId ?? '';
+    sidecarConnection.emit(transcriptReady(sessionId, 'Speech Kit'));
+    await vi.waitFor(() =>
+      expect(cleanup).toHaveBeenCalledWith(
+        expect.objectContaining({ userMessage: expect.stringContaining('Speech Kit') }),
+      ),
+    );
   });
 
   it('holds speech through dictation drain and releases it on terminal cleanup', async () => {

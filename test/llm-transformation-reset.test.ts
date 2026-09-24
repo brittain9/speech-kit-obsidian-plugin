@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-
-import { LlmPresetStateStore } from '../src/settings/llm-preset-state';
 import { restoreLlmTransformationDefaults } from '../src/settings/llm-transformation-reset';
 import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
+import { SettingsStateStore } from '../src/settings/settings-state';
 import { createUserPreset } from './fixtures/llm';
 
 function createStore(
@@ -14,7 +13,7 @@ function createStore(
     await persist(settings);
     current = settings;
   });
-  const store = new LlmPresetStateStore({
+  const store = new SettingsStateStore({
     commit,
     getSettings: () => current,
     loadData: async () => current,

@@ -32,6 +32,7 @@ import { renderHardwareAccelerationSetting } from './hardware-acceleration-setti
 import { renderMicrophonePicker } from './microphone-picker';
 import { renderModelSection } from './model-settings-section';
 import { openFilteredHotkeySettings } from './open-hotkey-settings';
+import { PersonalCorrectionRulesModal } from './personal-correction-rules-modal';
 import {
   PHRASE_FINALIZATION_TOOLTIP,
   phraseFinalizationDescription,
@@ -58,6 +59,7 @@ import {
   type DropdownOption,
   type SettingAccess,
 } from './setting-helpers';
+import type { SettingsMutation } from './settings-mutation';
 import { mountSettingsSidecarSurfaces } from './settings-sidecar-surfaces';
 import { SettingsTabLifecycle } from './settings-tab-lifecycle';
 import {
@@ -87,6 +89,7 @@ interface SettingsTabDependencies {
   resetLlmTransformation: () => Promise<void>;
   restartSidecar: () => Promise<void>;
   saveSettings: (settings: PluginSettings) => Promise<void>;
+  mutateSettings: (mutation: SettingsMutation) => Promise<void>;
   sidecarConnection: Pick<SidecarConnection, 'probeSystemAudio' | 'shutdown'>;
   sidecarInstallManager: SidecarInstallManager;
   sidecarLifecycleGate: SidecarLifecycleGate;
@@ -364,6 +367,18 @@ export class LocalSttSettingTab extends PluginSettingTab {
     renderAutomaticCopyFinalizedUtterancesSetting(outputCard, this.access);
 
     this.renderTranscriptFormattingSetting(outputCard);
+
+    new Setting(outputCard)
+      .setName(t('settings.corrections.name'))
+      .setDesc(t('settings.corrections.desc'))
+      .addButton((button) => {
+        button.setButtonText(t('settings.corrections.manage')).onClick(() => {
+          new PersonalCorrectionRulesModal(this.app, {
+            getSettings: () => this.dependencies.getSettings(),
+            mutateSettings: this.dependencies.mutateSettings,
+          }).open();
+        });
+      });
 
     const diarizationSetting = addToggleSetting(outputCard, this.access, {
       name: t('settings.speakerLabels.name'),

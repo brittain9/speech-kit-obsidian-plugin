@@ -1,8 +1,10 @@
+use std::collections::HashSet;
 use std::fmt;
 use std::io::{ErrorKind, Read, Write};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde::{Deserialize, Serialize};
+use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 
 use crate::audio_metadata::VoiceActivityEvidence;
@@ -21,7 +23,8 @@ const JSON_FRAME_KIND: u8 = 0x01;
 const AUDIO_FRAME_KIND: u8 = 0x02;
 const SYNTHESIS_AUDIO_FRAME_KIND: u8 = 0x03;
 const FRAME_HEADER_LENGTH: usize = 5;
-const MAX_FRAME_PAYLOAD: usize = 16 * 1024 * 1024;
+pub const MAX_SESSION_ID_CHARS: usize = 128;
+pub const MAX_FRAME_PAYLOAD: usize = 16 * 1024 * 1024;
 const SESSION_ID_BYTES: usize = 16;
 const SYNTHESIS_AUDIO_HEADER_BYTES: usize = 8;
 
@@ -41,6 +44,29 @@ impl fmt::Display for OversizedFramePayload {
 }
 
 impl std::error::Error for OversizedFramePayload {}
+
+#[derive(Debug)]
+struct OutboundFramePayloadTooLarge {
+    payload_length: usize,
+}
+
+impl fmt::Display for OutboundFramePayloadTooLarge {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "frame payload exceeds maximum supported size: {} > {}",
+            self.payload_length, MAX_FRAME_PAYLOAD
+        )
+    }
+}
+
+impl std::error::Error for OutboundFramePayloadTooLarge {}
+
+pub fn is_outbound_frame_payload_too_large(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<OutboundFramePayloadTooLarge>()
+        .is_some()
+}
 
 pub const PCM_SAMPLE_RATE_HZ: usize = 16_000;
 pub const PCM_CHANNEL_COUNT: usize = 1;
@@ -187,6 +213,90 @@ pub struct TranscriptWord {
     pub timestamp_source: TimestampSource,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PersonalCorrectionRuleValidity {
+    pub find: bool,
+    pub id: bool,
+    pub object: bool,
+    pub replace: bool,
+}
+
+impl Default for PersonalCorrectionRuleValidity {
+    fn default() -> Self {
+        Self {
+            find: false,
+            id: false,
+            object: true,
+            replace: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalCorrectionRule {
+    /// `enabled` is represented as an option only so a missing value can be
+    /// rejected by the typed start-session protocol error instead of being
+    /// silently defaulted on the wire.
+    pub enabled: Option<bool>,
+    pub find: String,
+    pub id: String,
+    pub replace: String,
+    #[serde(skip)]
+    pub validity: PersonalCorrectionRuleValidity,
+}
+
+impl<'de> Deserialize<'de> for PersonalCorrectionRule {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value =
+            serde_json::Value::deserialize(deserializer).map_err(serde::de::Error::custom)?;
+        let object = value.as_object().cloned();
+        let Some(object) = object else {
+            return Ok(Self {
+                enabled: None,
+                find: String::new(),
+                id: String::new(),
+                replace: String::new(),
+                validity: PersonalCorrectionRuleValidity {
+                    find: true,
+                    id: true,
+                    object: false,
+                    replace: true,
+                },
+            });
+        };
+        Ok(Self {
+            enabled: object.get("enabled").and_then(serde_json::Value::as_bool),
+            find: object
+                .get("find")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            id: object
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            replace: object
+                .get("replace")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            validity: PersonalCorrectionRuleValidity {
+                find: object.get("find").is_some_and(|value| !value.is_string()),
+                id: object.get("id").is_some_and(|value| !value.is_string()),
+                object: true,
+                replace: object
+                    .get("replace")
+                    .is_some_and(|value| !value.is_string()),
+            },
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TimestampSource {
@@ -302,6 +412,8 @@ pub enum Command {
     StartSession {
         #[serde(default)]
         acceleration_preference: AccelerationPreference,
+        #[serde(default, deserialize_with = "deserialize_correction_rules")]
+        correction_rules: Vec<PersonalCorrectionRule>,
         #[serde(default)]
         detailed_timestamps_enabled: bool,
         #[serde(default)]
@@ -627,6 +739,12 @@ impl CommandEnvelope {
 }
 
 fn validate_command(command: Command) -> Result<Command> {
+    if let Command::StartSession { session_id, .. } = &command {
+        ensure!(
+            session_id.chars().count() <= MAX_SESSION_ID_CHARS,
+            "session id exceeds {MAX_SESSION_ID_CHARS} characters"
+        );
+    }
     if let Command::StartTranslation {
         style_instruction: Some(style_instruction),
         ..
@@ -638,6 +756,185 @@ fn validate_command(command: Command) -> Result<Command> {
         );
     }
     Ok(command)
+}
+
+fn deserialize_correction_rules<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Vec<PersonalCorrectionRule>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer).map_err(serde::de::Error::custom)?;
+    let values = match value {
+        serde_json::Value::Array(values) => values,
+        _ => vec![serde_json::Value::Null],
+    };
+    values
+        .into_iter()
+        .map(|value| serde_json::from_value(value).map_err(serde::de::Error::custom))
+        .collect()
+}
+
+pub const MAX_CORRECTION_RULE_COUNT: usize = 100;
+pub const MAX_CORRECTION_RULE_CHARS: usize = 256;
+pub const MAX_CORRECTION_RULE_ID_CHARS: usize = 256;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CorrectionRulesValidationError {
+    pub code: &'static str,
+    pub field: &'static str,
+    pub index: usize,
+    pub message: String,
+}
+
+impl fmt::Display for CorrectionRulesValidationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "code={}; field={}; index={}; {}",
+            self.code, self.field, self.index, self.message
+        )
+    }
+}
+
+impl std::error::Error for CorrectionRulesValidationError {}
+
+fn correction_validation_error(
+    code: &'static str,
+    field: &'static str,
+    index: usize,
+    message: impl Into<String>,
+) -> CorrectionRulesValidationError {
+    CorrectionRulesValidationError {
+        code,
+        field,
+        index,
+        message: message.into(),
+    }
+}
+
+pub fn validate_correction_rules(
+    rules: &[PersonalCorrectionRule],
+) -> std::result::Result<(), CorrectionRulesValidationError> {
+    if rules.len() > MAX_CORRECTION_RULE_COUNT {
+        return Err(correction_validation_error(
+            "too_many_rules",
+            "rules",
+            0,
+            "too many personal correction rules",
+        ));
+    }
+
+    let mut ids = HashSet::new();
+    let mut finds = HashSet::new();
+    for (index, rule) in rules.iter().enumerate() {
+        if !rule.validity.object {
+            return Err(correction_validation_error(
+                "invalid_rule",
+                "rules",
+                index,
+                "rule must be an object",
+            ));
+        }
+        if rule.validity.id {
+            return Err(correction_validation_error(
+                "invalid_id",
+                "id",
+                index,
+                "id must be a string",
+            ));
+        }
+        if rule.enabled.is_none() {
+            return Err(correction_validation_error(
+                "invalid_enabled",
+                "enabled",
+                index,
+                "enabled must be a boolean",
+            ));
+        }
+        let id = rule.id.trim();
+        if id.is_empty() {
+            return Err(correction_validation_error(
+                "blank_id",
+                "id",
+                index,
+                "id must not be blank",
+            ));
+        }
+        if rule.id.chars().count() > MAX_CORRECTION_RULE_ID_CHARS {
+            return Err(correction_validation_error(
+                "oversized_id",
+                "id",
+                index,
+                "id is too long",
+            ));
+        }
+        if !ids.insert(id) {
+            return Err(correction_validation_error(
+                "duplicate_id",
+                "id",
+                index,
+                "id is duplicated",
+            ));
+        }
+        if rule.validity.find {
+            return Err(correction_validation_error(
+                "invalid_find",
+                "find",
+                index,
+                "find must be a string",
+            ));
+        }
+        if rule.find.trim().is_empty() {
+            return Err(correction_validation_error(
+                "blank_find",
+                "find",
+                index,
+                "find text must not be blank",
+            ));
+        }
+        if rule.validity.replace {
+            return Err(correction_validation_error(
+                "invalid_replace",
+                "replace",
+                index,
+                "replace must be a string",
+            ));
+        }
+        if rule.replace.trim().is_empty() {
+            return Err(correction_validation_error(
+                "blank_replace",
+                "replace",
+                index,
+                "replacement text must not be blank",
+            ));
+        }
+        if rule.find.chars().count() > MAX_CORRECTION_RULE_CHARS {
+            return Err(correction_validation_error(
+                "oversized_find",
+                "find",
+                index,
+                "find text is too long",
+            ));
+        }
+        if rule.replace.chars().count() > MAX_CORRECTION_RULE_CHARS {
+            return Err(correction_validation_error(
+                "oversized_replace",
+                "replace",
+                index,
+                "replacement text is too long",
+            ));
+        }
+        if !finds.insert(rule.find.nfd().collect::<String>()) {
+            return Err(correction_validation_error(
+                "duplicate_find",
+                "find",
+                index,
+                "find text is duplicated",
+            ));
+        }
+    }
+    Ok(())
 }
 
 impl EventEnvelope {
@@ -724,6 +1021,12 @@ pub fn write_event_frame<W: Write>(writer: &mut W, event: &Event) -> Result<()> 
     );
     let payload = serde_json::to_vec(&EventEnvelope::new(event.clone()))
         .context("failed to serialize event envelope")?;
+    if payload.len() > MAX_FRAME_PAYLOAD {
+        return Err(OutboundFramePayloadTooLarge {
+            payload_length: payload.len(),
+        }
+        .into());
+    }
     write_frame(writer, JSON_FRAME_KIND, &payload)
 }
 
@@ -737,7 +1040,13 @@ pub fn write_synthesis_audio_frame<W: Write>(
         pcm16le.len().is_multiple_of(2),
         "PCM16LE payload length must be even"
     );
-    let mut payload = Vec::with_capacity(SYNTHESIS_AUDIO_HEADER_BYTES + pcm16le.len());
+    let payload_length = SYNTHESIS_AUDIO_HEADER_BYTES
+        .checked_add(pcm16le.len())
+        .ok_or_else(|| anyhow!("synthesis payload length overflows"))?;
+    if payload_length > MAX_FRAME_PAYLOAD {
+        return Err(OutboundFramePayloadTooLarge { payload_length }.into());
+    }
+    let mut payload = Vec::with_capacity(payload_length);
     payload.extend_from_slice(&synthesis_id.to_le_bytes());
     payload.extend_from_slice(&seq.to_le_bytes());
     payload.extend_from_slice(pcm16le);
@@ -745,6 +1054,12 @@ pub fn write_synthesis_audio_frame<W: Write>(
 }
 
 fn write_frame<W: Write>(writer: &mut W, frame_kind: u8, payload: &[u8]) -> Result<()> {
+    if payload.len() > MAX_FRAME_PAYLOAD {
+        return Err(OutboundFramePayloadTooLarge {
+            payload_length: payload.len(),
+        }
+        .into());
+    }
     let payload_length = u32::try_from(payload.len())
         .map_err(|_| anyhow!("payload exceeds maximum frame length"))?;
     let mut header = [0_u8; FRAME_HEADER_LENGTH];
@@ -831,12 +1146,13 @@ fn read_exact_or_eof<R: Read>(reader: &mut R, buffer: &mut [u8]) -> Result<usize
 #[cfg(test)]
 mod tests {
     use super::{
-        AUDIO_FRAME_KIND, AccelerationPreference, AudioFrame, Command, Event, EventEnvelope,
-        FRAME_HEADER_LENGTH, IncomingFrame, JSON_FRAME_KIND, ListeningMode, MAX_FRAME_PAYLOAD,
-        MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS, ModelInstallState, ModelProbeStatus,
-        PCM_BYTES_PER_FRAME, QueueBackpressureTier, SYNTHESIS_AUDIO_FRAME_KIND, SelectedModel,
-        SessionStopReason, SourceRange, SpeakingStyle, TimestampGranularity, TimestampSource,
-        TranscriptSegment, TranscriptWord, encode_audio_frame_envelope, read_frame,
+        AUDIO_FRAME_KIND, AccelerationPreference, AudioFrame, Command, CommandEnvelope, Event,
+        EventEnvelope, FRAME_HEADER_LENGTH, IncomingFrame, JSON_FRAME_KIND, ListeningMode,
+        MAX_FRAME_PAYLOAD, MAX_SESSION_ID_CHARS, MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS,
+        ModelInstallState, ModelProbeStatus, PCM_BYTES_PER_FRAME, PersonalCorrectionRule,
+        QueueBackpressureTier, SYNTHESIS_AUDIO_FRAME_KIND, SelectedModel, SessionStopReason,
+        SourceRange, SpeakingStyle, TimestampGranularity, TimestampSource, TranscriptSegment,
+        TranscriptWord, encode_audio_frame_envelope, read_frame, validate_correction_rules,
         write_event_frame, write_frame, write_synthesis_audio_frame,
     };
     use crate::engine::capabilities::{ModelFamilyId, RuntimeId};
@@ -870,6 +1186,7 @@ mod tests {
             parsed,
             IncomingFrame::Command(Command::StartSession {
                 acceleration_preference: AccelerationPreference::Auto,
+                correction_rules: Vec::<PersonalCorrectionRule>::new(),
                 detailed_timestamps_enabled: false,
                 diarization_enabled: false,
                 diarization_max_speakers: None,
@@ -957,6 +1274,125 @@ mod tests {
         assert!(detailed_timestamps_enabled);
         assert!(diarization_enabled);
         assert_eq!(diarization_max_speakers, Some(2));
+    }
+
+    #[test]
+    fn start_session_correction_snapshot_round_trips() {
+        let payload = serde_json::to_vec(&serde_json::json!({
+            "type": "start_session",
+            "sessionId": "session-rules",
+            "mode": "always_on",
+            "modelSelection": {
+                "kind": "external_file",
+                "runtimeId": "whisper_cpp",
+                "familyId": "whisper",
+                "filePath": "/tmp/model.bin"
+            },
+            "language": "en",
+            "sessionStartUnixMs": 1_700_000_000_000_u64,
+            "correctionRules": [
+                { "enabled": true, "id": "rule-1", "find": "speech kit", "replace": "Speech Kit" },
+                { "enabled": false, "id": "rule-2", "find": "old", "replace": "new" }
+            ]
+        }))
+        .expect("payload should serialize");
+        let mut framed = Vec::new();
+        write_frame(&mut framed, JSON_FRAME_KIND, &payload).expect("frame should write");
+
+        let parsed = read_frame(&mut framed.as_slice())
+            .expect("frame should parse")
+            .expect("frame should exist");
+        let IncomingFrame::Command(Command::StartSession {
+            correction_rules, ..
+        }) = parsed
+        else {
+            panic!("expected start session command");
+        };
+
+        assert_eq!(correction_rules.len(), 2);
+        assert_eq!(correction_rules[0].find, "speech kit");
+        assert_eq!(correction_rules[1].enabled, Some(false));
+    }
+
+    #[test]
+    fn malformed_correction_rule_shapes_parse_for_typed_validation() {
+        let malformed_values = vec![
+            serde_json::json!([{ "enabled": true, "id": "x", "find": "a" }]),
+            serde_json::json!([{ "enabled": "yes", "id": "x", "find": "a", "replace": "b" }]),
+            serde_json::json!([{ "enabled": true, "id": null, "find": "a", "replace": "b" }]),
+            serde_json::json!([{ "enabled": true, "id": "x", "find": null, "replace": "b" }]),
+            serde_json::json!([{ "enabled": true, "id": "x", "find": "a", "replace": [] }]),
+            serde_json::json!([null]),
+            serde_json::json!([[]]),
+            serde_json::json!([{}]),
+            serde_json::json!(null),
+            serde_json::json!({ "not": "an array" }),
+        ];
+
+        for correction_rules in malformed_values {
+            let payload = serde_json::to_vec(&serde_json::json!({
+                "type": "start_session",
+                "sessionId": format!("malformed-{}", correction_rules),
+                "mode": "always_on",
+                "modelSelection": {
+                    "kind": "external_file",
+                    "runtimeId": "whisper_cpp",
+                    "familyId": "whisper",
+                    "filePath": "/tmp/model.bin"
+                },
+                "language": "en",
+                "sessionStartUnixMs": 1_700_000_000_000_u64,
+                "correctionRules": correction_rules
+            }))
+            .expect("payload should serialize");
+            let mut framed = Vec::new();
+            write_frame(&mut framed, JSON_FRAME_KIND, &payload).expect("frame should write");
+            let parsed = read_frame(&mut framed.as_slice())
+                .expect("malformed rule shape should not become a generic frame error")
+                .expect("frame should exist");
+            let IncomingFrame::Command(Command::StartSession {
+                correction_rules, ..
+            }) = parsed
+            else {
+                panic!("expected start session command");
+            };
+            let error = validate_correction_rules(&correction_rules)
+                .expect_err("malformed rule shape should fail typed validation");
+            assert!(!error.code.is_empty());
+            assert!(!error.field.is_empty());
+        }
+    }
+
+    #[test]
+    fn correction_rules_allow_former_nul_sentinel_values() {
+        let rule: PersonalCorrectionRule = serde_json::from_value(serde_json::json!({
+            "enabled": true,
+            "find": "\u{0000}invalid-correction-find",
+            "id": "\u{0000}invalid-correction-id",
+            "replace": "\u{0000}invalid-correction-replace"
+        }))
+        .expect("legitimate NUL values should deserialize");
+        validate_correction_rules(&[rule]).expect("legitimate NUL values should validate");
+    }
+
+    #[test]
+    fn oversized_session_id_is_rejected_before_command_dispatch() {
+        let payload = serde_json::to_vec(&serde_json::json!({
+            "type": "start_session",
+            "sessionId": "x".repeat(MAX_SESSION_ID_CHARS + 1),
+            "mode": "always_on",
+            "modelSelection": {
+                "kind": "external_file",
+                "runtimeId": "whisper_cpp",
+                "familyId": "whisper",
+                "filePath": "/tmp/model.bin"
+            },
+            "language": "en",
+            "sessionStartUnixMs": 1_700_000_000_000_u64
+        }))
+        .expect("payload should serialize");
+        let error = CommandEnvelope::parse_json(&payload).expect_err("oversized id should reject");
+        assert!(error.to_string().contains("session id exceeds"));
     }
 
     #[test]
@@ -1311,6 +1747,21 @@ mod tests {
                 .to_string()
                 .contains("frame payload exceeds maximum supported size")
         );
+    }
+
+    #[test]
+    fn oversized_event_is_rejected_symmetrically_before_writing() {
+        let code = "oversized".to_string();
+        let event = Event::Error {
+            code,
+            details: None,
+            message: "x".repeat(MAX_FRAME_PAYLOAD),
+            session_id: None,
+        };
+        let mut output = Vec::new();
+        let error = write_event_frame(&mut output, &event).expect_err("event should be rejected");
+        assert!(error.to_string().contains("frame payload exceeds"));
+        assert!(output.is_empty());
     }
 
     // The TypeScript side declares these fields as `T | null` (non-optional) /

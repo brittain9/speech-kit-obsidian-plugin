@@ -681,6 +681,11 @@ export const nl = {
   'models.current.validateBeforeDictating':
     'Valideer het externe modelbestand voordat u gaat dicteren.',
   'sidecarError.audio_too_long': 'Audioclip overschrijdt de maximale duur voor deze engine.',
+  'sidecarError.event_frame_too_large':
+    'De spraakengine heeft een gebeurtenis gegenereerd die de veilige framelimiet overschrijdt.',
+  'sidecarError.invalid_session_id': 'De sessie-ID is te lang.',
+  'sidecarError.invalid_correction_rules':
+    'De persoonlijke correctieregels zijn ongeldig. Corrigeer ze voordat je met dicteren begint.',
   'sidecarError.engine_inference_failed': 'Lokale transcriptie is mislukt.',
   'sidecarError.internal_error': 'Er is een interne fout opgetreden in de spraakengine.',
   'sidecarError.invalid_audio_buffer': 'De audiobuffer was leeg toen de transcriptie begon.',
@@ -848,4 +853,68 @@ export const nl = {
     'Snelle lokale vertaling met kleine taaldownloads op aanvraag en modellen die in Firefox zijn uitgebracht.',
   'catalog.family.firefox_translations.summary':
     'Vertaalt notitietekst lokaal met de compacte Bergamot-engine en Firefox-modellen.',
+  'notice.personalCorrectionRulesSnapshot':
+    'Deze sessie gebruikt {enabled} van {total} persoonlijke correctieregels. Wijzigingen gelden voor de volgende sessie.',
+  'notice.personalCorrectionRulesInvalid':
+    'Persoonlijke correctie-instellingen zijn ongeldig: {reason} Corrigeer ze voordat je met dicteren begint.',
+
+  'notice.personalCorrectionRulesSkipped':
+    '{count} opgeslagen persoonlijke correctieregels konden niet worden gelezen en zijn overgeslagen. Herstel ze in Instellingen.',
+  'settings.corrections.name': 'Persoonlijke correctieregels',
+  'settings.corrections.desc':
+    'Pas lokale, geordende letterlijke correcties toe na de transcriptie. Regels gelden voor finale segmenten in de volgende sessie; dit is geen ASR-vocabulaire en geen hotwoorden.',
+  'settings.corrections.manage': 'Correctieregels beheren',
+  'settings.corrections.modal.title': 'Persoonlijke correctieregels',
+  'settings.corrections.modal.intro':
+    'Dit zijn deterministische lokale correcties na de transcriptie, geen vocabulaire voor spraakherkenning. Regels worden in volgorde op elk final segment toegepast, vóór optionele LLM-opschoning. Wijzigingen gelden voor de volgende dicteersessie.',
+  'settings.corrections.modal.preview': 'Voorbeeld',
+  'settings.corrections.modal.previewInput': 'Voorbeeldtranscriptie',
+  'settings.corrections.modal.previewOutput': 'Gecorrigeerde transcriptie',
+  'settings.corrections.modal.add': 'Regel toevoegen',
+  'settings.corrections.modal.empty': 'Nog geen correctieregels.',
+  'settings.corrections.modal.countsOne': '{enabled} ingeschakeld · {total} regel',
+  'settings.corrections.modal.countsOther': '{enabled} ingeschakeld · {total} regels',
+  'settings.corrections.modal.previewSummaryOne': '{replacements} vervanging uit {rules} regel',
+  'settings.corrections.modal.previewSummaryOther':
+    '{replacements} vervangingen uit {rules} regels',
+  'settings.corrections.modal.find': 'Zoeken',
+  'settings.corrections.modal.replace': 'Vervangen door',
+  'settings.corrections.modal.enabled': 'Ingeschakeld',
+  'settings.corrections.modal.moveUp': 'Omhoog',
+  'settings.corrections.modal.moveDown': 'Omlaag',
+  'settings.corrections.modal.delete': 'Regel verwijderen',
+  'settings.corrections.modal.saving': 'Opslaan…',
+  'settings.corrections.modal.saved': 'Opgeslagen',
+  'settings.corrections.modal.unsaved': 'Niet-opgeslagen wijzigingen',
+  'settings.corrections.modal.retry': 'Opslaan mislukt. Probeer opnieuw op te slaan.',
+  'settings.corrections.modal.conflict':
+    'De correctieregels zijn ergens anders gewijzigd. Heropen dit venster voordat je opslaat.',
+  'settings.corrections.field.find': 'Zoeken',
+  'settings.corrections.field.enabled': 'Ingeschakeld',
+  'settings.corrections.field.id': 'Regel-ID',
+  'settings.corrections.field.replace': 'Vervangen door',
+  'settings.corrections.field.rules': 'Regels',
+  'settings.corrections.validation.tooMany': 'Voeg hoogstens {max} regels toe.',
+  'settings.corrections.validation.blankId': 'Elke regel heeft een ID nodig.',
+  'settings.corrections.validation.invalidRule':
+    'Deze correctieregel is geen leesbaar regelobject.',
+  'settings.corrections.validation.invalidId': 'De regel-ID moet tekst zijn.',
+  'settings.corrections.validation.invalidEnabled': 'Ingeschakeld moet aan of uit zijn.',
+  'settings.corrections.validation.invalidFind': 'De zoektekst moet tekst zijn.',
+  'settings.corrections.validation.duplicateId': 'Regel-ID’s moeten uniek zijn.',
+  'settings.corrections.validation.blankFind': 'De zoektekst mag niet leeg zijn.',
+  'settings.corrections.validation.blankReplace': 'De vervangende tekst mag niet leeg zijn.',
+  'settings.corrections.validation.invalidReplace': 'De vervangende tekst moet tekst zijn.',
+  'settings.corrections.validation.loneSurrogate':
+    'De tekst bevat een ongeldig Unicode-surrogaat en kan niet worden opgeslagen.',
+  'settings.corrections.validation.context': 'Regel {index}, {field}: {reason}',
+  'settings.corrections.validation.oversized': '{field} mag niet meer dan {max} tekens bevatten.',
+  'settings.corrections.validation.duplicateFind':
+    'De zoektekst moet uniek zijn; latere regels mogen niet dezelfde tekst gebruiken.',
+  'settings.corrections.validation.absoluteAmplification':
+    'De correctie zou de veiligheidslimiet van {max} tekens overschrijden en is afgewezen.',
+  'settings.corrections.validation.relativeAmplification':
+    'De correctie zou de tekst meer dan {max}× vergroten en is afgewezen.',
+  'settings.corrections.validation.workBudget':
+    'De correctiezoekopdracht overschrijdt de veiligheidslimiet van {max} stappen en is geweigerd.',
 } as const satisfies TranslationCatalog;

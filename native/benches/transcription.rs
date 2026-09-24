@@ -11,6 +11,7 @@
 //!
 //! Run with: `cargo bench --manifest-path native/Cargo.toml --bench transcription`
 
+#[cfg(feature = "engine-nemotron-asr")]
 use std::hint::black_box;
 use std::time::Duration;
 

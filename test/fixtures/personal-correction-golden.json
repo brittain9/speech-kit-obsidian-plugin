@@ -1,0 +1,195 @@
+{
+  "cases": [
+    {
+      "id": "mixed-nfd-standalone-mark",
+      "input": "é,́x",
+      "rules": [{ "id": "comma", "enabled": true, "find": ",", "replace": "!" }],
+      "expected": "é,́x",
+      "replacements": 0,
+      "rulesApplied": 0
+    },
+    {
+      "id": "identity-replacement",
+      "input": "a ",
+      "rules": [
+        { "id": "identity-a", "enabled": true, "find": "a", "replace": "a" },
+        { "id": "identity-a-space", "enabled": true, "find": "a ", "replace": "a " }
+      ],
+      "expected": "a ",
+      "replacements": 2,
+      "rulesApplied": 2
+    },
+    {
+      "id": "nfd-combining-before-punctuation",
+      "input": "e\u0301,",
+      "rules": [
+        { "id": "accent-before-punctuation", "enabled": true, "find": "e\u0301", "replace": "E" }
+      ],
+      "expected": "E,",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "nfd-adjacent-combining-sequence",
+      "input": "e\u0301\u0323,",
+      "rules": [
+        {
+          "id": "full-combining-sequence",
+          "enabled": true,
+          "find": "e\u0301\u0323",
+          "replace": "E"
+        }
+      ],
+      "expected": "E,",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "nfd-partial-before-adjacent-combining-mark",
+      "input": "e\u0301\u0323,",
+      "rules": [
+        { "id": "partial-combining-sequence", "enabled": true, "find": "e\u0301", "replace": "E" }
+      ],
+      "expected": "e\u0301\u0323,",
+      "replacements": 0,
+      "rulesApplied": 0
+    },
+    {
+      "id": "nfd-reordering-full-sequence",
+      "input": "\u00c0\u0316",
+      "rules": [
+        {
+          "id": "full-reordered-sequence",
+          "enabled": true,
+          "find": "A\u0300\u0316",
+          "replace": "X"
+        }
+      ],
+      "expected": "X",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "nfd-reordering-partial-before-boundary",
+      "input": "\u00c0\u0316",
+      "rules": [
+        { "id": "partial-reordered-sequence", "enabled": true, "find": "A\u0300", "replace": "X" }
+      ],
+      "expected": "\u00c0\u0316",
+      "replacements": 0,
+      "rulesApplied": 0
+    },
+    {
+      "id": "left-to-right-punctuation-overlap",
+      "input": "!!!",
+      "rules": [{ "id": "double-bang", "enabled": true, "find": "!!", "replace": "!" }],
+      "expected": "!!",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "left-to-right-word-overlap",
+      "input": "a-a-a",
+      "rules": [{ "id": "hyphenated-a", "enabled": true, "find": "a-a", "replace": "b" }],
+      "expected": "b-a",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "literal-order",
+      "input": "cat concatenate cat cat_2 2cat",
+      "rules": [
+        { "id": "cat-to-dog", "enabled": true, "find": "cat", "replace": "dog" },
+        { "id": "dog-to-fox", "enabled": true, "find": "dog", "replace": "fox" }
+      ],
+      "expected": "fox concatenate fox cat_2 2cat",
+      "replacements": 4,
+      "rulesApplied": 2
+    },
+    {
+      "id": "whole-word-boundaries",
+      "input": "one １ Ⅻ e\u0301",
+      "rules": [{ "id": "accented", "enabled": true, "find": "e\u0301", "replace": "E" }],
+      "expected": "one １ Ⅻ E",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "nfd-canonical-safety",
+      "input": "café cafe",
+      "rules": [{ "id": "partial-base", "enabled": true, "find": "cafe", "replace": "tea" }],
+      "expected": "café tea",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "nfd-whole-character",
+      "input": "café café",
+      "rules": [{ "id": "whole-character", "enabled": true, "find": "café", "replace": "coffee" }],
+      "expected": "coffee coffee",
+      "replacements": 2,
+      "rulesApplied": 1
+    },
+    {
+      "id": "cascade-budget",
+      "input": "a",
+      "rules": [
+        { "id": "double-1", "enabled": true, "find": "a", "replace": "aa" },
+        { "id": "double-2", "enabled": true, "find": "aa", "replace": "aaaa" },
+        { "id": "double-3", "enabled": true, "find": "aaaa", "replace": "aaaaaaaa" },
+        { "id": "double-4", "enabled": true, "find": "aaaaaaaa", "replace": "aaaaaaaaaaaaaaaa" }
+      ],
+      "expected": null,
+      "errorCode": "relative_amplification"
+    },
+    {
+      "id": "metadata-and-segments",
+      "input": "one two",
+      "segments": [
+        {
+          "startMs": 0,
+          "endMs": 1200,
+          "speaker": 0,
+          "text": "one",
+          "timestampGranularity": "word",
+          "timestampSource": "engine",
+          "words": [{ "startMs": 0, "endMs": 500, "text": "one", "timestampSource": "engine" }]
+        },
+        {
+          "startMs": 1200,
+          "endMs": 2400,
+          "speaker": 1,
+          "text": "two",
+          "timestampGranularity": "segment",
+          "timestampSource": "interpolated",
+          "words": [
+            { "startMs": 1200, "endMs": 2400, "text": "two", "timestampSource": "interpolated" }
+          ]
+        }
+      ],
+      "rules": [{ "id": "one", "enabled": true, "find": "one", "replace": "1" }],
+      "expectedSegments": [
+        {
+          "startMs": 0,
+          "endMs": 1200,
+          "speaker": 0,
+          "text": "1",
+          "timestampGranularity": "word",
+          "timestampSource": "engine",
+          "words": [{ "startMs": 0, "endMs": 500, "text": "one", "timestampSource": "engine" }]
+        },
+        {
+          "startMs": 1200,
+          "endMs": 2400,
+          "speaker": 1,
+          "text": "two",
+          "timestampGranularity": "segment",
+          "timestampSource": "interpolated",
+          "words": [
+            { "startMs": 1200, "endMs": 2400, "text": "two", "timestampSource": "interpolated" }
+          ]
+        }
+      ]
+    }
+  ]
+}

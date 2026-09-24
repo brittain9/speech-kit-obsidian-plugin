@@ -783,6 +783,10 @@ export class Modal {
   }
 }
 
+export class Plugin {
+  constructor(readonly app: unknown = {}) {}
+}
+
 export class PluginSettingTab {
   readonly containerEl = new TestElement();
 
