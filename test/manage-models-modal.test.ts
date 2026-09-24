@@ -8,7 +8,6 @@ import {
   deriveTaskModelAvailability,
   filterModelRowsForPicker,
   ManageModelsModal,
-  modelLanguageCompatibility,
   modelMatchesLanguageFilter,
   resolveInitialModelPickerTask,
   resolveTabNavigationIndex,
@@ -319,18 +318,6 @@ describe('model browser', () => {
     expect(options).toContain('TL');
     expect(options).not.toContain('XX');
     expect(options).not.toContain('YY');
-    expect(modelLanguageCompatibility(natural.model, { kind: 'language', tag: 'tl' })).toBe(
-      'compatible',
-    );
-    expect(modelLanguageCompatibility(natural.model, { kind: 'language', tag: 'xx' })).toBe(
-      'incompatible',
-    );
-    expect(modelLanguageCompatibility(english.model, { kind: 'language', tag: 'tl' })).toBe(
-      'incompatible',
-    );
-    expect(modelLanguageCompatibility(frenchVoice.model, { kind: 'language', tag: 'tl' })).toBe(
-      'incompatible',
-    );
     expect(deriveTaskModelAvailability([english, frenchVoice, natural, literal], 'tl')).toEqual([
       { compatibleDownloads: 0, installed: 0, task: 'stt' },
       { compatibleDownloads: 0, installed: 0, task: 'tts' },

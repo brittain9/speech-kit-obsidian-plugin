@@ -6,11 +6,9 @@ import type { ModelManagerState } from '../models/model-install-manager';
 import { type CatalogModelRecord, getTotalModelSize } from '../models/model-management-types';
 
 export type FirstRunHardwareClass = 'constrained' | 'standard' | 'unknown';
-export type FirstRunHardwareEvidence = 'both' | 'memory' | 'processor' | 'none';
 
 export interface FirstRunHardwareProfile {
   hardwareClass: FirstRunHardwareClass;
-  hardwareEvidence?: FirstRunHardwareEvidence;
   logicalProcessorCount: number | null;
   memoryGb: number | null;
 }
@@ -19,7 +17,6 @@ export type StartingModelReason = 'automatic' | 'liveEnglish' | 'multilingual' |
 
 export interface StartingModelRecommendation {
   hardwareClass: FirstRunHardwareClass;
-  hardwareEvidence: FirstRunHardwareEvidence;
   liveChoiceIsOnly: boolean;
   mode: 'final' | 'live';
   model: CatalogModelRecord;
@@ -44,14 +41,6 @@ export function readFirstRunHardwareProfile(
     (memoryGb !== null && memoryGb <= 4);
   const processorKnown = logicalProcessorCount !== null;
   const memoryKnown = memoryGb !== null;
-  const hardwareEvidence: FirstRunHardwareEvidence =
-    processorKnown && memoryKnown
-      ? 'both'
-      : processorKnown
-        ? 'processor'
-        : memoryKnown
-          ? 'memory'
-          : 'none';
 
   return {
     hardwareClass: constrained
@@ -59,7 +48,6 @@ export function readFirstRunHardwareProfile(
       : !processorKnown && !memoryKnown
         ? 'unknown'
         : 'standard',
-    hardwareEvidence,
     logicalProcessorCount,
     memoryGb,
   };
@@ -99,15 +87,6 @@ export function resolveStartingModelRecommendation(
 
   return {
     hardwareClass: hardware.hardwareClass,
-    hardwareEvidence:
-      hardware.hardwareEvidence ??
-      (hardware.logicalProcessorCount !== null && hardware.memoryGb !== null
-        ? 'both'
-        : hardware.logicalProcessorCount !== null
-          ? 'processor'
-          : hardware.memoryGb !== null
-            ? 'memory'
-            : 'none'),
     liveChoiceIsOnly: mode === 'live' && liveCandidates.length === 1,
     mode,
     model,

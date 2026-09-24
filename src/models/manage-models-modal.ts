@@ -139,14 +139,6 @@ export function modelLanguageTagsForDiscovery(
     : model.languageTags;
 }
 
-export function modelLanguageCompatibility(
-  model: Parameters<typeof modelMatchesLanguageFilter>[0],
-  filter: ModelLanguageFilter,
-): 'compatible' | 'incompatible' | 'not_applicable' {
-  if (filter.kind === 'all') return 'not_applicable';
-  return modelMatchesLanguageFilter(model, filter) ? 'compatible' : 'incompatible';
-}
-
 export interface TaskModelAvailability {
   compatibleDownloads: number;
   installed: number;
@@ -1227,13 +1219,11 @@ export class ManageModelsModal extends Modal {
       text: t(installed ? 'models.manage.installed' : 'models.manage.downloadable'),
     });
     if (this.activeLanguage.kind !== 'all') {
-      const language = modelLanguageLabel(this.activeLanguage.tag);
-      const compatibility = modelLanguageCompatibility(model, this.activeLanguage);
-      if (compatibility === 'compatible') {
-        tagsContainer.createSpan({
-          text: t('models.manage.compatibleLanguage', { language }),
-        });
-      }
+      tagsContainer.createSpan({
+        text: t('models.manage.compatibleLanguage', {
+          language: modelLanguageLabel(this.activeLanguage.tag),
+        }),
+      });
     }
     const policy = resolveModelPresentationPolicy(model);
 

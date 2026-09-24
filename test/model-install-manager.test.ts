@@ -16,7 +16,7 @@ import type {
   ModelInstallUpdateRecord,
 } from '../src/models/model-management-types';
 import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
-import type { SidecarEvent, SystemInfoEvent } from '../src/sidecar/protocol';
+import type { ModelProbeResultEvent, SidecarEvent, SystemInfoEvent } from '../src/sidecar/protocol';
 import {
   SidecarLifecycleConflictError,
   SidecarLifecycleGate,
@@ -1686,6 +1686,61 @@ describe('ModelInstallManager', () => {
         status: 'ready',
       });
     });
+
+    it.each(['ready', 'unavailable'] as const)(
+      'does not let a stale explicit selection capability %s overwrite a newer init',
+      async (resultKind) => {
+        const selection = sampleSelection();
+        const initialCapabilities = sampleMergedCapabilities();
+        harness = createManagerHarness({
+          selectedModel: selection,
+          selectedModelCapabilitiesSnapshot: {
+            capabilities: initialCapabilities,
+            selection,
+          },
+        });
+        configureSidecarForInit(harness.sidecarConnection);
+        const deferredProbe = deferred<ModelProbeResultEvent>();
+        harness.sidecarConnection.probeModelSelection.mockReturnValueOnce(deferredProbe.promise);
+
+        await harness.manager.init();
+        await Promise.resolve();
+        const selecting = harness.manager.select(selection);
+        const newerInit = harness.manager.init();
+        await newerInit;
+
+        const changedCapabilities = {
+          ...initialCapabilities,
+          family: {
+            ...initialCapabilities.family,
+            supportsWordTimestamps: !initialCapabilities.family.supportsWordTimestamps,
+          },
+        };
+        const probeResult: ModelProbeResultEvent =
+          resultKind === 'ready'
+            ? {
+                ...sampleReadyProbeResult(selection),
+                mergedCapabilities: changedCapabilities,
+                type: 'model_probe_result' as const,
+              }
+            : {
+                ...sampleReadyProbeResult(selection),
+                available: false,
+                installed: false,
+                mergedCapabilities: null,
+                message: 'Model is no longer available.',
+                status: 'missing',
+                type: 'model_probe_result' as const,
+              };
+        deferredProbe.resolve(probeResult);
+        await selecting;
+
+        expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+          capabilities: initialCapabilities,
+          selection,
+        });
+      },
+    );
 
     it('maps a non-throwing probe failure to `unavailable` with the message', async () => {
       harness = createManagerHarness({ selectedModel: sampleSelection() });

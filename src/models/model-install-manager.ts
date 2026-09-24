@@ -653,13 +653,16 @@ export class ModelInstallManager {
   async select(selection: SelectedModel): Promise<ModelProbeResultEvent> {
     const expectedLifecycleGeneration = this.lifecycleGeneration;
     const expectedSelectionGeneration = ++this.selectionGeneration;
+    const expectedInitGeneration = this.initGeneration;
     this.activeSelectionCount += 1;
     try {
       return await this.selectWithGuard(
         selection,
+        expectedInitGeneration,
         () =>
           this.lifecycleGeneration === expectedLifecycleGeneration &&
-          this.selectionGeneration === expectedSelectionGeneration,
+          this.selectionGeneration === expectedSelectionGeneration &&
+          this.initGeneration === expectedInitGeneration,
       );
     } finally {
       this.activeSelectionCount -= 1;
@@ -668,6 +671,7 @@ export class ModelInstallManager {
 
   private async selectWithGuard(
     selection: SelectedModel,
+    expectedInitGeneration: number,
     canCommit: (settings: Readonly<PluginSettings>) => boolean,
   ): Promise<ModelProbeResultEvent> {
     const task = this.selectionTask(selection);
@@ -686,12 +690,17 @@ export class ModelInstallManager {
           selection,
           probeResult,
           task,
-          this.initGeneration,
+          expectedInitGeneration,
           canCommit,
         );
       if (!canCommit(this.deps.getSettings())) return probeResult;
       if (task !== 'translation') {
-        await this.invalidateCapabilitiesSnapshot(selection, task, canCommit);
+        await this.invalidateCapabilitiesSnapshot(
+          selection,
+          task,
+          expectedInitGeneration,
+          canCommit,
+        );
       }
       throw new Error(createProbeFailureMessage(probeResult));
     }
@@ -752,7 +761,7 @@ export class ModelInstallManager {
         selection,
         probeResult,
         task,
-        this.initGeneration,
+        expectedInitGeneration,
         canCommit,
       );
     }
@@ -1000,6 +1009,7 @@ export class ModelInstallManager {
   private async invalidateCapabilitiesSnapshot(
     selection: SelectedModel,
     task: 'stt' | 'tts' = 'stt',
+    expectedInitGeneration: number = this.initGeneration,
     canCommit: (settings: Readonly<PluginSettings>) => boolean = () => true,
   ): Promise<void> {
     const settings = this.deps.getSettings();
@@ -1013,6 +1023,7 @@ export class ModelInstallManager {
           const current =
             task === 'tts' ? currentSettings.selectedTtsModel : currentSettings.selectedModel;
           return (
+            expectedInitGeneration === this.initGeneration &&
             canCommit(currentSettings) &&
             current !== null &&
             selectedModelEquals(current, selection)
@@ -1161,12 +1172,14 @@ export class ModelInstallManager {
     if (refresh.completed !== null && canAutoSelectReconciledFailure) {
       const completed = refresh.completed;
       const completedTask = this.selectionTask(completed);
+      const expectedInitGeneration = this.initGeneration;
       const canCommitAutoSelection = (settings: Readonly<PluginSettings>): boolean => {
         const selectedForTask = selectedModelForTask(settings, completedTask);
         return (
           this.lifecycleGeneration === refresh.expectedLifecycleGeneration &&
           this.installGeneration === refresh.expectedInstallGeneration &&
           this.selectionGeneration === refresh.expectedSelectionGeneration &&
+          this.initGeneration === expectedInitGeneration &&
           this.activeSelectionCount === 0 &&
           this.currentInstallRequest === null &&
           selectedForTask === null
@@ -1174,7 +1187,7 @@ export class ModelInstallManager {
       };
       try {
         if (canCommitAutoSelection(this.deps.getSettings())) {
-          await this.selectWithGuard(completed, canCommitAutoSelection);
+          await this.selectWithGuard(completed, expectedInitGeneration, canCommitAutoSelection);
         }
       } catch (error) {
         this.deps.logger?.warn(

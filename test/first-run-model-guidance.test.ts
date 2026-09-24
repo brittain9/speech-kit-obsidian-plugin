@@ -46,20 +46,17 @@ function largeMultilingualModel(): CatalogModelRecord {
 }
 
 describe('first-run model guidance', () => {
-  it('reports only the hardware hints that are actually available', () => {
+  it('classifies the hardware hints that are actually available', () => {
     expect(readFirstRunHardwareProfile({ hardwareConcurrency: 2 })).toMatchObject({
       hardwareClass: 'constrained',
-      hardwareEvidence: 'processor',
       memoryGb: null,
     });
     expect(readFirstRunHardwareProfile({ deviceMemory: 8 })).toMatchObject({
       hardwareClass: 'standard',
-      hardwareEvidence: 'memory',
       logicalProcessorCount: null,
     });
     expect(readFirstRunHardwareProfile({})).toMatchObject({
       hardwareClass: 'unknown',
-      hardwareEvidence: 'none',
     });
   });
 
@@ -102,7 +99,6 @@ describe('first-run model guidance', () => {
     );
 
     expect(recommendation).toMatchObject({
-      hardwareEvidence: 'both',
       liveChoiceIsOnly: true,
       model: { modelId: 'large-multilingual' },
       resourceClass: 'demanding',
