@@ -2378,6 +2378,68 @@ describe('ModelInstallManager', () => {
       });
     });
 
+    it('rehydrates ready capabilities when language changes during detached validation', async () => {
+      const selection = sampleSelection();
+      const initialCapabilities = sampleMergedCapabilities();
+      const freshCapabilities = {
+        ...initialCapabilities,
+        family: {
+          ...initialCapabilities.family,
+          supportsWordTimestamps: !initialCapabilities.family.supportsWordTimestamps,
+        },
+      };
+      harness = createManagerHarness({
+        selectedModel: selection,
+        selectedModelCapabilitiesSnapshot: {
+          capabilities: initialCapabilities,
+          selection,
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      await harness.manager.init();
+
+      const originalProbe = deferred<ModelProbeResultEvent>();
+      const freshProbe: ModelProbeResultEvent = {
+        ...sampleReadyProbeResult(selection),
+        mergedCapabilities: freshCapabilities,
+        type: 'model_probe_result',
+      };
+      const originalReadyProbe: ModelProbeResultEvent = {
+        ...sampleReadyProbeResult(selection),
+        mergedCapabilities: sampleMergedCapabilities(),
+        type: 'model_probe_result',
+      };
+      harness.sidecarConnection.probeModelSelection
+        .mockReturnValueOnce(originalProbe.promise)
+        .mockResolvedValueOnce(freshProbe);
+
+      const selecting = harness.manager.select(selection);
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().selectedModelCapabilities).toEqual({
+          selection,
+          status: 'pending',
+        });
+        expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledOnce();
+      });
+      harness.getSettings().dictationLanguage = 'ja';
+      originalProbe.resolve(originalReadyProbe);
+
+      await expect(selecting).rejects.toThrow('does not support 日本語');
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+          capabilities: freshCapabilities,
+          selection,
+          status: 'ready',
+        });
+      });
+      expect(harness.getSettings().selectedModel).toEqual(selection);
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        capabilities: freshCapabilities,
+        selection,
+      });
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(2);
+    });
+
     it('select() populates ready capabilities without an extra probe round-trip', async () => {
       configureSidecarForInit(harness.sidecarConnection);
       await harness.manager.init();

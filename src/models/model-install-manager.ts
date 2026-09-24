@@ -226,6 +226,7 @@ interface SelectionAttemptState {
   detachedAuthoritativeSelection: boolean;
   probeGeneration: number;
   probeRejected: boolean;
+  probeResultHandled: boolean;
   retriedAfterStaleInit: boolean;
 }
 
@@ -765,6 +766,7 @@ export class ModelInstallManager {
       detachedAuthoritativeSelection: false,
       probeGeneration: 0,
       probeRejected: false,
+      probeResultHandled: false,
       retriedAfterStaleInit: false,
     };
     try {
@@ -786,6 +788,15 @@ export class ModelInstallManager {
               task,
               expectedLifecycleGeneration,
               expectedInitGeneration,
+              expectedSelectionGeneration,
+              attemptState.probeGeneration,
+              canCommit,
+            );
+          } else if (!attemptState.probeResultHandled) {
+            await this.rehydrateDetachedSelection(
+              selection,
+              task,
+              expectedLifecycleGeneration,
               expectedSelectionGeneration,
               attemptState.probeGeneration,
               canCommit,
@@ -886,6 +897,7 @@ export class ModelInstallManager {
           );
         }
       }
+      attemptState.probeResultHandled = true;
       throw new Error(createProbeFailureMessage(probeResult));
     }
 
@@ -992,22 +1004,13 @@ export class ModelInstallManager {
       return;
     }
     if (expectedInitGeneration !== this.initGeneration) {
-      this.setCapabilities(task, { selection: attemptedSelection, status: 'pending' });
-      this.notify();
-      if (
-        this.lifecycleGeneration !== expectedLifecycleGeneration ||
-        this.selectionGenerations[task] !== expectedSelectionGeneration ||
-        expectedProbeGeneration !== this.probeGenerations[task]
-      ) {
-        return;
-      }
-      await this.refreshSelectedCapabilities(
+      await this.rehydrateDetachedSelection(
         attemptedSelection,
         task,
-        this.initGeneration,
-        this.selectionGenerations[task],
-        false,
-        true,
+        expectedLifecycleGeneration,
+        expectedSelectionGeneration,
+        expectedProbeGeneration,
+        canCommit,
       );
       return;
     }
@@ -1024,6 +1027,50 @@ export class ModelInstallManager {
       expectedSelectionGeneration,
       canCommit,
       expectedProbeGeneration,
+    );
+  }
+
+  private async rehydrateDetachedSelection(
+    attemptedSelection: SelectedModel,
+    task: ModelTask,
+    expectedLifecycleGeneration: number,
+    expectedSelectionGeneration: number,
+    expectedProbeGeneration: number,
+    canCommit: (settings: Readonly<PluginSettings>) => boolean,
+  ): Promise<void> {
+    if (task === 'translation') return;
+    if (
+      this.lifecycleGeneration !== expectedLifecycleGeneration ||
+      this.selectionGenerations[task] !== expectedSelectionGeneration ||
+      expectedProbeGeneration !== this.probeGenerations[task]
+    ) {
+      return;
+    }
+    const settings = this.deps.getSettings();
+    const current = task === 'tts' ? settings.selectedTtsModel : settings.selectedModel;
+    if (
+      current === null ||
+      !selectedModelEquals(current, attemptedSelection) ||
+      !canCommit(settings)
+    ) {
+      return;
+    }
+    this.setCapabilities(task, { selection: attemptedSelection, status: 'pending' });
+    this.notify();
+    if (
+      this.lifecycleGeneration !== expectedLifecycleGeneration ||
+      this.selectionGenerations[task] !== expectedSelectionGeneration ||
+      expectedProbeGeneration !== this.probeGenerations[task]
+    ) {
+      return;
+    }
+    await this.refreshSelectedCapabilities(
+      attemptedSelection,
+      task,
+      this.initGeneration,
+      this.selectionGenerations[task],
+      false,
+      true,
     );
   }
 
