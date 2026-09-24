@@ -146,6 +146,86 @@ describe('ModelInstallManager', () => {
       });
       expect(harness.manager.getState().catalog.models).toHaveLength(3);
     });
+
+    it('deduplicates concurrent initialization and publishes the loading transition', async () => {
+      configureSidecarForInit(harness.sidecarConnection);
+      const catalog = deferred<ReturnType<typeof sampleCatalog>>();
+      harness.sidecarConnection.listModelCatalog.mockReturnValue(catalog.promise);
+      let notifications = 0;
+      harness.manager.subscribe(() => {
+        notifications += 1;
+      });
+
+      const first = harness.manager.init();
+      const second = harness.manager.init();
+
+      expect(first).toBe(second);
+      expect(harness.sidecarConnection.listModelCatalog).toHaveBeenCalledOnce();
+      expect(notifications).toBe(0);
+      expect(harness.manager.getState().loadStatus).toBe('loading');
+
+      catalog.resolve(sampleCatalog());
+      await first;
+
+      expect(harness.manager.getState().loadStatus).toBe('ready');
+      expect(notifications).toBe(1);
+      const retryCatalog = deferred<ReturnType<typeof sampleCatalog>>();
+      harness.sidecarConnection.listModelCatalog.mockReturnValue(retryCatalog.promise);
+      const retry = harness.manager.init();
+
+      expect(notifications).toBe(2);
+      expect(harness.manager.getState().loadStatus).toBe('loading');
+      retryCatalog.resolve(sampleCatalog());
+      await retry;
+      expect(harness.manager.getState().loadStatus).toBe('ready');
+      expect(notifications).toBe(3);
+    });
+
+    it('deduplicates a capability retry after capability discovery fails', async () => {
+      configureSidecarForInit(harness.sidecarConnection);
+      harness.sidecarConnection.getSystemInfo.mockRejectedValueOnce(
+        new Error('system info failed'),
+      );
+
+      await harness.manager.init();
+      expect(harness.manager.getState().capabilityLoadError).toBe('system info failed');
+
+      const retryCatalog = deferred<ReturnType<typeof sampleCatalog>>();
+      harness.sidecarConnection.listModelCatalog.mockReturnValue(retryCatalog.promise);
+      const retry = harness.manager.init();
+      const duplicateRetry = harness.manager.init();
+
+      expect(duplicateRetry).toBe(retry);
+      expect(harness.sidecarConnection.listModelCatalog).toHaveBeenCalledTimes(2);
+      expect(harness.manager.getState().loadStatus).toBe('loading');
+
+      retryCatalog.resolve(sampleCatalog());
+      await retry;
+      expect(harness.manager.getState()).toMatchObject({
+        capabilityLoadError: null,
+        loadStatus: 'ready',
+      });
+    });
+
+    it('does not let a stale initialization overwrite a newer successful response', async () => {
+      configureSidecarForInit(harness.sidecarConnection);
+      const firstCatalog = deferred<ReturnType<typeof sampleCatalog>>();
+      const firstCatalogValue = { ...sampleCatalog(), catalogVersion: 1 };
+      const secondCatalog = { ...sampleCatalog(), catalogVersion: 2 };
+      harness.sidecarConnection.listModelCatalog
+        .mockReturnValueOnce(firstCatalog.promise)
+        .mockResolvedValueOnce(secondCatalog);
+
+      const first = harness.manager.init();
+      harness.manager.dispose();
+      const second = harness.manager.init();
+      await second;
+      expect(harness.manager.getState().catalog.catalogVersion).toBe(2);
+
+      firstCatalog.resolve(firstCatalogValue);
+      await first;
+      expect(harness.manager.getState().catalog.catalogVersion).toBe(2);
+    });
   });
 
   describe('install lifecycle', () => {

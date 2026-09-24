@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { CatalogModelRecord } from '../src/models/model-management-types';
+import bundledCatalog from '../native/catalog.json';
+import type { CatalogModelRecord, ModelCatalogRecord } from '../src/models/model-management-types';
 import {
   type FirstRunHardwareProfile,
+  readFirstRunHardwareProfile,
   resolveStartingModelRecommendation,
 } from '../src/setup/first-run-model-guidance';
 
@@ -44,6 +46,23 @@ function largeMultilingualModel(): CatalogModelRecord {
 }
 
 describe('first-run model guidance', () => {
+  it('reports only the hardware hints that are actually available', () => {
+    expect(readFirstRunHardwareProfile({ hardwareConcurrency: 2 })).toMatchObject({
+      hardwareClass: 'constrained',
+      hardwareEvidence: 'processor',
+      memoryGb: null,
+    });
+    expect(readFirstRunHardwareProfile({ deviceMemory: 8 })).toMatchObject({
+      hardwareClass: 'standard',
+      hardwareEvidence: 'memory',
+      logicalProcessorCount: null,
+    });
+    expect(readFirstRunHardwareProfile({})).toMatchObject({
+      hardwareClass: 'unknown',
+      hardwareEvidence: 'none',
+    });
+  });
+
   it('does not describe a demanding multilingual model as a lower-power choice', () => {
     const model = largeMultilingualModel();
     const recommendation = resolveStartingModelRecommendation(
@@ -83,8 +102,55 @@ describe('first-run model guidance', () => {
     );
 
     expect(recommendation).toMatchObject({
+      hardwareEvidence: 'both',
+      liveChoiceIsOnly: true,
       model: { modelId: 'large-multilingual' },
       resourceClass: 'demanding',
+    });
+  });
+
+  it('treats the bundled Moonshine Tiny entry as the compact live choice', () => {
+    const tiny = bundledCatalog.models.find(
+      (model) => model.modelId === 'moonshine_tiny_streaming_en',
+    );
+    if (tiny === undefined) throw new Error('Expected bundled Moonshine Tiny model');
+
+    const recommendation = resolveStartingModelRecommendation(
+      {
+        catalog: bundledCatalog as unknown as ModelCatalogRecord,
+        compiledAdapters: [
+          {
+            displayName: 'Moonshine',
+            familyCapabilities: {
+              availableVoices: [],
+              maxAudioDurationSecs: null,
+              outputSampleRate: null,
+              producesPunctuation: true,
+              supportsHardwareAcceleration: false,
+              supportedLanguages: { kind: 'list', tags: ['en'] },
+              supportsAutomaticLanguageDetection: false,
+              supportsInitialPrompt: false,
+              supportsLanguageSelection: true,
+              supportsSegmentTimestamps: false,
+              supportsSpeedControl: false,
+              supportsStreaming: true,
+              supportsWordTimestamps: false,
+              task: 'stt',
+            },
+            familyId: 'moonshine',
+            runtimeId: 'onnx_runtime',
+          },
+        ],
+      },
+      'en',
+      constrainedHardware,
+    );
+
+    expect(tiny.uxTags).toContain('lightweight');
+    expect(recommendation).toMatchObject({
+      model: { modelId: 'moonshine_tiny_streaming_en' },
+      mode: 'live',
+      resourceClass: 'standard',
     });
   });
 });

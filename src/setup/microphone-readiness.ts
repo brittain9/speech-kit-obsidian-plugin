@@ -65,7 +65,8 @@ export class MicrophoneReadiness {
     } catch (error) {
       return this.remember({
         error,
-        recovery: permissionState === null ? 'reopen' : 'recheck',
+        recovery:
+          permissionState === null || isSuppressedCaptureError(error) ? 'reopen' : 'recheck',
         status: 'unavailable',
       });
     }
@@ -99,6 +100,11 @@ function stopTracks(stream: MediaStream): void {
       // Continue releasing every track even if the runtime rejects one stop().
     }
   }
+}
+
+function isSuppressedCaptureError(error: unknown): boolean {
+  const name = (error as { name?: unknown } | null)?.name;
+  return name === 'NotFoundError' || name === 'NotReadableError';
 }
 
 function namedError(name: string, message: string): Error {

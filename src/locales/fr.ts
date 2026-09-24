@@ -584,7 +584,7 @@ export const fr = {
   'models.manage.loadCatalogFailed': 'Échec du chargement du catalogue de modèles.',
   'models.manage.noneAvailable': 'Aucun modèle disponible pour ce moteur.',
   'models.manage.unsupportedLanguage':
-    ' · Ne prend pas en charge {language}. Modifiez la langue de dictée pour installer ou utiliser ce modèle.',
+    'Ne prend pas en charge {language}. Modifiez la langue de dictée pour installer ou utiliser ce modèle.',
   'models.manage.use': 'Utiliser',
   'models.manage.selected': 'Sélectionné',
   'models.manage.cancelling': 'Annulation…',

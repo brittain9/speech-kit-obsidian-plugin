@@ -586,7 +586,7 @@ export const es = {
   'models.manage.loadCatalogFailed': 'No se pudo cargar el catálogo de modelos.',
   'models.manage.noneAvailable': 'No hay modelos disponibles para este motor.',
   'models.manage.unsupportedLanguage':
-    '· No es compatible con {language}. Cambie el idioma de dictado para instalar o utilizar este modelo.',
+    'No es compatible con {language}. Cambie el idioma de dictado para instalar o utilizar este modelo.',
   'models.manage.use': 'Usar',
   'models.manage.selected': 'Seleccionado',
   'models.manage.cancelling': 'Cancelando…',

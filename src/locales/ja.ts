@@ -577,7 +577,7 @@ export const ja = {
   'models.manage.loadCatalogFailed': 'モデルカタログの読み込みに失敗しました。',
   'models.manage.noneAvailable': 'このエンジンには利用可能なモデルがありません。',
   'models.manage.unsupportedLanguage':
-    ' · {language}はサポートされていません。このモデルをインストールまたは使用するには、ディクテーション言語を変更してください。',
+    '{language}はサポートされていません。このモデルをインストールまたは使用するには、ディクテーション言語を変更してください。',
   'models.manage.use': '使用',
   'models.manage.selected': '選択済み',
   'models.manage.cancelling': 'キャンセル中…',

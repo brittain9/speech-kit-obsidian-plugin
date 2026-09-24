@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { de } from '../src/locales/de';
 import type { ModelInstallManager, ModelManagerState } from '../src/models/model-install-manager';
 import type { CatalogModelRecord } from '../src/models/model-management-types';
+import { prepareFirstRunDictationTarget } from '../src/setup/first-run-dictation-target';
 import { recommendationStateSignature, SetupWizardModal } from '../src/setup/setup-wizard-modal';
 import type { SidecarInstallManager } from '../src/sidecar/sidecar-install-manager';
 import type { TestElement } from './__mocks__/obsidian';
@@ -98,6 +99,15 @@ function modelManagerState(overrides: Partial<ModelManagerState> = {}): ModelMan
   };
 }
 
+function readySelection() {
+  return {
+    familyId: 'moonshine' as const,
+    kind: 'catalog_model' as const,
+    modelId: 'moonshine-small',
+    runtimeId: 'onnx_runtime' as const,
+  };
+}
+
 function finalOnlyModelManagerState(): ModelManagerState {
   const base = modelManagerState();
   const finalModel = {
@@ -180,6 +190,59 @@ function modalDependencies(
   };
 }
 
+function createFirstRunBoundary(
+  options: {
+    existingFiles?: Array<{ extension: string; path: string }>;
+    failCreate?: boolean;
+    failOpen?: boolean;
+    openLeavesTarget?: boolean;
+  } = {},
+) {
+  const files = [...(options.existingFiles ?? [])];
+  let hasTarget = false;
+  const vault = {
+    create: vi.fn(async (path: string) => {
+      if (options.failCreate === true) throw new Error('create failed');
+      const created = { extension: 'md', path };
+      files.push(created);
+      return created;
+    }),
+    getAbstractFileByPath: (path: string) => files.find((file) => file.path === path) ?? null,
+    getAllLoadedFiles: () => files,
+    getMarkdownFiles: () => files.filter((file) => file.extension === 'md'),
+  };
+  const openLinkText = vi.fn(async () => {
+    if (options.failOpen === true) throw new Error('open failed');
+    hasTarget = options.openLeavesTarget ?? true;
+  });
+  return {
+    dependencies: {
+      hasTarget: () => hasTarget,
+      vault,
+      workspace: { openLinkText },
+    },
+    openLinkText,
+    vault,
+  };
+}
+
+async function openReadyWizard(modal: SetupWizardModal): Promise<void> {
+  vi.stubGlobal('navigator', {
+    deviceMemory: 8,
+    hardwareConcurrency: 8,
+    mediaDevices: {
+      getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })),
+    },
+    permissions: { query: vi.fn(async () => ({ state: 'granted' })) },
+  });
+  modal.open();
+  await vi.waitFor(() => expect(button(modal, 'Check microphone')).toBeDefined());
+  await button(modal, 'Check microphone').click();
+  await vi.waitFor(() => expect(button(modal, 'Continue')).toBeDefined());
+  await button(modal, 'Continue').click();
+  await vi.waitFor(() => expect(button(modal, 'Try dictation now')).toBeDefined());
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -253,7 +316,7 @@ describe('SetupWizardModal first-run guidance', () => {
       expect(text).toContain('Live words appear while you speak');
       expect(text).toContain('English');
       expect(text).toContain('50.0 MiB download');
-      expect(text).toContain('lower-power computer');
+      expect(text).toContain('smallest compatible live choice');
       expect(text).toContain('CUDA is optional');
     });
     expect(button(modal, 'Install and use').textContent).toBe('Install and use');
@@ -458,6 +521,49 @@ describe('SetupWizardModal first-run guidance', () => {
     expect(textContent(modal.contentEl as unknown as TestElement)).not.toContain('Install and use');
   });
 
+  it('returns to the model prerequisite when a previously ready selection is cleared', async () => {
+    vi.stubGlobal('navigator', {
+      deviceMemory: 8,
+      hardwareConcurrency: 8,
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })),
+      },
+      permissions: { query: vi.fn(async () => ({ state: 'granted' })) },
+    });
+    const selection = {
+      familyId: 'moonshine' as const,
+      kind: 'catalog_model' as const,
+      modelId: 'moonshine-small',
+      runtimeId: 'onnx_runtime' as const,
+    };
+    let hasSelectedModel = true;
+    let state = modelManagerState({ selectedModel: selection });
+    let notify: (() => void) | undefined;
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => state,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(
+      modalDependencies(manager, { hasSelectedModel: () => hasSelectedModel }),
+    );
+
+    modal.open();
+    await vi.waitFor(() => expect(button(modal, 'Check microphone')).toBeDefined());
+    await button(modal, 'Check microphone').click();
+    await vi.waitFor(() => expect(button(modal, 'Continue')).toBeDefined());
+    await button(modal, 'Continue').click();
+    await vi.waitFor(() => expect(button(modal, 'Try dictation now')).toBeDefined());
+
+    hasSelectedModel = false;
+    state = { ...state, selectedModel: null };
+    notify?.();
+
+    await vi.waitFor(() => expect(button(modal, 'Install and use')).toBeDefined());
+  });
   it('offers Use for an already installed recommendation without downloading', async () => {
     vi.stubGlobal('navigator', { deviceMemory: 8, hardwareConcurrency: 8 });
     let hasSelectedModel = false;
@@ -702,6 +808,143 @@ describe('SetupWizardModal first-run guidance', () => {
     });
     expect(installAndWait).not.toHaveBeenCalled();
   });
+
+  it('prepares and opens one scratch note through Try dictation for an empty vault', async () => {
+    const boundary = createFirstRunBoundary();
+    const state = modelManagerState({ selectedModel: readySelection() });
+    const startDictation = vi.fn(async () => {});
+    const onCompleted = vi.fn(async () => {});
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => state,
+      subscribe: () => () => {},
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(
+      modalDependencies(manager, {
+        hasDictationTarget: () => boundary.dependencies.hasTarget(),
+        hasSelectedModel: () => true,
+        onCompleted,
+        prepareDictationTarget: () =>
+          prepareFirstRunDictationTarget(boundary.dependencies as never, '# Scratch'),
+        startDictation,
+      }),
+    );
+
+    await openReadyWizard(modal);
+    await button(modal, 'Try dictation now').click();
+
+    await vi.waitFor(() => expect(startDictation).toHaveBeenCalledOnce());
+    expect(boundary.vault.create).toHaveBeenCalledOnce();
+    expect(boundary.openLinkText).toHaveBeenCalledWith('Speech Kit scratch note.md', '', true, {
+      active: true,
+      state: { mode: 'source' },
+    });
+    expect(onCompleted).toHaveBeenCalledOnce();
+  });
+
+  it('shows localized open-note guidance when a non-empty vault has no target', async () => {
+    const boundary = createFirstRunBoundary({
+      existingFiles: [{ extension: 'md', path: 'Notes/existing.md' }],
+    });
+    const feedback = { show: vi.fn() };
+    const startDictation = vi.fn(async () => {});
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => modelManagerState({ selectedModel: readySelection() }),
+      subscribe: () => () => {},
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(
+      modalDependencies(manager, {
+        feedback,
+        hasDictationTarget: () => boundary.dependencies.hasTarget(),
+        hasSelectedModel: () => true,
+        prepareDictationTarget: () =>
+          prepareFirstRunDictationTarget(boundary.dependencies as never, '# Scratch'),
+        startDictation,
+      }),
+    );
+
+    await openReadyWizard(modal);
+    await button(modal, 'Try dictation now').click();
+
+    await vi.waitFor(() =>
+      expect(feedback.show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Open a Markdown note in editing mode, then try dictation again.',
+        }),
+      ),
+    );
+    expect(boundary.vault.create).not.toHaveBeenCalled();
+    expect(startDictation).not.toHaveBeenCalled();
+  });
+
+  it('keeps setup open when openLinkText resolves without a target', async () => {
+    const boundary = createFirstRunBoundary({ openLeavesTarget: false });
+    const feedback = { show: vi.fn() };
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => modelManagerState({ selectedModel: readySelection() }),
+      subscribe: () => () => {},
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(
+      modalDependencies(manager, {
+        feedback,
+        hasDictationTarget: () => boundary.dependencies.hasTarget(),
+        hasSelectedModel: () => true,
+        prepareDictationTarget: () =>
+          prepareFirstRunDictationTarget(boundary.dependencies as never, '# Scratch'),
+      }),
+    );
+
+    await openReadyWizard(modal);
+    await button(modal, 'Try dictation now').click();
+
+    await vi.waitFor(() =>
+      expect(feedback.show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Open a Markdown note in editing mode, then try dictation again.',
+        }),
+      ),
+    );
+    expect(button(modal, 'Try dictation now')).toBeDefined();
+  });
+
+  it.each(['create', 'open'] as const)(
+    'keeps setup open with localized recovery when scratch %s fails',
+    async (operation) => {
+      const boundary = createFirstRunBoundary({
+        failCreate: operation === 'create',
+        failOpen: operation === 'open',
+      });
+      const feedback = { show: vi.fn() };
+      const manager = {
+        getDictationLanguage: () => 'en',
+        getState: () => modelManagerState({ selectedModel: readySelection() }),
+        subscribe: () => () => {},
+      } as unknown as ModelInstallManager;
+      const modal = new SetupWizardModal(
+        modalDependencies(manager, {
+          feedback,
+          hasDictationTarget: () => boundary.dependencies.hasTarget(),
+          hasSelectedModel: () => true,
+          prepareDictationTarget: () =>
+            prepareFirstRunDictationTarget(boundary.dependencies as never, '# Scratch'),
+        }),
+      );
+
+      await openReadyWizard(modal);
+      await button(modal, 'Try dictation now').click();
+
+      await vi.waitFor(() =>
+        expect(feedback.show).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: "Couldn't open a safe dictation note. Try again.",
+          }),
+        ),
+      );
+      expect(button(modal, 'Try dictation now')).toBeDefined();
+    },
+  );
 
   it('explains an unsupported language and leaves model choice in Customize models', async () => {
     const manager = {

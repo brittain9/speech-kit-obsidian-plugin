@@ -576,13 +576,19 @@ export const de = {
   'setup.wizard.recommendation.reason.finalOnly':
     'Dies ist das kleinste kompatible Modell, aber Wörter werden nach einer Pause statt live abgeschlossen.',
   'setup.wizard.recommendation.reason.hardware.constrained':
-    'Auf diesem Computer mit geringeren Ressourcen ist dies die kleinere Auswahl.',
+    'Dies ist auf Basis der verfügbaren Hardware-Hinweise die kleinste kompatible Auswahl.',
+  'setup.wizard.recommendation.reason.hardware.constrainedLive':
+    'Dies ist die kleinste kompatible Live-Auswahl für die ausgewählte Sprache.',
   'setup.wizard.recommendation.reason.hardware.constrainedFallback':
-    'Für diese Sprache gibt es kein kompaktes Modell. Dies ist die einzige kompatible Auswahl; Download und lokaler Ressourcenbedarf sind daher höher.',
+    'Dies ist die kleinste kompatible Live-Auswahl für die ausgewählte Sprache, aber der Download und der lokale Ressourcenbedarf sind höher.',
+  'setup.wizard.recommendation.reason.hardware.constrainedOnlyLive':
+    'Dies ist die einzige Live-Auswahl für die ausgewählte Sprache, aber der Download und der lokale Ressourcenbedarf sind höher.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFinalFallback':
+    'Dies ist die kleinste kompatible Auswahl, aber der Download und der lokale Ressourcenbedarf sind höher.',
   'setup.wizard.recommendation.reason.hardware.standard':
-    'Es passt zu der von diesem Computer gemeldeten CPU und Arbeitsspeichermenge.',
+    'Auf Basis der verfügbaren Hardware-Hinweise ist dies eine ausgewogene Startwahl.',
   'setup.wizard.recommendation.reason.hardware.unknown':
-    'Es ist ein pragmatischer CPU-Startpunkt; unter „Modelle anpassen“ finden Sie Modelle mit höherem Ressourcenbedarf.',
+    'Hardwareangaben sind nicht verfügbar; dies ist eine Startwahl und keine gemessene Anpassung.',
   'setup.wizard.recommendation.mode.live':
     'Wörter erscheinen während des Sprechens live; abgeschlossene Phrasen können weiterhin korrigiert werden.',
   'setup.wizard.recommendation.mode.final':
@@ -648,13 +654,18 @@ export const de = {
   'models.manage.runSetup': 'Installation starten',
   'models.manage.loadingCatalog': 'Modellkatalog wird geladen…',
   'models.manage.loadCatalogFailed': 'Modellkatalog konnte nicht geladen werden.',
+  'models.manage.capabilitiesUnavailableTitle': 'Modellfunktionen nicht verfügbar',
+  'models.manage.capabilitiesUnavailableDesc':
+    'Der Modellkatalog wurde geladen, aber Speech Kit konnte die Funktionen der Sprach-Engine nicht lesen. Versuchen Sie es hier erneut oder öffnen Sie Setup erneut, nachdem Sie die Engine geprüft haben.',
+  'models.manage.capabilitiesRetry': 'Funktionen erneut prüfen',
+  'models.manage.capabilitiesChecking': 'Funktionen werden geprüft…',
   'models.manage.noneAvailable': 'Für diesen Motor sind keine Modelle verfügbar.',
   'models.manage.installed': 'Installiert',
   'models.manage.downloadable': 'Herunterladbar',
   'models.manage.compatibleLanguage': 'Kompatibel mit {language}',
   'models.manage.incompatibleLanguage': 'Nicht kompatibel mit {language}',
   'models.manage.unsupportedLanguage':
-    ' · Unterstützt {language} nicht. Ändern Sie die Diktiersprache, um dieses Modell zu installieren oder zu verwenden.',
+    'Unterstützt {language} nicht. Ändern Sie die Diktiersprache, um dieses Modell zu installieren oder zu verwenden.',
   'models.manage.use': 'Verwenden',
   'models.manage.selected': 'Ausgewählt',
   'models.manage.cancelling': 'Wird abgebrochen…',

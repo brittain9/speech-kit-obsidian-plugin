@@ -44,6 +44,26 @@ describe('MicrophoneReadiness', () => {
     expect(getUserMedia).toHaveBeenCalledOnce();
   });
 
+  it.each(['NotFoundError', 'NotReadableError'] as const)(
+    'directs %s capture failures to reopen setup instead of promising another check',
+    async (name) => {
+      const getUserMedia = vi
+        .fn()
+        .mockRejectedValue(Object.assign(new Error('device is unavailable'), { name }));
+      const readiness = new MicrophoneReadiness({
+        mediaDevices: { getUserMedia },
+        permissions: { query: vi.fn().mockResolvedValue({ state: 'prompt' }) },
+      });
+
+      await expect(readiness.check()).resolves.toMatchObject({
+        recovery: 'reopen',
+        status: 'unavailable',
+      });
+      await readiness.check();
+      expect(getUserMedia).toHaveBeenCalledOnce();
+    },
+  );
+
   it('does not call media devices when permission is already denied', async () => {
     const getUserMedia = vi.fn();
     const readiness = new MicrophoneReadiness({

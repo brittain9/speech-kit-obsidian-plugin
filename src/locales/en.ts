@@ -816,13 +816,19 @@ export const en = {
   'setup.wizard.recommendation.reason.finalOnly':
     'This is the smallest compatible model, but words are finalized after a pause rather than shown live.',
   'setup.wizard.recommendation.reason.hardware.constrained':
-    'It is the smaller choice for this lower-power computer.',
+    'This is the smallest compatible choice based on the available hardware hints.',
+  'setup.wizard.recommendation.reason.hardware.constrainedLive':
+    'This is the smallest compatible live choice for the selected language.',
   'setup.wizard.recommendation.reason.hardware.constrainedFallback':
-    'No compact model supports this language. This is the only compatible choice, so its download and local resource cost are higher.',
+    'This is the smallest compatible live choice for the selected language, but its download and local resource cost are higher.',
+  'setup.wizard.recommendation.reason.hardware.constrainedOnlyLive':
+    'This is the only live choice for the selected language, and its download and local resource cost are higher.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFinalFallback':
+    'This is the smallest compatible choice, but its download and local resource cost are higher.',
   'setup.wizard.recommendation.reason.hardware.standard':
-    'It fits the CPU and memory reported by this computer.',
+    'This is a balanced starting choice based on the available hardware hints.',
   'setup.wizard.recommendation.reason.hardware.unknown':
-    'It is a practical CPU-first starting point; Customize models shows higher-resource choices.',
+    'Hardware details are unavailable, so this is a starting choice rather than a measured fit.',
   'setup.wizard.recommendation.mode.live':
     'Live words appear while you speak; completed phrases can still be revised.',
   'setup.wizard.recommendation.mode.final':
@@ -886,13 +892,18 @@ export const en = {
   'models.manage.runSetup': 'Run setup',
   'models.manage.loadingCatalog': 'Loading model catalog…',
   'models.manage.loadCatalogFailed': 'Failed to load the model catalog.',
+  'models.manage.capabilitiesUnavailableTitle': 'Model capabilities unavailable',
+  'models.manage.capabilitiesUnavailableDesc':
+    'The model catalog loaded, but Speech Kit could not read the speech-engine capabilities. Retry here or reopen setup after checking the engine.',
+  'models.manage.capabilitiesRetry': 'Retry capabilities',
+  'models.manage.capabilitiesChecking': 'Checking capabilities…',
   'models.manage.noneAvailable': 'No models available for this engine.',
   'models.manage.installed': 'Installed',
   'models.manage.downloadable': 'Downloadable',
   'models.manage.compatibleLanguage': 'Compatible with {language}',
   'models.manage.incompatibleLanguage': 'Not compatible with {language}',
   'models.manage.unsupportedLanguage':
-    ' · Does not support {language}. Change Dictation language to install or use this model.',
+    'Does not support {language}. Change Dictation language to install or use this model.',
   'models.manage.use': 'Use',
   'models.manage.selected': 'Selected',
   'models.manage.cancelling': 'Cancelling…',

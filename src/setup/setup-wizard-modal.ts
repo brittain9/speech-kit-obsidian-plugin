@@ -112,8 +112,14 @@ export class SetupWizardModal extends Modal {
     this.modelManagerUnsub = this.deps.modelInstallManager.subscribe(() => {
       const nextSignature = recommendationStateSignature(this.deps.modelInstallManager.getState());
       if (nextSignature === this.modelStateSignature) return;
+      const wasModelReady = this.modelReady;
       this.modelStateSignature = nextSignature;
       this.modelReady = this.deps.hasSelectedModel();
+      if (wasModelReady && !this.modelReady) {
+        this.currentStep = 'model';
+        this.render();
+        return;
+      }
       if (this.currentStep === 'model') {
         this.render();
       }
@@ -733,9 +739,18 @@ function recommendationReason(recommendation: StartingModelRecommendation): stri
 function hardwareReason(recommendation: StartingModelRecommendation): string {
   switch (recommendation.hardwareClass) {
     case 'constrained':
+      if (recommendation.resourceClass === 'demanding') {
+        if (recommendation.mode === 'live' && recommendation.liveChoiceIsOnly) {
+          return t('setup.wizard.recommendation.reason.hardware.constrainedOnlyLive');
+        }
+        if (recommendation.mode === 'live') {
+          return t('setup.wizard.recommendation.reason.hardware.constrainedFallback');
+        }
+        return t('setup.wizard.recommendation.reason.hardware.constrainedFinalFallback');
+      }
       return t(
-        recommendation.resourceClass === 'demanding'
-          ? 'setup.wizard.recommendation.reason.hardware.constrainedFallback'
+        recommendation.mode === 'live'
+          ? 'setup.wizard.recommendation.reason.hardware.constrainedLive'
           : 'setup.wizard.recommendation.reason.hardware.constrained',
       );
     case 'standard':

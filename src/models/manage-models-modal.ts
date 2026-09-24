@@ -94,7 +94,7 @@ export function deriveModelLanguageOptions(
     ...[...knownTags, ...remainingTags].map((tag) => ({
       code: tag === 'auto' ? 'AUTO' : tag.toUpperCase(),
       filter: { kind: 'language' as const, tag },
-      label: tag === 'auto' ? t('settings.dictationLanguage.autoDetect') : modelLanguageLabel(tag),
+      label: modelLanguageLabel(tag),
     })),
   ];
 }
@@ -123,7 +123,7 @@ export function modelMatchesLanguageFilter(
   return model.languageTags.includes(filter.tag);
 }
 
-function modelLanguageTagsForDiscovery(
+export function modelLanguageTagsForDiscovery(
   model: Pick<
     CatalogModelRecord,
     'languageTags' | 'supportsAutomaticLanguageDetection' | 'task' | 'translationSupport'
@@ -243,6 +243,7 @@ function adapterTabId(key: AdapterTabKey): string {
 
 export class ManageModelsModal extends Modal {
   private actionInProgress = false;
+  private capabilityRetryPending = false;
   private readonly activeTabs = new Map<ModelPickerTask, AdapterTabKey>();
   private activeTask: ModelPickerTask;
   private activeLanguage: ModelLanguageFilter = ALL_MODEL_LANGUAGES;
@@ -388,6 +389,7 @@ export class ManageModelsModal extends Modal {
     this.releaseSubscription?.();
     this.releaseSubscription = null;
     this.actionInProgress = false;
+    this.capabilityRetryPending = false;
     this.browserEl = null;
     this.navigationEl = null;
     this.navigationSignature = '';
@@ -589,7 +591,7 @@ export class ManageModelsModal extends Modal {
     const panel = this.listContainer.createDiv({ cls: 'local-stt-language-availability' });
     panel.createEl('h3', {
       text: t('models.manage.languageAvailabilityTitle', {
-        language: formatCatalogLanguageLabel(this.activeLanguage.tag),
+        language: modelLanguageLabel(this.activeLanguage.tag),
       }),
     });
     for (const availability of deriveTaskModelAvailability(
@@ -611,6 +613,11 @@ export class ManageModelsModal extends Modal {
     this.progressElements.clear();
 
     const state = this.deps.manager.getState();
+
+    if (state.capabilityLoadError != null || this.capabilityRetryPending) {
+      this.renderCapabilityErrorPanel(state.capabilityLoadError ?? '');
+      return;
+    }
 
     if (state.loadStatus === 'loading') {
       this.listContainer.createEl('p', { text: t('models.manage.loadingCatalog') });
@@ -668,6 +675,30 @@ export class ManageModelsModal extends Modal {
 
     for (const row of tabRows) {
       this.renderRow(row, this.listContainer.createDiv());
+    }
+  }
+
+  private renderCapabilityErrorPanel(message: string): void {
+    if (this.listContainer === null) return;
+    const panel = this.listContainer.createDiv({ cls: 'local-stt-empty-panel' });
+    panel.createEl('h3', { text: t('models.manage.capabilitiesUnavailableTitle') });
+    panel.createEl('p', { text: t('models.manage.capabilitiesUnavailableDesc') });
+    const actions = panel.createDiv({ cls: 'local-stt-empty-panel__actions' });
+    const pending =
+      this.capabilityRetryPending || this.deps.manager.getState().loadStatus === 'loading';
+    const retry = actions.createEl('button', {
+      cls: 'mod-cta',
+      text: t(pending ? 'models.manage.capabilitiesChecking' : 'models.manage.capabilitiesRetry'),
+    });
+    retry.disabled = pending;
+    retry.addEventListener('click', () => {
+      if (pending) return;
+      this.capabilityRetryPending = true;
+      this.renderModelList();
+      void this.deps.manager.init();
+    });
+    if (message.length > 0) {
+      panel.createEl('p', { cls: 'local-stt-model-warning', text: message });
     }
   }
 
@@ -985,6 +1016,7 @@ export class ManageModelsModal extends Modal {
 
   private handleStateChange(): void {
     const state = this.deps.manager.getState();
+    if (state.loadStatus !== 'loading') this.capabilityRetryPending = false;
 
     // If we're currently in the sidecar-required panel (listContainer === null)
     // or the state has just transitioned into error mode, do a full re-render
@@ -1153,18 +1185,7 @@ export class ManageModelsModal extends Modal {
   }
 
   private buildNavigationSignature(): string {
-    return this.getRunnableRows()
-      .map((row) => {
-        const { model } = row;
-        return [
-          model.runtimeId,
-          model.familyId,
-          model.modelId,
-          model.task,
-          ...model.languageTags,
-        ].join(':');
-      })
-      .join('|');
+    return buildModelNavigationSignature(this.deps.manager.getState());
   }
 
   private getRunnableRows(): ModelRowState[] {
@@ -1206,17 +1227,13 @@ export class ManageModelsModal extends Modal {
       text: t(installed ? 'models.manage.installed' : 'models.manage.downloadable'),
     });
     if (this.activeLanguage.kind !== 'all') {
-      const language =
-        this.activeLanguage.tag === 'auto'
-          ? t('settings.dictationLanguage.autoDetect')
-          : formatCatalogLanguageLabel(this.activeLanguage.tag);
+      const language = modelLanguageLabel(this.activeLanguage.tag);
       const compatibility = modelLanguageCompatibility(model, this.activeLanguage);
-      tagsContainer.createSpan({
-        text:
-          compatibility === 'compatible'
-            ? t('models.manage.compatibleLanguage', { language })
-            : t('models.manage.incompatibleLanguage', { language }),
-      });
+      if (compatibility === 'compatible') {
+        tagsContainer.createSpan({
+          text: t('models.manage.compatibleLanguage', { language }),
+        });
+      }
     }
     const policy = resolveModelPresentationPolicy(model);
 
@@ -1245,6 +1262,37 @@ export class ManageModelsModal extends Modal {
 
     return frag;
   }
+}
+
+export function buildModelNavigationSignature(state: Readonly<ModelManagerState>): string {
+  const runnableRows = deriveModelRowStates(state).filter((row) =>
+    state.compiledAdapters.some(
+      (adapter) =>
+        adapter.runtimeId === row.model.runtimeId && adapter.familyId === row.model.familyId,
+    ),
+  );
+  return JSON.stringify({
+    adapters: state.compiledAdapters.map((adapter) => {
+      const family = state.catalog.families.find(
+        (candidate) =>
+          candidate.runtimeId === adapter.runtimeId && candidate.familyId === adapter.familyId,
+      );
+      return [
+        adapter.runtimeId,
+        adapter.familyId,
+        adapter.familyCapabilities?.task ?? family?.task ?? null,
+        adapter.familyCapabilities?.supportsStreaming ?? false,
+      ];
+    }),
+    catalogVersion: state.catalog.catalogVersion,
+    models: runnableRows.map((row) => [
+      row.model.runtimeId,
+      row.model.familyId,
+      row.model.modelId,
+      row.model.task,
+      modelLanguageTagsForDiscovery(row.model),
+    ]),
+  });
 }
 
 function formatTaskModelAvailability(availability: TaskModelAvailability): string {
@@ -1305,7 +1353,9 @@ function matchesAdapterTab(left: AdapterTabKey, right: AdapterTabKey | null): bo
 }
 
 function modelLanguageLabel(tag: string): string {
-  return formatCatalogLanguageLabel(tag);
+  return tag === 'auto'
+    ? t('settings.dictationLanguage.autoDetect')
+    : formatCatalogLanguageLabel(tag);
 }
 
 function getRowKey(row: ModelRowState): string {

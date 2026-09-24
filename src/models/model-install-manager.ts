@@ -254,6 +254,8 @@ export class ModelInstallManager {
   private compiledRuntimes: CompiledRuntimeInfo[] = [];
   private currentInstallRequest: InstallRequest | null = null;
   private failedInstall: FailedInstallInfo | null = null;
+  private initGeneration = 0;
+  private initPromise: Promise<void> | null = null;
   private installGeneration = 0;
   private readonly installWaiters = new Map<string, InstallWaiter>();
   private installedModels: InstalledModelRecord[] = [];
@@ -274,11 +276,30 @@ export class ModelInstallManager {
   // Lifecycle
   // -----------------------------------------------------------------------
 
-  async init(): Promise<void> {
+  init(): Promise<void> {
+    if (this.initPromise !== null) return this.initPromise;
+
+    const generation = ++this.initGeneration;
+    const wasLoading = this.loadStatus === 'loading';
     this.loadStatus = 'loading';
     this.loadError = null;
     this.capabilityLoadError = null;
 
+    const promise = this.runInit(generation);
+    this.initPromise = promise;
+    if (!wasLoading) this.notify();
+    void promise.then(
+      () => {
+        if (this.initPromise === promise) this.initPromise = null;
+      },
+      () => {
+        if (this.initPromise === promise) this.initPromise = null;
+      },
+    );
+    return promise;
+  }
+
+  private async runInit(generation: number): Promise<void> {
     // Wire up the sidecar event listener before fetching so we don't miss
     // install events that arrive during the init fetch.
     if (this.releaseSidecarSubscription === null) {
@@ -298,6 +319,7 @@ export class ModelInstallManager {
         this.fetchSystemInfo(),
       ]);
 
+      if (generation !== this.initGeneration) return;
       this.catalog = catalogEvent;
       this.installedModels = installedEvent.models;
       this.modelStore = modelStoreEvent;
@@ -307,10 +329,12 @@ export class ModelInstallManager {
       this.loadStatus = 'ready';
       this.loadError = null;
     } catch (error) {
+      if (generation !== this.initGeneration) return;
       this.loadStatus = 'error';
       this.loadError = error instanceof Error ? error.message : String(error);
     }
 
+    if (generation !== this.initGeneration) return;
     const persistedSelection = this.deps.getSettings().selectedModel;
     if (persistedSelection !== null) {
       const snapshot = this.deps.getSettings().selectedModelCapabilitiesSnapshot;
@@ -345,10 +369,11 @@ export class ModelInstallManager {
         };
       } else {
         this.selectedModelCapabilities = { selection: persistedSelection, status: 'pending' };
-        void this.refreshSelectedCapabilities(persistedSelection);
+        void this.refreshSelectedCapabilities(persistedSelection, 'stt', generation);
       }
     }
 
+    if (generation !== this.initGeneration) return;
     const persistedTtsSelection = this.deps.getSettings().selectedTtsModel;
     if (persistedTtsSelection !== null) {
       const snapshot = this.deps.getSettings().selectedTtsModelCapabilitiesSnapshot;
@@ -363,14 +388,16 @@ export class ModelInstallManager {
           selection: persistedTtsSelection,
           status: 'pending',
         };
-        void this.refreshSelectedCapabilities(persistedTtsSelection, 'tts');
+        void this.refreshSelectedCapabilities(persistedTtsSelection, 'tts', generation);
       }
     }
 
-    this.notify();
+    if (generation === this.initGeneration) this.notify();
   }
 
   dispose(): void {
+    this.initGeneration += 1;
+    this.initPromise = null;
     this.lifecycleGeneration += 1;
     this.selectionGeneration += 1;
     if (this.cancelStuckTimer !== null) {
@@ -852,14 +879,22 @@ export class ModelInstallManager {
   private async refreshSelectedCapabilities(
     selection: SelectedModel,
     task: 'stt' | 'tts' = 'stt',
+    expectedInitGeneration: number = this.initGeneration,
   ): Promise<void> {
     try {
       const probeResult = await this.deps.sidecarConnection.probeModelSelection({
         modelSelection: selection,
         ...createModelStoreOverridePayload(this.deps.getSettings().modelStorePathOverride),
       });
-      await this.applyProbeResultToCapabilities(selection, probeResult, task);
+      if (expectedInitGeneration !== this.initGeneration) return;
+      await this.applyProbeResultToCapabilities(
+        selection,
+        probeResult,
+        task,
+        expectedInitGeneration,
+      );
     } catch (error) {
+      if (expectedInitGeneration !== this.initGeneration) return;
       this.deps.logger?.warn(
         'model',
         `failed to probe selected model capabilities: ${error instanceof Error ? error.message : String(error)}`,
@@ -883,7 +918,9 @@ export class ModelInstallManager {
     selection: SelectedModel,
     probeResult: ModelProbeResultEvent,
     task: 'stt' | 'tts' = 'stt',
+    expectedInitGeneration: number = this.initGeneration,
   ): Promise<void> {
+    if (expectedInitGeneration !== this.initGeneration) return;
     const current =
       task === 'tts'
         ? this.deps.getSettings().selectedTtsModel
@@ -893,14 +930,10 @@ export class ModelInstallManager {
     }
 
     if (probeResult.status === 'ready' && probeResult.mergedCapabilities !== null) {
-      this.setCapabilities(task, {
-        capabilities: probeResult.mergedCapabilities,
-        selection,
-        status: 'ready',
-      });
       // Cache the result so a future plugin startup can trust it instead of
       // re-probing the sidecar, which would force a full model load just to
-      // populate UI badges (issue #195).
+      // populate UI badges (issue #195). Do not publish the result until the
+      // write completes: a newer init generation may have superseded this probe.
       await this.updateSettings({
         ...(task === 'tts'
           ? {
@@ -915,6 +948,19 @@ export class ModelInstallManager {
                 selection,
               },
             }),
+      });
+      if (expectedInitGeneration !== this.initGeneration) return;
+      const currentAfterWrite =
+        task === 'tts'
+          ? this.deps.getSettings().selectedTtsModel
+          : this.deps.getSettings().selectedModel;
+      if (currentAfterWrite === null || !selectedModelEquals(currentAfterWrite, selection)) {
+        return;
+      }
+      this.setCapabilities(task, {
+        capabilities: probeResult.mergedCapabilities,
+        selection,
+        status: 'ready',
       });
     } else if (probeResult.status === 'missing' || probeResult.status === 'invalid') {
       const details = createProbeFailureMessage(probeResult);
@@ -937,7 +983,7 @@ export class ModelInstallManager {
       });
     }
 
-    this.notify();
+    if (expectedInitGeneration === this.initGeneration) this.notify();
   }
 
   private async invalidateCapabilitiesSnapshot(

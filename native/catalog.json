@@ -497,7 +497,7 @@
       "displayName": "Moonshine Tiny",
       "summary": "Fastest Moonshine streaming model at 34M parameters, designed for low-end CPUs.",
       "languageTags": ["en"],
-      "uxTags": ["fast", "cpu"],
+      "uxTags": ["fast", "lightweight", "cpu"],
       "licenseLabel": "MIT",
       "licenseUrl": "https://github.com/moonshine-ai/moonshine/blob/main/LICENSE",
       "sourceUrl": "https://github.com/moonshine-ai/moonshine",

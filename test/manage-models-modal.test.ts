@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   ALL_MODEL_LANGUAGES,
+  buildModelNavigationSignature,
   deriveModelLanguageOptions,
   derivePickerFamilyTabs,
   deriveTaskModelAvailability,
@@ -197,6 +198,109 @@ describe('model browser', () => {
     ]);
   });
 
+  it('uses task-aware discovery projections in the navigation signature', () => {
+    const autoModel = {
+      ...sttModel('auto', 'moonshine', ['en']),
+      supportsAutomaticLanguageDetection: true,
+    };
+    const translation = translationModel('translation', ['raw'], ['tl']);
+    const state = {
+      activeInstall: null,
+      catalog: {
+        catalogVersion: 1,
+        collections: [],
+        families: [],
+        models: [autoModel, translation],
+      },
+      compiledAdapters: [
+        {
+          displayName: 'Moonshine',
+          familyCapabilities: {
+            availableVoices: [],
+            maxAudioDurationSecs: null,
+            outputSampleRate: null,
+            producesPunctuation: true,
+            supportsHardwareAcceleration: false,
+            supportedLanguages: { kind: 'list', tags: ['en'] },
+            supportsAutomaticLanguageDetection: true,
+            supportsInitialPrompt: false,
+            supportsLanguageSelection: true,
+            supportsSegmentTimestamps: false,
+            supportsSpeedControl: false,
+            supportsStreaming: true,
+            supportsWordTimestamps: false,
+            task: 'stt',
+          },
+          familyId: 'moonshine',
+          runtimeId: 'onnx_runtime',
+        },
+        {
+          displayName: 'Translation',
+          familyCapabilities: {
+            availableVoices: [],
+            maxAudioDurationSecs: null,
+            outputSampleRate: null,
+            producesPunctuation: false,
+            supportsHardwareAcceleration: false,
+            supportedLanguages: { kind: 'list', tags: ['tl'] },
+            supportsAutomaticLanguageDetection: false,
+            supportsInitialPrompt: true,
+            supportsLanguageSelection: true,
+            supportsSegmentTimestamps: false,
+            supportsSpeedControl: false,
+            supportsStreaming: false,
+            supportsWordTimestamps: false,
+            task: 'translation',
+          },
+          familyId: 'tencent_hy_mt',
+          runtimeId: 'llama_cpp',
+        },
+      ],
+      compiledRuntimes: [],
+      failedInstall: null,
+      installedModels: [],
+      loadError: null,
+      loadStatus: 'ready',
+      modelStore: { overridePath: null, path: '', usingDefaultPath: true },
+      selectedModel: null,
+      selectedModelCapabilities: { status: 'none' },
+      selectedTtsModel: null,
+      selectedTtsModelCapabilities: { status: 'none' },
+    } satisfies ModelManagerState;
+    const baseSignature = buildModelNavigationSignature(state);
+    const rawTagOnly = {
+      ...state,
+      catalog: {
+        ...state.catalog,
+        models: [autoModel, { ...translation, languageTags: ['different'] }],
+      },
+    };
+    const autoChanged = {
+      ...state,
+      catalog: {
+        ...state.catalog,
+        models: [{ ...autoModel, supportsAutomaticLanguageDetection: false }, translation],
+      },
+    };
+    const translationChanged = {
+      ...state,
+      catalog: {
+        ...state.catalog,
+        models: [
+          autoModel,
+          {
+            ...translation,
+            translationSupport: { kind: 'all_to_all' as const, languages: ['es'] },
+          },
+        ],
+      },
+    };
+
+    expect(buildModelNavigationSignature(rawTagOnly)).toBe(baseSignature);
+    expect(buildModelNavigationSignature(autoChanged)).not.toBe(baseSignature);
+    expect(buildModelNavigationSignature(translationChanged)).not.toBe(baseSignature);
+  });
+
   it('derives task availability for a translation-only language from the same catalog', () => {
     const english = row(sttModel('whisper-en', 'whisper', ['en']));
     const frenchVoice = row(ttsModel('pocket-fr', 'fr'));
@@ -234,6 +338,72 @@ describe('model browser', () => {
     ]);
   });
 
+  it('shows capability discovery failure with a disabled pending retry', async () => {
+    let state: ModelManagerState = {
+      activeInstall: null,
+      capabilityLoadError: 'system info unavailable',
+      catalog: { catalogVersion: 1, collections: [], families: [], models: [] },
+      compiledAdapters: [],
+      compiledRuntimes: [],
+      failedInstall: null,
+      installedModels: [],
+      loadError: null,
+      loadStatus: 'ready',
+      modelStore: { overridePath: null, path: '', usingDefaultPath: true },
+      selectedModel: null,
+      selectedModelCapabilities: { status: 'none' },
+      selectedTtsModel: null,
+      selectedTtsModelCapabilities: { status: 'none' },
+    };
+    let notify: (() => void) | undefined;
+    let resolveRetry: (() => void) | undefined;
+    const retry = new Promise<void>((resolve) => {
+      resolveRetry = resolve;
+    });
+    const init = vi.fn(() => {
+      state = { ...state, capabilityLoadError: null, loadStatus: 'loading' };
+      notify?.();
+      return retry;
+    });
+    const manager = {
+      getState: () => state,
+      init,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
+    } as unknown as ModelInstallManager;
+    const modal = new ManageModelsModal({} as never, {
+      feedback: { show: vi.fn() },
+      manager,
+      onChanged: vi.fn(),
+    });
+
+    modal.open();
+    const content = modal.contentEl as unknown as TestElement;
+    expect(texts(content)).toEqual(
+      expect.arrayContaining(['Model capabilities unavailable', 'Retry capabilities']),
+    );
+    expect(texts(content)).not.toContain('No models available');
+
+    const retryButton = content
+      .querySelectorAll('button')
+      .find((candidate) => candidate.textContent === 'Retry capabilities');
+    await retryButton?.click();
+    const checkingButton = content
+      .querySelectorAll('button')
+      .find((candidate) => candidate.textContent === 'Checking capabilities…');
+    expect(checkingButton?.disabled).toBe(true);
+    await checkingButton?.click();
+    expect(init).toHaveBeenCalledOnce();
+
+    state = { ...state, capabilityLoadError: 'still unavailable', loadStatus: 'ready' };
+    resolveRetry?.();
+    await retry;
+    notify?.();
+    expect(texts(content)).toContain('Retry capabilities');
+    modal.close();
+  });
   it('shows installed and compatible-download counts for every task when a language is selected', async () => {
     const naturalModel = translationModel('hy-mt-natural', ['en', 'tl'], ['en', 'tl']);
     const literalModel = translationModel('hy-mt-literal', ['en', 'tl'], ['en', 'tl']);

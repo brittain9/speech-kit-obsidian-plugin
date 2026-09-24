@@ -582,7 +582,7 @@ export const pt = {
   'models.manage.loadCatalogFailed': 'Não foi possível carregar o catálogo de modelos.',
   'models.manage.noneAvailable': 'Não existem modelos disponíveis para este motor.',
   'models.manage.unsupportedLanguage':
-    ' · Não suporta {language}. Altere o Idioma do ditado para instalar ou utilizar este modelo.',
+    'Não suporta {language}. Altere o Idioma do ditado para instalar ou utilizar este modelo.',
   'models.manage.use': 'Utilizar',
   'models.manage.selected': 'Selecionado',
   'models.manage.cancelling': 'A cancelar…',

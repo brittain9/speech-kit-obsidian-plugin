@@ -581,7 +581,7 @@ export const nl = {
   'models.manage.loadCatalogFailed': 'Kan de modelcatalogus niet laden.',
   'models.manage.noneAvailable': 'Er zijn geen modellen beschikbaar voor deze engine.',
   'models.manage.unsupportedLanguage':
-    ' · Ondersteunt {language} niet. Wijzig de dicteertaal om dit model te installeren of te gebruiken.',
+    'Ondersteunt {language} niet. Wijzig de dicteertaal om dit model te installeren of te gebruiken.',
   'models.manage.use': 'Gebruik',
   'models.manage.selected': 'Gekozen',
   'models.manage.cancelling': 'Annuleren…',
