@@ -5,15 +5,6 @@ interface TranslationStatusUpdateOptions {
   preserveFocus?: boolean;
 }
 
-export function updateDetachedTranslationStatus(
-  status: Pick<TranslationStatusController, 'update'> | null,
-  state: TranslationJobState | null,
-  reopen: () => void,
-  options?: TranslationStatusUpdateOptions,
-): void {
-  status?.update(state, reopen, options);
-}
-
 /** Presents the detached translation job as a keyboard-operable live action. */
 export class TranslationStatusController {
   private readonly button: HTMLButtonElement;

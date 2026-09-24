@@ -82,10 +82,7 @@ import {
   type SidecarVersionDrift,
 } from './sidecar/sidecar-version-drift';
 import { TranslationController } from './translation/translation-controller';
-import {
-  TranslationStatusController,
-  updateDetachedTranslationStatus,
-} from './translation/translation-status';
+import { TranslationStatusController } from './translation/translation-status';
 import { READ_ALOUD_SPEED_PRESETS, readAloudControlLabels } from './tts/read-aloud-control-labels';
 import { ReadAloudController, type ReadAloudState } from './tts/read-aloud-controller';
 import { didReadAloudSettingsChange, resolveReadAloudVoiceId } from './tts/read-aloud-selection';
@@ -336,7 +333,7 @@ export default class LocalSttPlugin extends Plugin {
       onReadAloud: (text, language) => this.requireReadAloudController().readText(text, language),
       saveSettings: (nextSettings) => this.updateSettings(nextSettings),
       setDetachedStatus: (state, reopen, options) =>
-        updateDetachedTranslationStatus(this.translationStatus, state, reopen, options),
+        this.translationStatus?.update(state, reopen, options),
       sidecarConnection: this.requireSidecarConnection(),
     });
 

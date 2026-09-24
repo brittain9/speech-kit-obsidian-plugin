@@ -1,23 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { TranslationJobState } from '../src/translation/translation-job';
-import {
-  TranslationStatusController,
-  updateDetachedTranslationStatus,
-} from '../src/translation/translation-status';
+import { TranslationStatusController } from '../src/translation/translation-status';
 import { TestElement } from './__mocks__/obsidian';
 
 describe('TranslationStatusController', () => {
-  it('forwards the preserve-focus option through the production status adapter', () => {
-    const update = vi.fn();
-    const reopen = vi.fn();
-    const options = { preserveFocus: true };
-
-    updateDetachedTranslationStatus({ update } as never, null, reopen, options);
-
-    expect(update).toHaveBeenCalledExactlyOnceWith(null, reopen, options);
-  });
-
   it('exposes a keyboard-operable button with a polite translation status region', async () => {
     const status = new TestElement();
     const controller = new TranslationStatusController(status as unknown as HTMLElement);

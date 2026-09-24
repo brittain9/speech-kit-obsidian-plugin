@@ -162,6 +162,7 @@ describe('TranslationController', () => {
 
   it('restores the detached status trigger after deferred modal close', async () => {
     const fixture = await openStatusTriggeredTranslation();
+    expect(fixture.forwardedStatusOptions).toContainEqual({ preserveFocus: true });
     fixture.reopenedModal.contentEl.focus();
     const finishClose = deferModalClose(fixture.reopenedModal);
 
@@ -328,6 +329,7 @@ describe('TranslationController', () => {
 
 interface StatusTriggeredTranslationFixture {
   completeTranslation: () => void;
+  forwardedStatusOptions: Array<{ preserveFocus?: boolean } | undefined>;
   editor: {
     focus: ReturnType<typeof vi.fn>;
     getValue: () => string;
@@ -344,6 +346,7 @@ async function openStatusTriggeredTranslation(): Promise<StatusTriggeredTranslat
   const statusEl = new TestElement();
   const status = new TranslationStatusController(statusEl as unknown as HTMLElement);
   const listeners: Array<(event: SidecarEvent) => void> = [];
+  const forwardedStatusOptions: Array<{ preserveFocus?: boolean } | undefined> = [];
   let translationId = '';
   const startTranslation = vi.fn(async (payload: { translationId: string }) => {
     translationId = payload.translationId;
@@ -380,6 +383,7 @@ async function openStatusTriggeredTranslation(): Promise<StatusTriggeredTranslat
     onReadAloud: vi.fn(),
     saveSettings: vi.fn(async () => {}),
     setDetachedStatus: (state, reopen, options) => {
+      forwardedStatusOptions.push(options);
       status.update(state, reopen, options);
     },
     sidecarConnection: {
@@ -417,6 +421,7 @@ async function openStatusTriggeredTranslation(): Promise<StatusTriggeredTranslat
         translations: ['Traduzca esto.'],
       });
     },
+    forwardedStatusOptions,
     editor,
     reopenedModal,
     statusEl,
