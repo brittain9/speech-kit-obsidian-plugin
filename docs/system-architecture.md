@@ -513,8 +513,33 @@ the selected model runtime and family:
 
 The sidecar catalog owns SHA-256-pinned installation and removal for both
 engines. Translation support is either exact directed pairs or an all-to-all
-language set. Note text never crosses the network; HY-MT protocol and logs do
-not record source or translated text.
+language set. A model-capability helper derives participating translation
+languages from that metadata: all-to-all models expose their declared language
+set, while Firefox models expose only the distinct source and target endpoints
+of independently declared pairs. Manage Models reuses this helper so its
+STT/TTS `languageTags` filters cannot broaden or diverge from translation
+capability. Each task retains its own language filter while the user switches
+tasks.
+
+The modal's localized swap control reverses the draft source and target only
+when the exact selected runtime/family/model is installed and its catalog
+metadata declares the reverse direction. It uses the ordinary language-change
+persistence path and leaves any completed preview visible but stale. Swap,
+language changes, and exact-pack installation are disabled while inference,
+local model selection, or any live model install is active. The modal observes
+`ModelInstallManager` state and subscriptions, including the short interval
+before the sidecar emits an install event, so installed options and operation
+state do not become stale while the modal remains open.
+
+Model selection is monotonic. Every requested translation model receives a
+modal and controller generation; only the latest successful, committed probe
+may update draft state, active configuration, or persisted model selection.
+`ModelInstallManager.select()` reports whether its guarded settings commit was
+current, so a late successful probe is ignored rather than treated as a newer
+selection. Failed or successful stale completions cannot roll back or overwrite
+a later model choice, and an explicit fresh translation job resolves the model
+from the persisted latest selection. Note text never crosses the network; HY-MT
+protocol and logs do not record source or translated text.
 
 ---
 
