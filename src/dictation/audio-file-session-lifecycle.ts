@@ -105,13 +105,21 @@ export class ManagedAudioFileSession {
       throw new Error('The audio-file start command was acknowledged before it was issued.');
     }
     this.startState = 'acknowledged';
-    if (this.phase !== 'cancel-requested' && this.phase !== 'stopped' && this.phase !== 'quarantined') {
+    if (
+      this.phase !== 'cancel-requested' &&
+      this.phase !== 'stopped' &&
+      this.phase !== 'quarantined'
+    ) {
       this.phase = 'starting';
     }
   }
 
   markStreaming(): boolean {
-    if (this.phase === 'cancel-requested' || this.phase === 'stopped' || this.phase === 'quarantined') {
+    if (
+      this.phase === 'cancel-requested' ||
+      this.phase === 'stopped' ||
+      this.phase === 'quarantined'
+    ) {
       return false;
     }
     if (this.startState !== 'acknowledged') {

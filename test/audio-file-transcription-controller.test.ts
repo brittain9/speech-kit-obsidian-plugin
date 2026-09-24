@@ -86,6 +86,8 @@ class FakeSidecarConnection {
       payload: Omit<StartSessionCommand, 'type'>,
       options: { abortSignal?: AbortSignal; onCommandIssued?: () => void },
     ) => {
+      await this.ensureStarted();
+      options.abortSignal?.throwIfAborted();
       options.onCommandIssued?.();
       this.emit({ mode: payload.mode, sessionId: payload.sessionId, type: 'session_started' });
       return { mode: payload.mode, sessionId: payload.sessionId, type: 'session_started' } as const;
@@ -482,7 +484,7 @@ describe('AudioFileTranscriptionController', () => {
     finishEnsureStarted?.();
     await transcribing;
 
-    expect(sidecarConnection.startSessionWithControl).not.toHaveBeenCalled();
+    expect(sidecarConnection.startSessionWithControl).toHaveBeenCalledOnce();
     expect(sidecarConnection.cancelSession).not.toHaveBeenCalled();
     expect(decoded.dispose).toHaveBeenCalledOnce();
     expect(harness.sessions[0]?.dispose).toHaveBeenCalledOnce();
@@ -516,7 +518,7 @@ describe('AudioFileTranscriptionController', () => {
     await transcribing;
 
     expect(sidecarConnection.cancelSession).not.toHaveBeenCalled();
-    expect(sidecarConnection.ensureStarted).toHaveBeenCalledOnce();
+    expect(sidecarConnection.ensureStarted).not.toHaveBeenCalled();
     expect(harness.sessions[0]?.dispose).toHaveBeenCalledOnce();
     expect(harness.controller.getState()).toBe('idle');
   });

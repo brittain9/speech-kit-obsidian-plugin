@@ -452,6 +452,7 @@ export class SidecarConnection {
     rejectOnError?: (event: ErrorEvent) => boolean,
     control?: CommandControl,
   ): Promise<TEvent> {
+    control?.abortSignal?.throwIfAborted();
     await this.ensureStarted();
     control?.abortSignal?.throwIfAborted();
 

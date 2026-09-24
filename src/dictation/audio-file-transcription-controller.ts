@@ -112,7 +112,6 @@ export interface AudioFileTranscriptionControllerDependencies {
   readonly sidecarConnection: Pick<
     SidecarConnection,
     | 'cancelSession'
-    | 'ensureStarted'
     | 'requestStopSession'
     | 'sendAudioFrameWithBackpressure'
     | 'sendContextResponse'
@@ -264,7 +263,6 @@ export class AudioFileTranscriptionController {
       if (this.pendingStart === pending) this.pendingStart = null;
 
       try {
-        await this.dependencies.sidecarConnection.ensureStarted();
         this.throwIfCancelled(abortController.signal);
         this.revalidateTarget(target, abortController.signal);
         const finalConfiguration = this.resolveModelConfiguration();
