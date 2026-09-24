@@ -2009,6 +2009,79 @@ describe('ModelInstallManager', () => {
       expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(3);
     });
 
+    it('rehydrates a detached same-model reselect when init starts before its rejection', async () => {
+      const selection = sampleSelection();
+      const initialCapabilities = sampleMergedCapabilities();
+      const freshCapabilities = {
+        ...initialCapabilities,
+        family: {
+          ...initialCapabilities.family,
+          supportsWordTimestamps: !initialCapabilities.family.supportsWordTimestamps,
+        },
+      };
+      const translationSelection: CatalogModelSelection = {
+        familyId: 'firefox_translations',
+        kind: 'catalog_model',
+        modelId: 'firefox_translations_release',
+        runtimeId: 'bergamot_wasm',
+      };
+      harness = createManagerHarness({
+        selectedModel: selection,
+        selectedModelCapabilitiesSnapshot: {
+          capabilities: initialCapabilities,
+          selection,
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      await harness.manager.init();
+
+      const originalProbe = deferred<ModelProbeResultEvent>();
+      const freshProbe: ModelProbeResultEvent = {
+        ...sampleReadyProbeResult(selection),
+        mergedCapabilities: freshCapabilities,
+        type: 'model_probe_result',
+      };
+      harness.sidecarConnection.probeModelSelection
+        .mockResolvedValueOnce(sampleReadyProbeResult(translationSelection))
+        .mockReturnValueOnce(originalProbe.promise)
+        .mockResolvedValueOnce(freshProbe);
+
+      // Keep an earlier settings mutation in flight so the reselect's snapshot
+      // is still authoritative when the later init captures its generation.
+      const blockedCommit = harness.blockNextConditionalCommit();
+      const blockingTranslation = harness.manager.select(translationSelection);
+      await blockedCommit.started;
+
+      const selecting = harness.manager.select(selection);
+      const staleInit = harness.manager.init();
+      await staleInit;
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledOnce();
+
+      blockedCommit.release();
+      await blockingTranslation;
+      await vi.waitFor(() => {
+        expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
+        expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(2);
+      });
+
+      originalProbe.reject(new Error('original probe failed'));
+      await expect(selecting).rejects.toThrow('original probe failed');
+
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+          capabilities: freshCapabilities,
+          selection,
+          status: 'ready',
+        });
+      });
+      expect(harness.getSettings().selectedModel).toEqual(selection);
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        capabilities: freshCapabilities,
+        selection,
+      });
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(3);
+    });
+
     it('does not retain a stale ready snapshot when a same-model reselect is unavailable across init', async () => {
       const selection = sampleSelection();
       const initialCapabilities = sampleMergedCapabilities();
@@ -2633,15 +2706,18 @@ function emitInstallUpdate(harness: ManagerHarness, overrides?: Partial<ModelIns
 
 interface Deferred<T> {
   promise: Promise<T>;
+  reject(reason?: unknown): void;
   resolve(value: T): void;
 }
 
 function deferred<T>(): Deferred<T> {
+  let rejectPromise: (reason?: unknown) => void = () => {};
   let resolvePromise: (value: T) => void = () => {};
-  const promise = new Promise<T>((resolve) => {
+  const promise = new Promise<T>((resolve, reject) => {
+    rejectPromise = reject;
     resolvePromise = resolve;
   });
-  return { promise, resolve: resolvePromise };
+  return { promise, reject: rejectPromise, resolve: resolvePromise };
 }
 
 // ---------------------------------------------------------------------------

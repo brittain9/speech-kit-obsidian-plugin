@@ -977,7 +977,6 @@ export class ModelInstallManager {
     if (task === 'translation') return;
     if (
       this.lifecycleGeneration !== expectedLifecycleGeneration ||
-      expectedInitGeneration !== this.initGeneration ||
       this.selectionGenerations[task] !== expectedSelectionGeneration ||
       expectedProbeGeneration !== this.probeGenerations[task]
     ) {
@@ -990,6 +989,26 @@ export class ModelInstallManager {
       !selectedModelEquals(current, attemptedSelection) ||
       !canCommit(settings)
     ) {
+      return;
+    }
+    if (expectedInitGeneration !== this.initGeneration) {
+      this.setCapabilities(task, { selection: attemptedSelection, status: 'pending' });
+      this.notify();
+      if (
+        this.lifecycleGeneration !== expectedLifecycleGeneration ||
+        this.selectionGenerations[task] !== expectedSelectionGeneration ||
+        expectedProbeGeneration !== this.probeGenerations[task]
+      ) {
+        return;
+      }
+      await this.refreshSelectedCapabilities(
+        attemptedSelection,
+        task,
+        this.initGeneration,
+        this.selectionGenerations[task],
+        false,
+        true,
+      );
       return;
     }
     this.setCapabilities(task, {
