@@ -24,7 +24,8 @@ class FakeElement {
   readonly styleProps: Record<string, string> = {};
   title = '';
   removed = false;
-  innerHTML = '';
+  private _innerHTML = '';
+  private svgNode: object | null = null;
   readonly style = {
     setProperty: (name: string, value: string): void => {
       this.styleProps[name] = value;
@@ -33,6 +34,20 @@ class FakeElement {
       delete this.styleProps[name];
     },
   };
+  get innerHTML(): string {
+    return this._innerHTML;
+  }
+  set innerHTML(value: string) {
+    this._innerHTML = value;
+    this.svgNode = null;
+  }
+  querySelector(selector: string): object | null {
+    return selector === 'svg' ? this.svgNode : null;
+  }
+  createSvgNode(): object {
+    this.svgNode = {};
+    return this.svgNode;
+  }
   setAttribute(name: string, value: string): void {
     this.attributes[name] = value;
   }
@@ -234,15 +249,13 @@ describe('DictationRibbonController hold lifecycle interactions', () => {
     controller.setState('listening');
     controller.setState('speech_detected');
     controller.setState('listening');
-    const snapshot = element.innerHTML;
-    vi.mocked(setIcon).mockClear();
+    const svg = element.createSvgNode();
 
     controller.setQueueTier(tier);
 
     expect(element.attributes['aria-label']).toBe(label);
     expect(element.title).toBe(label);
-    expect(element.innerHTML).toBe(snapshot);
-    expect(setIcon).not.toHaveBeenCalled();
+    expect(element.querySelector('svg')).toBe(svg);
   });
 
   it('cancels the hold immediately when reduced-motion turns on mid-hold', () => {

@@ -114,7 +114,11 @@ interface TranslationControllerDependencies {
     SidecarConnection,
     'cancelTranslation' | 'startTranslation' | 'subscribe'
   >;
-  setDetachedStatus?: (state: TranslationJobState | null, reopen: () => void) => void;
+  setDetachedStatus?: (
+    state: TranslationJobState | null,
+    reopen: () => void,
+    options?: { preserveFocus?: boolean },
+  ) => void;
 }
 interface ActiveTranslation {
   configuration: TranslationConfiguration;
@@ -232,7 +236,6 @@ export class TranslationController {
   private openModal(): void {
     const active = this.active;
     if (active === null || this.activeModal !== null) return;
-    this.dependencies.setDetachedStatus?.(null, () => {});
     const modal = new TranslationModal(this.dependencies.app, {
       canReadAloud: this.dependencies.canReadAloud,
       editor: active.editor,
@@ -323,6 +326,7 @@ export class TranslationController {
     });
     this.activeModal = modal;
     modal.open();
+    this.dependencies.setDetachedStatus?.(null, () => {}, { preserveFocus: true });
   }
   private clearActive(): void {
     const active = this.active;

@@ -1470,6 +1470,16 @@
   outline-offset: 2px;
 }
 
+.local-stt-translation-status__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .local-stt-translation-modal__spinner {
   box-sizing: border-box;
   width: 20px;

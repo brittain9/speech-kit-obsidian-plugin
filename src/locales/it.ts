@@ -328,7 +328,7 @@ export const it = {
   'ribbon.speechDetected': 'Speech Kit — voce rilevata',
   'ribbon.error': 'Speech Kit — errore',
   'ribbon.queue.normal': 'Coda normale',
-  'ribbon.queue.catchingUp': 'In catch-up',
+  'ribbon.queue.catchingUp': 'In recupero',
   'ribbon.queue.fallingBehind': 'La trascrizione è in ritardo',
   'ribbon.queue.saturated': 'Coda piena — sospendi la dettatura',
   'validation.wholeNumberRange': 'Inserisci un numero intero compreso tra {min} e {max}.',

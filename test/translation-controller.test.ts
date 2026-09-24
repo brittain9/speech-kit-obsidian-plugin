@@ -8,7 +8,8 @@ import type { PluginSettings } from '../src/settings/plugin-settings';
 import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import type { SidecarEvent } from '../src/sidecar/protocol';
 import { TranslationController } from '../src/translation/translation-controller';
-import { Modal, Setting } from './__mocks__/obsidian';
+import { TranslationStatusController } from '../src/translation/translation-status';
+import { Modal, Setting, TestElement } from './__mocks__/obsidian';
 
 describe('TranslationController', () => {
   afterEach(() => {
@@ -157,6 +158,75 @@ describe('TranslationController', () => {
       translations: ['Traduzca esta nota.'],
     });
     await vi.waitFor(() => expect(Setting.buttonNamed('Replace')).toBeDefined());
+  });
+
+  it('restores the detached status trigger after keyboard-style modal reopen', async () => {
+    Modal.instances.length = 0;
+    Setting.reset();
+    const statusEl = new TestElement();
+    const status = new TranslationStatusController(statusEl as unknown as HTMLElement);
+    const startTranslation = vi.fn(async () => new Promise<void>(() => {}));
+    const settings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      selectedTranslationModel: {
+        familyId: 'tencent_hy_mt' as const,
+        kind: 'catalog_model' as const,
+        modelId: 'hy-mt',
+        runtimeId: 'llama_cpp' as const,
+      },
+    };
+    const model = {
+      familyId: 'tencent_hy_mt',
+      modelId: 'hy-mt',
+      runtimeId: 'llama_cpp',
+      task: 'translation',
+      translationSupport: { kind: 'all_to_all', languages: ['en', 'es'] },
+    };
+    const controller = new TranslationController({
+      app: {} as never,
+      canReadAloud: () => false,
+      feedback: { show: vi.fn() },
+      getSettings: () => settings,
+      logger: { error: vi.fn(), warn: vi.fn() } as never,
+      modelManager: {
+        getState: () => ({
+          catalog: { models: [model] },
+          selectedTranslationModel: settings.selectedTranslationModel,
+          installedModels: [
+            { familyId: 'tencent_hy_mt', modelId: 'hy-mt', runtimeId: 'llama_cpp' },
+          ],
+        }),
+      } as never,
+      onReadAloud: vi.fn(),
+      saveSettings: vi.fn(async () => {}),
+      setDetachedStatus: (state, reopen, options) => {
+        status.update(state, reopen, options);
+      },
+      sidecarConnection: {
+        cancelTranslation: vi.fn(),
+        startTranslation,
+        subscribe: () => () => {},
+      } as never,
+    });
+    const editor = { getValue: () => 'Translate this note.', replaceRange: vi.fn() };
+
+    controller.translateNote(editor as never);
+    await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledOnce());
+    Modal.instances.at(-1)?.close();
+    const trigger = statusEl.querySelector('button');
+    if (trigger === null) throw new Error('Expected detached translation trigger.');
+    trigger.focus();
+    expect(statusEl.ownerDocument.activeElement).toBe(trigger);
+
+    await trigger.click();
+    const reopenedModal = Modal.instances.at(-1);
+    if (reopenedModal === undefined) throw new Error('Expected reopened translation modal.');
+    reopenedModal.contentEl.focus();
+    expect(reopenedModal.contentEl.ownerDocument.activeElement).toBe(reopenedModal.contentEl);
+
+    reopenedModal.close();
+
+    expect(statusEl.ownerDocument.activeElement).toBe(trigger);
   });
 
   it('starts a fresh translation from the current note after it changed', async () => {
