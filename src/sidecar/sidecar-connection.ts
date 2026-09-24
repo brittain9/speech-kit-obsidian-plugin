@@ -82,6 +82,7 @@ interface PendingEventWaiter {
 
 interface SidecarProcessLike {
   isRunning(): boolean;
+  isStarting(): boolean;
   start(): Promise<void>;
   stop(): Promise<void>;
   write(frameBytes: Uint8Array): void;
@@ -90,6 +91,7 @@ interface SidecarProcessLike {
 
 export interface StartSessionControlOptions {
   readonly abortSignal?: AbortSignal;
+  readonly beforeCommandWrite?: () => void;
   readonly onCommandIssued?: () => void;
   readonly timeoutMs?: number;
 }
@@ -98,6 +100,7 @@ export type CancelSessionResult = SessionStoppedEvent | WarningEvent;
 
 interface CommandControl {
   readonly abortSignal?: AbortSignal;
+  readonly beforeCommandWrite?: () => void;
   readonly onCommandIssued?: () => void;
 }
 
@@ -328,14 +331,7 @@ export class SidecarConnection {
     payload: Omit<StartSessionCommand, 'type'>,
     timeoutMs = this.options.getRequestTimeoutMs(),
   ): Promise<SessionStartedEvent> {
-    return this.sendCommandAndWait(
-      createStartSessionCommand(payload),
-      (event): event is SessionStartedEvent =>
-        event.type === 'session_started' && event.sessionId === payload.sessionId,
-      `session_started:${payload.sessionId}`,
-      timeoutMs,
-      (event) => !('sessionId' in event) || event.sessionId === payload.sessionId,
-    );
+    return this.startSessionWithControl(payload, { timeoutMs });
   }
 
   async startSessionWithControl(
@@ -351,6 +347,9 @@ export class SidecarConnection {
       (event) => !('sessionId' in event) || event.sessionId === payload.sessionId,
       {
         ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : {}),
+        ...(options.beforeCommandWrite !== undefined
+          ? { beforeCommandWrite: options.beforeCommandWrite }
+          : {}),
         ...(options.onCommandIssued !== undefined
           ? { onCommandIssued: options.onCommandIssued }
           : {}),
@@ -368,7 +367,7 @@ export class SidecarConnection {
         (event.type === 'session_stopped' && event.sessionId === sessionId) ||
         (event.type === 'warning' &&
           event.code === 'no_active_session' &&
-          (event.sessionId === undefined || event.sessionId === sessionId)),
+          event.sessionId === sessionId),
       `session_stopped_or_no_active:${sessionId}`,
       timeoutMs,
       (event) => event.sessionId === undefined || event.sessionId === sessionId,
@@ -390,17 +389,18 @@ export class SidecarConnection {
   }
 
   async shutdown(): Promise<void> {
-    if (!this.process.isRunning()) {
-      return;
+    const shouldExpectStop = this.process.isRunning() || this.process.isStarting();
+    if (shouldExpectStop) {
+      this.expectedStop = true;
+      this.rejectPendingWaiters(new Error('Sidecar is shutting down.'));
     }
-
-    this.expectedStop = true;
-    this.rejectPendingWaiters(new Error('Sidecar is shutting down.'));
 
     // Stdin EOF is the shutdown signal. Avoid writing the redundant wire-level
     // shutdown command immediately before closing stdin; Node write() only
-    // guarantees buffering, not that bytes flushed to the OS pipe.
+    // guarantees buffering, not that bytes flushed to the OS pipe. stop() also
+    // waits for an in-flight launch, so shutdown cannot orphan a late child.
     await this.process.stop();
+    if (!this.process.isRunning()) this.expectedStop = false;
   }
 
   sendAudioFrame(sessionId: string, frameBytes: Uint8Array): void {
@@ -485,6 +485,8 @@ export class SidecarConnection {
       control?.abortSignal?.addEventListener('abort', onAbort, { once: true });
 
       try {
+        control?.beforeCommandWrite?.();
+        control?.abortSignal?.throwIfAborted();
         this.process.write(encodeJsonFrame(command));
         control?.onCommandIssued?.();
       } catch (error) {

@@ -20,6 +20,7 @@ import {
   type SelectedModelCapabilities,
   selectedModelEquals,
 } from '../models/model-management-types';
+import { Session, type SessionTarget } from '../session/session';
 import type { PluginSettings } from '../settings/plugin-settings';
 import type { PluginLogger } from '../shared/plugin-logger';
 import type { UserFeedback } from '../shared/user-feedback';
@@ -54,8 +55,7 @@ export type AudioFileTranscriptionState =
   | 'selecting'
   | 'preparing'
   | 'transcribing'
-  | 'draining'
-  | 'error';
+  | 'draining';
 
 interface AudioFileDecoder {
   decode(file: File, signal: AbortSignal): Promise<DecodedAudioFile>;
@@ -70,7 +70,7 @@ interface CreateAudioFileSessionOptions {
   readonly placement: NotePlacementOptions;
   readonly rendererOptions: TranscriptRenderOptions;
   readonly sessionId: string;
-  readonly target: object;
+  readonly target: SessionTarget;
 }
 
 interface AudioFileModelConfiguration {
@@ -101,9 +101,8 @@ export interface AudioFileTranscriptionControllerDependencies {
   readonly feedback: Pick<UserFeedback, 'show'>;
   readonly getModelCapabilities: () => SelectedModelCapabilities;
   readonly getSettings: () => PluginSettings;
-  readonly getTarget: () => object | null;
+  readonly getTarget: () => SessionTarget | null;
   readonly isDictationBusy: () => boolean;
-  readonly isSameTarget: (expected: object, actual: object) => boolean;
   readonly logger?: PluginLogger;
   readonly onModelMissing?: () => void;
   readonly onSidecarMissing?: () => void;
@@ -125,6 +124,7 @@ export interface AudioFileTranscriptionControllerDependencies {
 export class AudioFileTranscriptionController {
   private activeSession: ManagedAudioFileSession | null = null;
   private readonly failureMapper: AudioFileFailureMapper;
+  private managedStartCompletion: Promise<void> | null = null;
   private pendingStart: PendingAudioFileStart | null = null;
   private readonly quarantinedSessions = new Map<string, QuarantinedAudioFileSession>();
   private readonly releaseSidecarSubscription: () => void;
@@ -133,7 +133,6 @@ export class AudioFileTranscriptionController {
   constructor(private readonly dependencies: AudioFileTranscriptionControllerDependencies) {
     this.failureMapper = new AudioFileFailureMapper({
       feedback: dependencies.feedback,
-      ...(dependencies.logger !== undefined ? { logger: dependencies.logger } : {}),
       ...(dependencies.onModelMissing !== undefined
         ? { onModelMissing: dependencies.onModelMissing }
         : {}),
@@ -202,7 +201,12 @@ export class AudioFileTranscriptionController {
       if (file === null) return;
       this.throwIfCancelled(abortController.signal);
 
-      this.revalidateSelection(target, initialConfiguration.modelSelection, abortController.signal);
+      this.revalidateSelection(
+        target,
+        initialConfiguration.modelSelection,
+        initialConfiguration.language,
+        abortController.signal,
+      );
       this.dependencies.stopConflictingSpeech();
       this.throwIfCancelled(abortController.signal);
       this.applyState('preparing');
@@ -211,6 +215,9 @@ export class AudioFileTranscriptionController {
       const configuration = this.resolveModelConfiguration();
       if (!selectedModelEquals(initialConfiguration.modelSelection, configuration.modelSelection)) {
         throw new AudioFileWorkflowError('audio-file-model-changed');
+      }
+      if (configuration.language !== initialConfiguration.language) {
+        throw new AudioFileWorkflowError('audio-file-language-changed');
       }
       try {
         assertDecodedAudioWithinBudget(decodedAudio, {
@@ -264,13 +271,24 @@ export class AudioFileTranscriptionController {
 
       try {
         this.throwIfCancelled(abortController.signal);
-        this.revalidateTarget(target, abortController.signal);
+        this.revalidateSelection(
+          target,
+          initialConfiguration.modelSelection,
+          initialConfiguration.language,
+          abortController.signal,
+        );
         const finalConfiguration = this.resolveModelConfiguration();
-        if (!selectedModelEquals(configuration.modelSelection, finalConfiguration.modelSelection)) {
-          throw new AudioFileWorkflowError('audio-file-model-changed');
-        }
 
-        await this.startManagedSession(managed, finalConfiguration, sessionStartUnixMs);
+        const startOperation = this.startManagedSession(
+          managed,
+          finalConfiguration,
+          sessionStartUnixMs,
+          target,
+          initialConfiguration.modelSelection,
+        );
+        managed.setStartOperation(startOperation);
+        this.managedStartCompletion = managed.getStartCompletion();
+        await startOperation;
         this.throwIfCancelled(abortController.signal);
         if (managed.isTerminal()) {
           await managed.getCompletion();
@@ -305,6 +323,7 @@ export class AudioFileTranscriptionController {
             frameCount += 1;
           },
         });
+        this.throwIfCancelled(abortController.signal);
         if (frameCount === 0) {
           throw new AudioFileError(
             'empty',
@@ -320,13 +339,14 @@ export class AudioFileTranscriptionController {
       }
     } catch (error) {
       if (managed === null && !this.failureMapper.isCancellation(error)) {
-        this.failureMapper.reportStartFailure(error);
+        this.failureMapper.reportFailure(error);
       }
     } finally {
       decodedAudio?.dispose();
       if (this.pendingStart === pending && pending !== null) this.pendingStart = null;
       if (managed === null) speechLease?.release();
       releaseStartOperation?.();
+      this.managedStartCompletion = null;
       if (this.activeSession === null && this.pendingStart === null) {
         this.applyState('idle');
       }
@@ -353,7 +373,9 @@ export class AudioFileTranscriptionController {
       pending.speechLease.release();
     }
     const active = this.activeSession;
+    const startCompletion = this.managedStartCompletion;
     if (active !== null) await this.cancelManagedSession(active);
+    await startCompletion;
     this.releaseSidecarSubscription();
     if (this.activeSession === null) this.applyState('idle');
   }
@@ -362,9 +384,18 @@ export class AudioFileTranscriptionController {
     managed: ManagedAudioFileSession,
     configuration: AudioFileModelConfiguration,
     sessionStartUnixMs: number,
+    target: SessionTarget,
+    initialSelection: SelectedModel,
   ): Promise<void> {
     const options: StartSessionControlOptions = {
       abortSignal: managed.abortController.signal,
+      beforeCommandWrite: () =>
+        this.revalidateSelection(
+          target,
+          initialSelection,
+          configuration.language,
+          managed.abortController.signal,
+        ),
       onCommandIssued: () => managed.markStartIssued(),
     };
     await this.dependencies.sidecarConnection.startSessionWithControl(
@@ -432,17 +463,18 @@ export class AudioFileTranscriptionController {
     };
   }
 
-  private revalidateTarget(target: object, signal: AbortSignal): void {
+  private revalidateTarget(target: SessionTarget, signal: AbortSignal): void {
     this.throwIfCancelled(signal);
     const currentTarget = this.dependencies.getTarget();
-    if (currentTarget === null || !this.dependencies.isSameTarget(target, currentTarget)) {
+    if (currentTarget === null || !Session.targetsEqual(target, currentTarget)) {
       throw new AudioFileWorkflowError('audio-file-target-changed');
     }
   }
 
   private revalidateSelection(
-    target: object,
+    target: SessionTarget,
     initialSelection: SelectedModel,
+    initialLanguage: PluginSettings['dictationLanguage'],
     signal: AbortSignal,
   ): void {
     this.revalidateTarget(target, signal);
@@ -456,7 +488,10 @@ export class AudioFileTranscriptionController {
     ) {
       throw new AudioFileWorkflowError('audio-file-model-changed');
     }
-    this.resolveModelConfiguration();
+    const currentConfiguration = this.resolveModelConfiguration();
+    if (currentConfiguration.language !== initialLanguage) {
+      throw new AudioFileWorkflowError('audio-file-language-changed');
+    }
   }
 
   private async handleManagedFailure(
@@ -483,7 +518,7 @@ export class AudioFileTranscriptionController {
       return;
     }
 
-    this.failureMapper.reportManagedFailure(error, managed);
+    this.failureMapper.reportFailure(error, managed);
     await this.cancelManagedSession(managed);
   }
 
@@ -510,7 +545,11 @@ export class AudioFileTranscriptionController {
     );
   }
 
-  private async cancelManagedSession(managed: ManagedAudioFileSession): Promise<void> {
+  private cancelManagedSession(managed: ManagedAudioFileSession): Promise<void> {
+    return managed.runCancellation(() => this.performManagedCancellation(managed));
+  }
+
+  private async performManagedCancellation(managed: ManagedAudioFileSession): Promise<void> {
     if (managed.isTerminal()) {
       await managed.getCompletion();
       return;
@@ -525,13 +564,13 @@ export class AudioFileTranscriptionController {
     managed.abortController.abort(createAudioFileCancellationError());
     try {
       const result = await this.dependencies.sidecarConnection.cancelSession(managed.sessionId);
-      if (isSuccessfulCancellationResult(result)) {
+      if (isSuccessfulCancellationResult(result, managed.sessionId)) {
         await this.finishManagedSession(managed, 'cancelled', false);
       } else {
         await this.quarantineManagedSession(managed, new Error('Unexpected cancellation result'));
       }
     } catch (error) {
-      if (this.failureMapper.isNoActiveSession(error)) {
+      if (this.failureMapper.isNoActiveSession(error, managed.sessionId)) {
         await this.finishManagedSession(managed, 'no-active-session', false);
         return;
       }
@@ -597,11 +636,27 @@ export class AudioFileTranscriptionController {
       return;
     }
 
-    const active = this.activeSession;
-    if (active === null) {
-      if (event.type === 'session_stopped') this.releaseQuarantinedLease(event.sessionId);
+    if (event.type === 'session_stopped') {
+      this.releaseQuarantinedLease(event.sessionId);
+      const active = this.activeSession;
+      if (active === null || active.sessionId !== event.sessionId) return;
+      active.abortController.abort(createAudioFileCancellationError());
+      await this.finishManagedSession(active, 'cancelled', false);
       return;
     }
+
+    if (event.type === 'warning' && event.code === 'no_active_session') {
+      if (event.sessionId === undefined) return;
+      this.releaseQuarantinedLease(event.sessionId);
+      const active = this.activeSession;
+      if (active === null || active.sessionId !== event.sessionId) return;
+      active.abortController.abort(createAudioFileCancellationError());
+      await this.finishManagedSession(active, 'no-active-session', false);
+      return;
+    }
+
+    const active = this.activeSession;
+    if (active === null) return;
     if ('sessionId' in event && event.sessionId !== active.sessionId) return;
 
     switch (event.type) {
@@ -613,16 +668,6 @@ export class AudioFileTranscriptionController {
         return;
       case 'context_request':
         if (active.canAcceptSidecarWork()) this.handleContextRequest(active, event);
-        return;
-      case 'session_stopped':
-        active.abortController.abort(createAudioFileCancellationError());
-        await this.finishManagedSession(active, 'cancelled', false);
-        return;
-      case 'warning':
-        if (event.code === 'no_active_session') {
-          active.abortController.abort(createAudioFileCancellationError());
-          await this.finishManagedSession(active, 'no-active-session', false);
-        }
         return;
       case 'error':
         if (event.code === 'utterance_queue_overload') {
@@ -721,9 +766,14 @@ function createRendererOptions(
   };
 }
 
-function isSuccessfulCancellationResult(result: CancelSessionResult): boolean {
+function isSuccessfulCancellationResult(
+  result: CancelSessionResult,
+  expectedSessionId: string,
+): boolean {
   return (
-    result.type === 'session_stopped' ||
-    (result.type === 'warning' && result.code === 'no_active_session')
+    (result.type === 'session_stopped' && result.sessionId === expectedSessionId) ||
+    (result.type === 'warning' &&
+      result.code === 'no_active_session' &&
+      result.sessionId === expectedSessionId)
   );
 }

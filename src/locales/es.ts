@@ -8,6 +8,8 @@ export const es = {
     'Seleccione y valide un modelo local de voz a texto en Gestionar modelos y vuelva a intentarlo.',
   'audio-file-model-changed':
     'El modelo de transcripción cambió mientras estaba abierto el selector. Vuelva a ejecutar Transcribir archivo de audio local.',
+  'audio-file-language-changed':
+    'El idioma de dictado cambió mientras se preparaba el archivo de audio. Vuelva a ejecutar Transcribir archivo de audio local para usar el idioma actual.',
   'audio-file-model-not-batch':
     'Los archivos de audio requieren un modelo por lotes. Seleccione un modelo sin streaming e inténtelo de nuevo.',
   'audio-file-language-unsupported':

@@ -8,6 +8,8 @@ export const de = {
     'Wählen und validieren Sie in „Modelle verwalten“ ein lokales Sprach-zu-Text-Modell und versuchen Sie es erneut.',
   'audio-file-model-changed':
     'Das ausgewählte Transkriptionsmodell wurde geändert, während die Dateiauswahl geöffnet war. Starten Sie „Lokale Audiodatei transkribieren“ erneut.',
+  'audio-file-language-changed':
+    'Die Diktionssprache wurde während der Vorbereitung der Audiodatei geändert. Starten Sie „Lokale Audiodatei transkribieren“ erneut, um die aktuelle Sprache zu verwenden.',
   'audio-file-model-not-batch':
     'Für Audiodateien wird ein Batch-Sprachmodell benötigt. Wählen Sie ein Modell ohne Streaming und versuchen Sie es erneut.',
   'audio-file-language-unsupported':

@@ -8,6 +8,8 @@ export const fr = {
     'Sélectionnez et validez un modèle local de reconnaissance vocale dans Gérer les modèles, puis réessayez.',
   'audio-file-model-changed':
     "Le modèle de transcription a changé pendant l'ouverture du sélecteur. Relancez Transcrire un fichier audio local.",
+  'audio-file-language-changed':
+    'La langue de dictée a changé pendant la préparation du fichier audio. Relancez Transcrire un fichier audio local pour utiliser la langue actuelle.',
   'audio-file-model-not-batch':
     'Les fichiers audio nécessitent un modèle par lots. Sélectionnez un modèle sans streaming et réessayez.',
   'audio-file-language-unsupported':

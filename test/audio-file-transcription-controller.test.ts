@@ -1,4 +1,5 @@
-import { Platform } from 'obsidian';
+import type { EditorView } from '@codemirror/view';
+import { Platform, type TFile } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
 import type { DecodedAudioFile } from '../src/audio/audio-file-decoder';
 import { AudioFileTranscriptionController } from '../src/dictation/audio-file-transcription-controller';
@@ -8,7 +9,7 @@ import type {
   SelectedModel,
   SelectedModelCapabilities,
 } from '../src/models/model-management-types';
-import type { SessionAcceptResult } from '../src/session/session';
+import type { SessionAcceptResult, SessionTarget } from '../src/session/session';
 import type { TranscriptRevision } from '../src/session/session-journal';
 import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
 import type {
@@ -21,8 +22,12 @@ import { SidecarLifecycleGate } from '../src/sidecar/sidecar-lifecycle-gate';
 import type { TranscriptRenderOptions } from '../src/transcript/renderer';
 import { createGeneratedWavFile } from './fixtures/audio-file';
 
-interface Target {
-  readonly id: string;
+function createTarget(kind: SessionTarget['kind'] = 'active'): SessionTarget {
+  return {
+    file: { path: 'test.md' } as TFile,
+    kind,
+    view: {} as EditorView,
+  };
 }
 
 interface CreateSessionOptions {
@@ -34,7 +39,7 @@ interface CreateSessionOptions {
   readonly placement: NotePlacementOptions;
   readonly rendererOptions: TranscriptRenderOptions;
   readonly sessionId: string;
-  readonly target: object;
+  readonly target: SessionTarget;
 }
 
 class FakeSession {
@@ -75,6 +80,7 @@ class FakeSidecarConnection {
     return { reason: 'user_cancel', sessionId, type: 'session_stopped' } as const;
   });
   public readonly ensureStarted = vi.fn(async () => {});
+  public readonly issuedSessionIds: string[] = [];
   public readonly listeners = new Set<(event: SidecarEvent) => void>();
   public readonly requestStopSession = vi.fn((_sessionId: string) => {});
   public readonly sendContextResponse = vi.fn((_correlationId: string, _context: unknown) => {});
@@ -84,11 +90,17 @@ class FakeSidecarConnection {
   public readonly startSessionWithControl = vi.fn(
     async (
       payload: Omit<StartSessionCommand, 'type'>,
-      options: { abortSignal?: AbortSignal; onCommandIssued?: () => void },
+      options: {
+        abortSignal?: AbortSignal;
+        beforeCommandWrite?: () => void;
+        onCommandIssued?: () => void;
+      },
     ) => {
       await this.ensureStarted();
       options.abortSignal?.throwIfAborted();
+      options.beforeCommandWrite?.();
       options.onCommandIssued?.();
+      this.issuedSessionIds.push(payload.sessionId);
       this.emit({ mode: payload.mode, sessionId: payload.sessionId, type: 'session_started' });
       return { mode: payload.mode, sessionId: payload.sessionId, type: 'session_started' } as const;
     },
@@ -186,7 +198,7 @@ function transcriptReady(sessionId: string, text: string): TranscriptReadyEvent 
 function createHarness(
   overrides: Partial<ConstructorParameters<typeof AudioFileTranscriptionController>[0]> = {},
 ) {
-  let target: Target | null = { id: 'original-note' };
+  let target: SessionTarget | null = createTarget();
   const sessions: FakeSession[] = [];
   const feedback = { show: vi.fn() };
   const sidecarConnection = new FakeSidecarConnection();
@@ -215,14 +227,6 @@ function createHarness(
     getSettings: () => settings,
     getTarget: () => target,
     isDictationBusy: () => false,
-    isSameTarget: (left, right) =>
-      typeof left === 'object' &&
-      left !== null &&
-      typeof right === 'object' &&
-      right !== null &&
-      'id' in left &&
-      'id' in right &&
-      left.id === right.id,
     logger: { debug: vi.fn(), error: vi.fn(), warn: vi.fn() },
     onSidecarMissing: vi.fn(),
     pickAudioFile,
@@ -248,7 +252,7 @@ function createHarness(
     setSettings: (next: PluginSettings) => {
       settings = next;
     },
-    setTarget: (next: Target | null) => {
+    setTarget: (next: SessionTarget | null) => {
       target = next;
     },
   };
@@ -400,7 +404,7 @@ describe('AudioFileTranscriptionController', () => {
   it('retries after a target change during preparation', async () => {
     const harness = createHarness();
     harness.pickAudioFile.mockImplementationOnce(async () => {
-      harness.setTarget({ id: 'replacement-note' });
+      harness.setTarget(createTarget());
       return createGeneratedWavFile('retry.wav', {
         channelCount: 1,
         sampleRate: 16_000,
@@ -412,12 +416,48 @@ describe('AudioFileTranscriptionController', () => {
     expect(harness.controller.getState()).toBe('idle');
     expect(harness.sidecarConnection.startSessionWithControl).not.toHaveBeenCalled();
 
-    harness.setTarget({ id: 'original-note' });
+    harness.setTarget(createTarget());
     harness.pickAudioFile.mockImplementation(async () => null);
     await harness.controller.transcribe();
     expect(harness.pickAudioFile).toHaveBeenCalledTimes(2);
     expect(harness.controller.getState()).toBe('idle');
   });
+
+  it.each(['target', 'model', 'language'] as const)(
+    'revalidates %s after ensureStarted and before issuing start_session',
+    async (changed) => {
+      let resolveEnsure: (() => void) | undefined;
+      const sidecarConnection = new FakeSidecarConnection();
+      sidecarConnection.ensureStarted.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveEnsure = resolve;
+          }),
+      );
+      const harness = createHarness({ sidecarConnection });
+      const transcribing = harness.controller.transcribe();
+      await vi.waitFor(() => expect(sidecarConnection.ensureStarted).toHaveBeenCalledOnce());
+
+      if (changed === 'target') harness.setTarget(createTarget());
+      if (changed === 'model') harness.setCapabilities({ status: 'none' });
+      if (changed === 'language') {
+        harness.setCapabilities(
+          readyCapabilities({
+            capabilities: {
+              ...batchCapabilities,
+              family: { ...batchCapabilities.family, supportedLanguages: { kind: 'english_only' } },
+            },
+          }),
+        );
+      }
+      resolveEnsure?.();
+      await transcribing;
+
+      expect(sidecarConnection.issuedSessionIds).toEqual([]);
+      expect(sidecarConnection.cancelSession).not.toHaveBeenCalled();
+      expect(harness.controller.getState()).toBe('idle');
+    },
+  );
 
   it('returns to idle after a decode failure and can start a fresh attempt', async () => {
     const harness = createHarness();
@@ -441,11 +481,11 @@ describe('AudioFileTranscriptionController', () => {
 
   it('releases the session locally when cancellation is acknowledged without a subscription callback', async () => {
     const sidecarConnection = new FakeSidecarConnection();
-    sidecarConnection.cancelSession.mockResolvedValue({
+    sidecarConnection.cancelSession.mockImplementation(async (sessionId) => ({
       reason: 'user_cancel',
-      sessionId: 'ignored',
-      type: 'session_stopped',
-    });
+      sessionId,
+      type: 'session_stopped' as const,
+    }));
     const harness = createHarness({ sidecarConnection });
     const transcribing = harness.controller.transcribe();
     await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalledOnce());
@@ -523,14 +563,40 @@ describe('AudioFileTranscriptionController', () => {
     expect(harness.controller.getState()).toBe('idle');
   });
 
+  it('deduplicates native cancellation across user cancel and startup rejection', async () => {
+    let rejectStart: ((error: Error) => void) | undefined;
+    const sidecarConnection = new FakeSidecarConnection();
+    sidecarConnection.startSessionWithControl.mockImplementationOnce(async (payload, options) => {
+      await sidecarConnection.ensureStarted();
+      options.beforeCommandWrite?.();
+      options.onCommandIssued?.();
+      sidecarConnection.issuedSessionIds.push(payload.sessionId);
+      await new Promise<never>((_resolve, reject) => {
+        rejectStart = reject;
+      });
+      return { mode: payload.mode, sessionId: payload.sessionId, type: 'session_started' } as const;
+    });
+    const harness = createHarness({ sidecarConnection });
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() => expect(sidecarConnection.issuedSessionIds).toHaveLength(1));
+
+    const cancelling = harness.controller.cancel();
+    await vi.waitFor(() => expect(sidecarConnection.cancelSession).toHaveBeenCalledOnce());
+    rejectStart?.(new Error('startup rejected'));
+    await cancelling;
+    await transcribing;
+
+    expect(sidecarConnection.cancelSession).toHaveBeenCalledOnce();
+  });
+
   it('treats a no_active_session warning as a local successful cancellation', async () => {
     const sidecarConnection = new FakeSidecarConnection();
-    sidecarConnection.cancelSession.mockResolvedValue({
+    sidecarConnection.cancelSession.mockImplementation(async (sessionId) => ({
       code: 'no_active_session',
       message: 'No active session',
-      sessionId: 'session',
-      type: 'warning',
-    });
+      sessionId,
+      type: 'warning' as const,
+    }));
     const harness = createHarness({ sidecarConnection });
     const transcribing = harness.controller.transcribe();
     await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalledOnce());
@@ -565,6 +631,83 @@ describe('AudioFileTranscriptionController', () => {
       const lease = harness.sidecarLifecycleGate.acquireMutation();
       lease.release();
     }).not.toThrow();
+  });
+
+  it.each(['session_stopped', 'warning'] as const)(
+    'releases quarantined session A for a correlated %s acknowledgement while B is active',
+    async (acknowledgement) => {
+      const sidecarConnection = new FakeSidecarConnection();
+      sidecarConnection.cancelSession.mockRejectedValue(new Error('sidecar still alive'));
+      const harness = createHarness({ sessionStopTimeoutMs: 1_000, sidecarConnection });
+
+      const first = harness.controller.transcribe();
+      await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalledOnce());
+      await harness.controller.cancel();
+      await first;
+      const firstSessionId = sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+      if (firstSessionId === undefined) throw new Error('Expected quarantined session A.');
+
+      const second = harness.controller.transcribe();
+      await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalledTimes(2));
+      const secondSessionId =
+        sidecarConnection.startSessionWithControl.mock.calls[1]?.[0].sessionId;
+      const secondEditorSession = harness.sessions[1];
+      if (secondSessionId === undefined || secondEditorSession === undefined) {
+        throw new Error('Expected active session B.');
+      }
+
+      sidecarConnection.emit({
+        code: 'no_active_session',
+        message: 'Uncorrelated warning',
+        type: 'warning',
+      });
+      await Promise.resolve();
+      expect(secondEditorSession.dispose).not.toHaveBeenCalled();
+      expect(() => harness.sidecarLifecycleGate.acquireMutation()).toThrow();
+
+      sidecarConnection.emit(
+        acknowledgement === 'session_stopped'
+          ? { reason: 'user_stop', sessionId: firstSessionId, type: 'session_stopped' }
+          : {
+              code: 'no_active_session',
+              message: 'No active session',
+              sessionId: firstSessionId,
+              type: 'warning',
+            },
+      );
+      await Promise.resolve();
+      expect(secondEditorSession.dispose).not.toHaveBeenCalled();
+
+      sidecarConnection.emit({
+        reason: 'user_stop',
+        sessionId: secondSessionId,
+        type: 'session_stopped',
+      });
+      await second;
+      expect(secondEditorSession.dispose).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('awaits managed startup unwinding during dispose', async () => {
+    let resolveEnsure: (() => void) | undefined;
+    const sidecarConnection = new FakeSidecarConnection();
+    sidecarConnection.ensureStarted.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveEnsure = resolve;
+        }),
+    );
+    const harness = createHarness({ sidecarConnection });
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() => expect(sidecarConnection.ensureStarted).toHaveBeenCalledOnce());
+
+    const disposing = harness.controller.dispose();
+    resolveEnsure?.();
+    await Promise.all([disposing, transcribing]);
+
+    expect(sidecarConnection.issuedSessionIds).toEqual([]);
+    expect(sidecarConnection.cancelSession).not.toHaveBeenCalled();
+    expect(harness.controller.getState()).toBe('idle');
   });
 
   it('does not open the picker during sidecar maintenance and reports the conflict', async () => {
@@ -624,7 +767,7 @@ describe('AudioFileTranscriptionController', () => {
   it('rejects a target or model changed while the picker was open', async () => {
     const staleTargetHarness = createHarness();
     staleTargetHarness.pickAudioFile.mockImplementation(async () => {
-      staleTargetHarness.setTarget({ id: 'different-note' });
+      staleTargetHarness.setTarget(createTarget());
       return createSelectedFile();
     });
 
@@ -678,7 +821,7 @@ describe('AudioFileTranscriptionController', () => {
     });
     harness.decoder.decode.mockImplementation(async () => {
       order.push('decode');
-      harness.setTarget({ id: 'different-note' });
+      harness.setTarget(createTarget());
       return createAudio();
     });
 
@@ -719,6 +862,44 @@ describe('AudioFileTranscriptionController', () => {
     resolveCancel?.({ reason: 'user_cancel', sessionId, type: 'session_stopped' });
 
     expect(session.dispose).toHaveBeenCalledOnce();
+    expect(harness.controller.getState()).toBe('idle');
+  });
+
+  it('disposes the editor session even when clearing its processing mark fails', async () => {
+    const harness = createHarness();
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+    const session = harness.sessions[0];
+    const sessionId =
+      harness.sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    if (session === undefined || sessionId === undefined) {
+      throw new Error('Expected a cleanup test session.');
+    }
+    session.clearSessionProcessingMark.mockImplementationOnce(() => {
+      throw new Error('mark cleanup failed');
+    });
+
+    harness.sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await transcribing;
+
+    expect(session.dispose).toHaveBeenCalledOnce();
+    expect(harness.controller.getState()).toBe('idle');
+  });
+
+  it('does not request a graceful stop when cancellation wins the final-frame race', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const harness = createHarness({ sidecarConnection });
+    sidecarConnection.sendAudioFrameWithBackpressure.mockImplementation(async () => {
+      void harness.controller.cancel();
+    });
+
+    await harness.controller.transcribe();
+
+    expect(sidecarConnection.requestStopSession).not.toHaveBeenCalled();
+    expect(sidecarConnection.cancelSession).toHaveBeenCalledOnce();
+    expect(harness.feedback.show).not.toHaveBeenCalled();
     expect(harness.controller.getState()).toBe('idle');
   });
 

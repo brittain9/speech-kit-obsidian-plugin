@@ -1,7 +1,6 @@
 import { AudioFileBackpressureTimeoutError } from '../audio/audio-file-backpressure';
 import { AudioFileError, isAudioFileCancellation } from '../audio/audio-file-decoder';
 import { t } from '../shared/i18n';
-import type { PluginLogger } from '../shared/plugin-logger';
 import type { FeedbackRequest, UserFeedback } from '../shared/user-feedback';
 import { SidecarError } from '../sidecar/sidecar-connection';
 import { SidecarNotInstalledError } from '../sidecar/sidecar-paths';
@@ -15,6 +14,7 @@ export type FileWorkflowTranslationKey =
   | 'audio-file-empty'
   | 'audio-file-encoded-size'
   | 'audio-file-language-unsupported'
+  | 'audio-file-language-changed'
   | 'audio-file-maintenance'
   | 'audio-file-model-changed'
   | 'audio-file-model-duration'
@@ -49,7 +49,6 @@ interface FeedbackClaim {
 
 interface AudioFileFailureMapperDependencies {
   readonly feedback: Pick<UserFeedback, 'show'>;
-  readonly logger?: PluginLogger;
   readonly onModelMissing?: () => void;
   readonly onSidecarMissing?: () => void;
 }
@@ -57,15 +56,7 @@ interface AudioFileFailureMapperDependencies {
 export class AudioFileFailureMapper {
   constructor(private readonly dependencies: AudioFileFailureMapperDependencies) {}
 
-  reportStartFailure(error: unknown, claim?: FeedbackClaim): void {
-    if (error instanceof SidecarNotInstalledError) {
-      this.report('audio-file-sidecar-missing', error, claim);
-      return;
-    }
-    this.report(resolveWorkflowTranslationKey(error), error, claim);
-  }
-
-  reportManagedFailure(error: unknown, claim: FeedbackClaim): void {
+  reportFailure(error: unknown, claim?: FeedbackClaim): void {
     if (error instanceof SidecarNotInstalledError) {
       this.report('audio-file-sidecar-missing', error, claim);
       return;
@@ -89,8 +80,12 @@ export class AudioFileFailureMapper {
     return error instanceof AudioFileError && error.code === 'queue_overload';
   }
 
-  isNoActiveSession(error: unknown): boolean {
-    return error instanceof SidecarError && error.code === 'no_active_session';
+  isNoActiveSession(error: unknown, expectedSessionId?: string): boolean {
+    return (
+      error instanceof SidecarError &&
+      error.code === 'no_active_session' &&
+      (expectedSessionId === undefined || error.sessionId === expectedSessionId)
+    );
   }
 
   private report(

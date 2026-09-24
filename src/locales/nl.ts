@@ -8,6 +8,8 @@ export const nl = {
     'Selecteer en valideer een lokaal spraak-naar-tekstmodel bij Modellen beheren en probeer het opnieuw.',
   'audio-file-model-changed':
     'Het transcriptiemodel is gewijzigd terwijl de bestandskiezer open was. Voer Lokaal audiobestand transcriberen opnieuw uit.',
+  'audio-file-language-changed':
+    'De dicteertaal is gewijzigd terwijl het audiobestand werd voorbereid. Voer Lokaal audiobestand transcriberen opnieuw uit om de huidige taal te gebruiken.',
   'audio-file-model-not-batch':
     'Audiobestanden vereisen een batchspraakmodel. Kies een model zonder streaming en probeer het opnieuw.',
   'audio-file-language-unsupported':

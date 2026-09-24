@@ -20,6 +20,7 @@ export type ResolveSidecarLaunchSpec = () => Promise<SidecarLaunchSpec>;
 
 export class SidecarProcess {
   private child: ChildProcessWithoutNullStreams | null = null;
+  private closing = false;
   private startPromise: Promise<void> | null = null;
   private stderrReader: ReadLineInterface | null = null;
   private stdinDead = false;
@@ -39,7 +40,14 @@ export class SidecarProcess {
     return this.child !== null && this.child.exitCode === null && this.child.signalCode === null;
   }
 
+  isStarting(): boolean {
+    return this.startPromise !== null;
+  }
+
   async start(): Promise<void> {
+    if (this.closing) {
+      return this.startPromise ?? undefined;
+    }
     if (this.isRunning()) {
       return;
     }
@@ -103,21 +111,34 @@ export class SidecarProcess {
   }
 
   async stop(): Promise<void> {
-    const child = this.child;
+    this.closing = true;
+    try {
+      const startPromise = this.startPromise;
+      if (startPromise !== null) {
+        try {
+          await startPromise;
+        } catch {
+          return;
+        }
+      }
 
-    if (child === null) {
-      return;
+      const child = this.child;
+      if (child === null) {
+        return;
+      }
+
+      if (child.stdin.writable) {
+        child.stdin.end();
+      }
+
+      if (child.exitCode !== null) {
+        return;
+      }
+
+      await waitForExit(child);
+    } finally {
+      this.closing = false;
     }
-
-    if (child.stdin.writable) {
-      child.stdin.end();
-    }
-
-    if (child.exitCode !== null) {
-      return;
-    }
-
-    await waitForExit(child);
   }
 
   write(frameBytes: Uint8Array): void {

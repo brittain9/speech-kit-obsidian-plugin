@@ -39,8 +39,18 @@ export class AudioFileTranscriptAdapter {
   }
 
   disposeSession(): void {
-    this.session.clearSessionProcessingMark();
-    this.session.dispose();
+    let cleanupError: Error | null = null;
+    try {
+      this.session.clearSessionProcessingMark();
+    } catch (error) {
+      cleanupError = toError(error);
+    }
+    try {
+      this.session.dispose();
+    } catch (error) {
+      cleanupError ??= toError(error);
+    }
+    if (cleanupError !== null) throw cleanupError;
   }
 
   private async projectTranscript(event: TranscriptReadyEvent): Promise<void> {
@@ -56,6 +66,10 @@ export class AudioFileTranscriptAdapter {
       this.onProjectionFailure(new Error(result.reason));
     }
   }
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 function toTranscriptRevision(

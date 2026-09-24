@@ -157,6 +157,42 @@ describe('SidecarProcess bounded audio writes', () => {
   });
 });
 
+describe('SidecarProcess shutdown during launch', () => {
+  it('waits for a deferred launch and stops the child before resolving without an orphan', async () => {
+    const handlers = createHandlers();
+    const child = queueChild();
+    let resolveLaunch: ((spec: { command: string }) => void) | undefined;
+    const process = new SidecarProcess(
+      () =>
+        new Promise((resolve) => {
+          resolveLaunch = resolve;
+        }),
+      handlers,
+    );
+
+    const starting = process.start();
+    const stopping = process.stop();
+    resolveLaunch?.({ command: '/tmp/fake-sidecar' });
+    await vi.waitFor(() => expect(mockedSpawn).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(process.isRunning()).toBe(true));
+
+    let stopResolved = false;
+    void stopping.then(() => {
+      stopResolved = true;
+    });
+    await Promise.resolve();
+    expect(stopResolved).toBe(false);
+    expect(child.kill).not.toHaveBeenCalled();
+
+    child.reallyExit(null, 'SIGTERM');
+    await Promise.all([starting, stopping]);
+
+    expect(stopResolved).toBe(true);
+    expect(process.isRunning()).toBe(false);
+    expect(handlers.onExit).toHaveBeenCalledExactlyOnceWith(null, 'SIGTERM');
+  });
+});
+
 describe('SidecarProcess stale-exit race (issue #194)', () => {
   it('stop() does not resolve until the killed child actually exits', async () => {
     const handlers = createHandlers();

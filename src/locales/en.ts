@@ -4,14 +4,16 @@ export const en = {
     'Select and validate a local speech-to-text model in Manage models, then try the audio file again.',
   'audio-file-model-changed':
     'The selected transcription model changed while the file picker was open. Run Transcribe local audio file again to use the current model.',
+  'audio-file-language-changed':
+    'The dictation language changed while the audio file was being prepared. Run Transcribe local audio file again to use the current language.',
   'audio-file-model-not-batch':
     'Audio-file transcription requires a batch speech-to-text model. Select a non-streaming model in Manage models, then try again.',
   'audio-file-language-unsupported':
     'The selected model does not support the configured dictation language ({language}). Choose a compatible model or change Dictation language, then try again.',
   'audio-file-target-required':
-    'Open the Markdown note that should receive the transcript in editing mode, then run Transcribe audio file again.',
+    'Open the Markdown note that should receive the transcript in editing mode, then run Transcribe local audio file again.',
   'audio-file-target-changed':
-    'The transcript target changed while the audio file was being prepared. Return to the original note and run Transcribe audio file again.',
+    'The transcript target changed while the audio file was being prepared. Return to the original note and run Transcribe local audio file again.',
   'audio-file-desktop-only':
     'Audio-file transcription is available in the Obsidian desktop app. Open this vault on desktop to continue.',
   'audio-file-busy':

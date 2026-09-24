@@ -8,6 +8,8 @@ export const it = {
     'Seleziona e convalida un modello locale di riconoscimento vocale in Gestisci modelli, quindi riprova.',
   'audio-file-model-changed':
     'Il modello di trascrizione è cambiato mentre il selettore file era aperto. Riavvia Trascrivi file audio locale.',
+  'audio-file-language-changed':
+    'La lingua di dettatura è cambiata durante la preparazione del file audio. Riavvia Trascrivi file audio locale per usare la lingua attuale.',
   'audio-file-model-not-batch':
     'I file audio richiedono un modello batch. Seleziona un modello senza streaming e riprova.',
   'audio-file-language-unsupported':

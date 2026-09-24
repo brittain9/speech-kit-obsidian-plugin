@@ -36,7 +36,7 @@ import {
   openModelPickerWithSetup,
   READ_ALOUD_MODEL_PICKER_OPTIONS,
 } from './models/model-picker-routing';
-import { Session, type SessionTarget } from './session/session';
+import { Session } from './session/session';
 import { logAccelerationFallbacks } from './settings/acceleration-info';
 import { LlmPresetStateStore } from './settings/llm-preset-state';
 import { restoreLlmTransformationDefaults } from './settings/llm-transformation-reset';
@@ -329,19 +329,15 @@ export default class LocalSttPlugin extends Plugin {
     this.renderReadAloudStatus('idle');
     this.audioFileTranscriptionController = new AudioFileTranscriptionController({
       backpressureTimeoutMs: 30_000,
-      createSession: ({ callbacks, placement, rendererOptions, sessionId, target }) => {
-        if (!isSessionTarget(target)) {
-          throw new Error('The audio-file transcript target is no longer available.');
-        }
-        return Session.createFromTarget(this.app, target, {
+      createSession: ({ callbacks, placement, rendererOptions, sessionId, target }) =>
+        Session.createFromTarget(this.app, target, {
           callbacks,
           leafPinManager: this.temporaryLeafPinLeaseManager,
           logger: this.logger,
           placement,
           rendererOptions,
           sessionId,
-        });
-      },
+        }),
       decoder: new WebAudioAudioFileDecoder({ logger: this.logger }),
       feedback: this.feedback,
       getModelCapabilities: () =>
@@ -349,8 +345,6 @@ export default class LocalSttPlugin extends Plugin {
       getSettings: () => this.settings,
       getTarget: () => Session.getDictationTarget(this.app),
       isDictationBusy: () => this.requireDictationController().isCaptureActive(),
-      isSameTarget: (left, right) =>
-        isSessionTarget(left) && isSessionTarget(right) && Session.targetsEqual(left, right),
       logger: this.logger,
       onModelMissing: () => {
         void this.openModelPicker();
@@ -1259,16 +1253,6 @@ export default class LocalSttPlugin extends Plugin {
 
     return join(vaultAdapter.getBasePath(), this.app.vault.configDir, 'plugins', this.manifest.id);
   }
-}
-
-function isSessionTarget(value: unknown): value is SessionTarget {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'file' in value &&
-    'kind' in value &&
-    'view' in value
-  );
 }
 
 function getSidecarExecutableName(): string {

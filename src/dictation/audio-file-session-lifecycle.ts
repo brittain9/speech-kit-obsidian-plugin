@@ -11,7 +11,7 @@ export type AudioFileSessionPhase =
   | 'stopped'
   | 'quarantined';
 
-export type AudioFileStartState = 'not-issued' | 'issued' | 'acknowledged';
+type AudioFileStartState = 'not-issued' | 'issued' | 'acknowledged';
 
 export interface ManagedAudioFileSessionOptions {
   readonly abortController: AbortController;
@@ -28,9 +28,12 @@ export class ManagedAudioFileSession {
   private phase: AudioFileSessionPhase = 'created';
   private startState: AudioFileStartState = 'not-issued';
   private stopTimeoutHandle: number | null = null;
+  private cancellationPromise: Promise<void> | null = null;
   private readonly completion: Promise<void>;
   private completionFinalized = false;
   private completionResolve: () => void = () => {};
+  private startCompletion: Promise<void> = Promise.resolve();
+  private startCompletionResolve: () => void = () => {};
 
   constructor(
     readonly abortController: AbortController,
@@ -43,6 +46,9 @@ export class ManagedAudioFileSession {
   ) {
     this.completion = new Promise<void>((resolve) => {
       this.completionResolve = resolve;
+    });
+    this.startCompletion = new Promise<void>((resolve) => {
+      this.startCompletionResolve = resolve;
     });
   }
 
@@ -61,16 +67,24 @@ export class ManagedAudioFileSession {
     );
   }
 
-  getStatus(): AudioFileSessionPhase {
-    return this.phase;
-  }
-
-  getStartState(): AudioFileStartState {
-    return this.startState;
-  }
-
   getCompletion(): Promise<void> {
     return this.completion;
+  }
+
+  getStartCompletion(): Promise<void> {
+    return this.startCompletion;
+  }
+
+  setStartOperation(operation: Promise<void>): void {
+    this.startCompletion = operation.then(
+      () => this.startCompletionResolve(),
+      () => this.startCompletionResolve(),
+    );
+  }
+
+  runCancellation(operation: () => Promise<void>): Promise<void> {
+    this.cancellationPromise ??= Promise.resolve().then(operation);
+    return this.cancellationPromise;
   }
 
   isTerminal(): boolean {
@@ -79,10 +93,6 @@ export class ManagedAudioFileSession {
 
   isStartIssued(): boolean {
     return this.startState !== 'not-issued';
-  }
-
-  isActiveInput(): boolean {
-    return this.phase !== 'stopped' && this.phase !== 'quarantined';
   }
 
   canAcceptSidecarWork(): boolean {
@@ -130,10 +140,7 @@ export class ManagedAudioFileSession {
   }
 
   requestStop(): boolean {
-    if (this.phase === 'stop-requested') return false;
-    if (this.phase !== 'streaming') {
-      throw new Error(`Cannot gracefully stop audio-file phase ${this.phase}.`);
-    }
+    if (this.phase !== 'streaming') return false;
     this.phase = 'stop-requested';
     return true;
   }
@@ -149,10 +156,6 @@ export class ManagedAudioFileSession {
     if (this.feedbackClaimed) return false;
     this.feedbackClaimed = true;
     return true;
-  }
-
-  hasClaimedFeedback(): boolean {
-    return this.feedbackClaimed;
   }
 
   setStopTimeout(handle: number): void {

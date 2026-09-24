@@ -8,6 +8,8 @@ export const hr = {
     'Odaberite i provjerite lokalni model pretvarbe govora u tekst u Upravljanju modelima pa pokušajte ponovno.',
   'audio-file-model-changed':
     'Model transkripcije promijenjen je dok je otvoren odabir datoteke. Ponovno pokrenite Transkribiraj lokalnu audio-datoteku.',
+  'audio-file-language-changed':
+    'Jezik diktiranja promijenjen je tijekom pripreme audio-datoteke. Ponovno pokrenite Transkribiraj lokalnu audio-datoteku kako biste koristili trenutačni jezik.',
   'audio-file-model-not-batch':
     'Audio-datoteke zahtijevaju batch model. Odaberite model bez streaminga i pokušajte ponovno.',
   'audio-file-language-unsupported':

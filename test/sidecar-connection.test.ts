@@ -42,6 +42,10 @@ class FakeSidecarProcess {
     return this.running;
   }
 
+  isStarting(): boolean {
+    return false;
+  }
+
   async start(): Promise<void> {
     if (this.running) {
       return;
@@ -452,6 +456,42 @@ describe('SidecarConnection', () => {
       ),
     ).rejects.toBeDefined();
     expect(issued).toHaveBeenCalledOnce();
+  });
+
+  it('revalidates immediately before start_session write without issuing a command on failure', async () => {
+    const { connection, process } = createHarness();
+    const sessionId = '123e4567-e89b-42d3-a456-426614174000';
+    const issued = vi.fn();
+    const result = connection.startSessionWithControl(
+      {
+        accelerationPreference: 'auto',
+        detailedTimestampsEnabled: false,
+        diarizationEnabled: false,
+        diarizationMaxSpeakers: null,
+        includeSystemAudio: false,
+        language: 'en',
+        mode: 'always_on',
+        modelSelection: {
+          familyId: 'whisper',
+          filePath: '/models/test.bin',
+          kind: 'external_file',
+          runtimeId: 'whisper_cpp',
+        },
+        sessionId,
+        sessionStartUnixMs: Date.now(),
+        speakingStyle: 'balanced',
+      },
+      {
+        beforeCommandWrite: () => {
+          throw new Error('target changed');
+        },
+        onCommandIssued: issued,
+      },
+    );
+
+    await expect(result).rejects.toThrow('target changed');
+    expect(issued).not.toHaveBeenCalled();
+    expect(process.writtenFrames).toHaveLength(0);
   });
 
   it('treats a correlated no_active_session warning as successful cancellation', async () => {
