@@ -30,7 +30,7 @@ export function loadPluginSettings(
     (!isRecord(data) ||
       typeof data.schemaVersion !== 'number' ||
       !Number.isInteger(data.schemaVersion) ||
-      data.schemaVersion < 11);
+      data.schemaVersion < 12);
 
   if (!Object.hasOwn(raw, LEGACY_OPENROUTER_API_KEY)) {
     return { settings, shouldPersist: needsSchemaMigration };

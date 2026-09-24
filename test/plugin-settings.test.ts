@@ -53,14 +53,15 @@ describe('resolvePluginSettings', () => {
     ).toBeNull();
   });
 
-  it('migrates every supported prior schema to schema 11', () => {
-    for (let schemaVersion = 1; schemaVersion < 11; schemaVersion += 1) {
+  it('migrates every supported prior schema to schema 12', () => {
+    for (let schemaVersion = 1; schemaVersion < 12; schemaVersion += 1) {
       const settings = resolvePluginSettings({ schemaVersion });
-      expect(settings.schemaVersion).toBe(11);
+      expect(settings.schemaVersion).toBe(12);
       expect(settings.personalCorrectionRules).toEqual([]);
     }
-    expect(resolvePluginSettings({ schemaVersion: 11 }).schemaVersion).toBe(11);
+    expect(resolvePluginSettings({ schemaVersion: 11 }).schemaVersion).toBe(12);
     expect(resolvePluginSettings({ schemaVersion: 12 }).schemaVersion).toBe(12);
+    expect(resolvePluginSettings({ schemaVersion: 99 }).schemaVersion).toBe(99);
   });
 
   it('defaults and normalizes HY-MT2 translation styles', () => {
@@ -185,7 +186,7 @@ describe('resolvePluginSettings', () => {
     expect(
       resolvePluginSettings({ autoCopyFinalizedUtterances: 'yes' }).autoCopyFinalizedUtterances,
     ).toBe(false);
-    expect(resolvePluginSettings({ autoCopyFinalizedUtterances: true }).schemaVersion).toBe(11);
+    expect(resolvePluginSettings({ autoCopyFinalizedUtterances: true }).schemaVersion).toBe(12);
   });
 
   it('migrates personal correction rules without resetting other settings', () => {
@@ -202,7 +203,7 @@ describe('resolvePluginSettings', () => {
       },
     });
 
-    expect(settings.schemaVersion).toBe(11);
+    expect(settings.schemaVersion).toBe(12);
     expect(settings.personalCorrectionRules).toEqual(rules);
     expect(settings.autoCopyFinalizedUtterances).toBe(true);
     expect(settings.selectedModel).toEqual({
@@ -233,19 +234,85 @@ describe('resolvePluginSettings', () => {
     ).toBe('keep');
   });
 
-  it('preserves malformed persisted correction rules for session-start validation', () => {
-    const rules = resolvePluginSettings({
+  it('omits malformed persisted correction rules but preserves repair diagnostics', () => {
+    const settings = resolvePluginSettings({
       personalCorrectionRules: [
         { enabled: true, find: 'ok', id: 'valid', replace: 'yes' },
         { enabled: true, find: ' ', id: 'blank', replace: 'yes' },
         { enabled: true, find: 'ok', id: 'duplicate', replace: 'no' },
       ],
-    }).personalCorrectionRules;
+    });
 
-    expect(rules).toHaveLength(3);
-    expect(rules[1]).toMatchObject({ find: ' ', id: 'blank' });
-    expect(rules[2]).toMatchObject({ find: 'ok', id: 'duplicate' });
+    expect(settings.personalCorrectionRules).toEqual([
+      { enabled: true, find: 'ok', id: 'valid', replace: 'yes' },
+    ]);
+    expect(settings.personalCorrectionRuleDiagnostics).toMatchObject([
+      { code: 'blank_find', field: 'find', index: 1 },
+      { code: 'duplicate_find', field: 'find', index: 2 },
+    ]);
   });
+
+  it.each([11, 12])(
+    'keeps sessions recoverable when schema %s contains non-object rules',
+    (schemaVersion) => {
+      const settings = resolvePluginSettings({
+        personalCorrectionRules: [
+          null,
+          42,
+          [],
+          { enabled: true, find: 'ok', id: 'valid', replace: 'yes' },
+        ],
+        schemaVersion,
+      });
+
+      expect(settings.schemaVersion).toBe(12);
+      expect(settings.personalCorrectionRules).toHaveLength(1);
+      expect(settings.personalCorrectionRuleDiagnostics).toMatchObject([
+        { code: 'invalid_rule', raw: null },
+        { code: 'invalid_rule', raw: 42 },
+        { code: 'invalid_rule', raw: [] },
+      ]);
+    },
+  );
+
+  it('retains repair diagnostics after active rules have been normalized', () => {
+    const settings = resolvePluginSettings({
+      personalCorrectionRuleDiagnostics: [
+        {
+          code: 'blank_find',
+          field: 'find',
+          index: 1,
+          message: 'Find text cannot be blank.',
+          raw: { enabled: true, find: ' ', id: 'repair-me', replace: 'value' },
+        },
+      ],
+      personalCorrectionRules: [{ enabled: true, find: 'ok', id: 'valid', replace: 'yes' }],
+      schemaVersion: 12,
+    });
+
+    expect(settings.personalCorrectionRules).toHaveLength(1);
+    expect(settings.personalCorrectionRuleDiagnostics).toMatchObject([
+      { code: 'blank_find', index: 1, raw: { id: 'repair-me' } },
+    ]);
+  });
+
+  it('preserves newer schema fields and diagnoses a non-array rule container', () => {
+    const settings = resolvePluginSettings({
+      futureCorrectionField: { keep: true },
+      personalCorrectionRules: { not: 'an array' },
+      schemaVersion: 99,
+    });
+
+    expect(settings.schemaVersion).toBe(99);
+    expect((settings as unknown as Record<string, unknown>).futureCorrectionField).toEqual({
+      keep: true,
+    });
+    expect(settings.personalCorrectionRules).toEqual([]);
+    expect(settings.personalCorrectionRuleDiagnostics).toMatchObject([
+      { code: 'invalid_rule', field: 'rules', index: 0 },
+    ]);
+  });
+
   it('migrates legacy speaker label setting to diarization', () => {
     expect(resolvePluginSettings({ speakerLabelsEnabled: true }).diarizationEnabled).toBe(true);
     expect(

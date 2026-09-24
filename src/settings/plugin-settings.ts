@@ -40,6 +40,8 @@ import { normalizeTranslationLanguage, type TranslationLanguage } from '../trans
 import {
   normalizePersonalCorrectionRules,
   type PersonalCorrectionRule,
+  type PersonalCorrectionRuleDiagnostic,
+  readPersonalCorrectionRuleDiagnostics,
 } from './personal-correction-rules';
 
 export const DICTATION_ANCHORS = ['at_cursor', 'end_of_note'] as const;
@@ -193,6 +195,7 @@ export interface PluginSettings {
   localTranscriptSidebarBootstrapped: boolean;
   modelStorePathOverride: string;
   personalCorrectionRules: PersonalCorrectionRule[];
+  personalCorrectionRuleDiagnostics: PersonalCorrectionRuleDiagnostic[];
   readAloudLanguage: DictationLanguage;
   retainLastUtterance: boolean;
   schemaVersion: number;
@@ -266,9 +269,10 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   localTranscriptSidebarBootstrapped: false,
   modelStorePathOverride: '',
   personalCorrectionRules: [],
+  personalCorrectionRuleDiagnostics: [],
   readAloudLanguage: 'auto',
   retainLastUtterance: true,
-  schemaVersion: 11,
+  schemaVersion: 12,
   selectedModel: null,
   selectedModelCapabilitiesSnapshot: null,
   selectedTtsModel: null,
@@ -318,6 +322,11 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
   const legacyModel =
     typeof raw.llmPostprocessModel === 'string' ? raw.llmPostprocessModel.trim() : '';
   const llmProviderConfigurations = readLlmProviderConfigurations(raw, legacyModel);
+  const personalCorrectionRules = normalizePersonalCorrectionRules(raw.personalCorrectionRules);
+  const personalCorrectionRuleDiagnostics =
+    personalCorrectionRules.diagnostics.length > 0
+      ? personalCorrectionRules.diagnostics
+      : readPersonalCorrectionRuleDiagnostics(raw.personalCorrectionRuleDiagnostics);
 
   return {
     // Preserve fields introduced by a newer plugin/schema. Known fields below
@@ -403,7 +412,8 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.modelStorePathOverride,
       DEFAULT_PLUGIN_SETTINGS.modelStorePathOverride,
     ),
-    personalCorrectionRules: normalizePersonalCorrectionRules(raw.personalCorrectionRules),
+    personalCorrectionRules: personalCorrectionRules.rules,
+    personalCorrectionRuleDiagnostics,
     readAloudLanguage: isDictationLanguage(raw.readAloudLanguage)
       ? raw.readAloudLanguage
       : DEFAULT_PLUGIN_SETTINGS.readAloudLanguage,
@@ -596,9 +606,10 @@ function readString(value: unknown, fallback: string): string {
 }
 
 function readSchemaVersion(value: unknown): number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 11
-    ? value
-    : DEFAULT_PLUGIN_SETTINGS.schemaVersion;
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 12) return value;
+  // Schema 11 is the recoverable correction-rule migration. It is read
+  // leniently and written back as schema 12 with diagnostics for bad entries.
+  return DEFAULT_PLUGIN_SETTINGS.schemaVersion;
 }
 
 export function normalizeTranslationStyleInstruction(value: unknown): string {

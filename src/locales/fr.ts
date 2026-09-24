@@ -864,6 +864,8 @@ export const fr = {
   'notice.personalCorrectionRulesInvalid':
     'Les paramètres de correction personnelle sont invalides : {reason} Corrigez-les avant de démarrer la dictée.',
 
+  'notice.personalCorrectionRulesSkipped':
+    '{count} règles de correction personnelle enregistrées n’ont pas pu être lues et ont été ignorées. Réparez-les dans les paramètres.',
   'settings.corrections.name': 'Règles de correction personnelle',
   'settings.corrections.desc':
     'Applique des corrections littérales locales et ordonnées après la transcription. Les règles s’appliquent aux segments finaux de la prochaine session ; ce ne sont ni du vocabulaire ASR ni des mots-clés.',
@@ -890,9 +892,10 @@ export const fr = {
   'settings.corrections.modal.delete': 'Supprimer la règle',
   'settings.corrections.modal.saving': 'Enregistrement…',
   'settings.corrections.modal.saved': 'Enregistré',
-  'settings.corrections.modal.failed': 'Non enregistré. Corrigez les règles et réessayez.',
-  'settings.corrections.modal.invalid':
-    'Corrigez la règle indiquée avant d’enregistrer ou d’afficher l’aperçu.',
+  'settings.corrections.modal.unsaved': 'Modifications non enregistrées',
+  'settings.corrections.modal.retry': 'Échec de l’enregistrement. Réessayez.',
+  'settings.corrections.modal.conflict':
+    'Les règles de correction ont changé ailleurs. Rouvrez cette fenêtre avant d’enregistrer.',
   'settings.corrections.field.find': 'Rechercher',
   'settings.corrections.field.enabled': 'Activées',
   'settings.corrections.field.id': 'ID de règle',
@@ -900,9 +903,9 @@ export const fr = {
   'settings.corrections.field.rules': 'Règles',
   'settings.corrections.validation.tooMany': 'Ajoutez au maximum {max} règles.',
   'settings.corrections.validation.blankId': 'Chaque règle doit avoir un ID.',
+  'settings.corrections.validation.invalidRule':
+    'Cette règle de correction n’est pas un objet de règle lisible.',
   'settings.corrections.validation.invalidId': "L'ID de règle doit être du texte.",
-  'settings.corrections.validation.oversizedId':
-    "L'ID de règle ne peut pas dépasser {max} caractères.",
   'settings.corrections.validation.invalidEnabled': "L'activation doit être activée ou désactivée.",
   'settings.corrections.validation.invalidFind': 'Le texte recherché doit être du texte.',
   'settings.corrections.validation.duplicateId': 'Les ID de règles doivent être uniques.',
@@ -916,7 +919,9 @@ export const fr = {
   'settings.corrections.validation.duplicateFind':
     'Le texte à rechercher doit être unique ; les règles suivantes ne peuvent pas cibler le même texte.',
   'settings.corrections.validation.absoluteAmplification':
-    'La correction dépasserait la limite de {max} caractères et a été rejetée avant l’allocation de la sortie.',
+    'La correction dépasserait la limite de sécurité de {max} caractères et a été rejetée.',
   'settings.corrections.validation.relativeAmplification':
-    'La correction agrandirait le texte de plus de {max}× et a été rejetée avant l’allocation de la sortie.',
+    'La correction agrandirait le texte de plus de {max}× et a été rejetée.',
+  'settings.corrections.validation.workBudget':
+    'La recherche de corrections dépasse la limite de sécurité de {max} étapes et a été refusée.',
 } as const satisfies TranslationCatalog;

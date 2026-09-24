@@ -8,7 +8,8 @@ use anyhow::{Context, Result};
 use local_dictation_sidecar::app::{AppState, ControlFlow};
 use local_dictation_sidecar::catalog::ModelCatalog;
 use local_dictation_sidecar::protocol::{
-    AudioFrame, Command, Event, IncomingFrame, is_fatal_frame_error, read_frame, write_event_frame,
+    AudioFrame, Command, Event, IncomingFrame, is_fatal_frame_error,
+    is_outbound_frame_payload_too_large, read_frame, write_event_frame,
     write_synthesis_audio_frame,
 };
 #[cfg(feature = "engine-whisper")]
@@ -174,9 +175,12 @@ fn write_events(writer: &mut impl Write, events: Vec<Event>) -> Result<()> {
             event => write_event_frame(writer, event).context("failed to write event frame"),
         };
         if let Err(error) = result {
-            // A payload-cap failure must not terminate the protocol loop or leave
-            // the renderer waiting for a frame that can never be written. Emit a
-            // small typed error event instead; writer I/O failures are returned.
+            if !is_outbound_frame_payload_too_large(&error) {
+                return Err(error);
+            }
+            // Only a pre-write payload-cap failure is replaced. Serialization
+            // and writer I/O failures propagate, and a partial frame is never
+            // followed by an unrelated fallback frame.
             let fallback = Event::Error {
                 code: "event_frame_too_large".to_string(),
                 details: Some(format!("{error:#}")),
@@ -193,11 +197,13 @@ fn write_events(writer: &mut impl Write, events: Vec<Event>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::io::{self, Cursor, Write};
     use std::sync::mpsc;
 
     use super::{InputMessage, read_inputs, write_events};
-    use local_dictation_sidecar::protocol::{Event, MAX_FRAME_PAYLOAD, read_json_frame};
+    use local_dictation_sidecar::protocol::{
+        Event, HealthStatus, MAX_FRAME_PAYLOAD, read_json_frame,
+    };
 
     #[test]
     fn oversized_frame_terminates_the_reader_without_parsing_payload_bytes() {
@@ -219,6 +225,87 @@ mod tests {
                 details,
                 fatal: true,
             } if details.contains("frame payload exceeds maximum supported size")
+        ));
+    }
+
+    struct PartialWriter {
+        output: Vec<u8>,
+        writes: usize,
+    }
+
+    impl Write for PartialWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.writes += 1;
+            if self.writes == 2 {
+                return Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "simulated pipe failure",
+                ));
+            }
+            self.output.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn ordinary_partial_write_errors_propagate_without_fallback() {
+        let mut writer = PartialWriter {
+            output: Vec::new(),
+            writes: 0,
+        };
+        let error = write_events(
+            &mut writer,
+            vec![Event::HealthOk {
+                sidecar_version: "test".to_string(),
+                status: HealthStatus::Ready,
+            }],
+        )
+        .expect_err("writer failure should propagate");
+        assert!(format!("{error:#}").contains("simulated pipe failure"));
+        assert_eq!(writer.output.len(), 5);
+    }
+
+    #[test]
+    fn ordinary_synthesis_write_errors_propagate_without_fallback() {
+        let mut writer = PartialWriter {
+            output: Vec::new(),
+            writes: 0,
+        };
+        let error = write_events(
+            &mut writer,
+            vec![Event::SynthesisAudio {
+                pcm16le: vec![0, 0],
+                seq: 0,
+                synthesis_id: 7,
+            }],
+        )
+        .expect_err("synthesis writer failure should propagate");
+        assert!(format!("{error:#}").contains("simulated pipe failure"));
+        assert_eq!(writer.output.len(), 5);
+    }
+
+    #[test]
+    fn oversized_synthesis_audio_is_replaced_before_any_frame_write() {
+        let mut output = Vec::new();
+        write_events(
+            &mut output,
+            vec![Event::SynthesisAudio {
+                pcm16le: vec![0; MAX_FRAME_PAYLOAD + 2],
+                seq: 0,
+                synthesis_id: 7,
+            }],
+        )
+        .expect("pre-write synthesis cap should use the typed fallback");
+        let fallback: Event = read_json_frame(&mut output.as_slice())
+            .expect("fallback frame should parse")
+            .expect("fallback frame should exist");
+        assert!(matches!(
+            fallback,
+            Event::Error { ref code, .. } if code == "event_frame_too_large"
         ));
     }
 

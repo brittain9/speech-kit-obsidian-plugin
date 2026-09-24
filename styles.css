@@ -833,6 +833,24 @@
   resize: vertical;
 }
 
+.local-stt-corrections-modal__rule--invalid {
+  border-inline-start: 3px solid var(--text-error);
+  padding-inline-start: var(--size-4-2);
+}
+
+.local-stt-corrections-modal__rule--invalid .setting-item-description {
+  color: var(--text-error);
+}
+
+.local-stt-corrections-modal__save-status[data-state="unsaved"] {
+  color: var(--text-muted);
+}
+
+.local-stt-corrections-modal__save-status[data-state="error"],
+.local-stt-corrections-modal__save-status[data-state="conflict"] {
+  color: var(--text-error);
+}
+
 /* --- Batch LLM processing pulse ----------------------------------- */
 
 .local-stt-transcript-provisional {

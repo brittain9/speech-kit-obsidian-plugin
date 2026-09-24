@@ -54,13 +54,13 @@ describe('LLM Secret Storage integration', () => {
     expect(result.shouldPersist).toBe(true);
   });
 
-  it('requests one normalized rewrite for settings schemas before version 11', () => {
+  it('requests one normalized rewrite for settings schemas before version 12', () => {
     const result = loadPluginSettings(
       { schemaVersion: 6 },
       { getSecret: () => null, setSecret: vi.fn() },
     );
 
-    expect(result.settings.schemaVersion).toBe(11);
+    expect(result.settings.schemaVersion).toBe(12);
     expect(result.shouldPersist).toBe(true);
   });
 
@@ -77,7 +77,31 @@ describe('LLM Secret Storage integration', () => {
     expect(result.shouldPersist).toBe(false);
   });
 
-  it('does not rewrite already-normalized schema 11 settings', () => {
+  it('persists schema 11 repair diagnostics without losing them on the next load', () => {
+    const first = loadPluginSettings(
+      {
+        personalCorrectionRules: [
+          { enabled: true, find: 'ok', id: 'valid', replace: 'yes' },
+          { enabled: true, find: ' ', id: 'repair-me', replace: 'yes' },
+        ],
+        schemaVersion: 11,
+      },
+      { getSecret: () => null, setSecret: vi.fn() },
+    );
+    const second = loadPluginSettings(first.settings, {
+      getSecret: () => null,
+      setSecret: vi.fn(),
+    });
+
+    expect(first.shouldPersist).toBe(true);
+    expect(first.settings.personalCorrectionRules).toHaveLength(1);
+    expect(second.settings.personalCorrectionRuleDiagnostics).toMatchObject([
+      { code: 'blank_find', raw: { id: 'repair-me' } },
+    ]);
+    expect(second.shouldPersist).toBe(false);
+  });
+
+  it('does not rewrite already-normalized schema 12 settings', () => {
     const result = loadPluginSettings(DEFAULT_PLUGIN_SETTINGS, {
       getSecret: () => null,
       setSecret: vi.fn(),

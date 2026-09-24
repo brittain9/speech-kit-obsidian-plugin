@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
-  applyPersonalCorrectionRules,
   compilePersonalCorrectionPreview,
   MAX_CORRECTION_OUTPUT_CHARS,
   PERSONAL_CORRECTION_RULE_MAX_CHARS,
@@ -17,6 +16,12 @@ function rule(
   overrides: Partial<PersonalCorrectionRule> = {},
 ): PersonalCorrectionRule {
   return { enabled: true, find, id: `${find}-${replace}`, replace, ...overrides };
+}
+
+function apply(input: string, rules: readonly PersonalCorrectionRule[]): string {
+  const preview = compilePersonalCorrectionPreview(rules, input);
+  if (!preview.ok) throw new Error(preview.error.message);
+  return preview.output;
 }
 
 const golden = JSON.parse(
@@ -50,10 +55,10 @@ describe('personal correction rule semantics', () => {
   });
 
   it('matches canonical-equivalent NFD text while inserting replacement literally', () => {
-    expect(applyPersonalCorrectionRules('cafe\u0301', [rule('café', 'coffee')])).toBe('coffee');
-    expect(applyPersonalCorrectionRules('café', [rule('cafe\u0301', 'tea')])).toBe('tea');
-    expect(applyPersonalCorrectionRules('cafe\u0301', [rule('cafe', 'tea')])).toBe('cafe\u0301');
-    expect(applyPersonalCorrectionRules('é é', [rule('é', 'e')])).toBe('e e');
+    expect(apply('cafe\u0301', [rule('café', 'coffee')])).toBe('coffee');
+    expect(apply('café', [rule('cafe\u0301', 'tea')])).toBe('tea');
+    expect(apply('cafe\u0301', [rule('cafe', 'tea')])).toBe('cafe\u0301');
+    expect(apply('é é', [rule('é', 'e')])).toBe('e e');
   });
 
   it('rejects blank, oversized, and duplicate drafts before compiling a preview', () => {
@@ -83,7 +88,7 @@ describe('personal correction rule semantics', () => {
       rule('aaaaaaaa', 'aaaaaaaaaaaaaaaa', { id: 'double-4' }),
     ];
 
-    expect(() => applyPersonalCorrectionRules('a', rules)).toThrow(/more than 8×|expansion/);
+    expect(() => apply('a', rules)).toThrow(/more than 8×|expansion/);
   });
 
   it('reports amplification validation with the offending rule context', () => {
@@ -115,15 +120,22 @@ describe('personal correction rule semantics', () => {
     );
   });
 
+  it('rejects pathological NFD near-matches by deterministic search work', () => {
+    const input = 'e\u0301'.repeat(50_000);
+    const result = compilePersonalCorrectionPreview(
+      [rule(`${'e\u0301'.repeat(127)}x`, 'x', { id: 'nfd-stress' })],
+      input,
+    );
+    expect(result).toMatchObject({ error: { code: 'work_budget' }, ok: false });
+  });
+
   it('rejects partial canonical scalar matches without dropping combining marks', () => {
-    expect(applyPersonalCorrectionRules('café cafe', [rule('cafe', 'tea')])).toBe('café tea');
-    expect(applyPersonalCorrectionRules('cafe\u0301', [rule('cafe', 'tea')])).toBe('cafe\u0301');
+    expect(apply('café cafe', [rule('cafe', 'tea')])).toBe('café tea');
+    expect(apply('cafe\u0301', [rule('cafe', 'tea')])).toBe('cafe\u0301');
   });
 
   it('does not apply disabled rules but keeps them in the ordered snapshot', () => {
-    expect(
-      applyPersonalCorrectionRules('hello', [rule('hello', 'goodbye', { enabled: false })]),
-    ).toBe('hello');
+    expect(apply('hello', [rule('hello', 'goodbye', { enabled: false })])).toBe('hello');
   });
 
   it('matches the shared cross-language golden vectors', () => {

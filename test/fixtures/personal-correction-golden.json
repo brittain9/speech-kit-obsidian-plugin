@@ -1,6 +1,30 @@
 {
   "cases": [
     {
+      "id": "mixed-nfd-standalone-mark",
+      "input": "é,́x",
+      "rules": [{ "id": "comma", "enabled": true, "find": ",", "replace": "!" }],
+      "expected": "é,́x",
+      "replacements": 0,
+      "rulesApplied": 0
+    },
+    {
+      "id": "left-to-right-punctuation-overlap",
+      "input": "!!!",
+      "rules": [{ "id": "double-bang", "enabled": true, "find": "!!", "replace": "!" }],
+      "expected": "!!",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "left-to-right-word-overlap",
+      "input": "a-a-a",
+      "rules": [{ "id": "hyphenated-a", "enabled": true, "find": "a-a", "replace": "b" }],
+      "expected": "b-a",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
       "id": "literal-order",
       "input": "cat concatenate cat cat_2 2cat",
       "rules": [

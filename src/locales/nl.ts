@@ -857,6 +857,8 @@ export const nl = {
   'notice.personalCorrectionRulesInvalid':
     'Persoonlijke correctie-instellingen zijn ongeldig: {reason} Corrigeer ze voordat je met dicteren begint.',
 
+  'notice.personalCorrectionRulesSkipped':
+    '{count} opgeslagen persoonlijke correctieregels konden niet worden gelezen en zijn overgeslagen. Herstel ze in Instellingen.',
   'settings.corrections.name': 'Persoonlijke correctieregels',
   'settings.corrections.desc':
     'Pas lokale, geordende letterlijke correcties toe na de transcriptie. Regels gelden voor finale segmenten in de volgende sessie; dit is geen ASR-vocabulaire en geen hotwoorden.',
@@ -882,10 +884,10 @@ export const nl = {
   'settings.corrections.modal.delete': 'Regel verwijderen',
   'settings.corrections.modal.saving': 'Opslaan…',
   'settings.corrections.modal.saved': 'Opgeslagen',
-  'settings.corrections.modal.failed':
-    'Niet opgeslagen. Corrigeer de regels en probeer het opnieuw.',
-  'settings.corrections.modal.invalid':
-    'Corrigeer de gemarkeerde regel voordat je opslaat of het voorbeeld bekijkt.',
+  'settings.corrections.modal.unsaved': 'Niet-opgeslagen wijzigingen',
+  'settings.corrections.modal.retry': 'Opslaan mislukt. Probeer opnieuw op te slaan.',
+  'settings.corrections.modal.conflict':
+    'De correctieregels zijn ergens anders gewijzigd. Heropen dit venster voordat je opslaat.',
   'settings.corrections.field.find': 'Zoeken',
   'settings.corrections.field.enabled': 'Ingeschakeld',
   'settings.corrections.field.id': 'Regel-ID',
@@ -893,9 +895,9 @@ export const nl = {
   'settings.corrections.field.rules': 'Regels',
   'settings.corrections.validation.tooMany': 'Voeg hoogstens {max} regels toe.',
   'settings.corrections.validation.blankId': 'Elke regel heeft een ID nodig.',
+  'settings.corrections.validation.invalidRule':
+    'Deze correctieregel is geen leesbaar regelobject.',
   'settings.corrections.validation.invalidId': 'De regel-ID moet tekst zijn.',
-  'settings.corrections.validation.oversizedId':
-    'Regel-ID mag niet meer dan {max} tekens bevatten.',
   'settings.corrections.validation.invalidEnabled': 'Ingeschakeld moet aan of uit zijn.',
   'settings.corrections.validation.invalidFind': 'De zoektekst moet tekst zijn.',
   'settings.corrections.validation.duplicateId': 'Regel-ID’s moeten uniek zijn.',
@@ -909,7 +911,9 @@ export const nl = {
   'settings.corrections.validation.duplicateFind':
     'De zoektekst moet uniek zijn; latere regels mogen niet dezelfde tekst gebruiken.',
   'settings.corrections.validation.absoluteAmplification':
-    'De correctie zou de limiet van {max} tekens overschrijden en is vóór outputtoewijzing geweigerd.',
+    'De correctie zou de veiligheidslimiet van {max} tekens overschrijden en is afgewezen.',
   'settings.corrections.validation.relativeAmplification':
-    'De correctie zou de tekst meer dan {max}× vergroten en is vóór outputtoewijzing geweigerd.',
+    'De correctie zou de tekst meer dan {max}× vergroten en is afgewezen.',
+  'settings.corrections.validation.workBudget':
+    'De correctiezoekopdracht overschrijdt de veiligheidslimiet van {max} stappen en is geweigerd.',
 } as const satisfies TranslationCatalog;

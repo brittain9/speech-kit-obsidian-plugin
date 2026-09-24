@@ -197,11 +197,19 @@ describe('DictationSessionController', () => {
     await controller.stopDictation();
   });
 
-  it('reports malformed persisted correction settings before sending a session frame', async () => {
+  it('skips malformed persisted correction settings and starts with a warning', async () => {
     const sidecarConnection = new FakeSidecarConnection();
     const feedback = { show: vi.fn() };
     const settings = createSettings({
-      personalCorrectionRules: [{ enabled: true, find: ' ', id: 'blank', replace: 'value' }],
+      personalCorrectionRuleDiagnostics: [
+        {
+          code: 'blank_find',
+          field: 'find',
+          index: 0,
+          message: 'Find text cannot be blank.',
+          raw: { enabled: true, find: ' ', id: 'blank', replace: 'value' },
+        },
+      ],
       selectedModel: createExternalModelSelection(),
     });
     const controller = createController({
@@ -212,11 +220,14 @@ describe('DictationSessionController', () => {
 
     await controller.startDictation();
 
-    expect(sidecarConnection.startSession).not.toHaveBeenCalled();
+    expect(sidecarConnection.startSession).toHaveBeenCalledWith(
+      expect.objectContaining({ correctionRules: [] }),
+    );
     expect(feedback.show).toHaveBeenCalledWith(
       expect.objectContaining({
-        key: 'personal-correction-rules-invalid',
-        message: expect.stringContaining('Personal correction settings are invalid'),
+        intent: 'warning',
+        key: 'personal-correction-rules-skipped',
+        message: expect.stringContaining('1'),
       }),
     );
   });

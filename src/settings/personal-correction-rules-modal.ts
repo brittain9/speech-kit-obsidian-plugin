@@ -4,25 +4,28 @@ import type { App, TextAreaComponent } from 'obsidian';
 import { Modal, Setting } from 'obsidian';
 
 import { type TranslationKey, t, tPlural } from '../shared/i18n';
-import type { PluginSettingsMutation } from './llm-preset-state';
 import {
   compilePersonalCorrectionPreview,
+  type InvalidRuleDraft,
+  normalizePersonalCorrectionRules,
   type PersonalCorrectionPreviewResult,
   type PersonalCorrectionRule,
+  type PersonalCorrectionRuleDraft,
 } from './personal-correction-rules';
 import type { PluginSettings } from './plugin-settings';
+import type { SettingsMutationFacade } from './settings-mutation';
 
 interface PersonalCorrectionRulesModalDependencies {
   getSettings: () => PluginSettings;
-  mutateSettings: (mutation: PluginSettingsMutation) => Promise<void>;
+  mutateSettings: SettingsMutationFacade['mutateSettings'];
 }
 
-type SaveState = 'failed' | 'idle' | 'saved' | 'saving';
+type SaveState = 'conflict' | 'error' | 'idle' | 'saved' | 'saving' | 'unsaved';
 
 const DEFAULT_PREVIEW_INPUT = 'The café AI system is ready.';
 
 export class PersonalCorrectionRulesModal extends Modal {
-  private draft: PersonalCorrectionRule[];
+  private draft: PersonalCorrectionRuleDraft[];
   private previewInput = DEFAULT_PREVIEW_INPUT;
   private previewResult: PersonalCorrectionPreviewResult | null = null;
   private previewStatusEl: HTMLElement | null = null;
@@ -34,13 +37,25 @@ export class PersonalCorrectionRulesModal extends Modal {
   private pendingSaves = 0;
   private saveState: SaveState = 'idle';
   private dirtyRevision = 0;
+  private dirty = false;
+  private saveGeneration = 0;
+  private knownSettingsFingerprint: string;
 
   constructor(
     app: App,
     private readonly dependencies: PersonalCorrectionRulesModalDependencies,
   ) {
     super(app);
-    this.draft = cloneRules(dependencies.getSettings().personalCorrectionRules);
+    const settings = dependencies.getSettings();
+    this.draft = [
+      ...settings.personalCorrectionRules,
+      ...settings.personalCorrectionRuleDiagnostics.map((diagnostic) => ({
+        diagnostic,
+        invalid: true as const,
+        raw: diagnostic.raw,
+      })),
+    ];
+    this.knownSettingsFingerprint = correctionSettingsFingerprint(settings);
   }
 
   override onOpen(): void {
@@ -56,6 +71,13 @@ export class PersonalCorrectionRulesModal extends Modal {
     this.countSetting = null;
     this.saveStatusEl = null;
     this.ruleRows.clear();
+  }
+
+  private markDirty(): void {
+    this.dirty = true;
+    this.dirtyRevision += 1;
+    this.saveState = 'unsaved';
+    this.updateSaveStatus();
   }
 
   private render(): void {
@@ -118,7 +140,7 @@ export class PersonalCorrectionRulesModal extends Modal {
       .addButton((button) => {
         button.setButtonText(t('settings.corrections.modal.add')).onClick(() => {
           this.draft = [...this.draft, { enabled: true, find: '', id: randomUUID(), replace: '' }];
-          this.dirtyRevision += 1;
+          this.markDirty();
           this.render();
         });
       });
@@ -130,24 +152,31 @@ export class PersonalCorrectionRulesModal extends Modal {
     this.updateSaveStatus();
   }
 
-  private renderRule(rule: PersonalCorrectionRule, index: number): void {
+  private renderRule(rule: PersonalCorrectionRuleDraft, index: number): void {
     const row = new Setting(this.contentEl)
       .setName(this.ruleName(rule, index))
       .setDesc(this.ruleDescription(rule));
     this.ruleRows.set(index, row);
 
     row.addToggle((toggle) => {
-      toggle.setValue(rule.enabled);
+      toggle.setValue(draftEnabled(rule));
       toggle.onChange((enabled) => this.updateRule(index, { enabled }));
     });
+    if (isInvalidDraft(rule)) {
+      row.addText((text) => {
+        text.setPlaceholder(t('settings.corrections.field.id'));
+        text.setValue(draftString(rule, 'id'));
+        text.onChange((value) => this.updateRule(index, { id: value }));
+      });
+    }
     row.addText((text) => {
       text.setPlaceholder(t('settings.corrections.modal.find'));
-      text.setValue(rule.find);
+      text.setValue(draftString(rule, 'find'));
       text.onChange((value) => this.updateRule(index, { find: value }));
     });
     row.addText((text) => {
       text.setPlaceholder(t('settings.corrections.modal.replace'));
-      text.setValue(rule.replace);
+      text.setValue(draftString(rule, 'replace'));
       text.onChange((value) => this.updateRule(index, { replace: value }));
     });
     row.addExtraButton((button) => {
@@ -168,7 +197,7 @@ export class PersonalCorrectionRulesModal extends Modal {
         .setTooltip(t('settings.corrections.modal.delete'))
         .onClick(() => {
           this.draft = this.draft.filter((_, ruleIndex) => ruleIndex !== index);
-          this.dirtyRevision += 1;
+          this.markDirty();
           this.render();
           this.persistIfValid();
         });
@@ -176,10 +205,15 @@ export class PersonalCorrectionRulesModal extends Modal {
   }
 
   private updateRule(index: number, update: Partial<PersonalCorrectionRule>): void {
-    this.draft = this.draft.map((rule, ruleIndex) =>
-      ruleIndex === index ? { ...rule, ...update } : rule,
-    );
-    this.dirtyRevision += 1;
+    this.draft = this.draft.map((rule, ruleIndex) => {
+      if (ruleIndex !== index) return rule;
+      if (isInvalidDraft(rule)) {
+        const raw = isRecord(rule.raw) ? rule.raw : {};
+        return { ...raw, ...update };
+      }
+      return isRecord(rule) ? { ...rule, ...update } : { ...update };
+    });
+    this.markDirty();
     this.updateRuleLabels(index);
     this.updatePreview();
   }
@@ -191,13 +225,13 @@ export class PersonalCorrectionRulesModal extends Modal {
     if (rule === undefined) return;
     next.splice(targetIndex, 0, rule);
     this.draft = next;
-    this.dirtyRevision += 1;
+    this.markDirty();
     this.render();
     this.persistIfValid();
   }
 
   private updatePreview(persist = true): void {
-    this.previewResult = compilePersonalCorrectionPreview(this.draft, this.previewInput);
+    this.previewResult = compilePersonalCorrectionPreview(this.draftInputs(), this.previewInput);
     this.updateRuleHighlight();
     this.updateCountLabels();
     if (this.previewOutput !== null) {
@@ -219,9 +253,12 @@ export class PersonalCorrectionRulesModal extends Modal {
         ),
       );
       if (persist) this.persistIfValid();
+      else this.updateSaveStatus();
       return;
     }
     this.previewStatusEl.setText(this.previewResult.error.message);
+    if (this.dirty) this.saveState = 'unsaved';
+    this.updateSaveStatus();
   }
 
   private updateRuleLabels(index: number): void {
@@ -235,10 +272,9 @@ export class PersonalCorrectionRulesModal extends Modal {
     const invalidIndex =
       this.previewResult?.ok === false ? this.previewResult.error.index : undefined;
     for (const [index, row] of this.ruleRows) {
-      row.settingEl.classList.toggle(
-        'local-stt-corrections-modal__rule--invalid',
-        invalidIndex === index,
-      );
+      const invalid = invalidIndex === index;
+      row.settingEl.classList.toggle('local-stt-corrections-modal__rule--invalid', invalid);
+      row.settingEl.setAttribute('aria-invalid', String(invalid));
     }
   }
 
@@ -246,12 +282,17 @@ export class PersonalCorrectionRulesModal extends Modal {
     this.countSetting?.setName(this.countsLabel());
   }
 
-  private ruleName(rule: PersonalCorrectionRule, index: number): string {
-    return `${index + 1}. ${rule.find || t('settings.corrections.modal.find')}`;
+  private ruleName(rule: PersonalCorrectionRuleDraft, index: number): string {
+    return `${index + 1}. ${draftString(rule, 'find') || t('settings.corrections.modal.find')}`;
   }
 
-  private ruleDescription(rule: PersonalCorrectionRule): string {
-    return `${t('settings.corrections.modal.find')}: ${rule.find} → ${t('settings.corrections.modal.replace')}: ${rule.replace} · ${t('settings.corrections.modal.enabled')}: ${rule.enabled ? t('common.on') : t('common.off')}`;
+  private ruleDescription(rule: PersonalCorrectionRuleDraft): string {
+    if (isInvalidDraft(rule)) {
+      return t('settings.corrections.validation.invalidRule');
+    }
+    const find = draftString(rule, 'find');
+    const replace = draftString(rule, 'replace');
+    return `${t('settings.corrections.modal.find')}: ${find} → ${t('settings.corrections.modal.replace')}: ${replace} · ${t('settings.corrections.modal.enabled')}: ${draftEnabled(rule) ? t('common.on') : t('common.off')}`;
   }
 
   private countsLabel(): string {
@@ -262,7 +303,7 @@ export class PersonalCorrectionRulesModal extends Modal {
         other: 'settings.corrections.modal.countsOther',
       },
       {
-        enabled: this.draft.filter((rule) => rule.enabled).length,
+        enabled: this.draft.filter((rule) => draftEnabled(rule)).length,
         total: this.draft.length,
       },
     );
@@ -270,52 +311,131 @@ export class PersonalCorrectionRulesModal extends Modal {
 
   private persistIfValid(): void {
     if (this.previewResult === null || !this.previewResult.ok) {
-      this.saveState = 'failed';
+      this.saveState = 'unsaved';
       this.updateSaveStatus();
       return;
     }
 
+    const generation = ++this.saveGeneration;
     const revision = this.dirtyRevision;
-    const rules = cloneRules(this.draft);
+    const normalized = normalizePersonalCorrectionRules(this.draftInputs());
+    const rules = normalized.rules;
     this.pendingSaves += 1;
     this.saveState = 'saving';
     this.updateSaveStatus();
     const operation = this.persistChain.then(() =>
-      this.dependencies.mutateSettings((settings) => ({
-        ...settings,
-        personalCorrectionRules: rules,
-      })),
+      this.dependencies.mutateSettings((settings) => {
+        if (correctionSettingsFingerprint(settings) !== this.knownSettingsFingerprint) {
+          throw new SettingsConflictError();
+        }
+        return {
+          ...settings,
+          personalCorrectionRuleDiagnostics: normalized.diagnostics,
+          personalCorrectionRules: rules,
+        };
+      }),
     );
     this.persistChain = operation.catch(() => undefined);
     void operation
       .then(() => {
         this.pendingSaves -= 1;
-        if (revision === this.dirtyRevision && this.pendingSaves === 0) {
+        this.knownSettingsFingerprint = correctionSettingsFingerprint(
+          this.dependencies.getSettings(),
+        );
+        if (
+          generation === this.saveGeneration &&
+          revision === this.dirtyRevision &&
+          this.pendingSaves === 0
+        ) {
+          this.dirty = false;
           this.saveState = 'saved';
         }
         this.updateSaveStatus();
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         this.pendingSaves -= 1;
-        this.saveState = 'failed';
+        if (generation === this.saveGeneration) {
+          this.dirty = true;
+          this.saveState = error instanceof SettingsConflictError ? 'conflict' : 'error';
+        }
         this.updateSaveStatus();
       });
   }
 
+  private draftInputs(): unknown[] {
+    return this.draft.map((rule) => draftInput(rule));
+  }
+
   private updateSaveStatus(): void {
     if (this.saveStatusEl === null) return;
-    const key: TranslationKey =
-      this.saveState === 'saving'
+    const isUnsaved = this.dirty && this.saveState === 'unsaved';
+    const key: TranslationKey = isUnsaved
+      ? 'settings.corrections.modal.unsaved'
+      : this.pendingSaves > 0
         ? 'settings.corrections.modal.saving'
-        : this.saveState === 'saved'
-          ? 'settings.corrections.modal.saved'
-          : this.saveState === 'failed'
-            ? 'settings.corrections.modal.failed'
-            : 'settings.corrections.modal.saved';
+        : this.saveState === 'conflict'
+          ? 'settings.corrections.modal.conflict'
+          : this.saveState === 'error'
+            ? 'settings.corrections.modal.retry'
+            : this.dirty || this.previewResult?.ok === false
+              ? 'settings.corrections.modal.unsaved'
+              : 'settings.corrections.modal.saved';
     this.saveStatusEl.setText(t(key));
+    this.saveStatusEl.setAttribute(
+      'data-state',
+      isUnsaved
+        ? 'unsaved'
+        : this.pendingSaves > 0
+          ? 'saving'
+          : this.saveState === 'conflict'
+            ? 'conflict'
+            : this.saveState === 'error'
+              ? 'error'
+              : this.dirty || this.previewResult?.ok === false
+                ? 'unsaved'
+                : 'saved',
+    );
   }
 }
 
-function cloneRules(rules: readonly PersonalCorrectionRule[]): PersonalCorrectionRule[] {
-  return rules.map((rule) => ({ ...rule }));
+function draftInput(draft: PersonalCorrectionRuleDraft): unknown {
+  return isInvalidDraft(draft) ? draft.raw : draft;
+}
+
+function draftString(draft: PersonalCorrectionRuleDraft, field: 'find' | 'id' | 'replace'): string {
+  const source = isInvalidDraft(draft)
+    ? isRecord(draft.raw)
+      ? draft.raw
+      : null
+    : isRecord(draft)
+      ? draft
+      : null;
+  return source !== null && typeof source[field] === 'string' ? source[field] : '';
+}
+
+function draftEnabled(draft: PersonalCorrectionRuleDraft): boolean {
+  const source = isInvalidDraft(draft) ? draft.raw : draft;
+  return isRecord(source) && source.enabled === true;
+}
+
+function isInvalidDraft(draft: PersonalCorrectionRuleDraft): draft is InvalidRuleDraft {
+  return isRecord(draft) && draft.invalid === true;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+class SettingsConflictError extends Error {
+  constructor() {
+    super('Correction rules changed elsewhere.');
+    this.name = 'SettingsConflictError';
+  }
+}
+
+function correctionSettingsFingerprint(settings: PluginSettings): string {
+  return JSON.stringify({
+    diagnostics: settings.personalCorrectionRuleDiagnostics,
+    rules: settings.personalCorrectionRules,
+  });
 }

@@ -29,7 +29,6 @@ import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
 import { changeHardwareAcceleration } from './hardware-acceleration-action';
 import { renderHardwareAccelerationSetting } from './hardware-acceleration-setting';
-import type { PluginSettingsMutation } from './llm-preset-state';
 import { renderMicrophonePicker } from './microphone-picker';
 import { renderModelSection } from './model-settings-section';
 import { openFilteredHotkeySettings } from './open-hotkey-settings';
@@ -60,6 +59,7 @@ import {
   type DropdownOption,
   type SettingAccess,
 } from './setting-helpers';
+import type { SettingsMutation } from './settings-mutation';
 import { mountSettingsSidecarSurfaces } from './settings-sidecar-surfaces';
 import { SettingsTabLifecycle } from './settings-tab-lifecycle';
 import {
@@ -89,7 +89,7 @@ interface SettingsTabDependencies {
   resetLlmTransformation: () => Promise<void>;
   restartSidecar: () => Promise<void>;
   saveSettings: (settings: PluginSettings) => Promise<void>;
-  mutateSettings?: (mutation: PluginSettingsMutation) => Promise<void>;
+  mutateSettings?: (mutation: SettingsMutation) => Promise<void>;
   sidecarConnection: Pick<SidecarConnection, 'probeSystemAudio' | 'shutdown'>;
   sidecarInstallManager: SidecarInstallManager;
   sidecarLifecycleGate: SidecarLifecycleGate;

@@ -425,6 +425,15 @@ export class DictationSessionController {
       this.applyUiState('idle');
       return;
     }
+    if (settings.personalCorrectionRuleDiagnostics.length > 0) {
+      this.dependencies.feedback.show({
+        intent: 'warning',
+        key: 'personal-correction-rules-skipped',
+        message: t('notice.personalCorrectionRulesSkipped', {
+          count: settings.personalCorrectionRuleDiagnostics.length,
+        }),
+      });
+    }
     if (snapshot.correctionRules.length > 0) {
       this.dependencies.feedback.show({
         intent: 'information',

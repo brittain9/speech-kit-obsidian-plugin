@@ -830,7 +830,10 @@ impl AppState {
                 if let Err(error) = validate_correction_rules(&correction_rules) {
                     events.push(Event::Error {
                         code: "invalid_correction_rules".to_string(),
-                        details: Some(error.to_string()),
+                        details: Some(format!(
+                            "code={};field={};index={};{}",
+                            error.code, error.field, error.index, error.message
+                        )),
                         message: "Personal correction rules are invalid.".to_string(),
                         session_id: Some(session_id),
                     });
@@ -4186,8 +4189,12 @@ mod tests {
         assert!(app.active_sessions.is_empty());
         assert!(matches!(
             events.as_slice(),
-            [Event::Error { code, session_id: Some(session_id), .. }]
-                if code == "invalid_correction_rules" && session_id == "invalid-rules"
+            [Event::Error { code, details: Some(details), session_id: Some(session_id), .. }]
+                if code == "invalid_correction_rules"
+                    && session_id == "invalid-rules"
+                    && details.contains("code=invalid_enabled")
+                    && details.contains("field=enabled")
+                    && details.contains("index=0")
         ));
     }
 

@@ -871,6 +871,8 @@ export const de = {
   'notice.personalCorrectionRulesInvalid':
     'Persönliche Korrektureinstellungen sind ungültig: {reason} Bitte korrigiere sie vor dem Start des Diktierens.',
 
+  'notice.personalCorrectionRulesSkipped':
+    '{count} gespeicherte persönliche Korrekturregeln konnten nicht gelesen werden und wurden übersprungen. Repariere sie in den Einstellungen.',
   'settings.corrections.name': 'Persönliche Korrekturregeln',
   'settings.corrections.desc':
     'Lokale, geordnete Korrekturen nach der Transkription. Regeln gelten für endgültige Segmente in der nächsten Sitzung; sie sind kein ASR-Vokabular und keine Hotwords.',
@@ -893,12 +895,12 @@ export const de = {
   'settings.corrections.modal.moveUp': 'Nach oben',
   'settings.corrections.modal.moveDown': 'Nach unten',
   'settings.corrections.modal.delete': 'Regel löschen',
-  'settings.corrections.modal.saving': 'Speichern …',
+  'settings.corrections.modal.saving': 'Speichern...',
   'settings.corrections.modal.saved': 'Gespeichert',
-  'settings.corrections.modal.failed':
-    'Nicht gespeichert. Korrigiere die Regeln und versuche es erneut.',
-  'settings.corrections.modal.invalid':
-    'Korrigiere die markierte Regel vor dem Speichern oder Anzeigen der Vorschau.',
+  'settings.corrections.modal.unsaved': 'Nicht gespeicherte Änderungen',
+  'settings.corrections.modal.retry': 'Speichern fehlgeschlagen. Erneut versuchen.',
+  'settings.corrections.modal.conflict':
+    'Die Korrekturregeln wurden an anderer Stelle geändert. Öffne dieses Fenster erneut, bevor du speicherst.',
   'settings.corrections.field.find': 'Suchen',
   'settings.corrections.field.enabled': 'Aktiviert',
   'settings.corrections.field.id': 'Regel-ID',
@@ -906,9 +908,9 @@ export const de = {
   'settings.corrections.field.rules': 'Regeln',
   'settings.corrections.validation.tooMany': 'Füge höchstens {max} Regeln hinzu.',
   'settings.corrections.validation.blankId': 'Jede Regel benötigt eine ID.',
+  'settings.corrections.validation.invalidRule':
+    'Diese Korrekturregel ist kein lesbares Regobjekt.',
   'settings.corrections.validation.invalidId': 'Die Regel-ID muss Text sein.',
-  'settings.corrections.validation.oversizedId':
-    'Die Regel-ID darf höchstens {max} Zeichen lang sein.',
   'settings.corrections.validation.invalidEnabled': 'Eingeschaltet muss ein Ja/Nein-Wert sein.',
   'settings.corrections.validation.invalidFind': 'Der Suchtext muss Text sein.',
   'settings.corrections.validation.duplicateId': 'Regel-IDs müssen eindeutig sein.',
@@ -922,7 +924,9 @@ export const de = {
   'settings.corrections.validation.duplicateFind':
     'Der Suchtext muss eindeutig sein; spätere Regeln dürfen nicht denselben Text verwenden.',
   'settings.corrections.validation.absoluteAmplification':
-    'Die Korrektur würde das Limit von {max} Zeichen überschreiten und wurde vor der Ausgabeallokation abgelehnt.',
+    'Die Korrektur würde das Sicherheitslimit von {max} Zeichen überschreiten und wurde abgelehnt.',
   'settings.corrections.validation.relativeAmplification':
-    'Die Korrektur würde den Text um mehr als {max}× vergrößern und wurde vor der Ausgabeallokation abgelehnt.',
+    'Die Korrektur würde den Text um mehr als {max}× vergrößern und wurde abgelehnt.',
+  'settings.corrections.validation.workBudget':
+    'Die Korrektursuche überschreitet das Sicherheitslimit von {max} Schritten und wurde abgelehnt.',
 } as const satisfies TranslationCatalog;

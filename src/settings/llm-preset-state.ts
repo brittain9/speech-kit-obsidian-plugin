@@ -1,6 +1,7 @@
 import type { LlmPreset } from '../llm/presets';
 import { isRecord } from '../shared/type-guards';
 import { type PluginSettings, resolvePluginSettings } from './plugin-settings';
+import type { SettingsMutation } from './settings-mutation';
 
 export interface LlmPresetState {
   activePresetRef: string;
@@ -8,7 +9,6 @@ export interface LlmPresetState {
 }
 
 export type LlmPresetStateMutation = (state: Readonly<LlmPresetState>) => LlmPresetState;
-export type PluginSettingsMutation = (settings: Readonly<PluginSettings>) => PluginSettings;
 
 export interface LlmPresetStateStoreDependencies {
   commit: (settings: PluginSettings, options: { persist: boolean }) => Promise<void>;
@@ -90,7 +90,7 @@ export class LlmPresetStateStore {
     });
   }
 
-  mutateSettings(mutation: PluginSettingsMutation): Promise<void> {
+  mutateSettings(mutation: SettingsMutation): Promise<void> {
     return this.enqueue(async () => {
       await this.synchronizeNow();
       const nextSettings = resolvePluginSettings(mutation(this.dependencies.getSettings()));

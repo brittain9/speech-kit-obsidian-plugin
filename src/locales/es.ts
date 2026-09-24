@@ -862,6 +862,8 @@ export const es = {
   'notice.personalCorrectionRulesInvalid':
     'La configuración de correcciones personales no es válida: {reason} Corrígela antes de empezar a dictado.',
 
+  'notice.personalCorrectionRulesSkipped':
+    '{count} reglas de corrección personal guardadas no se pudieron leer y se omitieron. Repáralas en Configuración.',
   'settings.corrections.name': 'Reglas de corrección personal',
   'settings.corrections.desc':
     'Aplica correcciones literales locales y ordenadas después de la transcripción. Las reglas se aplican a segmentos finales en la próxima sesión; no son vocabulario de ASR ni hotwords.',
@@ -886,9 +888,10 @@ export const es = {
   'settings.corrections.modal.delete': 'Eliminar regla',
   'settings.corrections.modal.saving': 'Guardando…',
   'settings.corrections.modal.saved': 'Guardado',
-  'settings.corrections.modal.failed': 'No se guardó. Corrige las reglas e inténtalo de nuevo.',
-  'settings.corrections.modal.invalid':
-    'Corrige la regla indicada antes de guardar o previsualizar.',
+  'settings.corrections.modal.unsaved': 'Cambios sin guardar',
+  'settings.corrections.modal.retry': 'No se pudo guardar. Reintenta el guardado.',
+  'settings.corrections.modal.conflict':
+    'Las reglas de corrección cambiaron en otro lugar. Vuelve a abrir este diálogo antes de guardar.',
   'settings.corrections.field.find': 'Buscar',
   'settings.corrections.field.enabled': 'Activada',
   'settings.corrections.field.id': 'ID de regla',
@@ -896,9 +899,9 @@ export const es = {
   'settings.corrections.field.rules': 'Reglas',
   'settings.corrections.validation.tooMany': 'Añade como máximo {max} reglas.',
   'settings.corrections.validation.blankId': 'Cada regla necesita un ID.',
+  'settings.corrections.validation.invalidRule':
+    'Esta regla de corrección no es un objeto de regla legible.',
   'settings.corrections.validation.invalidId': 'El ID de regla debe ser texto.',
-  'settings.corrections.validation.oversizedId':
-    'El ID de regla no puede superar los {max} caracteres.',
   'settings.corrections.validation.invalidEnabled': 'Activada debe ser activada o desactivada.',
   'settings.corrections.validation.invalidFind': 'El texto buscado debe ser texto.',
   'settings.corrections.validation.duplicateId': 'Los ID de regla deben ser únicos.',
@@ -912,7 +915,9 @@ export const es = {
   'settings.corrections.validation.duplicateFind':
     'El texto que se busca debe ser único; las reglas posteriores no pueden apuntar al mismo texto.',
   'settings.corrections.validation.absoluteAmplification':
-    'La corrección superaría el límite de {max} caracteres y se rechazó antes de asignar la salida.',
+    'La corrección superaría el límite de seguridad de {max} caracteres y se rechazó.',
   'settings.corrections.validation.relativeAmplification':
-    'La corrección ampliaría el texto más de {max}× y se rechazó antes de asignar la salida.',
+    'La corrección ampliaría el texto más de {max}× y se rechazó.',
+  'settings.corrections.validation.workBudget':
+    'La búsqueda de correcciones supera el límite de seguridad de {max} pasos y se ha rechazado.',
 } as const satisfies TranslationCatalog;

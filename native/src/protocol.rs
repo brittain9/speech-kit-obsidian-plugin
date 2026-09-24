@@ -44,6 +44,29 @@ impl fmt::Display for OversizedFramePayload {
 
 impl std::error::Error for OversizedFramePayload {}
 
+#[derive(Debug)]
+struct OutboundFramePayloadTooLarge {
+    payload_length: usize,
+}
+
+impl fmt::Display for OutboundFramePayloadTooLarge {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "frame payload exceeds maximum supported size: {} > {}",
+            self.payload_length, MAX_FRAME_PAYLOAD
+        )
+    }
+}
+
+impl std::error::Error for OutboundFramePayloadTooLarge {}
+
+pub fn is_outbound_frame_payload_too_large(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<OutboundFramePayloadTooLarge>()
+        .is_some()
+}
+
 pub const PCM_SAMPLE_RATE_HZ: usize = 16_000;
 pub const PCM_CHANNEL_COUNT: usize = 1;
 pub const PCM_SAMPLE_BYTES: usize = 2;
@@ -189,7 +212,12 @@ pub struct TranscriptWord {
     pub timestamp_source: TimestampSource,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+const INVALID_CORRECTION_OBJECT: &str = "\u{0}invalid-correction-object";
+const INVALID_CORRECTION_ID: &str = "\u{0}invalid-correction-id";
+const INVALID_CORRECTION_FIND: &str = "\u{0}invalid-correction-find";
+const INVALID_CORRECTION_REPLACE: &str = "\u{0}invalid-correction-replace";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonalCorrectionRule {
     /// `enabled` is represented as an option only so a missing value can be
@@ -197,9 +225,66 @@ pub struct PersonalCorrectionRule {
     /// silently defaulted on the wire.
     pub enabled: Option<bool>,
     pub find: String,
-    #[serde(default)]
     pub id: String,
     pub replace: String,
+}
+
+impl<'de> Deserialize<'de> for PersonalCorrectionRule {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value =
+            serde_json::Value::deserialize(deserializer).map_err(serde::de::Error::custom)?;
+        let object = value.as_object().cloned();
+        let Some(object) = object else {
+            return Ok(Self {
+                enabled: None,
+                find: INVALID_CORRECTION_FIND.to_string(),
+                id: INVALID_CORRECTION_OBJECT.to_string(),
+                replace: INVALID_CORRECTION_REPLACE.to_string(),
+            });
+        };
+        Ok(Self {
+            enabled: object.get("enabled").and_then(serde_json::Value::as_bool),
+            find: object
+                .get("find")
+                .filter(|value| value.is_string())
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_else(|| {
+                    if object.contains_key("find") {
+                        INVALID_CORRECTION_FIND
+                    } else {
+                        ""
+                    }
+                })
+                .to_string(),
+            id: object
+                .get("id")
+                .filter(|value| value.is_string())
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_else(|| {
+                    if object.contains_key("id") {
+                        INVALID_CORRECTION_ID
+                    } else {
+                        ""
+                    }
+                })
+                .to_string(),
+            replace: object
+                .get("replace")
+                .filter(|value| value.is_string())
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_else(|| {
+                    if object.contains_key("replace") {
+                        INVALID_CORRECTION_REPLACE
+                    } else {
+                        ""
+                    }
+                })
+                .to_string(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -317,7 +402,7 @@ pub enum Command {
     StartSession {
         #[serde(default)]
         acceleration_preference: AccelerationPreference,
-        #[serde(default)]
+        #[serde(default, deserialize_with = "deserialize_correction_rules")]
         correction_rules: Vec<PersonalCorrectionRule>,
         #[serde(default)]
         detailed_timestamps_enabled: bool,
@@ -657,55 +742,181 @@ fn validate_command(command: Command) -> Result<Command> {
     Ok(command)
 }
 
+fn deserialize_correction_rules<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Vec<PersonalCorrectionRule>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer).map_err(serde::de::Error::custom)?;
+    let values = match value {
+        serde_json::Value::Array(values) => values,
+        _ => vec![serde_json::Value::Null],
+    };
+    values
+        .into_iter()
+        .map(|value| serde_json::from_value(value).map_err(serde::de::Error::custom))
+        .collect()
+}
+
 pub const MAX_CORRECTION_RULE_COUNT: usize = 100;
 pub const MAX_CORRECTION_RULE_CHARS: usize = 256;
 pub const MAX_CORRECTION_RULE_ID_CHARS: usize = 256;
 
-pub fn validate_correction_rules(rules: &[PersonalCorrectionRule]) -> Result<()> {
-    ensure!(
-        rules.len() <= MAX_CORRECTION_RULE_COUNT,
-        "too many personal correction rules"
-    );
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CorrectionRulesValidationError {
+    pub code: &'static str,
+    pub field: &'static str,
+    pub index: usize,
+    pub message: String,
+}
+
+impl fmt::Display for CorrectionRulesValidationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "code={}; field={}; index={}; {}",
+            self.code, self.field, self.index, self.message
+        )
+    }
+}
+
+impl std::error::Error for CorrectionRulesValidationError {}
+
+fn correction_validation_error(
+    code: &'static str,
+    field: &'static str,
+    index: usize,
+    message: impl Into<String>,
+) -> CorrectionRulesValidationError {
+    CorrectionRulesValidationError {
+        code,
+        field,
+        index,
+        message: message.into(),
+    }
+}
+
+pub fn validate_correction_rules(
+    rules: &[PersonalCorrectionRule],
+) -> std::result::Result<(), CorrectionRulesValidationError> {
+    if rules.len() > MAX_CORRECTION_RULE_COUNT {
+        return Err(correction_validation_error(
+            "too_many_rules",
+            "rules",
+            0,
+            "too many personal correction rules",
+        ));
+    }
 
     let mut ids = HashSet::new();
     let mut finds = HashSet::new();
     for (index, rule) in rules.iter().enumerate() {
-        ensure!(
-            rule.enabled.is_some(),
-            "personal correction rule {index} is missing a boolean enabled field"
-        );
-        ensure!(
-            !rule.id.trim().is_empty(),
-            "personal correction rule {index} is missing a non-empty id"
-        );
-        ensure!(
-            rule.id.chars().count() <= MAX_CORRECTION_RULE_ID_CHARS,
-            "personal correction rule {index} id is too long"
-        );
-        ensure!(
-            ids.insert(rule.id.trim()),
-            "personal correction rule id is duplicated"
-        );
-        ensure!(
-            !rule.find.trim().is_empty(),
-            "personal correction find text cannot be blank"
-        );
-        ensure!(
-            !rule.replace.trim().is_empty(),
-            "personal correction replacement text cannot be blank"
-        );
-        ensure!(
-            rule.find.chars().count() <= MAX_CORRECTION_RULE_CHARS,
-            "personal correction find text is too long"
-        );
-        ensure!(
-            rule.replace.chars().count() <= MAX_CORRECTION_RULE_CHARS,
-            "personal correction replacement text is too long"
-        );
-        ensure!(
-            finds.insert(rule.find.nfd().collect::<String>()),
-            "personal correction find text is duplicated"
-        );
+        if rule.id == INVALID_CORRECTION_OBJECT {
+            return Err(correction_validation_error(
+                "invalid_rule",
+                "rules",
+                index,
+                "rule must be an object",
+            ));
+        }
+        if rule.id == INVALID_CORRECTION_ID {
+            return Err(correction_validation_error(
+                "invalid_id",
+                "id",
+                index,
+                "id must be a string",
+            ));
+        }
+        if rule.enabled.is_none() {
+            return Err(correction_validation_error(
+                "invalid_enabled",
+                "enabled",
+                index,
+                "enabled must be a boolean",
+            ));
+        }
+        let id = rule.id.trim();
+        if id.is_empty() {
+            return Err(correction_validation_error(
+                "blank_id",
+                "id",
+                index,
+                "id must not be blank",
+            ));
+        }
+        if rule.id.chars().count() > MAX_CORRECTION_RULE_ID_CHARS {
+            return Err(correction_validation_error(
+                "oversized_id",
+                "id",
+                index,
+                "id is too long",
+            ));
+        }
+        if !ids.insert(id) {
+            return Err(correction_validation_error(
+                "duplicate_id",
+                "id",
+                index,
+                "id is duplicated",
+            ));
+        }
+        if rule.find == INVALID_CORRECTION_FIND {
+            return Err(correction_validation_error(
+                "invalid_find",
+                "find",
+                index,
+                "find must be a string",
+            ));
+        }
+        if rule.find.trim().is_empty() {
+            return Err(correction_validation_error(
+                "blank_find",
+                "find",
+                index,
+                "find text must not be blank",
+            ));
+        }
+        if rule.replace == INVALID_CORRECTION_REPLACE {
+            return Err(correction_validation_error(
+                "invalid_replace",
+                "replace",
+                index,
+                "replace must be a string",
+            ));
+        }
+        if rule.replace.trim().is_empty() {
+            return Err(correction_validation_error(
+                "blank_replace",
+                "replace",
+                index,
+                "replacement text must not be blank",
+            ));
+        }
+        if rule.find.chars().count() > MAX_CORRECTION_RULE_CHARS {
+            return Err(correction_validation_error(
+                "oversized_find",
+                "find",
+                index,
+                "find text is too long",
+            ));
+        }
+        if rule.replace.chars().count() > MAX_CORRECTION_RULE_CHARS {
+            return Err(correction_validation_error(
+                "oversized_replace",
+                "replace",
+                index,
+                "replacement text is too long",
+            ));
+        }
+        if !finds.insert(rule.find.nfd().collect::<String>()) {
+            return Err(correction_validation_error(
+                "duplicate_find",
+                "find",
+                index,
+                "find text is duplicated",
+            ));
+        }
     }
     Ok(())
 }
@@ -794,12 +1005,12 @@ pub fn write_event_frame<W: Write>(writer: &mut W, event: &Event) -> Result<()> 
     );
     let payload = serde_json::to_vec(&EventEnvelope::new(event.clone()))
         .context("failed to serialize event envelope")?;
-    ensure!(
-        payload.len() <= MAX_FRAME_PAYLOAD,
-        "event frame payload exceeds maximum supported size: {} > {}",
-        payload.len(),
-        MAX_FRAME_PAYLOAD
-    );
+    if payload.len() > MAX_FRAME_PAYLOAD {
+        return Err(OutboundFramePayloadTooLarge {
+            payload_length: payload.len(),
+        }
+        .into());
+    }
     write_frame(writer, JSON_FRAME_KIND, &payload)
 }
 
@@ -813,7 +1024,13 @@ pub fn write_synthesis_audio_frame<W: Write>(
         pcm16le.len().is_multiple_of(2),
         "PCM16LE payload length must be even"
     );
-    let mut payload = Vec::with_capacity(SYNTHESIS_AUDIO_HEADER_BYTES + pcm16le.len());
+    let payload_length = SYNTHESIS_AUDIO_HEADER_BYTES
+        .checked_add(pcm16le.len())
+        .ok_or_else(|| anyhow!("synthesis payload length overflows"))?;
+    if payload_length > MAX_FRAME_PAYLOAD {
+        return Err(OutboundFramePayloadTooLarge { payload_length }.into());
+    }
+    let mut payload = Vec::with_capacity(payload_length);
     payload.extend_from_slice(&synthesis_id.to_le_bytes());
     payload.extend_from_slice(&seq.to_le_bytes());
     payload.extend_from_slice(pcm16le);
@@ -821,12 +1038,12 @@ pub fn write_synthesis_audio_frame<W: Write>(
 }
 
 fn write_frame<W: Write>(writer: &mut W, frame_kind: u8, payload: &[u8]) -> Result<()> {
-    ensure!(
-        payload.len() <= MAX_FRAME_PAYLOAD,
-        "frame payload exceeds maximum supported size: {} > {}",
-        payload.len(),
-        MAX_FRAME_PAYLOAD
-    );
+    if payload.len() > MAX_FRAME_PAYLOAD {
+        return Err(OutboundFramePayloadTooLarge {
+            payload_length: payload.len(),
+        }
+        .into());
+    }
     let payload_length = u32::try_from(payload.len())
         .map_err(|_| anyhow!("payload exceeds maximum frame length"))?;
     let mut header = [0_u8; FRAME_HEADER_LENGTH];
@@ -919,8 +1136,8 @@ mod tests {
         PCM_BYTES_PER_FRAME, PersonalCorrectionRule, QueueBackpressureTier,
         SYNTHESIS_AUDIO_FRAME_KIND, SelectedModel, SessionStopReason, SourceRange, SpeakingStyle,
         TimestampGranularity, TimestampSource, TranscriptSegment, TranscriptWord,
-        encode_audio_frame_envelope, read_frame, write_event_frame, write_frame,
-        write_synthesis_audio_frame,
+        encode_audio_frame_envelope, read_frame, validate_correction_rules, write_event_frame,
+        write_frame, write_synthesis_audio_frame,
     };
     use crate::engine::capabilities::{ModelFamilyId, RuntimeId};
     use uuid::Uuid;
@@ -1079,6 +1296,55 @@ mod tests {
         assert_eq!(correction_rules.len(), 2);
         assert_eq!(correction_rules[0].find, "speech kit");
         assert_eq!(correction_rules[1].enabled, Some(false));
+    }
+
+    #[test]
+    fn malformed_correction_rule_shapes_parse_for_typed_validation() {
+        let malformed_values = vec![
+            serde_json::json!([{ "enabled": true, "id": "x", "find": "a" }]),
+            serde_json::json!([{ "enabled": "yes", "id": "x", "find": "a", "replace": "b" }]),
+            serde_json::json!([{ "enabled": true, "id": null, "find": "a", "replace": "b" }]),
+            serde_json::json!([{ "enabled": true, "id": "x", "find": null, "replace": "b" }]),
+            serde_json::json!([{ "enabled": true, "id": "x", "find": "a", "replace": [] }]),
+            serde_json::json!([null]),
+            serde_json::json!([[]]),
+            serde_json::json!([{}]),
+            serde_json::json!(null),
+            serde_json::json!({ "not": "an array" }),
+        ];
+
+        for correction_rules in malformed_values {
+            let payload = serde_json::to_vec(&serde_json::json!({
+                "type": "start_session",
+                "sessionId": format!("malformed-{}", correction_rules),
+                "mode": "always_on",
+                "modelSelection": {
+                    "kind": "external_file",
+                    "runtimeId": "whisper_cpp",
+                    "familyId": "whisper",
+                    "filePath": "/tmp/model.bin"
+                },
+                "language": "en",
+                "sessionStartUnixMs": 1_700_000_000_000_u64,
+                "correctionRules": correction_rules
+            }))
+            .expect("payload should serialize");
+            let mut framed = Vec::new();
+            write_frame(&mut framed, JSON_FRAME_KIND, &payload).expect("frame should write");
+            let parsed = read_frame(&mut framed.as_slice())
+                .expect("malformed rule shape should not become a generic frame error")
+                .expect("frame should exist");
+            let IncomingFrame::Command(Command::StartSession {
+                correction_rules, ..
+            }) = parsed
+            else {
+                panic!("expected start session command");
+            };
+            let error = validate_correction_rules(&correction_rules)
+                .expect_err("malformed rule shape should fail typed validation");
+            assert!(!error.code.is_empty());
+            assert!(!error.field.is_empty());
+        }
     }
 
     #[test]
@@ -1446,7 +1712,7 @@ mod tests {
         };
         let mut output = Vec::new();
         let error = write_event_frame(&mut output, &event).expect_err("event should be rejected");
-        assert!(error.to_string().contains("event frame payload exceeds"));
+        assert!(error.to_string().contains("frame payload exceeds"));
         assert!(output.is_empty());
     }
 

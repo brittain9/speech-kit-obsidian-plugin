@@ -409,25 +409,37 @@ run on partials, or cross the later diarization/LLM stages.
 The `start_session` command carries the complete `{ id, enabled, find, replace }`
 rule array. IDs are required and unique, `enabled` is required, finds are
 NFD-unique, and scalar limits are checked before a session is created. Invalid
-rules produce a typed `invalid_correction_rules` protocol error before any
-session or worker exists; there is no unreachable `invalid_rule` transcript-stage
-path. The settings boundary also validates the final immutable snapshot
-immediately before serialization, reporting a localized correction-settings error
-instead of sending a malformed frame. Persisted schema 11 data remains additive:
-unknown top-level fields and newer schema fields are retained, while malformed
-correction rules remain visible to validation rather than being silently dropped.
+wire shapes produce a typed `invalid_correction_rules` protocol error with the
+rule code, field, and index before any session or worker exists; there is no
+unreachable `invalid_rule` transcript-stage path. The settings boundary also
+validates the final immutable snapshot immediately before serialization,
+reporting a localized correction-settings error instead of sending a malformed
+frame.
+
+Persisted settings use a recoverable schema-12 policy. Schema 11 and earlier
+correction entries are validated independently: valid entries remain active,
+malformed entries are omitted from the active snapshot, and their raw values,
+field/index context, and count are retained as repair diagnostics. Dictation
+starts with the valid rules and a localized warning such as “N stored rules could
+not be read and were skipped; repair settings”; the invalid entries do not brick
+sessions. Unknown top-level fields and newer schema fields are preserved.
+Malformed wire values received from the sidecar are not treated as this
+recoverable persisted state: they are rejected with the typed protocol error.
 
 The stage enforces utterance-wide absolute output (`1,000,000` characters),
 relative amplification (`8x`), normalized-input, indexed-search, and frame
 budgets. It precompiles and NFD-normalizes each rule once per session, reuses the
 normalized segment while a rule makes no change, and uses a first-scalar index
-plus a work budget so many long near-matches cannot monopolize the worker. The
-budget includes segment text, the duplicate joined transcript field, word
-metadata, stage history, and conservative JSON/frame overhead. A budget failure
-records `UserRules: Failed`, leaves the original transcript untouched, and keeps
-the complete ordered stage history. `write_event_frame` applies the symmetric
-`MAX_FRAME_PAYLOAD` cap; the main loop emits a small typed frame-size error event
-rather than terminating or desynchronizing the stream. A successful correction
+plus a work budget so many long near-matches cannot monopolize the worker. Search
+work is charged before candidate comparison as candidate count × normalized find
+length plus bounded boundary costs, with checked arithmetic. The budget includes
+segment text, the duplicate joined transcript field, word metadata, stage history,
+and conservative JSON/frame overhead. A budget failure records `UserRules: Failed`,
+leaves the original transcript untouched, and keeps the complete ordered stage
+history. `write_event_frame` applies the symmetric `MAX_FRAME_PAYLOAD` cap; only a
+pre-write payload-cap failure is replaced by a small typed frame-size error event.
+JSON, stdout, and synthesis I/O failures propagate, including failures after a
+partial write, so the protocol is never desynchronized. A successful correction
 is reflected in both `transcript_ready.text` and the LLM input.
 
 ---
@@ -601,6 +613,7 @@ A representative slice of user-facing settings (full list and defaults in
 | `dictationAnchor` | `at_cursor` | Where transcript text lands (`at_cursor` / `end_of_note`) |
 | `transcriptFormatting` | `smart` | How utterance boundaries render |
 | `personalCorrectionRules` | `[]` | Ordered local literal find/replace rules applied to final segments in the next session |
+| `personalCorrectionRuleDiagnostics` | `[]` | Repair metadata for persisted entries omitted from the active rule snapshot |
 | `timestampsEnabled` | `false` | Render timestamps in the note |
 | `timestampClock` | `elapsed` | `elapsed` session time vs `wallclock` |
 | `timestampDensity` | `sparse` | `sparse` (interval), `every_utterance`, or `paragraph` |
@@ -611,6 +624,12 @@ A representative slice of user-facing settings (full list and defaults in
 | `sidecarRequestTimeoutSeconds` | `300` | Command/response timeout |
 | `sidecarStartupTimeoutSeconds` | `4` | Health-check timeout on launch |
 | `developerMode` | `false` | Verbose logging |
+
+Settings surfaces that need to mutate one part of the resolved snapshot use the
+serialized `SettingsMutationFacade` in `src/settings/settings-mutation.ts`.
+The correction modal and the LLM preset surfaces share that ownership boundary;
+mutations are applied to the latest snapshot, then persisted by the plugin's
+transactional `applySettings` path.
 
 ---
 

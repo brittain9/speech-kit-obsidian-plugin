@@ -742,16 +742,19 @@ export default class LocalSttPlugin extends Plugin {
     options: { persist: boolean },
   ): Promise<void> {
     const previousSettings = this.settings;
-    this.settings = resolvePluginSettings(nextSettings);
+    const resolvedSettings = resolvePluginSettings(nextSettings);
+    if (options.persist) {
+      // Persist before publishing the new live snapshot. A failed data.json
+      // write must not leave side effects or in-memory state ahead of disk.
+      await this.saveData(resolvedSettings);
+    }
+    this.settings = resolvedSettings;
     const llmWasDisabled = previousSettings.llmFeaturesEnabled && !this.settings.llmFeaturesEnabled;
     if (llmWasDisabled) {
       this.dictationController?.disableLlmForActiveSessions();
     }
     this.lastUtteranceRecovery.setEnabled(this.settings.retainLastUtterance);
     this.rawTranscriptRecovery.setEnabled(this.settings.retainLastUtterance);
-    if (options.persist) {
-      await this.saveData(this.settings);
-    }
     if (previousSettings.highlightSpokenText !== this.settings.highlightSpokenText) {
       this.readAloudFollowAlong?.setEnabled(this.settings.highlightSpokenText);
     }

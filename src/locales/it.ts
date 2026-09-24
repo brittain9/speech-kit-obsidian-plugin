@@ -872,6 +872,8 @@ export const it = {
   'notice.personalCorrectionRulesInvalid':
     'Le impostazioni delle correzioni personali non sono valide: {reason} Correggile prima di iniziare la dettatura.',
 
+  'notice.personalCorrectionRulesSkipped':
+    '{count} regole di correzione personali memorizzate non sono state lette e sono state ignorate. Correggile nelle impostazioni.',
   'settings.corrections.name': 'Regole di correzione personali',
   'settings.corrections.desc':
     'Applica correzioni letterali locali e ordinate dopo la trascrizione. Le regole si applicano ai segmenti finali della prossima sessione; non sono vocabolario ASR né hotword.',
@@ -896,9 +898,10 @@ export const it = {
   'settings.corrections.modal.delete': 'Elimina regola',
   'settings.corrections.modal.saving': 'Salvataggio…',
   'settings.corrections.modal.saved': 'Salvato',
-  'settings.corrections.modal.failed': 'Non salvato. Correggi le regole e riprova.',
-  'settings.corrections.modal.invalid':
-    'Correggi la regola indicata prima di salvare o mostrare l’anteprima.',
+  'settings.corrections.modal.unsaved': 'Modifiche non salvate',
+  'settings.corrections.modal.retry': 'Salvataggio non riuscito. Riprova.',
+  'settings.corrections.modal.conflict':
+    'Le regole di correzione sono cambiate altrove. Riapri questa finestra prima di salvare.',
   'settings.corrections.field.find': 'Trova',
   'settings.corrections.field.enabled': 'Attiva',
   'settings.corrections.field.id': 'ID regola',
@@ -906,9 +909,9 @@ export const it = {
   'settings.corrections.field.rules': 'Regole',
   'settings.corrections.validation.tooMany': 'Aggiungi al massimo {max} regole.',
   'settings.corrections.validation.blankId': 'Ogni regola richiede un ID.',
+  'settings.corrections.validation.invalidRule':
+    'Questa regola di correzione non è un oggetto regola leggibile.',
   'settings.corrections.validation.invalidId': "L'ID della regola deve essere testo.",
-  'settings.corrections.validation.oversizedId':
-    "L'ID della regola non può superare {max} caratteri.",
   'settings.corrections.validation.invalidEnabled': 'Attivato deve essere sì o no.',
   'settings.corrections.validation.invalidFind': 'Il testo da trovare deve essere testo.',
   'settings.corrections.validation.duplicateId': 'Gli ID delle regole devono essere univoci.',
@@ -922,7 +925,9 @@ export const it = {
   'settings.corrections.validation.duplicateFind':
     'Il testo da trovare deve essere univoco; le regole successive non possono puntare allo stesso testo.',
   'settings.corrections.validation.absoluteAmplification':
-    'La correzione supererebbe il limite di {max} caratteri ed è stata rifiutata prima di allocare l’output.',
+    'La correzione supererebbe il limite di sicurezza di {max} caratteri ed è stata rifiutata.',
   'settings.corrections.validation.relativeAmplification':
-    'La correzione amplierebbe il testo di oltre {max}× ed è stata rifiutata prima di allocare l’output.',
+    'La correzione amplierebbe il testo di oltre {max}× ed è stata rifiutata.',
+  'settings.corrections.validation.workBudget':
+    'La ricerca delle correzioni supera il limite di sicurezza di {max} passaggi ed è stata rifiutata.',
 } satisfies TranslationCatalog;

@@ -4,6 +4,8 @@ export const en = {
     'This session uses {enabled} of {total} personal correction rules. Changes apply to the next session.',
   'notice.personalCorrectionRulesInvalid':
     'Personal correction settings are invalid: {reason} Fix them before starting dictation.',
+  'notice.personalCorrectionRulesSkipped':
+    '{count} stored personal correction rules could not be read and were skipped. Repair them in Settings.',
   'notice.dictationStartFailed': 'Could not start dictation.',
   'notice.dictationStopFailed': 'Could not stop dictation.',
   'notice.finalizedUtteranceAutoCopyFailed':
@@ -344,17 +346,20 @@ export const en = {
   'settings.corrections.modal.delete': 'Delete rule',
   'settings.corrections.modal.saving': 'Saving…',
   'settings.corrections.modal.saved': 'Saved',
-  'settings.corrections.modal.failed': 'Not saved. Fix the rules and try again.',
-  'settings.corrections.modal.invalid': 'Fix the highlighted rule before saving or previewing.',
+  'settings.corrections.modal.unsaved': 'Unsaved changes',
+  'settings.corrections.modal.retry': 'Save failed. Retry saving.',
+  'settings.corrections.modal.conflict':
+    'Correction rules changed elsewhere. Reopen this dialog before saving.',
   'settings.corrections.field.enabled': 'Enabled',
   'settings.corrections.field.find': 'Find',
   'settings.corrections.field.id': 'Rule ID',
   'settings.corrections.field.replace': 'Replace with',
   'settings.corrections.field.rules': 'Rules',
   'settings.corrections.validation.tooMany': 'Add no more than {max} rules.',
+  'settings.corrections.validation.invalidRule':
+    'This correction rule is not a readable rule object.',
   'settings.corrections.validation.blankId': 'Each rule needs an ID.',
   'settings.corrections.validation.invalidId': 'Rule ID must be text.',
-  'settings.corrections.validation.oversizedId': 'Rule ID cannot exceed {max} characters.',
   'settings.corrections.validation.duplicateId': 'Rule IDs must be unique.',
   'settings.corrections.validation.invalidEnabled': 'Enabled must be on or off.',
   'settings.corrections.validation.blankFind': 'Find text cannot be blank.',
@@ -368,9 +373,11 @@ export const en = {
   'settings.corrections.validation.duplicateFind':
     'Find text must be unique; later rules cannot target the same text.',
   'settings.corrections.validation.absoluteAmplification':
-    'The correction would exceed the {max}-character output limit and was rejected before output allocation.',
+    'The correction would exceed the {max}-character safety limit and was rejected.',
   'settings.corrections.validation.relativeAmplification':
-    'The correction would expand text by more than {max}× and was rejected before output allocation.',
+    'The correction would expand text by more than {max}× and was rejected.',
+  'settings.corrections.validation.workBudget':
+    'The correction search exceeds the {max}-step safety limit and was rejected.',
   'settings.phraseFinalization.responsiveOption': 'Responsive — short pauses',
   'settings.phraseFinalization.balancedOption': 'Balanced — standard',
   'settings.phraseFinalization.patientOption': 'Patient — long pauses',

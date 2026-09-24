@@ -329,7 +329,14 @@ fn preflight_rule(
         .first_scalar
         .and_then(|scalar| normalized.first_scalar_indices.get(&scalar))
         .map_or(0, Vec::len);
-    budget.add_search_steps(candidate_count)?;
+    let normalized_find_len = rule.normalized_find.len();
+    let per_candidate = normalized_find_len
+        .checked_add(2)
+        .ok_or_else(|| RuleApplicationError::work("correction search work overflows"))?;
+    let boundary_cost = candidate_count
+        .checked_mul(per_candidate)
+        .ok_or_else(|| RuleApplicationError::work("correction search work overflows"))?;
+    budget.add_search_steps(boundary_cost)?;
     let matches = find_matches(normalized, rule);
     let replace_length = rule.replace_chars;
     let removed = matches.iter().try_fold(0_usize, |total, &(start, end)| {
@@ -360,29 +367,46 @@ fn materialize_rule(input: &str, replace: &str, matches: &[(usize, usize)]) -> S
 }
 
 struct NormalizedInput<'a> {
+    boundary_map: Vec<Option<usize>>,
     chars: Vec<char>,
     first_scalar_indices: HashMap<char, Vec<usize>>,
     input: &'a str,
-    original_boundaries: Vec<usize>,
-    original_chars: Vec<char>,
-    original_prefix_lengths: Option<Vec<usize>>,
+    next_word_boundary: Vec<bool>,
+    previous_word_boundary: Vec<bool>,
+    safe_boundaries: Vec<bool>,
 }
 
 impl<'a> NormalizedInput<'a> {
     fn new(input: &'a str, budget: &mut UtteranceBudget) -> Result<Self, RuleApplicationError> {
-        let original_chars = input.chars().collect::<Vec<_>>();
-        let original_prefix_lengths = (original_chars
-            .iter()
-            .any(|character| character.to_string().nfd().count() > 1))
-        .then(|| nfd_prefix_lengths(&original_chars));
         let normalized_len = input.nfd().count();
         if normalized_len > MAX_CORRECTION_INPUT_CHARS {
             return Err(RuleApplicationError::work(
                 "normalized correction input exceeds the safety budget",
             ));
         }
+        let original_chars = input.chars().collect::<Vec<_>>();
         let normalized = input.nfd().collect::<Vec<_>>();
         budget.add_normalized(normalized.len())?;
+        let mut boundary_map = vec![None; normalized.len() + 1];
+        let mut safe_boundaries = vec![false; normalized.len() + 1];
+        let mut normalized_index = 0;
+        let mut byte_index = 0;
+        for original_char in &original_chars {
+            let expansion = original_char.to_string().nfd().collect::<Vec<_>>();
+            let combining = is_combining_mark(*original_char);
+            boundary_map[normalized_index] = Some(byte_index);
+            safe_boundaries[normalized_index] = !combining;
+            for offset in 1..expansion.len() {
+                safe_boundaries[normalized_index + offset] = false;
+            }
+            let end_boundary = normalized_index + expansion.len();
+            boundary_map[end_boundary] = Some(byte_index + original_char.len_utf8());
+            safe_boundaries[end_boundary] = !combining;
+            normalized_index += expansion.len();
+            byte_index += original_char.len_utf8();
+        }
+        boundary_map[normalized.len()] = Some(byte_index);
+        safe_boundaries[normalized.len()] = true;
         let mut first_scalar_indices = HashMap::new();
         for (index, character) in normalized.iter().copied().enumerate() {
             first_scalar_indices
@@ -390,13 +414,30 @@ impl<'a> NormalizedInput<'a> {
                 .or_insert_with(Vec::new)
                 .push(index);
         }
+        let mut previous_word_boundary = vec![false; normalized.len() + 1];
+        for (index, character) in normalized.iter().copied().enumerate() {
+            previous_word_boundary[index + 1] = if is_combining_mark(character) {
+                previous_word_boundary[index]
+            } else {
+                is_word_character(character)
+            };
+        }
+        let mut next_word_boundary = vec![false; normalized.len() + 1];
+        for index in (0..normalized.len()).rev() {
+            next_word_boundary[index] = if is_combining_mark(normalized[index]) {
+                next_word_boundary[index + 1]
+            } else {
+                is_word_character(normalized[index])
+            };
+        }
         Ok(Self {
+            boundary_map,
             chars: normalized,
             first_scalar_indices,
             input,
-            original_boundaries: char_boundaries(&original_chars),
-            original_chars,
-            original_prefix_lengths,
+            next_word_boundary,
+            previous_word_boundary,
+            safe_boundaries,
         })
     }
 }
@@ -409,24 +450,27 @@ fn find_matches(
         return Vec::new();
     };
     let mut matches = Vec::new();
+    let mut next_allowed_start = 0;
     for &index in normalized
         .first_scalar_indices
         .get(&first_scalar)
         .into_iter()
         .flatten()
     {
+        if index < next_allowed_start {
+            continue;
+        }
         if index + rule.normalized_find.len() > normalized.chars.len() {
             continue;
         }
         if !same_code_points(&normalized.chars, index, &rule.normalized_find) {
             continue;
         }
-        if !is_safe_original_boundary(normalized, index)
-            || !is_safe_original_boundary(normalized, index + rule.normalized_find.len())
+        if !normalized.safe_boundaries[index]
+            || !normalized.safe_boundaries[index + rule.normalized_find.len()]
         {
             continue;
         }
-        let before_index = index.checked_sub(1);
         let after_index = index + rule.normalized_find.len();
         let start_edge = word_edge(&rule.normalized_find, 0, 1);
         let end_edge = word_edge(
@@ -434,45 +478,21 @@ fn find_matches(
             rule.normalized_find.len().saturating_sub(1),
             -1,
         );
-        if is_boundary(start_edge, &normalized.chars, before_index, 1)
-            || is_boundary(end_edge, &normalized.chars, Some(after_index), -1)
+        if is_boundary(start_edge, &normalized.previous_word_boundary, index)
+            || is_boundary(end_edge, &normalized.next_word_boundary, after_index)
         {
             continue;
         }
-        matches.push((
-            map_safe_boundary(normalized, index),
-            map_safe_boundary(normalized, after_index),
-        ));
+        let (Some(start), Some(end)) = (
+            normalized.boundary_map[index],
+            normalized.boundary_map[after_index],
+        ) else {
+            continue;
+        };
+        matches.push((start, end));
+        next_allowed_start = after_index;
     }
     matches
-}
-
-fn is_safe_original_boundary(normalized: &NormalizedInput<'_>, index: usize) -> bool {
-    if normalized
-        .original_prefix_lengths
-        .as_ref()
-        .is_some_and(|prefixes| !prefixes.contains(&index))
-    {
-        return false;
-    }
-    // A decomposed base scalar followed by its combining mark is also a
-    // partial canonical match: replacing the base alone would strand the
-    // combining mark in the transcript.
-    !normalized
-        .original_chars
-        .get(index)
-        .is_some_and(|character| is_combining_mark(*character))
-}
-
-fn map_safe_boundary(normalized: &NormalizedInput<'_>, index: usize) -> usize {
-    if let Some(prefixes) = &normalized.original_prefix_lengths {
-        let scalar_index = prefixes
-            .iter()
-            .position(|value| *value == index)
-            .unwrap_or(0);
-        return normalized.original_boundaries[scalar_index];
-    }
-    normalized.original_boundaries[index.min(normalized.original_boundaries.len() - 1)]
 }
 
 fn word_edge(chars: &[char], start: usize, direction: isize) -> Option<char> {
@@ -487,25 +507,10 @@ fn word_edge(chars: &[char], start: usize, direction: isize) -> Option<char> {
     None
 }
 
-fn is_boundary(
-    edge: Option<char>,
-    adjacent: &[char],
-    adjacent_index: Option<usize>,
-    direction: isize,
-) -> bool {
-    let Some(mut index) = adjacent_index.map(|value| value as isize) else {
-        return false;
-    };
-    if !edge.is_some_and(is_word_character) {
-        return false;
-    }
-    while index >= 0
-        && (index as usize) < adjacent.len()
-        && is_combining_mark(adjacent[index as usize])
-    {
-        index += direction;
-    }
-    index >= 0 && (index as usize) < adjacent.len() && is_word_character(adjacent[index as usize])
+fn is_boundary(edge: Option<char>, adjacent_word_boundary: &[bool], boundary_index: usize) -> bool {
+    edge.is_some_and(is_word_character)
+        && boundary_index < adjacent_word_boundary.len()
+        && adjacent_word_boundary[boundary_index]
 }
 
 fn is_combining_mark(value: char) -> bool {
@@ -537,26 +542,6 @@ fn same_code_points(input: &[char], start: usize, expected: &[char]) -> bool {
         .iter()
         .enumerate()
         .all(|(offset, value)| input.get(start + offset) == Some(value))
-}
-
-fn char_boundaries(chars: &[char]) -> Vec<usize> {
-    let mut boundaries = vec![0];
-    let mut offset = 0;
-    for character in chars {
-        offset += character.len_utf8();
-        boundaries.push(offset);
-    }
-    boundaries
-}
-
-fn nfd_prefix_lengths(chars: &[char]) -> Vec<usize> {
-    let mut lengths = vec![0];
-    let mut total = 0;
-    for character in chars {
-        total += character.to_string().nfd().count();
-        lengths.push(total);
-    }
-    lengths
 }
 
 fn estimate_transcript_event_bytes(
@@ -742,6 +727,18 @@ mod tests {
     }
 
     #[test]
+    fn matches_left_to_right_without_overlapping_punctuation() {
+        let result = apply_rules_to_segment(
+            &segment("!!!"),
+            &compile_correction_rules(&[rule("!!", "!")]),
+            &mut UtteranceBudget::new(3),
+        )
+        .expect("punctuation rule should apply");
+        assert_eq!(result.segment.text, "!!");
+        assert_eq!(result.replacement_count, 1);
+    }
+
+    #[test]
     fn rejects_partial_canonical_scalar_matches() {
         let normalized = NormalizedInput::new("café", &mut UtteranceBudget::new(100)).unwrap();
         let compiled = compile_correction_rules(&[rule("cafe", "tea")]);
@@ -861,6 +858,20 @@ mod tests {
     }
 
     #[test]
+    fn nfd_long_near_match_work_budget_is_deterministic() {
+        let input = "e\u{301}".repeat(50_000);
+        let find = format!("{}x", "e\u{301}".repeat(127));
+        let mut budget = UtteranceBudget::new(input.chars().count());
+        let error = apply_rules_to_segment(
+            &segment(&input),
+            &compile_correction_rules(&[rule(&find, "x")]),
+            &mut budget,
+        )
+        .expect_err("pathological NFD near-match must exhaust the work budget");
+        assert_eq!(error.code, "work_budget");
+    }
+
+    #[test]
     fn frame_budget_keeps_original_transcript_and_records_failed_stage() {
         let mut source = segment("a");
         source.words = vec![crate::protocol::TranscriptWord {
@@ -968,6 +979,19 @@ mod tests {
                 let result = result.expect("golden vector should apply");
                 if let Some(expected) = case["expected"].as_str() {
                     assert_eq!(result.segment.text, expected, "{id}");
+                }
+                if let Some(expected_replacements) = case["replacements"].as_u64() {
+                    assert_eq!(
+                        result.replacement_count as u64, expected_replacements,
+                        "{id}"
+                    );
+                }
+                if let Some(expected_rules_applied) = case["rulesApplied"].as_u64() {
+                    assert_eq!(
+                        result.applied_rule_indices.len() as u64,
+                        expected_rules_applied,
+                        "{id}"
+                    );
                 }
             }
         }

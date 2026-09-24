@@ -1018,6 +1018,8 @@ export const hr = {
   'notice.personalCorrectionRulesInvalid':
     'Postavke osobnih ispravaka nisu valjane: {reason} Ispravite ih prije početka diktiranja.',
 
+  'notice.personalCorrectionRulesSkipped':
+    '{count} spremljenih osobnih pravila ispravka nije se moglo pročitati pa su preskočena. Popravite ih u postavkama.',
   'settings.corrections.name': 'Osobna pravila ispravka',
   'settings.corrections.desc':
     'Primjenjuje lokalne, uređene doslovne ispravke nakon transkripcije. Pravila se primjenjuju na završne segmente u sljedećoj sesiji; nisu ASR rječnik ni hotwords.',
@@ -1042,9 +1044,10 @@ export const hr = {
   'settings.corrections.modal.delete': 'Izbriši pravilo',
   'settings.corrections.modal.saving': 'Spremanje…',
   'settings.corrections.modal.saved': 'Spremljeno',
-  'settings.corrections.modal.failed': 'Nije spremljeno. Ispravite pravila i pokušajte ponovno.',
-  'settings.corrections.modal.invalid':
-    'Ispravite označeno pravilo prije spremanja ili pretpregleda.',
+  'settings.corrections.modal.unsaved': 'Nespremljene promjene',
+  'settings.corrections.modal.retry': 'Spremanje nije uspjelo. Pokušajte ponovno.',
+  'settings.corrections.modal.conflict':
+    'Pravila ispravka promijenjena su na drugom mjestu. Ponovno otvorite ovaj prozor prije spremanja.',
   'settings.corrections.field.find': 'Pronaći',
   'settings.corrections.field.enabled': 'Omogućeno',
   'settings.corrections.field.id': 'ID pravila',
@@ -1052,8 +1055,9 @@ export const hr = {
   'settings.corrections.field.rules': 'Pravila',
   'settings.corrections.validation.tooMany': 'Dodajte najviše {max} pravila.',
   'settings.corrections.validation.blankId': 'Svako pravilo potrebuje ID.',
+  'settings.corrections.validation.invalidRule':
+    'Ovo pravilo ispravka nije čitljiv objekt pravila.',
   'settings.corrections.validation.invalidId': 'ID pravila mora biti tekst.',
-  'settings.corrections.validation.oversizedId': 'ID pravila ne može premašiti {max} znakova.',
   'settings.corrections.validation.invalidEnabled': 'Omogućeno mora biti uključeno ili isključeno.',
   'settings.corrections.validation.invalidFind': 'Tekst za pronalazak mora biti tekst.',
   'settings.corrections.validation.duplicateId': 'ID-ovi pravila moraju biti jedinstveni.',
@@ -1067,7 +1071,9 @@ export const hr = {
   'settings.corrections.validation.duplicateFind':
     'Tekst za pronalazak mora biti jedinstven; kasnija pravila ne mogu tražiti isti tekst.',
   'settings.corrections.validation.absoluteAmplification':
-    'Ispravka bi premašila ograničenje od {max} znakova i odbijena je prije dodjele izlaza.',
+    'Ispravka bi premašila sigurnosno ograničenje od {max} znakova pa je odbijena.',
   'settings.corrections.validation.relativeAmplification':
-    'Ispravka bi povećala tekst više od {max}× i odbijena je prije dodjele izlaza.',
+    'Ispravka bi povećala tekst više od {max}× pa je odbijena.',
+  'settings.corrections.validation.workBudget':
+    'Pretraga ispravaka premašuje sigurnosno ograničenje od {max} koraka pa je odbijena.',
 } as const satisfies TranslationCatalog;
