@@ -42,6 +42,8 @@ export const fr = {
     "Le moteur vocal local n'a pas pu démarrer la transcription. Vérifiez le modèle et réessayez.",
   'audio-file-sidecar-missing':
     'Installez le moteur vocal local, sélectionnez un modèle de reconnaissance vocale et réessayez.',
+  'audio-file-shutdown-uncertain':
+    "Le moteur vocal local n'a pas confirmé l'arrêt de la transcription du fichier audio. Speech Kit a protégé la session pour éviter les travaux vocaux simultanés. Vérifiez le moteur local, puis réessayez.",
   'audio-file-sidecar-failed':
     "La transcription s'est arrêtée car le moteur local a échoué. Vérifiez le modèle et réessayez.",
   'audio-file-queue-overload':

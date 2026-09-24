@@ -42,6 +42,8 @@ export const pt = {
     'O motor de voz local não conseguiu iniciar a transcrição. Verifique o modelo selecionado e tente novamente.',
   'audio-file-sidecar-missing':
     'Instale o motor de voz local, selecione um modelo de voz para texto e tente novamente.',
+  'audio-file-shutdown-uncertain':
+    'O motor de voz local não confirmou que a transcrição do ficheiro de áudio terminou. O Speech Kit protegeu a sessão para evitar operações de voz sobrepostas. Verifique o motor local e tente novamente.',
   'audio-file-sidecar-failed':
     'A transcrição parou porque o motor local falhou. Verifique o modelo e tente novamente.',
   'audio-file-queue-overload':

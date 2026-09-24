@@ -42,6 +42,8 @@ export const hr = {
     'Lokalni govorni motor nije mogao pokrenuti transkripciju. Provjerite odabrani model pa pokušajte ponovno.',
   'audio-file-sidecar-missing':
     'Instalirajte lokalni govorni motor, odaberite model pretvarbe govora u tekst pa pokušajte ponovno.',
+  'audio-file-shutdown-uncertain':
+    'Lokalni govorni motor nije potvrdio da je transkripcija audio-datoteke završena. Speech Kit je zaštitio sesiju kako ne bi došlo do preklapajućih govornih operacija. Provjerite lokalni motor i pokušajte ponovno.',
   'audio-file-sidecar-failed':
     'Transkripcija se zaustavila jer lokalni govorni motor nije uspio. Provjerite model pa pokušajte ponovno.',
   'audio-file-queue-overload':

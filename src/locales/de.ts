@@ -42,6 +42,8 @@ export const de = {
     'Die lokale Speech Engine konnte nicht gestartet werden. Prüfen Sie das ausgewählte Modell und versuchen Sie es erneut.',
   'audio-file-sidecar-missing':
     'Installieren Sie die lokale Speech Engine, wählen Sie ein Sprach-zu-Text-Modell und versuchen Sie es erneut.',
+  'audio-file-shutdown-uncertain':
+    'Die lokale Speech Engine hat das Beenden der Audiodateitranskription nicht bestätigt. Speech Kit hat die Sitzung geschützt, damit keine überlappenden Sprachaufträge entstehen. Prüfen Sie die lokale Speech Engine und versuchen Sie es erneut.',
   'audio-file-sidecar-failed':
     'Die Transkription wurde beendet, weil die lokale Speech Engine fehlgeschlagen ist. Prüfen Sie das Modell und versuchen Sie es erneut.',
   'audio-file-queue-overload':

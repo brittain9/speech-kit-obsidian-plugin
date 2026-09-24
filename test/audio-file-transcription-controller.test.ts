@@ -479,6 +479,121 @@ describe('AudioFileTranscriptionController', () => {
     expect(harness.controller.getState()).toBe('idle');
   });
 
+  it('reports an unexpected sidecar exit as an actionable runtime failure', async () => {
+    const harness = createHarness();
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+
+    harness.sidecarConnection.emit({
+      code: 'sidecar_exited',
+      message: 'The local speech engine exited unexpectedly.',
+      type: 'error',
+    });
+    await transcribing;
+
+    expect(harness.feedback.show).toHaveBeenCalledOnce();
+    expect(harness.feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'audio-file-sidecar-failed' }),
+    );
+  });
+
+  it('keeps user cancellation silent when the sidecar exits during native cancellation', async () => {
+    let resolveCancel:
+      | ((value: { reason: 'user_cancel'; sessionId: string; type: 'session_stopped' }) => void)
+      | undefined;
+    const sidecarConnection = new FakeSidecarConnection();
+    sidecarConnection.cancelSession.mockImplementation(
+      async (_sessionId) =>
+        await new Promise((resolve) => {
+          resolveCancel = resolve;
+        }),
+    );
+    const harness = createHarness({ sidecarConnection });
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalledOnce());
+    const sessionId = sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    if (sessionId === undefined) throw new Error('Expected a user-cancel session.');
+
+    const cancelling = harness.controller.cancel();
+    await vi.waitFor(() => expect(sidecarConnection.cancelSession).toHaveBeenCalledOnce());
+    sidecarConnection.emit({
+      code: 'sidecar_exited',
+      message: 'The local speech engine exited unexpectedly.',
+      type: 'error',
+    });
+    await transcribing;
+    resolveCancel?.({ reason: 'user_cancel', sessionId, type: 'session_stopped' });
+    await cancelling;
+
+    expect(harness.feedback.show).not.toHaveBeenCalled();
+  });
+
+  it('keeps disposal cancellation silent when the sidecar exits during native cancellation', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const harness = createHarness({ sidecarConnection });
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalledOnce());
+
+    await harness.controller.dispose();
+    await transcribing;
+
+    expect(harness.feedback.show).not.toHaveBeenCalled();
+  });
+
+  it('reports an unacknowledged native cancellation once with protected-lease guidance', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    sidecarConnection.cancelSession.mockRejectedValue(new Error('native cancellation timed out'));
+    const harness = createHarness({ sessionStopTimeoutMs: 5, sidecarConnection });
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalledOnce());
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 15));
+    await transcribing;
+
+    expect(harness.feedback.show).toHaveBeenCalledOnce();
+    expect(harness.feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'audio-file-shutdown-uncertain' }),
+    );
+  });
+
+  it('keeps the first terminal notice when overload is followed by sidecar exit', async () => {
+    let resolveCancel:
+      | ((value: { reason: 'user_cancel'; sessionId: string; type: 'session_stopped' }) => void)
+      | undefined;
+    const sidecarConnection = new FakeSidecarConnection();
+    sidecarConnection.cancelSession.mockImplementation(
+      async (_sessionId) =>
+        await new Promise((resolve) => {
+          resolveCancel = resolve;
+        }),
+    );
+    const harness = createHarness({ sidecarConnection });
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalledOnce());
+    const sessionId = sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    if (sessionId === undefined) throw new Error('Expected an overload session.');
+
+    sidecarConnection.emit({
+      code: 'utterance_queue_overload',
+      message: 'Queue overloaded.',
+      sessionId,
+      type: 'error',
+    });
+    sidecarConnection.emit({
+      code: 'sidecar_exited',
+      message: 'The local speech engine exited unexpectedly.',
+      type: 'error',
+    });
+    await transcribing;
+    resolveCancel?.({ reason: 'user_cancel', sessionId, type: 'session_stopped' });
+
+    expect(harness.feedback.show).toHaveBeenCalledOnce();
+    expect(harness.feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'audio-file-queue-overload' }),
+    );
+  });
+
   it('releases the session locally when cancellation is acknowledged without a subscription callback', async () => {
     const sidecarConnection = new FakeSidecarConnection();
     sidecarConnection.cancelSession.mockImplementation(async (sessionId) => ({

@@ -18,7 +18,6 @@ export interface ManagedAudioFileSessionOptions {
   readonly backpressure: AudioFileBackpressureGate;
   readonly sessionId: string;
   readonly speechLease: SidecarLifecycleLease;
-  readonly timestamps: AudioFileTranscriptAdapter['timestamps'];
   readonly useNoteAsContext: boolean;
 }
 
@@ -35,12 +34,11 @@ export class ManagedAudioFileSession {
   private startCompletion: Promise<void> = Promise.resolve();
   private startCompletionResolve: () => void = () => {};
 
-  constructor(
+  private constructor(
     readonly abortController: AbortController,
     readonly backpressure: AudioFileBackpressureGate,
     readonly sessionId: string,
     readonly speechLease: SidecarLifecycleLease,
-    readonly timestamps: AudioFileTranscriptAdapter['timestamps'],
     readonly useNoteAsContext: boolean,
     readonly transcript: AudioFileTranscriptAdapter,
   ) {
@@ -61,7 +59,6 @@ export class ManagedAudioFileSession {
       options.backpressure,
       options.sessionId,
       options.speechLease,
-      options.timestamps,
       options.useNoteAsContext,
       transcript,
     );
@@ -165,7 +162,7 @@ export class ManagedAudioFileSession {
     this.stopTimeoutHandle = handle;
   }
 
-  clearStopTimeout(): void {
+  private clearStopTimeout(): void {
     if (this.stopTimeoutHandle === null) return;
     window.clearTimeout(this.stopTimeoutHandle);
     this.stopTimeoutHandle = null;
@@ -195,7 +192,7 @@ export class ManagedAudioFileSession {
     return this.speechLease;
   }
 
-  releaseLease(): void {
+  private releaseLease(): void {
     if (this.leaseTransferred) return;
     this.leaseTransferred = true;
     this.speechLease.release();

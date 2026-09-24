@@ -23,6 +23,7 @@ export type FileWorkflowTranslationKey =
   | 'audio-file-queue-overload'
   | 'audio-file-read-failed'
   | 'audio-file-sidecar-failed'
+  | 'audio-file-shutdown-uncertain'
   | 'audio-file-sidecar-missing'
   | 'audio-file-start-failed'
   | 'audio-file-target-changed'

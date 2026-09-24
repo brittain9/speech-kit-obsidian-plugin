@@ -124,9 +124,9 @@ export interface AudioFileTranscriptionControllerDependencies {
 export class AudioFileTranscriptionController {
   private activeSession: ManagedAudioFileSession | null = null;
   private readonly failureMapper: AudioFileFailureMapper;
-  private managedStartCompletion: Promise<void> | null = null;
   private pendingStart: PendingAudioFileStart | null = null;
   private readonly quarantinedSessions = new Map<string, QuarantinedAudioFileSession>();
+  private readonly userCancelledSessions = new WeakSet<ManagedAudioFileSession>();
   private readonly releaseSidecarSubscription: () => void;
   private state: AudioFileTranscriptionState = 'idle';
 
@@ -261,7 +261,6 @@ export class AudioFileTranscriptionController {
           backpressure: new AudioFileBackpressureGate(this.dependencies.backpressureTimeoutMs),
           sessionId,
           speechLease,
-          timestamps: rendererOptions.timestamps,
           useNoteAsContext: settings.useNoteAsContext,
         },
         transcript,
@@ -287,7 +286,6 @@ export class AudioFileTranscriptionController {
           initialConfiguration.modelSelection,
         );
         managed.setStartOperation(startOperation);
-        this.managedStartCompletion = managed.getStartCompletion();
         await startOperation;
         this.throwIfCancelled(abortController.signal);
         if (managed.isTerminal()) {
@@ -346,7 +344,6 @@ export class AudioFileTranscriptionController {
       if (this.pendingStart === pending && pending !== null) this.pendingStart = null;
       if (managed === null) speechLease?.release();
       releaseStartOperation?.();
-      this.managedStartCompletion = null;
       if (this.activeSession === null && this.pendingStart === null) {
         this.applyState('idle');
       }
@@ -362,6 +359,7 @@ export class AudioFileTranscriptionController {
     }
     const active = this.activeSession;
     if (active === null) return;
+    this.userCancelledSessions.add(active);
     active.abortController.abort(createAudioFileCancellationError());
     await this.cancelManagedSession(active);
   }
@@ -373,9 +371,12 @@ export class AudioFileTranscriptionController {
       pending.speechLease.release();
     }
     const active = this.activeSession;
-    const startCompletion = this.managedStartCompletion;
-    if (active !== null) await this.cancelManagedSession(active);
-    await startCompletion;
+    if (active !== null) {
+      this.userCancelledSessions.add(active);
+      const startCompletion = active.getStartCompletion();
+      await this.cancelManagedSession(active);
+      await startCompletion;
+    }
     this.releaseSidecarSubscription();
     if (this.activeSession === null) this.applyState('idle');
   }
@@ -587,6 +588,9 @@ export class AudioFileTranscriptionController {
       'audio-file cancellation was not acknowledged',
       error,
     );
+    if (!this.userCancelledSessions.has(managed)) {
+      this.failureMapper.reportTranslation('audio-file-shutdown-uncertain', error, managed);
+    }
     if (managed.isTerminal()) {
       await managed.getCompletion();
       return;
@@ -630,6 +634,9 @@ export class AudioFileTranscriptionController {
       this.releaseAllQuarantinedLeases();
       const active = this.activeSession;
       if (active !== null) {
+        if (!this.userCancelledSessions.has(active)) {
+          this.failureMapper.reportTranslation('audio-file-sidecar-failed', event, active);
+        }
         active.abortController.abort(createAudioFileCancellationError());
         await this.finishManagedSession(active, 'cancelled', false);
       }

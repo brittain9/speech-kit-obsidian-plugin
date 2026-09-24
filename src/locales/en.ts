@@ -38,6 +38,8 @@ export const en = {
     'The local speech engine could not start audio-file transcription. Check the selected model, then try again.',
   'audio-file-sidecar-missing':
     'Install the local speech engine in Setup, select a speech-to-text model, then try the audio file again.',
+  'audio-file-shutdown-uncertain':
+    'The local speech engine did not confirm that audio-file shutdown completed. Speech Kit kept the session protected to prevent overlapping speech work. Check the local engine and try again.',
   'audio-file-sidecar-failed':
     'Audio-file transcription stopped because the local speech engine failed. Check the selected model and try again.',
   'audio-file-queue-overload':

@@ -42,6 +42,8 @@ export const it = {
     'Il motore vocale locale non ha avviato la trascrizione. Controlla il modello selezionato e riprova.',
   'audio-file-sidecar-missing':
     'Installa il motore vocale locale, seleziona un modello di riconoscimento vocale e riprova.',
+  'audio-file-shutdown-uncertain':
+    'Il motore vocale locale non ha confermato la chiusura della trascrizione del file audio. Speech Kit ha protetto la sessione per evitare operazioni vocali sovrapposte. Controlla il motore locale e riprova.',
   'audio-file-sidecar-failed':
     'La trascrizione si è interrotta perché il motore locale non ha funzionato. Controlla il modello e riprova.',
   'audio-file-queue-overload':

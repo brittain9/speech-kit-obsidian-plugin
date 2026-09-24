@@ -41,6 +41,8 @@ export const es = {
     'El motor local no pudo iniciar la transcripción. Compruebe el modelo seleccionado e inténtelo de nuevo.',
   'audio-file-sidecar-missing':
     'Instale el motor local, seleccione un modelo de voz a texto e inténtelo de nuevo.',
+  'audio-file-shutdown-uncertain':
+    'El motor local no confirmó que la transcripción del archivo de audio se haya cerrado. Speech Kit mantuvo la sesión protegida para evitar trabajos de voz superpuestos. Compruebe el motor local e inténtelo de nuevo.',
   'audio-file-sidecar-failed':
     'La transcripción se detuvo porque falló el motor local. Compruebe el modelo e inténtelo de nuevo.',
   'audio-file-queue-overload':

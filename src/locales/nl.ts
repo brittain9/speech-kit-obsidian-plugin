@@ -42,6 +42,8 @@ export const nl = {
     'De lokale spraakengine kon de transcriptie niet starten. Controleer het geselecteerde model en probeer het opnieuw.',
   'audio-file-sidecar-missing':
     'Installeer de lokale spraakengine, selecteer een spraak-naar-tekstmodel en probeer het opnieuw.',
+  'audio-file-shutdown-uncertain':
+    'De lokale spraakengine heeft niet bevestigd dat de transcriptie van het audiobestand is voltooid. Speech Kit heeft de sessie beschermd om overlappende spraakacties te voorkomen. Controleer de lokale engine en probeer het opnieuw.',
   'audio-file-sidecar-failed':
     'De transcriptie stopte omdat de lokale spraakengine mislukte. Controleer het model en probeer het opnieuw.',
   'audio-file-queue-overload':
