@@ -4,7 +4,11 @@ vi.mock('virtual:bergamot-worker-source', () => ({
   BERGAMOT_WORKER_SOURCE: '',
 }));
 
-import type { CatalogModelRecord } from '../src/models/model-management-types';
+import type { ModelManagerState } from '../src/models/model-install-manager';
+import type {
+  CatalogModelRecord,
+  InstalledModelRecord,
+} from '../src/models/model-management-types';
 import { TranslationCancelledError } from '../src/translation/bergamot-client';
 import { HyMtTranslationError } from '../src/translation/hy-mt-client';
 import {
@@ -13,7 +17,7 @@ import {
   type TranslationJobRunOptions,
 } from '../src/translation/translation-job';
 import { TranslationModal, type TranslationSnapshot } from '../src/translation/translation-modal';
-import { Setting, type TestElement } from './__mocks__/obsidian';
+import { type ButtonComponent, Setting, type TestElement } from './__mocks__/obsidian';
 
 const SNAPSHOT: TranslationSnapshot = {
   from: { line: 0, ch: 0 },
@@ -305,11 +309,13 @@ describe('TranslationModal mutation safety', () => {
 
   it('shows a dedicated in-progress panel instead of an empty preview while translating', () => {
     Setting.reset();
+    const model = createModalModel();
     const modal = createModal({
       editor: {
         getValue: () => SNAPSHOT.source,
         replaceRange: vi.fn(),
       },
+      installedModelOptions: [model],
       runTranslation: () => new Promise(() => {}),
     });
 
@@ -322,6 +328,24 @@ describe('TranslationModal mutation safety', () => {
         ?.classList.contains('is-active'),
     ).toBe(true);
     expect(content.querySelector('.local-stt-translation-modal__spinner')).not.toBeNull();
+    expect(modelDropdown()?.selectEl.options.map((option) => option.label)).toEqual([
+      'Firefox Translations',
+      'Choose a translation model',
+    ]);
+    expect(modelDropdown()?.selectEl.disabled).toBe(true);
+    expect(content.querySelector('.local-stt-translation-modal__swap')?.disabled).toBe(true);
+    expect(
+      Setting.instances
+        .filter((setting) => setting.name === 'From')
+        .at(-1)
+        ?.onlyDropdown().selectEl.disabled,
+    ).toBe(true);
+    expect(
+      Setting.instances
+        .filter((setting) => setting.name === 'To')
+        .at(-1)
+        ?.onlyDropdown().selectEl.disabled,
+    ).toBe(true);
     expect(
       content
         .querySelector('.local-stt-translation-modal__output-surface')
@@ -388,6 +412,372 @@ describe('TranslationModal mutation safety', () => {
     expect(replaceRange).not.toHaveBeenCalled();
   });
 
+  it('swaps a supported installed model direction from the keyboard and marks the preview stale', async () => {
+    Setting.reset();
+    const model = createModalModel();
+    const runTranslation = vi.fn(async () => ({
+      kind: 'translated' as const,
+      sourceUnitsKept: 0,
+      text: 'Traduzca esto.',
+    }));
+    const onLanguageChange = vi.fn(async () => {});
+    const onRestart = vi.fn();
+    const modal = createModal({
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      installedModelOptions: [model],
+      onLanguageChange,
+      onRestart,
+      runTranslation,
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(Setting.buttonNamed('Replace').disabled).toBe(false));
+
+    const content = modal.contentEl as unknown as TestElement;
+    const swap = content.querySelector('.local-stt-translation-modal__swap');
+    expect(swap?.tagName).toBe('BUTTON');
+    expect(swap?.getAttribute('type')).toBe('button');
+    expect(swap?.getAttribute('aria-label')).toBe('Swap');
+    expect(swap?.getAttribute('title')).toBe('Swap');
+    expect(swap?.findByText('Swap')).toBeDefined();
+    expect(swap?.disabled).toBe(false);
+
+    swap?.focus();
+    swap?.dispatchEvent({ key: 'Enter', type: 'keydown' });
+    await vi.waitFor(() => expect(onLanguageChange).toHaveBeenCalledExactlyOnceWith('es', 'en'));
+    const rerenderedSwap = content.querySelector('.local-stt-translation-modal__swap');
+    expect(rerenderedSwap).not.toBe(swap);
+    expect(rerenderedSwap?.ownerDocument.activeElement).toBe(rerenderedSwap);
+
+    expect(content.querySelector('h2')?.textContent).toBe('Translate: Español → English');
+    expect((content.querySelector('textarea') as unknown as HTMLTextAreaElement).value).toBe(
+      'Traduzca esto.',
+    );
+    expect(
+      content.findByText(
+        'Translation setup changed. Select Translate again to update the preview.',
+      ),
+    ).toBeDefined();
+    expect(Setting.buttonNamed('Translate again')).toBeDefined();
+    const latestActions = Setting.instances
+      .filter((setting) => setting.buttonComponents.length > 0)
+      .at(-1);
+    expect(latestActions?.buttonComponents.some((button) => button.text === 'Replace')).toBe(false);
+    expect(runTranslation).toHaveBeenCalledOnce();
+    expect(onRestart).not.toHaveBeenCalled();
+  });
+
+  it('keeps swap disabled when the selected installed model does not support the reverse direction', async () => {
+    Setting.reset();
+    const model = createModalModel({
+      translationSupport: {
+        kind: 'pairs',
+        pairs: [{ source: 'en', target: 'es' }],
+      },
+    });
+    const onLanguageChange = vi.fn(async () => {});
+    const modal = createModal({
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      installedModelOptions: [model],
+      jobModel: model,
+      onLanguageChange,
+      runTranslation: vi.fn(async () => ({
+        kind: 'translated' as const,
+        sourceUnitsKept: 0,
+        text: 'Traduzca esto.',
+      })),
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(Setting.buttonNamed('Replace').disabled).toBe(false));
+
+    const content = modal.contentEl as unknown as TestElement;
+    const swap = content.querySelector('.local-stt-translation-modal__swap');
+    expect(swap?.tagName).toBe('BUTTON');
+    expect(swap?.disabled).toBe(true);
+    await swap?.click();
+    swap?.dispatchEvent({ key: 'Enter', type: 'keydown' });
+
+    expect(onLanguageChange).not.toHaveBeenCalled();
+    expect(content.querySelector('h2')?.textContent).toBe('Translate: English → Español');
+    expect(Setting.buttonNamed('Replace').disabled).toBe(false);
+  });
+
+  it('swaps Firefox only when forward and reverse pairs are declared independently', async () => {
+    Setting.reset();
+    const model = createModalModel({
+      translationSupport: {
+        kind: 'pairs',
+        pairs: [
+          { source: 'en', target: 'es' },
+          { source: 'es', target: 'en' },
+        ],
+      },
+    });
+    const onLanguageChange = vi.fn(async () => {});
+    const modal = createModal({
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      installedModelOptions: [model],
+      jobModel: model,
+      onLanguageChange,
+      runTranslation: vi.fn(async () => ({
+        kind: 'translated' as const,
+        sourceUnitsKept: 0,
+        text: 'Traduzca esto.',
+      })),
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(Setting.buttonNamed('Replace').disabled).toBe(false));
+    const swap = (modal.contentEl as unknown as TestElement).querySelector(
+      '.local-stt-translation-modal__swap',
+    );
+    expect(swap?.disabled).toBe(false);
+    await swap?.click();
+    expect(onLanguageChange).toHaveBeenCalledExactlyOnceWith('es', 'en');
+  });
+
+  it('disables Translate again while model selection is pending', async () => {
+    Setting.reset();
+    const first = createModalModel({ modelId: 'model-a' });
+    const second = { ...createModalModel(), modelId: 'model-b' };
+    const selection = deferred<boolean>();
+    const onModelChange = vi.fn(() => selection.promise);
+    const onTranslateCurrent = vi.fn();
+    const modal = createModal({
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      installedModelOptions: [first, second],
+      onModelChange,
+      onTranslateCurrent,
+      runTranslation: vi.fn(async () => ({
+        kind: 'translated' as const,
+        sourceUnitsKept: 0,
+        text: 'Translated with Model A.',
+      })),
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(Setting.buttonNamed('Replace').disabled).toBe(false));
+    selectModel(second);
+    expect(latestAction('Translate again').disabled).toBe(true);
+    await latestAction('Translate again').click();
+    expect(onTranslateCurrent).not.toHaveBeenCalled();
+
+    selection.resolve(true);
+    await vi.waitFor(() => expect(latestAction('Translate again').disabled).toBe(false));
+  });
+
+  it('keeps the latest model draft when an older selection fails after a newer swap', async () => {
+    Setting.reset();
+    const first = createModalModel({ displayName: 'Model A', modelId: 'model-a' });
+    const second = { ...createModalModel(), displayName: 'Model B', modelId: 'model-b' };
+    const third = { ...createModalModel(), displayName: 'Model C', modelId: 'model-c' };
+    const secondSelection = deferred<boolean>();
+    const thirdSelection = deferred<boolean>();
+    const onModelChange = vi.fn((model: CatalogModelRecord) =>
+      model.modelId === 'model-b' ? secondSelection.promise : thirdSelection.promise,
+    );
+    const modal = createModal({
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      installedModelOptions: [first, second, third],
+      onModelChange,
+      runTranslation: vi.fn(async () => ({
+        kind: 'translated' as const,
+        sourceUnitsKept: 0,
+        text: 'Translated with Model A.',
+      })),
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(Setting.buttonNamed('Replace').disabled).toBe(false));
+    selectModel(second);
+    expect(modelDropdown()?.selectEl.disabled).toBe(false);
+    expect(fromDropdown()?.selectEl.disabled).toBe(true);
+    expect(toDropdown()?.selectEl.disabled).toBe(true);
+    expect(swapButton(modal)?.disabled).toBe(true);
+
+    selectModel(third);
+    thirdSelection.resolve(true);
+    await vi.waitFor(() => expect(modelDropdown()?.selectEl.value).toBe(modelKey(third)));
+
+    secondSelection.reject(new Error('stale model B probe failed'));
+    await Promise.resolve();
+    expect(modelDropdown()?.selectEl.value).toBe(modelKey(third));
+    expect(swapButton(modal)?.disabled).toBe(false);
+    const latestActions = Setting.instances
+      .filter((setting) => setting.buttonComponents.length > 0)
+      .at(-1);
+    expect(latestActions?.buttonComponents.some((button) => button.text === 'Replace')).toBe(false);
+  });
+
+  it('uses live install state for swap gating through an unrelated install completion', async () => {
+    Setting.reset();
+    const model = createModalModel();
+    let state = createModalModelManagerState([model], [installedRecord(model)]);
+    let notify = () => {};
+    const modelManager = {
+      getState: () => state,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
+    };
+    state = {
+      ...state,
+      activeInstall: {
+        installUpdate: {
+          details: null,
+          downloadedBytes: 0,
+          familyId: 'whisper',
+          installId: 'unrelated-install',
+          message: null,
+          modelId: 'unrelated',
+          runtimeId: 'whisper_cpp',
+          state: 'downloading',
+          totalBytes: 100,
+        },
+        lastError: null,
+        phase: 'installing',
+      },
+    };
+    const modal = createModal({
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      modelManager,
+      runTranslation: vi.fn(async () => ({
+        kind: 'translated' as const,
+        sourceUnitsKept: 0,
+        text: 'Traduzca esto.',
+      })),
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(Setting.buttonNamed('Replace').disabled).toBe(false));
+    const content = modal.contentEl as unknown as TestElement;
+    expect(content.querySelector('.local-stt-translation-modal__swap')?.disabled).toBe(true);
+
+    state = { ...state, activeInstall: null, installRequestPending: true };
+    notify();
+    expect(content.querySelector('.local-stt-translation-modal__swap')?.disabled).toBe(true);
+
+    state = { ...state, installRequestPending: false };
+    notify();
+    expect(content.querySelector('.local-stt-translation-modal__swap')?.disabled).toBe(false);
+  });
+
+  it('uses live install state to gate exact-pack installation', async () => {
+    Setting.reset();
+    const model = createModalModel();
+    let state = createModalModelManagerState([model], [installedRecord(model)]);
+    let notify = () => {};
+    const modelManager = {
+      getState: () => state,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
+    };
+    state = {
+      ...state,
+      activeInstall: {
+        installUpdate: {
+          details: null,
+          downloadedBytes: 0,
+          familyId: 'whisper',
+          installId: 'unrelated-install',
+          message: null,
+          modelId: 'unrelated',
+          runtimeId: 'whisper_cpp',
+          state: 'downloading',
+          totalBytes: 100,
+        },
+        lastError: null,
+        phase: 'installing',
+      },
+    };
+    const onInstallPack = vi.fn(async () => true);
+    createModal({
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      modelManager,
+      onInstallPack,
+      runTranslation: vi.fn(async () => ({ kind: 'missing_model' as const })),
+      translationInstallRequirement: () => ({
+        artifactIds: ['en_es_model'],
+        downloadBytes: 41,
+        kind: 'pack' as const,
+      }),
+    }).open();
+
+    await vi.waitFor(() => expect(latestAction('Download language pack · 41 B')).toBeDefined());
+    expect(latestAction('Download language pack · 41 B').disabled).toBe(true);
+    await latestAction('Download language pack · 41 B').click();
+    expect(onInstallPack).not.toHaveBeenCalled();
+
+    state = { ...state, activeInstall: null, installRequestPending: true };
+    notify();
+    expect(latestAction('Download language pack · 41 B').disabled).toBe(true);
+
+    state = { ...state, installRequestPending: false };
+    notify();
+    expect(latestAction('Download language pack · 41 B').disabled).toBe(false);
+  });
+
+  it('requires an exact installed runtime/family/model identity before enabling swap', async () => {
+    Setting.reset();
+    const model = createModalModel();
+    const wrongRuntime = installedRecord({ ...model, runtimeId: 'llama_cpp' });
+    let state = createModalModelManagerState([model], [wrongRuntime]);
+    let notify = () => {};
+    const modelManager = {
+      getState: () => state,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
+    };
+    const modal = createModal({
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      modelManager,
+      runTranslation: vi.fn(async () => ({
+        kind: 'translated' as const,
+        sourceUnitsKept: 0,
+        text: 'Traduzca esto.',
+      })),
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(Setting.buttonNamed('Replace').disabled).toBe(false));
+    const content = modal.contentEl as unknown as TestElement;
+    expect(content.querySelector('.local-stt-translation-modal__swap')?.disabled).toBe(true);
+
+    state = createModalModelManagerState([model], [installedRecord(model)]);
+    notify();
+    expect(content.querySelector('.local-stt-translation-modal__swap')?.disabled).toBe(false);
+  });
+
   it('does not translate automatically when the language pair changes', async () => {
     Setting.reset();
     const runTranslation = vi.fn(async () => ({
@@ -437,7 +827,7 @@ describe('TranslationModal mutation safety', () => {
       sourceUnitsKept: 0,
       text: 'Traduzca esto.',
     }));
-    const onModelChange = vi.fn(async () => {});
+    const onModelChange = vi.fn(async () => true);
     const modal = createModal({
       editor: {
         getValue: () => SNAPSHOT.source,
@@ -469,7 +859,7 @@ describe('TranslationModal mutation safety', () => {
     Setting.reset();
     const installedModel = createModalModel();
     const runTranslation = vi.fn(async () => ({ kind: 'missing_model' as const }));
-    const onModelChange = vi.fn(async () => {});
+    const onModelChange = vi.fn(async () => true);
     const onTranslateCurrent = vi.fn();
     const modal = createModal({
       configuration: { model: null, sourceLanguage: 'en', targetLanguage: 'es' },
@@ -503,14 +893,14 @@ describe('TranslationModal mutation safety', () => {
       ),
     ).toBeDefined();
 
-    await Setting.buttonNamed('Translate again').click();
+    await latestAction('Translate again').click();
     expect(onTranslateCurrent).toHaveBeenCalledWith('en', 'es', '');
   });
 
   it('offers the exact language pack instead of the whole Firefox bundle', async () => {
     Setting.reset();
     const model = createModalModel();
-    const onInstallPack = vi.fn(async () => {});
+    const onInstallPack = vi.fn(async () => true);
     const onTranslateCurrent = vi.fn();
     const modal = createModal({
       configuration: { model, sourceLanguage: 'en', targetLanguage: 'es' },
@@ -543,6 +933,42 @@ describe('TranslationModal mutation safety', () => {
     await Setting.buttonNamed('Download language pack · 41 B').click();
     expect(onInstallPack).toHaveBeenCalledExactlyOnceWith(model, 'en', 'es');
     expect(onTranslateCurrent).toHaveBeenCalledExactlyOnceWith('en', 'es', '');
+  });
+
+  it('does not close or auto-retry when pack-model selection is stale', async () => {
+    Setting.reset();
+    const model = createModalModel();
+    const onInstallPack = vi.fn(async () => false);
+    const onTranslateCurrent = vi.fn();
+    const modal = createModal({
+      configuration: { model, sourceLanguage: 'en', targetLanguage: 'es' },
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      installedModelOptions: [model],
+      jobModel: model,
+      onInstallPack,
+      onTranslateCurrent,
+      runTranslation: vi.fn(async () => ({ kind: 'missing_model' as const })),
+      translationInstallRequirement: () => ({
+        artifactIds: ['en_es_model'],
+        downloadBytes: 41,
+        kind: 'pack' as const,
+      }),
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(latestAction('Download language pack · 41 B')).toBeDefined());
+    await latestAction('Download language pack · 41 B').click();
+
+    expect(onInstallPack).toHaveBeenCalledOnce();
+    expect(onTranslateCurrent).not.toHaveBeenCalled();
+    expect(
+      (modal.contentEl as unknown as TestElement).findByText(
+        'English → Español needs a 41 B language download.',
+      ),
+    ).toBeDefined();
   });
 
   it('reports partial results but never writes them into the note', async () => {
@@ -641,8 +1067,12 @@ function createModal({
   editor,
   jobModel = createModalModel(),
   installedModelOptions = [],
-  onInstallPack = vi.fn(async () => {}),
-  onModelChange = vi.fn(async () => {}),
+  modelManager = createTestModelManager(installedModelOptions),
+  getModelSelectionState = () => ({ generation: 0 }),
+  modelSelectionPending = false,
+  subscribeConfiguration = () => () => {},
+  onInstallPack = vi.fn(async () => true),
+  onModelChange = vi.fn(async () => true),
   onLanguageChange = vi.fn(async () => {}),
   onReadAloud = vi.fn(),
   onRestart = vi.fn(),
@@ -662,10 +1092,17 @@ function createModal({
     getValue: () => string;
     replaceRange: ReturnType<typeof vi.fn>;
   };
-  installedModelOptions?: ConstructorParameters<
-    typeof TranslationModal
-  >[1]['installedModelOptions'];
+  installedModelOptions?: readonly CatalogModelRecord[];
   jobModel?: CatalogModelRecord | null;
+  modelManager?: {
+    getState(): ModelManagerState;
+    subscribe(listener: () => void): () => void;
+  };
+  getModelSelectionState?: () => {
+    generation: number;
+  };
+  modelSelectionPending?: boolean;
+  subscribeConfiguration?: (listener: () => void) => () => void;
   onInstallPack?: ConstructorParameters<typeof TranslationModal>[1]['onInstallPack'];
   onLanguageChange?: ConstructorParameters<typeof TranslationModal>[1]['onLanguageChange'];
   onModelChange?: ConstructorParameters<typeof TranslationModal>[1]['onModelChange'];
@@ -699,8 +1136,11 @@ function createModal({
     feedback: { show: vi.fn() },
     getStyle,
     getStyleInstruction,
-    installedModelOptions,
     job,
+    modelManager,
+    getModelSelectionState,
+    isModelSelectionPending: () => modelSelectionPending,
+    subscribeConfiguration,
     onApplied: vi.fn(),
     onCancelPackInstall: vi.fn(async () => {}),
     onClosed: vi.fn(),
@@ -717,7 +1157,116 @@ function createModal({
   });
 }
 
-function createModalModel(): CatalogModelRecord {
+function latestAction(label: string): ButtonComponent {
+  const action = Setting.instances
+    .filter((setting) => setting.buttonComponents.length > 0)
+    .at(-1)
+    ?.buttonComponents.find((button) => button.text === label);
+  if (action === undefined) throw new Error(`Action not found: ${label}`);
+  return action;
+}
+
+function modelDropdown() {
+  return Setting.instances.filter((setting) => setting.name === 'Translation model').at(-1)
+    ?.dropdownComponents[0];
+}
+
+function fromDropdown() {
+  return Setting.instances.filter((setting) => setting.name === 'From').at(-1)
+    ?.dropdownComponents[0];
+}
+
+function toDropdown() {
+  return Setting.instances.filter((setting) => setting.name === 'To').at(-1)?.dropdownComponents[0];
+}
+
+function swapButton(modal: TranslationModal): TestElement | null {
+  return (modal.contentEl as unknown as TestElement).querySelector(
+    '.local-stt-translation-modal__swap',
+  );
+}
+
+function selectModel(model: CatalogModelRecord): void {
+  const dropdown = modelDropdown();
+  const option = dropdown?.selectEl.options.find(
+    (candidate) => candidate.value === modelKey(model),
+  );
+  if (dropdown === undefined || option === undefined) {
+    throw new Error(`Translation model option not found: ${model.displayName}`);
+  }
+  dropdown.change(option.value);
+}
+
+function modelKey(model: CatalogModelRecord): string {
+  return JSON.stringify([model.runtimeId, model.familyId, model.modelId]);
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  reject(error: unknown): void;
+  resolve(value: T): void;
+} {
+  let rejectPromise = (_error: unknown) => {};
+  let resolvePromise = (_value: T) => {};
+  const promise = new Promise<T>((resolve, reject) => {
+    rejectPromise = reject;
+    resolvePromise = resolve;
+  });
+  return { promise, reject: rejectPromise, resolve: resolvePromise };
+}
+
+function createTestModelManager(models: readonly CatalogModelRecord[]) {
+  const state = createModalModelManagerState(models, models.map(installedRecord));
+  return {
+    getState: () => state,
+    subscribe: () => () => {},
+  };
+}
+
+function installedRecord(model: CatalogModelRecord): InstalledModelRecord {
+  return {
+    catalogVersion: 1,
+    familyId: model.familyId,
+    installPath: `/models/${model.runtimeId}/${model.modelId}`,
+    installedArtifactIds: [],
+    installedAtUnixMs: 1,
+    installedVoiceIds: [],
+    modelId: model.modelId,
+    runtimeId: model.runtimeId,
+    runtimePath: null,
+    totalSizeBytes: 1,
+  };
+}
+
+function createModalModelManagerState(
+  models: readonly CatalogModelRecord[],
+  installedModels: readonly InstalledModelRecord[],
+): ModelManagerState {
+  return {
+    activeInstall: null,
+    catalog: {
+      catalogVersion: 1,
+      collections: [],
+      families: [],
+      models: [...models],
+    },
+    compiledAdapters: [],
+    compiledRuntimes: [],
+    failedInstall: null,
+    installedModels: [...installedModels],
+    installRequestPending: false,
+    loadError: null,
+    loadStatus: 'ready',
+    modelStore: { overridePath: null, path: '/models', usingDefaultPath: true },
+    selectedModel: null,
+    selectedModelCapabilities: { status: 'none' },
+    selectedTtsModel: null,
+    selectedTtsModelCapabilities: { status: 'none' },
+    selectedTranslationModel: null,
+  };
+}
+
+function createModalModel(overrides: Partial<CatalogModelRecord> = {}): CatalogModelRecord {
   return {
     artifacts: [],
     collectionId: 'translation',
@@ -736,5 +1285,6 @@ function createModalModel(): CatalogModelRecord {
     task: 'translation',
     translationSupport: { kind: 'all_to_all', languages: ['en', 'es'] },
     uxTags: [],
+    ...overrides,
   };
 }

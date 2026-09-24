@@ -8,6 +8,32 @@ import {
   languageSupportIncludes,
   supportedDictationLanguageOptions,
 } from '../src/language/dictation-language';
+import { translationSupportLanguages } from '../src/models/model-management-types';
+
+describe('translation language participation', () => {
+  it('deduplicates exact directed endpoints without inferring reverse directions', () => {
+    expect(
+      translationSupportLanguages({
+        translationSupport: {
+          kind: 'pairs',
+          pairs: [
+            { source: 'en', target: 'es' },
+            { source: 'en', target: 'de' },
+            { source: 'fr', target: 'en' },
+          ],
+        },
+      }),
+    ).toEqual(['en', 'es', 'de', 'fr']);
+  });
+
+  it('returns the declared all-to-all set unchanged', () => {
+    expect(
+      translationSupportLanguages({
+        translationSupport: { kind: 'all_to_all', languages: ['en', 'ja', 'yue'] },
+      }),
+    ).toEqual(['en', 'ja', 'yue']);
+  });
+});
 
 describe('dictation language eligibility', () => {
   it('presents Serbian as one option', () => {
