@@ -55,6 +55,31 @@
       "rulesApplied": 0
     },
     {
+      "id": "nfd-reordering-full-sequence",
+      "input": "\u00c0\u0316",
+      "rules": [
+        {
+          "id": "full-reordered-sequence",
+          "enabled": true,
+          "find": "A\u0300\u0316",
+          "replace": "X"
+        }
+      ],
+      "expected": "X",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "nfd-reordering-partial-before-boundary",
+      "input": "\u00c0\u0316",
+      "rules": [
+        { "id": "partial-reordered-sequence", "enabled": true, "find": "A\u0300", "replace": "X" }
+      ],
+      "expected": "\u00c0\u0316",
+      "replacements": 0,
+      "rulesApplied": 0
+    },
+    {
       "id": "left-to-right-punctuation-overlap",
       "input": "!!!",
       "rules": [{ "id": "double-bang", "enabled": true, "find": "!!", "replace": "!" }],

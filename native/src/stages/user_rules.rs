@@ -295,7 +295,7 @@ fn apply_rules_to_segment(
         if !rule.enabled {
             continue;
         }
-        let current_chars = text.as_deref().unwrap_or(original_text).chars().count();
+        let current_chars = normalized.input_chars;
         let application = preflight_rule(&normalized, rule, current_chars, budget)?;
         if application.matches.is_empty() {
             continue;
@@ -386,6 +386,7 @@ struct NormalizedInput {
     chars: Vec<char>,
     first_scalar_indices: HashMap<char, Vec<usize>>,
     input: String,
+    input_chars: usize,
     next_word_boundary: Vec<bool>,
     previous_word_boundary: Vec<bool>,
     safe_boundaries: Vec<bool>,
@@ -408,6 +409,7 @@ impl NormalizedInput {
         NORMALIZED_INPUT_VECTOR_CONSTRUCTIONS.with(|counter| counter.set(counter.get() + 1));
         let input = input.to_owned();
         let original_chars = input.chars().collect::<Vec<_>>();
+        let input_chars = original_chars.len();
         let normalized = input.nfd().collect::<Vec<_>>();
         let mut boundary_map = vec![None; normalized.len() + 1];
         let mut safe_boundaries = vec![false; normalized.len() + 1];
@@ -459,6 +461,7 @@ impl NormalizedInput {
             chars: normalized,
             first_scalar_indices,
             input,
+            input_chars,
             next_word_boundary,
             previous_word_boundary,
             safe_boundaries,
@@ -918,6 +921,27 @@ mod tests {
         };
         assert!(error.contains("work_budget"));
         assert_eq!(transcript.segments[0].text, "a".repeat(100_000));
+    }
+
+    #[test]
+    fn many_nonmatching_rules_reuse_the_current_scalar_count() {
+        let input = "a".repeat(100_000);
+        let rules = (0..100).map(|_| rule("b", "x")).collect::<Vec<_>>();
+        let before = NORMALIZED_INPUT_VECTOR_CONSTRUCTIONS.with(std::cell::Cell::get);
+        let mut budget = UtteranceBudget::new(input.chars().count());
+        let result = apply_rules_to_segment(
+            &segment(&input),
+            &compile_correction_rules(&rules),
+            &mut budget,
+        )
+        .expect("nonmatching rules should stay within the search budget");
+
+        assert_eq!(result.segment.text, input);
+        assert_eq!(result.replacement_count, 0);
+        assert_eq!(
+            NORMALIZED_INPUT_VECTOR_CONSTRUCTIONS.with(std::cell::Cell::get),
+            before + 1
+        );
     }
 
     #[test]
