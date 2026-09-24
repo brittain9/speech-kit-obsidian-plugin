@@ -1656,6 +1656,71 @@ describe('ModelInstallManager', () => {
       });
     });
 
+    it('keeps TTS hydration independent from a translation selection change', async () => {
+      const ttsSelection = sampleTtsVoiceSelection();
+      const translationModel = sampleTranslationCatalogModel();
+      const translationSelection: CatalogModelSelection = {
+        familyId: translationModel.familyId,
+        kind: 'catalog_model',
+        modelId: translationModel.modelId,
+        runtimeId: translationModel.runtimeId,
+      };
+      harness = createManagerHarness({ selectedTtsModel: ttsSelection });
+      const catalog = sampleCatalog();
+      catalog.models.push(sampleTtsVoiceCatalogModel(), translationModel);
+      configureSidecarForInit(harness.sidecarConnection);
+      const catalogResponse = deferred<ReturnType<typeof sampleCatalog>>();
+      harness.sidecarConnection.listModelCatalog.mockReturnValue(catalogResponse.promise);
+      const ttsProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
+      harness.sidecarConnection.probeModelSelection
+        .mockResolvedValueOnce(sampleReadyProbeResult(translationSelection))
+        .mockReturnValueOnce(ttsProbe.promise);
+
+      const initializing = harness.manager.init();
+      await harness.manager.select(translationSelection);
+      catalogResponse.resolve(catalog);
+      await initializing;
+
+      ttsProbe.resolve(sampleReadyProbeResult(ttsSelection));
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().selectedTtsModelCapabilities).toMatchObject({
+          selection: ttsSelection,
+          status: 'ready',
+        });
+      });
+      expect(harness.getSettings().selectedTranslationModel).toEqual(translationSelection);
+    });
+
+    it('keeps TTS hydration independent from an STT selection change', async () => {
+      const initialSttSelection = sampleSelection('whisper_small_en_q5_1');
+      const newerSttSelection = sampleSelection();
+      const ttsSelection = sampleTtsVoiceSelection();
+      harness = createManagerHarness({
+        selectedModel: initialSttSelection,
+        selectedTtsModel: ttsSelection,
+      });
+      const catalog = sampleCatalog();
+      catalog.models.push(sampleTtsVoiceCatalogModel());
+      harness.sidecarConnection.listModelCatalog.mockResolvedValue(catalog);
+      const ttsProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
+      harness.sidecarConnection.probeModelSelection
+        .mockReturnValueOnce(sampleReadyProbeResult(initialSttSelection))
+        .mockReturnValueOnce(ttsProbe.promise)
+        .mockResolvedValueOnce(sampleReadyProbeResult(newerSttSelection));
+
+      await harness.manager.init();
+      await harness.manager.select(newerSttSelection);
+
+      ttsProbe.resolve(sampleReadyProbeResult(ttsSelection));
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().selectedTtsModelCapabilities).toMatchObject({
+          selection: ttsSelection,
+          status: 'ready',
+        });
+      });
+      expect(harness.getSettings().selectedModel).toEqual(newerSttSelection);
+    });
+
     it('does not let an older capability probe overwrite a newer selection', async () => {
       const olderSelection = sampleSelection('whisper_small_en_q5_1');
       const newerSelection = sampleSelection();
