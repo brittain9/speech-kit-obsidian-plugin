@@ -194,6 +194,62 @@ describe('registerCommands', () => {
     Platform.isDesktopApp = originalDesktop;
   });
 
+  it('gates the YouTube command on desktop availability and enablement', () => {
+    const commands: Command[] = [];
+    const plugin = {
+      addCommand: vi.fn((command: Command) => {
+        commands.push(command);
+      }),
+    } as unknown as Plugin;
+    let enabled = false;
+    const transcribeYouTube = vi.fn(async () => {});
+    registerCommands({
+      cancelAudioFile: vi.fn(async () => {}),
+      cancelDictation: vi.fn(async () => {}),
+      clearLastUtterance: vi.fn(),
+      clearRawTranscriptRecovery: vi.fn(),
+      checkSidecarHealth: vi.fn(async () => {}),
+      copyLastUtterance: vi.fn(),
+      copyRawTranscript: vi.fn(),
+      hasLastUtterance: () => false,
+      hasRawTranscriptRecovery: () => false,
+      isAudioFileTranscriptionActive: () => false,
+      isYouTubeMediaSourceEnabled: () => enabled,
+      isReadAloudActive: () => false,
+      plugin,
+      readAloud: vi.fn(async () => {}),
+      readAloudFromCursor: vi.fn(async () => {}),
+      reinsertLastUtterance: vi.fn(),
+      restoreRawTranscript: vi.fn(),
+      restartSidecar: vi.fn(async () => {}),
+      startDictation: vi.fn(async () => {}),
+      stopReadAloud: vi.fn(),
+      stopDictation: vi.fn(async () => {}),
+      transcribeAudioFile: vi.fn(async () => {}),
+      transcribeYouTube,
+      translateNote: vi.fn(),
+      translateSelection: vi.fn(),
+      toggleDictation: vi.fn(async () => {}),
+      toggleReadAloudPaused: vi.fn(async () => {}),
+    });
+
+    const command = commands.find(({ id }) => id === 'transcribe-youtube-video');
+    const originalDesktop = Platform.isDesktopApp;
+    try {
+      expect(command?.checkCallback?.(true)).toBe(false);
+      expect(transcribeYouTube).not.toHaveBeenCalled();
+      enabled = true;
+      expect(command?.checkCallback?.(true)).toBe(true);
+      expect(transcribeYouTube).not.toHaveBeenCalled();
+      expect(command?.checkCallback?.(false)).toBe(true);
+      expect(transcribeYouTube).toHaveBeenCalledOnce();
+      Platform.isDesktopApp = false;
+      expect(command?.checkCallback?.(true)).toBe(false);
+    } finally {
+      Platform.isDesktopApp = originalDesktop;
+    }
+  });
+
   it('registers cancellation only while local audio-file transcription is active', async () => {
     const commands: Command[] = [];
     const plugin = {

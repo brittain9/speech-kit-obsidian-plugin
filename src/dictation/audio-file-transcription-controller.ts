@@ -19,7 +19,8 @@ import { dictationLanguageLabel, languageSupportIncludes } from '../language/dic
 import type { LlmRouter } from '../llm/router';
 import { MEDIA_ACQUISITION_LIMITS } from '../media/media-policy';
 import type {
-  MediaAcquireOverrides,
+  LocalMediaAcquireRequest,
+  MediaAcquireRequestLike,
   MediaLease,
   MediaSource,
   MediaTranscriptionEntry,
@@ -129,7 +130,7 @@ export interface AudioFileTranscriptionControllerDependencies {
   readonly onModelMissing?: () => void;
   readonly onRawTranscriptRecoveryAvailable?: (receipt: RawTranscriptRecoveryReceipt) => void;
   readonly onSidecarMissing?: () => void;
-  readonly mediaSource: MediaSource;
+  readonly mediaEntry: MediaTranscriptionEntry<undefined, LocalMediaAcquireRequest>;
   readonly mediaFailureAdapters?: readonly MediaFailureAdapter[];
   readonly mediaLlmCoordinator?: MediaLlmCoordinator;
   readonly onMediaProgress?: (progress: MediaTranscriptionProgress | null) => void;
@@ -215,15 +216,15 @@ export class AudioFileTranscriptionController {
   }
 
   async transcribe(): Promise<void> {
-    await this.startTranscription(this.dependencies.mediaSource);
+    await this.startTranscription(this.dependencies.mediaEntry, undefined);
   }
 
-  async transcribeProvider<TContext>(
-    entry: MediaTranscriptionEntry<TContext>,
+  async transcribeProvider<TContext, TRequest extends MediaAcquireRequestLike>(
+    entry: MediaTranscriptionEntry<TContext, TRequest>,
     context: TContext,
   ): Promise<void> {
     if (!entry.isEnabled()) return;
-    await this.startTranscription(entry.source, entry.createRequest(context), entry.id);
+    await this.startTranscription(entry, context);
   }
 
   async cancelProvider(providerId: string): Promise<void> {
@@ -245,13 +246,12 @@ export class AudioFileTranscriptionController {
     await this.activeTranscribeCompletion;
   }
 
-  private async startTranscription(
-    source: MediaSource,
-    request?: MediaAcquireOverrides,
-    providerId?: string,
+  private async startTranscription<TContext, TRequest extends MediaAcquireRequestLike>(
+    entry: MediaTranscriptionEntry<TContext, TRequest>,
+    context: TContext,
   ): Promise<void> {
     if (this.activeTranscribeCompletion !== null) return;
-    const operation = this.runTranscribe(source, request, providerId);
+    const operation = this.runTranscribe(entry, context);
     this.activeTranscribeCompletion = operation;
     try {
       await operation;
@@ -264,10 +264,9 @@ export class AudioFileTranscriptionController {
     this.mediaLlmCoordinator.settingsChanged();
   }
 
-  private async runTranscribe(
-    source: MediaSource,
-    request?: MediaAcquireOverrides,
-    providerId?: string,
+  private async runTranscribe<TContext, TRequest extends MediaAcquireRequestLike>(
+    entry: MediaTranscriptionEntry<TContext, TRequest>,
+    context: TContext,
   ): Promise<void> {
     // Keep this guard before the busy check: mobile callers must not mutate a
     // running desktop workflow or open a native-only picker accidentally.
@@ -282,9 +281,7 @@ export class AudioFileTranscriptionController {
 
     this.applyState('selecting');
     const abortController = new AbortController();
-    if (providerId !== undefined) {
-      this.activeMediaProvider = { abortController, id: providerId };
-    }
+    this.activeMediaProvider = { abortController, id: entry.id };
     let decodedAudio: DecodedAudioFile | null = null;
     let mediaLease: MediaLease | null = null;
     let pending: PendingAudioFileStart | null = null;
@@ -314,7 +311,12 @@ export class AudioFileTranscriptionController {
       this.pendingStart = pending;
 
       this.emitProgress('acquire');
-      mediaLease = await this.acquireMediaLease(abortController.signal, source, request);
+      const request = entry.createRequest(context, {
+        ...MEDIA_ACQUISITION_LIMITS,
+        kind: 'interactive',
+        signal: abortController.signal,
+      });
+      mediaLease = await this.acquireMediaLease(abortController.signal, entry.source, request);
       if (mediaLease === null) return;
       this.throwIfCancelled(abortController.signal);
 
@@ -526,17 +528,12 @@ export class AudioFileTranscriptionController {
     if (this.activeSession === null) this.applyState('idle');
   }
 
-  private async acquireMediaLease(
+  private async acquireMediaLease<TRequest extends MediaAcquireRequestLike>(
     signal: AbortSignal,
-    source: MediaSource,
-    request?: MediaAcquireOverrides,
+    source: MediaSource<TRequest>,
+    request: TRequest,
   ): Promise<MediaLease | null> {
-    for await (const event of source.acquire({
-      ...MEDIA_ACQUISITION_LIMITS,
-      kind: 'interactive',
-      signal,
-      ...request,
-    })) {
+    for await (const event of source.acquire(request)) {
       if (event.type === 'ready') {
         if (signal.aborted) {
           await event.lease.release();

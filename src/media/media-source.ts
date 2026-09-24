@@ -37,29 +37,35 @@ export type AcquisitionEvent<TLease extends MediaLease = MediaLease> =
   | { readonly type: 'ready'; readonly lease: TLease }
   | { readonly type: 'warning'; readonly code: string; readonly message: string };
 
-export interface MediaAcquireRequest {
+export interface MediaAcquireRequest<TProvider = never> {
   readonly kind: 'interactive';
   readonly maxBytes: number;
   readonly maxDurationMs: number;
+  readonly provider: TProvider;
   readonly signal: AbortSignal;
 }
 
-export type MediaAcquireOverrides = Partial<Omit<MediaAcquireRequest, 'kind' | 'signal'>> & {
-  readonly provider?: unknown;
-};
+export type LocalMediaAcquireRequest = MediaAcquireRequest<undefined>;
 
-export interface MediaTranscriptionEntry<TContext> {
-  readonly createRequest: (context: TContext) => MediaAcquireOverrides;
+export type MediaAcquireRequestBase = Omit<MediaAcquireRequest, 'provider'>;
+export type MediaAcquireRequestLike = MediaAcquireRequestBase & { readonly provider: unknown };
+
+export interface MediaTranscriptionEntry<TContext, TRequest extends MediaAcquireRequestLike> {
+  readonly createRequest: (context: TContext, request: MediaAcquireRequestBase) => TRequest;
   readonly id: string;
   readonly isEnabled: () => boolean;
-  readonly source: MediaSource;
+  readonly source: MediaSource<TRequest>;
 }
 
-export interface MediaAcquisition {
-  acquire(request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent>;
+export interface MediaAcquisition<
+  TRequest extends MediaAcquireRequestLike = MediaAcquireRequest<undefined>,
+> {
+  acquire(request: TRequest): AsyncIterable<AcquisitionEvent>;
 }
 
-export interface MediaSource extends MediaAcquisition {
+export interface MediaSource<
+  TRequest extends MediaAcquireRequestLike = MediaAcquireRequest<undefined>,
+> extends MediaAcquisition<TRequest> {
   readonly adapterVersion: string;
   readonly id: MediaSourceId;
 }

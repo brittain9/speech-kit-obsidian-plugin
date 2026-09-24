@@ -31,8 +31,10 @@ clears process-tree and forced-kill timers on settlement. It never starts
 synchronous process scans; POSIX cleanup uses the detached process group, and
 normal descendant cleanup starts at the child `exit` event before `close` so
 PID reuse cannot receive a post-close kill. Windows `taskkill` uses an absolute
-system executable and a sanitized environment rather than inherited `PATH`, and
-falls back to the direct child while cleanup is still before `close`. The command ignores
+system executable and a sanitized environment rather than inherited `PATH`. If
+`taskkill /T` itself fails, the runner reports the bounded cleanup limitation
+without falling back to a PID-only child kill that cannot terminate
+grandchildren. The command ignores
 user configuration, caches, plugins, remote components, cookies, playlists,
 mark-watched/live behavior, metadata sidecars, thumbnails, archives,
 postprocessors, and external downloaders. It uses one audio-only stream, one

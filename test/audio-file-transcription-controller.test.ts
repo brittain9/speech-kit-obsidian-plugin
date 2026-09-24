@@ -9,6 +9,7 @@ import { MEDIA_ACQUISITION_LIMITS } from '../src/media/media-policy';
 import type {
   AcquisitionEvent,
   MediaAcquireRequest,
+  MediaAcquireRequestBase,
   MediaLease,
   MediaSource,
 } from '../src/media/media-source';
@@ -244,9 +245,17 @@ function transcriptReady(sessionId: string, text: string): TranscriptReadyEvent 
   };
 }
 
-function createHarness(
-  overrides: Partial<ConstructorParameters<typeof AudioFileTranscriptionController>[0]> = {},
-) {
+type HarnessOverrides = Omit<
+  Partial<ConstructorParameters<typeof AudioFileTranscriptionController>[0]>,
+  'mediaEntry'
+> & {
+  readonly mediaEntry?: ConstructorParameters<
+    typeof AudioFileTranscriptionController
+  >[0]['mediaEntry'];
+  readonly mediaSource?: MediaSource;
+};
+
+function createHarness(overrides: HarnessOverrides = {}) {
   let target: SessionTarget | null = createTarget();
   const sessions: FakeSession[] = [];
   const feedback = { show: vi.fn() };
@@ -288,7 +297,23 @@ function createHarness(
       ),
     );
   }
-  const mediaSource = overrides.mediaSource ?? new LocalMediaSource({ pickFile: pickAudioFile });
+  const {
+    mediaEntry: overrideMediaEntry,
+    mediaSource: overrideMediaSource,
+    ...dependencyOverrides
+  } = overrides;
+  const mediaSource = overrideMediaSource ?? new LocalMediaSource({ pickFile: pickAudioFile });
+  const mediaEntry: ConstructorParameters<
+    typeof AudioFileTranscriptionController
+  >[0]['mediaEntry'] = overrideMediaEntry ?? {
+    createRequest: (_context, request: MediaAcquireRequestBase) => ({
+      ...request,
+      provider: undefined,
+    }),
+    id: mediaSource.id,
+    isEnabled: () => true,
+    source: mediaSource,
+  };
   const dependencies: ConstructorParameters<typeof AudioFileTranscriptionController>[0] = {
     backpressureTimeoutMs: 100,
     createSession: (_options: CreateSessionOptions) => {
@@ -307,9 +332,9 @@ function createHarness(
     sidecarConnection,
     sidecarLifecycleGate,
     stopConflictingSpeech: vi.fn(),
-    ...overrides,
+    ...dependencyOverrides,
     decoder: configuredDecoder,
-    mediaSource,
+    mediaEntry,
   };
   const controller = new AudioFileTranscriptionController(dependencies);
 
@@ -345,16 +370,19 @@ function createSettings(overrides: Partial<PluginSettings> = {}): PluginSettings
 describe('AudioFileTranscriptionController', () => {
   it('rechecks the provider kill switch before acquiring provider media', async () => {
     const acquire = vi.fn();
-    const source = { acquire, adapterVersion: '1', id: 'provider' } as unknown as MediaSource;
+    const source: MediaSource = { acquire, adapterVersion: '1', id: 'provider' };
     const harness = createHarness();
     const entry = {
-      createRequest: () => ({}),
+      createRequest: (_context: undefined, request: MediaAcquireRequestBase) => ({
+        ...request,
+        provider: undefined,
+      }),
       id: 'provider',
       isEnabled: () => false,
       source,
     };
 
-    await harness.controller.transcribeProvider(entry, {});
+    await harness.controller.transcribeProvider(entry, undefined);
 
     expect(acquire).not.toHaveBeenCalled();
   });
@@ -397,12 +425,15 @@ describe('AudioFileTranscriptionController', () => {
     };
     const harness = createHarness({ decoder, mediaSource: source });
     const entry = {
-      createRequest: () => ({}),
+      createRequest: (_context: undefined, request: MediaAcquireRequestBase) => ({
+        ...request,
+        provider: undefined,
+      }),
       id: 'youtube_yt_dlp',
       isEnabled: () => true,
       source,
     };
-    const operation = harness.controller.transcribeProvider(entry, {});
+    const operation = harness.controller.transcribeProvider(entry, undefined);
     await started;
     await harness.controller.cancelProvider('youtube_yt_dlp');
     await operation;

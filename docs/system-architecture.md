@@ -122,9 +122,11 @@ validated canonical video ID, and returns a temporary path-backed `MediaLease`.
 The adapter requires a current typed consent grant, rejects helper metadata
 that is not an exact non-live VOD identity match, and keeps YouTube-specific
 metadata outside the shared media contract. A typed provider entry carries the
-YouTube context, enablement predicate, and stable provider id into the shared
-coordinator; the coordinator has no YouTube setting dependency and can cancel
-only the matching active provider operation. The adapter does not pass its URL,
+YouTube context, typed acquisition request factory, enablement predicate, and
+stable provider id into the shared coordinator; the request and source generic
+are checked together end-to-end, with runtime validation at the provider
+boundary. The coordinator has no YouTube setting dependency and can cancel only
+the matching active provider operation. The adapter does not pass its URL,
 helper, path, or provenance to the decoder, ASR, renderer, or optional LLM.
 
 The shared media transcription coordinator owns the provider-neutral sequence:

@@ -15,8 +15,8 @@ import { join, resolve } from 'node:path';
 import { t } from '../shared/i18n';
 import type {
   AcquisitionEvent,
-  MediaAcquireOverrides,
   MediaAcquireRequest,
+  MediaAcquireRequestBase,
   MediaLease,
   MediaPlan,
   MediaSource,
@@ -89,9 +89,7 @@ export interface YouTubeAcquisitionContext {
   readonly ref: YouTubeVideoRef;
 }
 
-export type YouTubeMediaAcquireRequest = MediaAcquireRequest & {
-  readonly provider: YouTubeAcquisitionContext;
-};
+export type YouTubeMediaAcquireRequest = MediaAcquireRequest<YouTubeAcquisitionContext>;
 
 export interface YouTubeMediaPlan extends MediaPlan {
   readonly canonicalUrl: string;
@@ -155,7 +153,7 @@ export interface YouTubeHelperMetadata {
   readonly videoId?: string;
 }
 
-export class YouTubeMediaSource implements MediaSource {
+export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireRequest> {
   readonly adapterVersion = YOUTUBE_MEDIA_ADAPTER_VERSION;
   readonly id = 'youtube_yt_dlp' as const;
   private readonly tempRoot: string;
@@ -182,17 +180,22 @@ export class YouTubeMediaSource implements MediaSource {
     );
   }
 
-  createRequest(context: YouTubeAcquisitionContext): MediaAcquireOverrides {
-    return { provider: context };
+  createRequest(
+    context: YouTubeAcquisitionContext,
+    request: MediaAcquireRequestBase,
+  ): YouTubeMediaAcquireRequest {
+    return { ...request, provider: context };
   }
 
-  acquire(request: YouTubeMediaAcquireRequest): AsyncIterable<AcquisitionEvent<YouTubeMediaLease>>;
-  acquire(request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent>;
-  async *acquire(request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent> {
-    const typedRequest = requireYouTubeRequest(request);
-    throwIfCancelled(typedRequest.signal);
-    const video = typedRequest.provider.ref;
-    assertConsent(typedRequest.provider.consent);
+  async *acquire(
+    request: YouTubeMediaAcquireRequest,
+  ): AsyncIterable<AcquisitionEvent<YouTubeMediaLease>> {
+    if (!isYouTubeMediaAcquireRequest(request)) {
+      throw new YouTubeAcquisitionError('invalid_or_unsupported_url', 'Enter one YouTube VOD URL.');
+    }
+    throwIfCancelled(request.signal);
+    const video = request.provider.ref;
+    assertConsent(request.provider.consent);
     const helperPath = normalizeYouTubeHelperPath(this.dependencies.getHelperPath());
     if (this.jobInUse) {
       throw new YouTubeAcquisitionError(
@@ -223,7 +226,7 @@ export class YouTubeMediaSource implements MediaSource {
         spawnProcess: this.spawnProcess,
       });
       const helperVersion = version.version;
-      if (helperVersion !== typedRequest.provider.helperVersion) {
+      if (helperVersion !== request.provider.helperVersion) {
         throw new YouTubeAcquisitionError(
           'helper_version_unsupported',
           'The selected yt-dlp version no longer matches the probed helper.',
@@ -766,16 +769,22 @@ function createPlan(video: YouTubeVideoRef, sourceId: string): YouTubeMediaPlan 
   };
 }
 
-function requireYouTubeRequest(request: MediaAcquireRequest): YouTubeMediaAcquireRequest {
-  const provider = (request as Partial<YouTubeMediaAcquireRequest>).provider;
-  if (
-    provider === undefined ||
-    provider.ref === undefined ||
-    !isYouTubeVideoId(provider.ref.videoId)
-  ) {
-    throw new YouTubeAcquisitionError('invalid_or_unsupported_url', 'Enter one YouTube VOD URL.');
-  }
-  return request as YouTubeMediaAcquireRequest;
+function isYouTubeMediaAcquireRequest(value: unknown): value is YouTubeMediaAcquireRequest {
+  if (!isRecord(value) || !isRecord(value.provider) || !isRecord(value.provider.ref)) return false;
+  return (
+    value.kind === 'interactive' &&
+    typeof value.maxBytes === 'number' &&
+    Number.isFinite(value.maxBytes) &&
+    typeof value.maxDurationMs === 'number' &&
+    Number.isFinite(value.maxDurationMs) &&
+    isRecord(value.signal) &&
+    typeof value.signal.aborted === 'boolean' &&
+    typeof value.signal.addEventListener === 'function' &&
+    typeof value.signal.removeEventListener === 'function' &&
+    typeof value.provider.helperVersion === 'string' &&
+    typeof value.provider.ref.videoId === 'string' &&
+    isYouTubeVideoId(value.provider.ref.videoId)
+  );
 }
 
 function assertConsent(consent: YouTubeConsentGrant | undefined): void {
@@ -837,7 +846,7 @@ function mapHelperFailure(stderr: string): YouTubeAcquisitionError {
 
 interface HelperExecution {
   readonly cancelled: boolean;
-  readonly events: AcquisitionEvent[];
+  readonly events: AcquisitionEvent<YouTubeMediaLease>[];
   readonly exitCode: number | null;
   readonly metadata: YouTubeHelperMetadata;
   readonly outputLimitExceeded: boolean;
@@ -856,7 +865,7 @@ async function runHelper(options: {
   readonly spawnProcess: typeof spawn;
   readonly wallTimeMs: number;
 }): Promise<HelperExecution> {
-  const events: AcquisitionEvent[] = [];
+  const events: AcquisitionEvent<YouTubeMediaLease>[] = [];
   let lastProgressBytes: number | undefined;
   const result = await runManagedProcess(
     options.command,

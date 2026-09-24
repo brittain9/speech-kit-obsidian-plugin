@@ -1,11 +1,11 @@
-import type {
-  FileWorkflowTranslationKey,
-  MediaFailureAdapter,
-} from '../dictation/audio-file-failure';
+import type { ExternalFailureFeedback, MediaFailureAdapter } from '../dictation/audio-file-failure';
+import { type TranslationKey, t } from '../shared/i18n';
 import { YouTubeHelperError, type YouTubeHelperFailureCode } from './youtube-helper';
 import { YouTubeAcquisitionError, type YouTubeFailureCode } from './youtube-media-source';
 
-const YOUTUBE_ERROR_KEYS: Readonly<Record<YouTubeFailureCode, FileWorkflowTranslationKey>> = {
+type YouTubeFeedbackKey = Extract<TranslationKey, `youtube.error.${string}`>;
+
+const YOUTUBE_ERROR_KEYS: Readonly<Record<YouTubeFailureCode, YouTubeFeedbackKey>> = {
   invalid_or_unsupported_url: 'youtube.error.invalid_url',
   not_found_or_private: 'youtube.error.not_found_private',
   region_restricted: 'youtube.error.region_restricted',
@@ -27,7 +27,7 @@ const YOUTUBE_ERROR_KEYS: Readonly<Record<YouTubeFailureCode, FileWorkflowTransl
   cancelled: 'youtube.error.cancelled',
 };
 
-const HELPER_ERROR_KEYS: Readonly<Record<YouTubeHelperFailureCode, FileWorkflowTranslationKey>> = {
+const HELPER_ERROR_KEYS: Readonly<Record<YouTubeHelperFailureCode, YouTubeFeedbackKey>> = {
   helper_unavailable: 'youtube.error.helper_unavailable',
   helper_version_unsupported: 'youtube.error.helper_version_unsupported',
   resource_limit: 'youtube.error.resource_limit',
@@ -35,13 +35,18 @@ const HELPER_ERROR_KEYS: Readonly<Record<YouTubeHelperFailureCode, FileWorkflowT
   cancelled: 'youtube.error.cancelled',
 };
 
+function feedbackFor(key: YouTubeFeedbackKey): ExternalFailureFeedback {
+  return { intent: 'error', key, message: t(key) };
+}
+
 export const youtubeMediaFailureAdapter: MediaFailureAdapter = {
   isCancellation: (error) =>
     (error instanceof YouTubeAcquisitionError && error.code === 'cancelled') ||
     (error instanceof YouTubeHelperError && error.code === 'cancelled'),
   map: (error) => {
-    if (error instanceof YouTubeAcquisitionError) return YOUTUBE_ERROR_KEYS[error.code];
-    if (error instanceof YouTubeHelperError) return HELPER_ERROR_KEYS[error.code];
+    if (error instanceof YouTubeAcquisitionError)
+      return feedbackFor(YOUTUBE_ERROR_KEYS[error.code]);
+    if (error instanceof YouTubeHelperError) return feedbackFor(HELPER_ERROR_KEYS[error.code]);
     return null;
   },
   sanitize: (error) => {

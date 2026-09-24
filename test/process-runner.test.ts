@@ -102,7 +102,7 @@ describe('managed process runner', () => {
     kill.mockRestore();
   });
 
-  it('falls back to the direct child when Windows taskkill fails before close', async () => {
+  it('does not use an incapable direct-child fallback when Windows taskkill fails', async () => {
     const child = new FakeChild();
     child.pid = 2468;
     const taskkill = new FakeChild();
@@ -119,7 +119,8 @@ describe('managed process runner', () => {
     taskkill.emit('error', new Error('taskkill failed'));
     child.emit('close', 0);
     await resultPromise;
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    // The fake child represents a surviving tree; no PID-only kill is attempted.
+    expect(child.kill).not.toHaveBeenCalled();
   });
 
   it('uses fixed taskkill argv without a shell on Windows', async () => {

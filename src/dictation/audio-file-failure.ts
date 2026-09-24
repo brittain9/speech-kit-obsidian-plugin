@@ -1,11 +1,9 @@
 import { AudioFileBackpressureTimeoutError } from '../audio/audio-file-backpressure';
 import { AudioFileError, isAudioFileCancellation } from '../audio/audio-file-decoder';
-import { type TranslationKey, t } from '../shared/i18n';
+import { t } from '../shared/i18n';
 import type { FeedbackRequest, UserFeedback } from '../shared/user-feedback';
 import { SidecarError } from '../sidecar/sidecar-connection';
 import { SidecarNotInstalledError } from '../sidecar/sidecar-paths';
-
-type ExternalWorkflowTranslationKey = Extract<TranslationKey, `youtube.error.${string}`>;
 
 export type FileWorkflowTranslationKey =
   | 'audio-file-busy'
@@ -33,12 +31,17 @@ export type FileWorkflowTranslationKey =
   | 'audio-file-target-deleted'
   | 'audio-file-target-required'
   | 'audio-file-transcript-write-failed'
-  | 'audio-file-surface-changed'
-  | ExternalWorkflowTranslationKey;
+  | 'audio-file-surface-changed';
+
+export interface ExternalFailureFeedback {
+  readonly intent: FeedbackRequest['intent'];
+  readonly key: string;
+  readonly message: string;
+}
 
 export interface MediaFailureAdapter {
   readonly isCancellation: (error: unknown) => boolean;
-  readonly map: (error: unknown) => FileWorkflowTranslationKey | null;
+  readonly map: (error: unknown) => ExternalFailureFeedback | null;
   readonly sanitize?: (error: unknown) => unknown;
 }
 
@@ -69,9 +72,9 @@ export class AudioFileFailureMapper {
 
   reportFailure(error: unknown, claim?: FeedbackClaim): void {
     for (const adapter of this.dependencies.mediaFailureAdapters ?? []) {
-      const translationKey = adapter.map(error);
-      if (translationKey !== null) {
-        this.report(translationKey, adapter.sanitize?.(error) ?? error, claim);
+      const externalFeedback = adapter.map(error);
+      if (externalFeedback !== null) {
+        this.reportExternal(externalFeedback, adapter.sanitize?.(error) ?? error, claim);
         return;
       }
     }
@@ -109,6 +112,22 @@ export class AudioFileFailureMapper {
       error.code === 'no_active_session' &&
       (expectedSessionId === undefined || error.sessionId === expectedSessionId)
     );
+  }
+
+  private reportExternal(
+    feedback: ExternalFailureFeedback,
+    cause: unknown,
+    claim?: FeedbackClaim,
+  ): void {
+    if (claim !== undefined && !claim.claimFeedback()) {
+      return;
+    }
+    this.dependencies.feedback.show({
+      cause,
+      intent: feedback.intent,
+      key: feedback.key,
+      message: feedback.message,
+    });
   }
 
   private report(

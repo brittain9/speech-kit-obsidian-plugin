@@ -552,6 +552,24 @@ describe('YouTubeMediaSource with a local fake helper', () => {
   });
 
   it('rejects live metadata and missing consent before accepting media', async () => {
+    const invalidRequest = {
+      ...youtubeRequest(new AbortController().signal),
+      provider: {
+        ...youtubeRequest(new AbortController().signal).provider,
+        ref: { videoId: 'bad' },
+      },
+    } as unknown as YouTubeMediaAcquireRequest;
+    const validationHelper = await makeHelper(false);
+    const validationRoot = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-validation-'));
+    temporaryPaths.push(validationRoot);
+    const validationSource = new YouTubeMediaSource({
+      getHelperPath: () => validationHelper,
+      tempRoot: validationRoot,
+    });
+    await expect(collect(validationSource.acquire(invalidRequest))).rejects.toMatchObject({
+      code: 'invalid_or_unsupported_url',
+    });
+
     const liveHelper = await makeHelper(false, { is_live: true, live_status: 'is_live' });
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-live-'));
     temporaryPaths.push(root);

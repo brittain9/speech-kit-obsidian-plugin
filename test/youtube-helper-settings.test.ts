@@ -50,6 +50,11 @@ describe('YouTube helper settings lifecycle', () => {
       access,
       getSettings: access.getSettings,
     });
+    const status = parent.findByClass('local-stt-youtube-helper-status');
+    const liveStatus = status?.children.at(-1);
+    expect(liveStatus?.getAttribute('role')).toBe('status');
+    expect(liveStatus?.getAttribute('aria-live')).toBe('polite');
+    expect(liveStatus?.getAttribute('aria-atomic')).toBe('true');
     const setting = (Setting as unknown as { instances: SettingFixture[] }).instances[1];
     const text = setting?.textComponents[0];
     const check = setting?.buttonComponents[0];

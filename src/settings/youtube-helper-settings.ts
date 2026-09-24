@@ -44,7 +44,9 @@ export function renderYouTubeHelperSettings(
       ? t('youtube.settings.policyAccepted', { policy: YOUTUBE_POLICY_VERSION })
       : t('youtube.settings.policyRequired'),
   });
-  const probeStatus = status.createDiv();
+  const probeStatus = status.createDiv({
+    attr: { 'aria-atomic': 'true', 'aria-live': 'polite', role: 'status' },
+  });
 
   const currentPath = dependencies.getSettings().youtubeHelperPath;
   let selectedPath = currentPath;

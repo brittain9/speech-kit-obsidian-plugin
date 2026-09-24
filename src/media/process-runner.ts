@@ -242,7 +242,8 @@ async function killProcessTree(options: {
           windowsHide: true,
         });
       } catch {
-        if (allowDirectChild) child.kill(signal);
+        // A direct child kill cannot terminate Windows grandchildren. Keep the
+        // limitation explicit instead of issuing a PID-only fallback.
         resolve();
         return;
       }
@@ -255,11 +256,11 @@ async function killProcessTree(options: {
       };
       const timer = window.setTimeout(() => {
         taskkillProcess.kill('SIGKILL');
-        if (allowDirectChild) child.kill(signal);
+        // Do not fall back to child.kill(): it cannot terminate the tree.
         finish();
       }, 1_000);
       taskkillProcess.once('error', () => {
-        if (allowDirectChild) child.kill(signal);
+        // The tree-capable taskkill operation failed; leave the tree alone.
         finish();
       });
       taskkillProcess.once('close', finish);

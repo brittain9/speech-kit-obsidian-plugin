@@ -26,12 +26,13 @@ import { syncDictationLanguageWithObsidian } from './language/dictation-language
 import type { LlmCleanupFailure } from './llm/provider';
 import { createConfiguredLlmRouter } from './llm/runtime';
 import { LocalMediaSource } from './media/local-media-source';
-import type { MediaTranscriptionEntry } from './media/media-source';
+import type { LocalMediaAcquireRequest, MediaTranscriptionEntry } from './media/media-source';
 import { youtubeMediaFailureAdapter } from './media/youtube-failure-mapper';
 import {
   sweepAbandonedYouTubeJobs,
   YOUTUBE_POLICY_VERSION,
   type YouTubeAcquisitionContext,
+  type YouTubeMediaAcquireRequest,
   YouTubeMediaSource,
 } from './media/youtube-media-source';
 import { ManageModelsModal, type ModelPickerOptions } from './models/manage-models-modal';
@@ -355,9 +356,18 @@ export default class LocalSttPlugin extends Plugin {
     this.youtubeMediaSource = new YouTubeMediaSource({
       getHelperPath: () => this.settings.youtubeHelperPath,
     });
+    const localMediaEntry: MediaTranscriptionEntry<undefined, LocalMediaAcquireRequest> = {
+      createRequest: (_context, request) => ({ ...request, provider: undefined }),
+      id: localMediaSource.id,
+      isEnabled: () => true,
+      source: localMediaSource,
+    };
     const youtubeMediaSource = this.youtubeMediaSource;
-    const youtubeMediaEntry: MediaTranscriptionEntry<YouTubeAcquisitionContext> = {
-      createRequest: (context) => youtubeMediaSource.createRequest(context),
+    const youtubeMediaEntry: MediaTranscriptionEntry<
+      YouTubeAcquisitionContext,
+      YouTubeMediaAcquireRequest
+    > = {
+      createRequest: (context, request) => youtubeMediaSource.createRequest(context, request),
       id: youtubeMediaSource.id,
       isEnabled: () => this.settings.youtubeMediaSourceEnabled,
       source: youtubeMediaSource,
@@ -367,7 +377,7 @@ export default class LocalSttPlugin extends Plugin {
       confirmMediaLlm: (preview, signal) => confirmMediaLlmPreview(this.app, preview, signal),
       createLlmRouter: (settings) =>
         createConfiguredLlmRouter(settings, (secretId) => this.getSecret(secretId)),
-      mediaSource: localMediaSource,
+      mediaEntry: localMediaEntry,
       mediaFailureAdapters: [youtubeMediaFailureAdapter],
       createSession: ({ callbacks, placement, rendererOptions, sessionId, target }) =>
         Session.createFromTarget(this.app, target, {
