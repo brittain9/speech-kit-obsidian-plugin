@@ -3,7 +3,7 @@ export const en = {
   'audio-file-model-required':
     'Select and validate a local speech-to-text model in Manage models, then try the audio file again.',
   'audio-file-model-changed':
-    'The selected transcription model changed while the file picker was open. Run Transcribe audio file again to use the current model.',
+    'The selected transcription model changed while the file picker was open. Run Transcribe local audio file again to use the current model.',
   'audio-file-model-not-batch':
     'Audio-file transcription requires a batch speech-to-text model. Select a non-streaming model in Manage models, then try again.',
   'audio-file-language-unsupported':
@@ -12,6 +12,8 @@ export const en = {
     'Open the Markdown note that should receive the transcript in editing mode, then run Transcribe audio file again.',
   'audio-file-target-changed':
     'The transcript target changed while the audio file was being prepared. Return to the original note and run Transcribe audio file again.',
+  'audio-file-desktop-only':
+    'Audio-file transcription is available in the Obsidian desktop app. Open this vault on desktop to continue.',
   'audio-file-busy':
     'Microphone dictation or another audio-file transcription is already active. Finish or cancel it, then try again.',
   'audio-file-maintenance':
@@ -27,7 +29,7 @@ export const en = {
   'audio-file-model-duration':
     'This audio file is longer than the selected model can transcribe in one file. Split it into shorter files or choose a model with a longer audio limit.',
   'audio-file-decoded-memory':
-    'Decoding this file would use too much memory. Choose a shorter, lower-bitrate, or fewer-channel file, then try again.',
+    'Decoding this file would use too much memory. Choose a shorter or lower-bitrate file, or one with fewer channels, then try again.',
   'audio-file-empty':
     'The selected file contains no audio that can be transcribed. Choose a different audio file.',
   'audio-file-start-failed':

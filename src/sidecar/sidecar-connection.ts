@@ -46,6 +46,7 @@ import {
   type SynthesisAudioFrame,
   type SystemAudioProbeResultEvent,
   type SystemInfoEvent,
+  type WarningEvent,
 } from './protocol';
 import { localizeSidecarEvent, rawSidecarEventDetail } from './sidecar-event-localization';
 import { createSidecarStderrLogEntry } from './sidecar-logging';
@@ -84,7 +85,20 @@ interface SidecarProcessLike {
   start(): Promise<void>;
   stop(): Promise<void>;
   write(frameBytes: Uint8Array): void;
-  writeAudioFrame?(frameBytes: Uint8Array, signal: AbortSignal): Promise<void>;
+  writeAudioFrame(frameBytes: Uint8Array, signal: AbortSignal): Promise<void>;
+}
+
+export interface StartSessionControlOptions {
+  readonly abortSignal?: AbortSignal;
+  readonly onCommandIssued?: () => void;
+  readonly timeoutMs?: number;
+}
+
+export type CancelSessionResult = SessionStoppedEvent | WarningEvent;
+
+interface CommandControl {
+  readonly abortSignal?: AbortSignal;
+  readonly onCommandIssued?: () => void;
 }
 
 interface SidecarConnectionOptions {
@@ -324,15 +338,38 @@ export class SidecarConnection {
     );
   }
 
+  async startSessionWithControl(
+    payload: Omit<StartSessionCommand, 'type'>,
+    options: StartSessionControlOptions = {},
+  ): Promise<SessionStartedEvent> {
+    return await this.sendCommandAndWait(
+      createStartSessionCommand(payload),
+      (event): event is SessionStartedEvent =>
+        event.type === 'session_started' && event.sessionId === payload.sessionId,
+      `session_started:${payload.sessionId}`,
+      options.timeoutMs ?? this.options.getRequestTimeoutMs(),
+      (event) => !('sessionId' in event) || event.sessionId === payload.sessionId,
+      {
+        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : {}),
+        ...(options.onCommandIssued !== undefined
+          ? { onCommandIssued: options.onCommandIssued }
+          : {}),
+      },
+    );
+  }
+
   async cancelSession(
     sessionId: string,
     timeoutMs = this.options.getRequestTimeoutMs(),
-  ): Promise<SessionStoppedEvent> {
+  ): Promise<CancelSessionResult> {
     return this.sendCommandAndWait(
       createCancelSessionCommand(sessionId),
-      (event): event is SessionStoppedEvent =>
-        event.type === 'session_stopped' && event.sessionId === sessionId,
-      `session_stopped:${sessionId}`,
+      (event): event is CancelSessionResult =>
+        (event.type === 'session_stopped' && event.sessionId === sessionId) ||
+        (event.type === 'warning' &&
+          event.code === 'no_active_session' &&
+          (event.sessionId === undefined || event.sessionId === sessionId)),
+      `session_stopped_or_no_active:${sessionId}`,
       timeoutMs,
       (event) => event.sessionId === undefined || event.sessionId === sessionId,
     );
@@ -377,16 +414,7 @@ export class SidecarConnection {
   ): Promise<void> {
     signal.throwIfAborted();
     const encodedFrame = encodeAudioFrame(sessionId, frameBytes);
-    if (this.process.writeAudioFrame !== undefined) {
-      await this.process.writeAudioFrame(encodedFrame, signal);
-      return;
-    }
-
-    // Test and compatibility process implementations may expose only the
-    // existing synchronous writer. The signal is still honored at the boundary;
-    // the real SidecarProcess always provides drain-aware writing.
-    this.process.write(encodedFrame);
-    signal.throwIfAborted();
+    await this.process.writeAudioFrame(encodedFrame, signal);
   }
 
   sendContextResponse(correlationId: string, context: ContextWindow | null): void {
@@ -422,26 +450,46 @@ export class SidecarConnection {
     description: string,
     timeoutMs: number,
     rejectOnError?: (event: ErrorEvent) => boolean,
+    control?: CommandControl,
   ): Promise<TEvent> {
     await this.ensureStarted();
+    control?.abortSignal?.throwIfAborted();
 
     return new Promise<TEvent>((resolve, reject) => {
-      const waiter = this.createPendingWaiter(
+      let waiter: PendingEventWaiter | null = null;
+      const onAbort = (): void => {
+        if (waiter === null) return;
+        window.clearTimeout(waiter.timeoutHandle);
+        this.pendingWaiters.delete(waiter);
+        const reason: unknown = control?.abortSignal?.reason;
+        reject(reason instanceof Error ? reason : new Error('Sidecar command aborted.'));
+      };
+      const removeAbortListener = (): void => {
+        control?.abortSignal?.removeEventListener('abort', onAbort);
+      };
+      waiter = this.createPendingWaiter(
         matches,
         description,
         timeoutMs,
         (event) => {
+          removeAbortListener();
           resolve(event as TEvent);
         },
-        reject,
+        (error) => {
+          removeAbortListener();
+          reject(error);
+        },
         rejectOnError,
       );
+      control?.abortSignal?.addEventListener('abort', onAbort, { once: true });
 
       try {
         this.process.write(encodeJsonFrame(command));
+        control?.onCommandIssued?.();
       } catch (error) {
         window.clearTimeout(waiter.timeoutHandle);
         this.pendingWaiters.delete(waiter);
+        removeAbortListener();
         reject(asError(error, `Failed to write sidecar command: ${command.type}`));
       }
     });

@@ -5,7 +5,7 @@ export const hr = {
   'commands.transcribeAudioFile': 'Transkribiraj lokalnu audio-datoteku',
   'commands.cancelAudioFile': 'Otkaži transkripciju lokalne audio-datoteke',
   'audio-file-model-required':
-    'Odaberite i provjerite lokalni model govora u tekstu u Upravljanju modelima pa pokušajte ponovno.',
+    'Odaberite i provjerite lokalni model pretvarbe govora u tekst u Upravljanju modelima pa pokušajte ponovno.',
   'audio-file-model-changed':
     'Model transkripcije promijenjen je dok je otvoren odabir datoteke. Ponovno pokrenite Transkribiraj lokalnu audio-datoteku.',
   'audio-file-model-not-batch':
@@ -16,6 +16,8 @@ export const hr = {
     'Otvorite Markdown bilješku koja treba primiti transkript u načinu uređivanja pa pokušajte ponovno.',
   'audio-file-target-changed':
     'Odredište se promijenilo tijekom pripreme. Vratite se na izvornu bilješku i ponovno pokrenite naredbu.',
+  'audio-file-desktop-only':
+    'Transkripcija audio-datoteka dostupna je u Obsidian aplikaciji za računalo. Otvorite ovaj trezor na računalu za nastavak.',
   'audio-file-busy':
     'Diktiranje ili druga transkripcija audio-datoteke je aktivna. Završite ili otkažite tu radnju pa pokušajte ponovno.',
   'audio-file-maintenance':
@@ -37,7 +39,7 @@ export const hr = {
   'audio-file-start-failed':
     'Lokalni govorni motor nije mogao pokrenuti transkripciju. Provjerite odabrani model pa pokušajte ponovno.',
   'audio-file-sidecar-missing':
-    'Instalirajte lokalni govorni motor, odaberite model govora u tekst pa pokušajte ponovno.',
+    'Instalirajte lokalni govorni motor, odaberite model pretvarbe govora u tekst pa pokušajte ponovno.',
   'audio-file-sidecar-failed':
     'Transkripcija se zaustavila jer lokalni govorni motor nije uspio. Provjerite model pa pokušajte ponovno.',
   'audio-file-queue-overload':

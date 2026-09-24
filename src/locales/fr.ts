@@ -16,6 +16,8 @@ export const fr = {
     'Ouvrez en mode édition la note Markdown qui doit recevoir la transcription, puis réessayez.',
   'audio-file-target-changed':
     "La cible a changé pendant la préparation. Revenez à la note d'origine et relancez la commande.",
+  'audio-file-desktop-only':
+    "La transcription de fichiers audio est disponible dans l'application de bureau Obsidian. Ouvrez ce coffre sur un ordinateur pour continuer.",
   'audio-file-busy':
     "Une dictée ou une autre transcription de fichier est déjà active. Terminez-la ou annulez-la d'abord.",
   'audio-file-maintenance':

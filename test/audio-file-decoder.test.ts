@@ -137,6 +137,40 @@ describe('WebAudioAudioFileDecoder', () => {
     expect(context.close).not.toHaveBeenCalled();
   });
 
+  it('mixes stereo generated WAV channels before real resampling and frame output', async () => {
+    const left = new Float32Array(1_920);
+    const right = new Float32Array(1_920);
+    left.fill(0.2);
+    right.fill(0.4);
+    const bytes = createGeneratedWavBytes({
+      channelCount: 2,
+      sampleRate: 48_000,
+      samples: [left, right],
+    });
+    const file = new File([bytes], 'stereo.wav', { type: 'audio/wav' });
+    const { decoder } = decoderWithContext(new GeneratedWavAudioContext());
+    const decoded = await decoder.decode(file);
+    const frames: Uint8Array[] = [];
+
+    await pumpDecodedAudioFrames(decoded, {
+      signal: new AbortController().signal,
+      waitForBackpressure: async () => {},
+      writeFrame: async (frame) => {
+        frames.push(frame);
+      },
+    });
+
+    expect(decoded.numberOfChannels).toBe(2);
+    expect(frames).toHaveLength(2);
+    const firstBytes = frames[0];
+    if (firstBytes === undefined) throw new Error('Expected a stereo resampled frame.');
+    const firstFrame = new Int16Array(
+      firstBytes.buffer.slice(firstBytes.byteOffset, firstBytes.byteOffset + firstBytes.byteLength),
+    );
+    expect(firstFrame[0]).toBeGreaterThan(9_800);
+    expect(firstFrame[0]).toBeLessThan(9_850);
+  });
+
   it('rejects oversized encoded input before reading or creating an AudioContext', async () => {
     const stream = vi.fn();
     const file = {

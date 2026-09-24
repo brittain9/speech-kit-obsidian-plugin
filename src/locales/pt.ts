@@ -16,6 +16,8 @@ export const pt = {
     'Abra em modo de edição a nota Markdown que deve receber a transcrição e tente novamente.',
   'audio-file-target-changed':
     'O destino mudou durante a preparação. Volte à nota original e execute novamente o comando.',
+  'audio-file-desktop-only':
+    'A transcrição de ficheiros de áudio está disponível na aplicação de ambiente de trabalho do Obsidian. Abra este cofre num computador para continuar.',
   'audio-file-busy':
     'O ditado ou outra transcrição de ficheiro de áudio já está ativo. Conclua ou cancele essa operação e tente novamente.',
   'audio-file-maintenance':

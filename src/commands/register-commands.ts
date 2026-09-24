@@ -1,4 +1,4 @@
-import type { Editor, Plugin } from 'obsidian';
+import { type Editor, Platform, type Plugin } from 'obsidian';
 import { t } from '../shared/i18n';
 
 const START_DICTATION_COMMAND_ID = 'start-dictation-session';
@@ -91,8 +91,10 @@ export function registerCommands(dependencies: CommandDependencies): void {
   dependencies.plugin.addCommand({
     id: 'transcribe-local-audio-file',
     name: t('commands.transcribeAudioFile'),
-    callback: async () => {
-      await dependencies.transcribeAudioFile();
+    checkCallback: (checking) => {
+      if (!Platform.isDesktopApp) return false;
+      if (!checking) void dependencies.transcribeAudioFile();
+      return true;
     },
   });
 

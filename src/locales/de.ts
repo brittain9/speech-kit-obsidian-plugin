@@ -16,6 +16,8 @@ export const de = {
     'Öffnen Sie die Markdown-Notiz, die das Transkript erhalten soll, im Bearbeitungsmodus und versuchen Sie es erneut.',
   'audio-file-target-changed':
     'Das Transkriptziel wurde während der Vorbereitung geändert. Öffnen Sie die ursprüngliche Notiz und starten Sie den Befehl erneut.',
+  'audio-file-desktop-only':
+    'Die Transkription von Audiodateien ist in der Obsidian-Desktop-App verfügbar. Öffnen Sie diesen Tresor auf dem Desktop, um fortzufahren.',
   'audio-file-busy':
     'Mikrofondiktat oder eine andere Audiodateitranskription ist bereits aktiv. Beenden oder abbrechen Sie sie zuerst.',
   'audio-file-maintenance':
@@ -29,7 +31,7 @@ export const de = {
   'audio-file-duration':
     'Die Audiodatei ist länger als das Sicherheitslimit von 30 Minuten. Teilen Sie sie in kürzere Dateien auf.',
   'audio-file-model-duration':
-    'Die Audiodatei ist länger als das ausgewählte Modell verarbeiten kann. Teilen Sie sie auf oder wählen Sie ein Modell mit höherem Zeitlimit.',
+    'Die Audiodatei ist länger, als das ausgewählte Modell verarbeiten kann. Teilen Sie sie auf oder wählen Sie ein Modell mit höherem Zeitlimit.',
   'audio-file-decoded-memory':
     'Die Dekodierung würde zu viel Speicher benötigen. Wählen Sie eine kürzere Datei mit geringerer Bitrate oder weniger Kanälen.',
   'audio-file-empty':

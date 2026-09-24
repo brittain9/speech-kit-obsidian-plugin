@@ -16,6 +16,8 @@ export const es = {
     'Abra en modo de edición la nota Markdown que debe recibir la transcripción y vuelva a intentarlo.',
   'audio-file-target-changed':
     'El destino cambió al preparar el audio. Vuelva a la nota original y ejecute de nuevo Transcribir archivo de audio local.',
+  'audio-file-desktop-only':
+    'La transcripción de archivos de audio está disponible en la aplicación de escritorio de Obsidian. Ábrelo en un equipo de escritorio para continuar.',
   'audio-file-busy':
     'Ya hay dictado o una transcripción de archivo activa. Termine o cancele esa operación antes de continuar.',
   'audio-file-maintenance':

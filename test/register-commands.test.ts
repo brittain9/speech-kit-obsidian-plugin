@@ -1,4 +1,4 @@
-import type { Command, Editor, Plugin } from 'obsidian';
+import { type Command, type Editor, Platform, type Plugin } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
 
 import { registerCommands } from '../src/commands/register-commands';
@@ -185,8 +185,13 @@ describe('registerCommands', () => {
 
     const command = commands.find(({ id }) => id === 'transcribe-local-audio-file');
     expect(command?.name).toBe('Transcribe local audio file');
-    await command?.callback?.();
+    command?.checkCallback?.(false);
     expect(transcribeAudioFile).toHaveBeenCalledOnce();
+
+    const originalDesktop = Platform.isDesktopApp;
+    Platform.isDesktopApp = false;
+    expect(command?.checkCallback?.(true)).toBe(false);
+    Platform.isDesktopApp = originalDesktop;
   });
 
   it('registers cancellation only while local audio-file transcription is active', async () => {

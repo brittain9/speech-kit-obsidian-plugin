@@ -16,6 +16,8 @@ export const nl = {
     'Open de Markdown-notitie die het transcript moet ontvangen in bewerkingsmodus en probeer het opnieuw.',
   'audio-file-target-changed':
     'Het doel is gewijzigd tijdens de voorbereiding. Keer terug naar de oorspronkelijke notitie en voer de opdracht opnieuw uit.',
+  'audio-file-desktop-only':
+    'Transcriptie van audiobestanden is beschikbaar in de Obsidian-desktopapp. Open deze kluis op een computer om verder te gaan.',
   'audio-file-busy':
     'Dicteren of een andere audiobestandtranscriptie is al actief. Voltooi of annuleer die bewerking eerst.',
   'audio-file-maintenance':

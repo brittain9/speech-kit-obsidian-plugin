@@ -5,7 +5,7 @@ export const it = {
   'commands.transcribeAudioFile': 'Trascrivi file audio locale',
   'commands.cancelAudioFile': 'Annulla trascrizione del file audio locale',
   'audio-file-model-required':
-    'Seleziona e convalida un modello locale voce-to-text in Gestisci modelli, quindi riprova.',
+    'Seleziona e convalida un modello locale di riconoscimento vocale in Gestisci modelli, quindi riprova.',
   'audio-file-model-changed':
     'Il modello di trascrizione è cambiato mentre il selettore file era aperto. Riavvia Trascrivi file audio locale.',
   'audio-file-model-not-batch':
@@ -16,6 +16,8 @@ export const it = {
     'Apri in modalità modifica la nota Markdown che deve ricevere la trascrizione, quindi riprova.',
   'audio-file-target-changed':
     'La destinazione è cambiata durante la preparazione. Torna alla nota originale e riavvia il comando.',
+  'audio-file-desktop-only':
+    'La trascrizione dei file audio è disponibile nell’app desktop di Obsidian. Apri questo vault su un computer per continuare.',
   'audio-file-busy':
     'La dettatura o un’altra trascrizione di file audio è già attiva. Completala o annullala, quindi riprova.',
   'audio-file-maintenance':
@@ -37,7 +39,7 @@ export const it = {
   'audio-file-start-failed':
     'Il motore vocale locale non ha avviato la trascrizione. Controlla il modello selezionato e riprova.',
   'audio-file-sidecar-missing':
-    'Installa il motore vocale locale, seleziona un modello voce-to-text e riprova.',
+    'Installa il motore vocale locale, seleziona un modello di riconoscimento vocale e riprova.',
   'audio-file-sidecar-failed':
     'La trascrizione si è interrotta perché il motore locale non ha funzionato. Controlla il modello e riprova.',
   'audio-file-queue-overload':

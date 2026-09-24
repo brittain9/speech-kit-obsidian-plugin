@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { PassThrough } from 'node:stream';
+import { PassThrough, Writable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('node:child_process', () => ({
@@ -17,12 +17,29 @@ const mockedSpawn = spawn as unknown as ReturnType<typeof vi.fn>;
 // (exitCode/signalCode/killed/kill/'spawn'/'exit') that the fix under test
 // depends on.
 class FakeChild extends EventEmitter {
-  readonly stdin = new PassThrough();
+  readonly stdin: Writable;
   readonly stdout = new PassThrough();
   readonly stderr = new PassThrough();
+  public pendingWrite: ((error?: Error | null) => void) | null = null;
   exitCode: number | null = null;
   signalCode: NodeJS.Signals | null = null;
   killed = false;
+  constructor() {
+    super();
+    this.stdin = new Writable({
+      highWaterMark: 16,
+      write: (_chunk, _encoding, callback) => {
+        this.pendingWrite = callback;
+      },
+    });
+  }
+
+  completePendingWrite(error?: Error | null): void {
+    const callback = this.pendingWrite;
+    this.pendingWrite = null;
+    callback?.(error);
+  }
+
   kill = vi.fn((_signal?: NodeJS.Signals | number): boolean => {
     this.killed = true;
     return true;
@@ -72,6 +89,72 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe('SidecarProcess bounded audio writes', () => {
+  it('resolves immediately when the Node writable accepts a frame', async () => {
+    const process = new SidecarProcess(
+      async () => ({ command: '/tmp/fake-sidecar' }),
+      createHandlers(),
+    );
+    const child = await startChild(process);
+
+    await expect(
+      process.writeAudioFrame(new Uint8Array(1), new AbortController().signal),
+    ).resolves.toBeUndefined();
+    expect(child.pendingWrite).not.toBeNull();
+    child.completePendingWrite();
+  });
+
+  it('waits for drain after a false write return and cleans up its listeners', async () => {
+    const process = new SidecarProcess(
+      async () => ({ command: '/tmp/fake-sidecar' }),
+      createHandlers(),
+    );
+    const child = await startChild(process);
+    const abortController = new AbortController();
+    const writing = process.writeAudioFrame(new Uint8Array(661), abortController.signal);
+    const assertion = expect(writing).resolves.toBeUndefined();
+
+    expect(child.stdin.writableNeedDrain).toBe(true);
+    child.completePendingWrite();
+    await assertion;
+    expect(child.stdin.listenerCount('drain')).toBe(0);
+    expect(abortController.signal.aborted).toBe(false);
+  });
+
+  it('rejects a false write on abort and removes drain/error listeners', async () => {
+    const process = new SidecarProcess(
+      async () => ({ command: '/tmp/fake-sidecar' }),
+      createHandlers(),
+    );
+    const child = await startChild(process);
+    const abortController = new AbortController();
+    const writing = process.writeAudioFrame(new Uint8Array(661), abortController.signal);
+    const assertion = expect(writing).rejects.toBeDefined();
+
+    abortController.abort();
+    await assertion;
+    expect(child.stdin.listenerCount('drain')).toBe(0);
+    expect(child.stdin.listenerCount('error')).toBe(1);
+    child.completePendingWrite();
+  });
+
+  it('rejects a false write on stream error and removes the one-shot listener', async () => {
+    const process = new SidecarProcess(
+      async () => ({ command: '/tmp/fake-sidecar' }),
+      createHandlers(),
+    );
+    const child = await startChild(process);
+    const writing = process.writeAudioFrame(new Uint8Array(661), new AbortController().signal);
+    const assertion = expect(writing).rejects.toThrow('stdin failed');
+
+    child.stdin.emit('error', new Error('stdin failed'));
+    await assertion;
+    expect(child.stdin.listenerCount('drain')).toBe(0);
+    expect(child.stdin.listenerCount('error')).toBe(1);
+    child.completePendingWrite();
+  });
 });
 
 describe('SidecarProcess stale-exit race (issue #194)', () => {

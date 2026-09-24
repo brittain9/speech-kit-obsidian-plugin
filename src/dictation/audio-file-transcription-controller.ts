@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+
+import { Platform } from 'obsidian';
+
 import {
   AudioFileBackpressureGate,
   AudioFileBackpressureTimeoutError,
@@ -8,7 +11,6 @@ import {
   assertDecodedAudioWithinBudget,
   createAudioFileCancellationError,
   type DecodedAudioFile,
-  isAudioFileCancellation,
   pumpDecodedAudioFrames,
 } from '../audio/audio-file-decoder';
 import type { NotePlacementOptions, SurfaceDesynchronization } from '../editor/note-surface';
@@ -18,21 +20,34 @@ import {
   type SelectedModelCapabilities,
   selectedModelEquals,
 } from '../models/model-management-types';
-import type { SessionAcceptResult } from '../session/session';
-import type { TranscriptRevision } from '../session/session-journal';
 import type { PluginSettings } from '../settings/plugin-settings';
-import { t } from '../shared/i18n';
 import type { PluginLogger } from '../shared/plugin-logger';
-import type { FeedbackRequest, UserFeedback } from '../shared/user-feedback';
-import type { ContextRequestEvent, SidecarEvent, TranscriptReadyEvent } from '../sidecar/protocol';
-import { type SidecarConnection, SidecarError } from '../sidecar/sidecar-connection';
+import type { UserFeedback } from '../shared/user-feedback';
+import type { ContextRequestEvent, SidecarEvent } from '../sidecar/protocol';
+import type {
+  CancelSessionResult,
+  SidecarConnection,
+  StartSessionControlOptions,
+} from '../sidecar/sidecar-connection';
 import {
   SidecarLifecycleConflictError,
   type SidecarLifecycleGate,
   type SidecarLifecycleLease,
 } from '../sidecar/sidecar-lifecycle-gate';
-import { SidecarNotInstalledError } from '../sidecar/sidecar-paths';
-import { buildTranscriptSpans, type TranscriptRenderOptions } from '../transcript/renderer';
+import type { TranscriptRenderOptions } from '../transcript/renderer';
+import {
+  AudioFileFailureMapper,
+  AudioFileWorkflowError,
+  type FileWorkflowTranslationKey,
+} from './audio-file-failure';
+import {
+  type AudioFileSessionPhase,
+  ManagedAudioFileSession,
+} from './audio-file-session-lifecycle';
+import {
+  type AudioFileEditorSession,
+  AudioFileTranscriptAdapter,
+} from './audio-file-transcript-adapter';
 
 export type AudioFileTranscriptionState =
   | 'idle'
@@ -42,51 +57,8 @@ export type AudioFileTranscriptionState =
   | 'draining'
   | 'error';
 
-type FileWorkflowTranslationKey =
-  | 'audio-file-busy'
-  | 'audio-file-decoded-memory'
-  | 'audio-file-decode-failed'
-  | 'audio-file-duration'
-  | 'audio-file-empty'
-  | 'audio-file-encoded-size'
-  | 'audio-file-language-unsupported'
-  | 'audio-file-maintenance'
-  | 'audio-file-model-changed'
-  | 'audio-file-model-duration'
-  | 'audio-file-model-not-batch'
-  | 'audio-file-model-required'
-  | 'audio-file-queue-overload'
-  | 'audio-file-read-failed'
-  | 'audio-file-sidecar-failed'
-  | 'audio-file-sidecar-missing'
-  | 'audio-file-start-failed'
-  | 'audio-file-target-changed'
-  | 'audio-file-target-closed'
-  | 'audio-file-target-deleted'
-  | 'audio-file-target-required'
-  | 'audio-file-transcript-write-failed'
-  | 'audio-file-surface-changed';
-
-class AudioFileWorkflowError extends Error {
-  constructor(
-    readonly translationKey: FileWorkflowTranslationKey,
-    readonly parameters: Record<string, string> = {},
-    options?: { cause?: unknown },
-  ) {
-    super(translationKey, options);
-    this.name = 'AudioFileWorkflowError';
-  }
-}
-
 interface AudioFileDecoder {
   decode(file: File, signal: AbortSignal): Promise<DecodedAudioFile>;
-}
-
-interface AudioFileSession {
-  readonly acceptTranscript: (revision: TranscriptRevision) => SessionAcceptResult;
-  readonly clearSessionProcessingMark: () => void;
-  readonly dispose: () => void;
-  readonly readNoteGlossary: (maxChars: number) => { text: string; truncated: boolean } | null;
 }
 
 interface CreateAudioFileSessionOptions {
@@ -117,27 +89,14 @@ interface PendingAudioFileStart {
   readonly speechLease: SidecarLifecycleLease;
 }
 
-interface ManagedAudioFileSession {
-  readonly abortController: AbortController;
-  readonly backpressure: AudioFileBackpressureGate;
-  readonly completion: Promise<void>;
-  readonly completionResolve: () => void;
-  readonly pendingTranscriptWork: Set<Promise<void>>;
-  readonly session: AudioFileSession;
+interface QuarantinedAudioFileSession {
+  readonly lease: SidecarLifecycleLease;
   readonly sessionId: string;
-  readonly speechLease: SidecarLifecycleLease;
-  readonly timestamps: TranscriptRenderOptions['timestamps'];
-  readonly useNoteAsContext: boolean;
-  cancellationStarted: boolean;
-  feedbackClaimed: boolean;
-  phase: 'starting' | 'streaming' | 'stopping' | 'cancelling' | 'stopped';
-  stopRequested: boolean;
-  stopTimeoutHandle: number | null;
 }
 
 export interface AudioFileTranscriptionControllerDependencies {
   readonly backpressureTimeoutMs: number;
-  readonly createSession: (options: CreateAudioFileSessionOptions) => AudioFileSession;
+  readonly createSession: (options: CreateAudioFileSessionOptions) => AudioFileEditorSession;
   readonly decoder: AudioFileDecoder;
   readonly feedback: Pick<UserFeedback, 'show'>;
   readonly getModelCapabilities: () => SelectedModelCapabilities;
@@ -157,7 +116,7 @@ export interface AudioFileTranscriptionControllerDependencies {
     | 'requestStopSession'
     | 'sendAudioFrameWithBackpressure'
     | 'sendContextResponse'
-    | 'startSession'
+    | 'startSessionWithControl'
     | 'subscribe'
   >;
   readonly sidecarLifecycleGate: SidecarLifecycleGate;
@@ -166,12 +125,24 @@ export interface AudioFileTranscriptionControllerDependencies {
 
 export class AudioFileTranscriptionController {
   private activeSession: ManagedAudioFileSession | null = null;
+  private readonly failureMapper: AudioFileFailureMapper;
   private pendingStart: PendingAudioFileStart | null = null;
+  private readonly quarantinedSessions = new Map<string, QuarantinedAudioFileSession>();
   private readonly releaseSidecarSubscription: () => void;
   private state: AudioFileTranscriptionState = 'idle';
 
   constructor(private readonly dependencies: AudioFileTranscriptionControllerDependencies) {
-    this.releaseSidecarSubscription = this.dependencies.sidecarConnection.subscribe((event) => {
+    this.failureMapper = new AudioFileFailureMapper({
+      feedback: dependencies.feedback,
+      ...(dependencies.logger !== undefined ? { logger: dependencies.logger } : {}),
+      ...(dependencies.onModelMissing !== undefined
+        ? { onModelMissing: dependencies.onModelMissing }
+        : {}),
+      ...(dependencies.onSidecarMissing !== undefined
+        ? { onSidecarMissing: dependencies.onSidecarMissing }
+        : {}),
+    });
+    this.releaseSidecarSubscription = dependencies.sidecarConnection.subscribe((event) => {
       void this.handleSidecarEvent(event);
     });
   }
@@ -189,17 +160,24 @@ export class AudioFileTranscriptionController {
   }
 
   async transcribe(): Promise<void> {
+    // Keep this guard before the busy check: mobile callers must not mutate a
+    // running desktop workflow or open a native-only picker accidentally.
+    if (!Platform.isDesktopApp) {
+      this.failureMapper.reportTranslation('audio-file-desktop-only', new Error('Mobile runtime'));
+      return;
+    }
     if (this.isBusy()) {
-      this.showWorkflowError(new AudioFileWorkflowError('audio-file-busy'));
+      this.failureMapper.reportTranslation('audio-file-busy', new Error('Audio file is busy'));
       return;
     }
 
     this.applyState('selecting');
-    let speechLease: SidecarLifecycleLease | null = null;
-    let releaseStartOperation: (() => void) | null = null;
-    let pending: PendingAudioFileStart | null = null;
     const abortController = new AbortController();
     let decodedAudio: DecodedAudioFile | null = null;
+    let pending: PendingAudioFileStart | null = null;
+    let speechLease: SidecarLifecycleLease | null = null;
+    let releaseStartOperation: (() => void) | null = null;
+    let managed: ManagedAudioFileSession | null = null;
 
     try {
       const target = this.dependencies.getTarget();
@@ -214,24 +192,15 @@ export class AudioFileTranscriptionController {
       try {
         speechLease = this.dependencies.sidecarLifecycleGate.acquireSpeech();
       } catch (error) {
-        if (!(error instanceof SidecarLifecycleConflictError)) {
-          throw error;
-        }
-        this.showWorkflowError(
-          new AudioFileWorkflowError('audio-file-maintenance', {}, { cause: error }),
-        );
-        return;
+        if (!(error instanceof SidecarLifecycleConflictError)) throw error;
+        throw new AudioFileWorkflowError('audio-file-maintenance', {}, { cause: error });
       }
-
       releaseStartOperation = speechLease.retain();
       pending = { abortController, speechLease };
       this.pendingStart = pending;
-      this.throwIfCancelled(abortController.signal);
 
       const file = await this.dependencies.pickAudioFile(abortController.signal);
-      if (file === null) {
-        return;
-      }
+      if (file === null) return;
       this.throwIfCancelled(abortController.signal);
 
       this.revalidateSelection(target, initialConfiguration.modelSelection, abortController.signal);
@@ -249,7 +218,6 @@ export class AudioFileTranscriptionController {
           maxModelDurationMs: configuration.maxModelDurationMs,
         });
       } catch (error) {
-        // The budget assertion owns and clears rejected decoded channels.
         decodedAudio = null;
         throw error;
       }
@@ -257,13 +225,9 @@ export class AudioFileTranscriptionController {
 
       const sessionId = randomUUID();
       const sessionStartUnixMs = Date.now();
-      const rendererOptions = createRendererOptions(
-        this.dependencies.getSettings(),
-        sessionStartUnixMs,
-      );
-      const timestamps = rendererOptions.timestamps;
       const settings = this.dependencies.getSettings();
-      let session: AudioFileSession;
+      const rendererOptions = createRendererOptions(settings, sessionStartUnixMs);
+      let session: AudioFileEditorSession;
       try {
         session = this.dependencies.createSession({
           callbacks: {
@@ -280,18 +244,24 @@ export class AudioFileTranscriptionController {
         throw new AudioFileWorkflowError('audio-file-target-required', {}, { cause: error });
       }
 
-      const managed = this.createManagedSession({
-        abortController,
+      const transcript = new AudioFileTranscriptAdapter(
         session,
-        sessionId,
-        speechLease,
-        timestamps,
-        useNoteAsContext: settings.useNoteAsContext,
-      });
+        rendererOptions.timestamps,
+        (error) => this.handleProjectionFailure(managed, error),
+      );
+      managed = ManagedAudioFileSession.create(
+        {
+          abortController,
+          backpressure: new AudioFileBackpressureGate(this.dependencies.backpressureTimeoutMs),
+          sessionId,
+          speechLease,
+          timestamps: rendererOptions.timestamps,
+          useNoteAsContext: settings.useNoteAsContext,
+        },
+        transcript,
+      );
       this.activeSession = managed;
-      if (this.pendingStart === pending) {
-        this.pendingStart = null;
-      }
+      if (this.pendingStart === pending) this.pendingStart = null;
 
       try {
         await this.dependencies.sidecarConnection.ensureStarted();
@@ -302,33 +272,18 @@ export class AudioFileTranscriptionController {
           throw new AudioFileWorkflowError('audio-file-model-changed');
         }
 
-        await this.dependencies.sidecarConnection.startSession({
-          accelerationPreference: finalConfiguration.accelerationPreference,
-          detailedTimestampsEnabled: false,
-          diarizationEnabled: finalConfiguration.diarizationEnabled,
-          diarizationMaxSpeakers: finalConfiguration.diarizationMaxSpeakers,
-          includeSystemAudio: false,
-          language: finalConfiguration.language,
-          mode: 'always_on',
-          modelSelection: finalConfiguration.modelSelection,
-          sessionId,
-          sessionStartUnixMs,
-          speakingStyle: finalConfiguration.speakingStyle,
-          ...(finalConfiguration.modelStorePathOverride.length > 0
-            ? { modelStorePathOverride: finalConfiguration.modelStorePathOverride }
-            : {}),
-        });
+        await this.startManagedSession(managed, finalConfiguration, sessionStartUnixMs);
         this.throwIfCancelled(abortController.signal);
-        if (managed.phase === 'stopped') {
-          await managed.completion;
+        if (managed.isTerminal()) {
+          await managed.getCompletion();
           return;
         }
-        if (managed.phase === 'starting') {
-          managed.phase = 'streaming';
+        if (!managed.markStreaming()) {
+          await managed.getCompletion();
+          return;
         }
         this.applyState('transcribing');
 
-        let frameCount = 0;
         const sourceAudio = decodedAudio;
         if (sourceAudio === null) {
           throw new AudioFileError(
@@ -337,12 +292,15 @@ export class AudioFileTranscriptionController {
           );
         }
         decodedAudio = null;
+        let frameCount = 0;
         await pumpDecodedAudioFrames(sourceAudio, {
           signal: abortController.signal,
-          waitForBackpressure: (signal) => managed.backpressure.waitUntilNormal(signal),
+          waitForBackpressure: (signal) =>
+            managed?.backpressure.waitUntilNormal(signal) ?? Promise.resolve(),
           writeFrame: async (frame, signal) => {
+            if (managed === null) throw createAudioFileCancellationError();
             await this.dependencies.sidecarConnection.sendAudioFrameWithBackpressure(
-              sessionId,
+              managed.sessionId,
               frame,
               signal,
             );
@@ -352,27 +310,27 @@ export class AudioFileTranscriptionController {
         if (frameCount === 0) {
           throw new AudioFileError(
             'empty',
-            'The decoded audio is shorter than one complete transcription frame.',
+            'The decoded audio is shorter than one complete frame.',
           );
         }
 
         this.requestGracefulStop(managed);
         this.applyState('draining');
-        await managed.completion;
+        await managed.getCompletion();
       } catch (error) {
-        await this.handleRunFailure(managed, error);
+        await this.handleManagedFailure(managed, error);
       }
     } catch (error) {
-      this.handleStartFailure(error);
+      if (managed === null && !this.failureMapper.isCancellation(error)) {
+        this.failureMapper.reportStartFailure(error);
+      }
     } finally {
       decodedAudio?.dispose();
-      if (this.pendingStart === pending && pending !== null) {
-        this.pendingStart = null;
-      }
-      speechLease?.release();
+      if (this.pendingStart === pending && pending !== null) this.pendingStart = null;
+      if (managed === null) speechLease?.release();
       releaseStartOperation?.();
       if (this.activeSession === null && this.pendingStart === null) {
-        this.applyState(this.state === 'error' ? 'error' : 'idle');
+        this.applyState('idle');
       }
     }
   }
@@ -384,13 +342,10 @@ export class AudioFileTranscriptionController {
       pending.speechLease.release();
       return;
     }
-
     const active = this.activeSession;
-    if (active === null) {
-      return;
-    }
+    if (active === null) return;
     active.abortController.abort(createAudioFileCancellationError());
-    await this.cancelActiveSession(active);
+    await this.cancelManagedSession(active);
   }
 
   async dispose(): Promise<void> {
@@ -400,13 +355,40 @@ export class AudioFileTranscriptionController {
       pending.speechLease.release();
     }
     const active = this.activeSession;
-    if (active !== null) {
-      await this.cancelActiveSession(active);
-    }
+    if (active !== null) await this.cancelManagedSession(active);
     this.releaseSidecarSubscription();
-    if (this.activeSession === null) {
-      this.applyState('idle');
-    }
+    if (this.activeSession === null) this.applyState('idle');
+  }
+
+  private async startManagedSession(
+    managed: ManagedAudioFileSession,
+    configuration: AudioFileModelConfiguration,
+    sessionStartUnixMs: number,
+  ): Promise<void> {
+    const options: StartSessionControlOptions = {
+      abortSignal: managed.abortController.signal,
+      onCommandIssued: () => managed.markStartIssued(),
+    };
+    await this.dependencies.sidecarConnection.startSessionWithControl(
+      {
+        accelerationPreference: configuration.accelerationPreference,
+        detailedTimestampsEnabled: false,
+        diarizationEnabled: configuration.diarizationEnabled,
+        diarizationMaxSpeakers: configuration.diarizationMaxSpeakers,
+        includeSystemAudio: false,
+        language: configuration.language,
+        mode: 'always_on',
+        modelSelection: configuration.modelSelection,
+        sessionId: managed.sessionId,
+        sessionStartUnixMs,
+        speakingStyle: configuration.speakingStyle,
+        ...(configuration.modelStorePathOverride.length > 0
+          ? { modelStorePathOverride: configuration.modelStorePathOverride }
+          : {}),
+      },
+      options,
+    );
+    managed.markStartAcknowledged();
   }
 
   private resolveModelConfiguration(): AudioFileModelConfiguration {
@@ -437,7 +419,6 @@ export class AudioFileTranscriptionController {
         language: dictationLanguageLabel(settings.dictationLanguage),
       });
     }
-
     return {
       accelerationPreference: settings.accelerationPreference,
       diarizationEnabled: settings.diarizationEnabled,
@@ -477,112 +458,193 @@ export class AudioFileTranscriptionController {
     ) {
       throw new AudioFileWorkflowError('audio-file-model-changed');
     }
-    const currentConfiguration = this.resolveModelConfiguration();
-    if (!selectedModelEquals(initialSelection, currentConfiguration.modelSelection)) {
-      throw new AudioFileWorkflowError('audio-file-model-changed');
+    this.resolveModelConfiguration();
+  }
+
+  private async handleManagedFailure(
+    managed: ManagedAudioFileSession,
+    error: unknown,
+  ): Promise<void> {
+    if (managed.isTerminal()) {
+      await managed.getCompletion();
+      return;
+    }
+    if (this.failureMapper.isCancellation(error)) {
+      await this.cancelManagedSession(managed);
+      return;
+    }
+    if (
+      this.failureMapper.isQueueAbort(error) ||
+      error instanceof AudioFileBackpressureTimeoutError
+    ) {
+      this.failureMapper.reportTranslation('audio-file-queue-overload', error, managed);
+      managed.abortController.abort(
+        new AudioFileError('queue_overload', 'Source backpressure aborted.'),
+      );
+      await this.cancelManagedSession(managed);
+      return;
+    }
+
+    this.failureMapper.reportManagedFailure(error, managed);
+    await this.cancelManagedSession(managed);
+  }
+
+  private handleProjectionFailure(managed: ManagedAudioFileSession | null, error: unknown): void {
+    if (managed === null || managed.isTerminal()) return;
+    this.failureMapper.reportTranslation('audio-file-transcript-write-failed', error, managed);
+    managed.abortController.abort(createAudioFileCancellationError());
+    void this.cancelManagedSession(managed);
+  }
+
+  private requestGracefulStop(managed: ManagedAudioFileSession): void {
+    if (!managed.requestStop()) return;
+    try {
+      this.dependencies.sidecarConnection.requestStopSession(managed.sessionId);
+    } catch (error) {
+      this.dependencies.logger?.warn('session', 'failed to request audio-file stop', error);
+      void this.cancelManagedSession(managed);
+      return;
+    }
+    managed.setStopTimeout(
+      window.setTimeout(() => {
+        void this.cancelManagedSession(managed);
+      }, this.dependencies.sessionStopTimeoutMs),
+    );
+  }
+
+  private async cancelManagedSession(managed: ManagedAudioFileSession): Promise<void> {
+    if (managed.isTerminal()) {
+      await managed.getCompletion();
+      return;
+    }
+    if (!managed.isStartIssued()) {
+      managed.abortController.abort(createAudioFileCancellationError());
+      await this.finishManagedSession(managed, 'cancelled-before-start', false);
+      return;
+    }
+
+    managed.requestCancel();
+    managed.abortController.abort(createAudioFileCancellationError());
+    try {
+      const result = await this.dependencies.sidecarConnection.cancelSession(managed.sessionId);
+      if (isSuccessfulCancellationResult(result)) {
+        await this.finishManagedSession(managed, 'cancelled', false);
+      } else {
+        await this.quarantineManagedSession(managed, new Error('Unexpected cancellation result'));
+      }
+    } catch (error) {
+      if (this.failureMapper.isNoActiveSession(error)) {
+        await this.finishManagedSession(managed, 'no-active-session', false);
+        return;
+      }
+      await this.quarantineManagedSession(managed, error);
     }
   }
 
-  private createManagedSession(options: {
-    abortController: AbortController;
-    session: AudioFileSession;
-    sessionId: string;
-    speechLease: SidecarLifecycleLease;
-    timestamps: TranscriptRenderOptions['timestamps'];
-    useNoteAsContext: boolean;
-  }): ManagedAudioFileSession {
-    let completionResolve = (): void => {};
-    const completion = new Promise<void>((resolve) => {
-      completionResolve = resolve;
-    });
-    return {
-      abortController: options.abortController,
-      backpressure: new AudioFileBackpressureGate(this.dependencies.backpressureTimeoutMs),
-      completion,
-      completionResolve,
-      pendingTranscriptWork: new Set(),
-      phase: 'starting',
-      session: options.session,
-      sessionId: options.sessionId,
-      speechLease: options.speechLease,
-      stopRequested: false,
-      stopTimeoutHandle: null,
-      timestamps: options.timestamps,
-      useNoteAsContext: options.useNoteAsContext,
-      cancellationStarted: false,
-      feedbackClaimed: false,
-    };
+  private async quarantineManagedSession(
+    managed: ManagedAudioFileSession,
+    error: unknown,
+  ): Promise<void> {
+    this.dependencies.logger?.warn(
+      'session',
+      'audio-file cancellation was not acknowledged',
+      error,
+    );
+    if (managed.isTerminal()) {
+      await managed.getCompletion();
+      return;
+    }
+    const lease = managed.transferLeaseToQuarantine();
+    this.quarantinedSessions.set(managed.sessionId, { lease, sessionId: managed.sessionId });
+    await this.finishManagedSession(managed, 'quarantined', true);
+  }
+
+  private async finishManagedSession(
+    managed: ManagedAudioFileSession,
+    reason: AudioFileSessionPhase | 'cancelled' | 'cancelled-before-start' | 'no-active-session',
+    quarantined: boolean,
+  ): Promise<void> {
+    if (managed.isTerminal()) {
+      await managed.getCompletion();
+      return;
+    }
+    if (quarantined) {
+      managed.markQuarantined();
+    } else {
+      managed.markStopped();
+    }
+    if (this.activeSession === managed) this.activeSession = null;
+    await managed.transcript.drainPendingProjections();
+    try {
+      managed.transcript.disposeSession();
+    } catch (error) {
+      this.dependencies.logger?.warn(
+        'session',
+        `failed to dispose audio-file session (${reason})`,
+        error,
+      );
+    }
+    this.applyState('idle');
+    managed.complete();
   }
 
   private async handleSidecarEvent(event: SidecarEvent): Promise<void> {
-    const entry = this.activeSession;
-    if (entry === null) {
-      if (event.type === 'error' && event.code === 'sidecar_exited') {
-        this.reportFeedback('audio-file-sidecar-failed', event);
+    if (event.type === 'error' && event.code === 'sidecar_exited') {
+      this.releaseAllQuarantinedLeases();
+      const active = this.activeSession;
+      if (active !== null) {
+        active.abortController.abort(createAudioFileCancellationError());
+        await this.finishManagedSession(active, 'cancelled', false);
       }
       return;
     }
-    if ('sessionId' in event && event.sessionId !== entry.sessionId) {
+
+    const active = this.activeSession;
+    if (active === null) {
+      if (event.type === 'session_stopped') this.releaseQuarantinedLease(event.sessionId);
       return;
     }
+    if ('sessionId' in event && event.sessionId !== active.sessionId) return;
 
     switch (event.type) {
       case 'transcription_queue_changed':
-        entry.backpressure.update(event.tier);
+        active.backpressure.update(event.tier);
         return;
       case 'transcript_ready':
-        this.handleTranscriptReady(entry, event);
+        if (active.canAcceptSidecarWork()) active.transcript.handleTranscript(event);
         return;
       case 'context_request':
-        this.handleContextRequest(entry, event);
+        if (active.canAcceptSidecarWork()) this.handleContextRequest(active, event);
         return;
       case 'session_stopped':
-        await this.finalizeStoppedSession(entry, event.reason);
+        active.abortController.abort(createAudioFileCancellationError());
+        await this.finishManagedSession(active, 'cancelled', false);
+        return;
+      case 'warning':
+        if (event.code === 'no_active_session') {
+          active.abortController.abort(createAudioFileCancellationError());
+          await this.finishManagedSession(active, 'no-active-session', false);
+        }
         return;
       case 'error':
-        await this.handleSidecarError(entry, event);
+        if (event.code === 'utterance_queue_overload') {
+          this.failureMapper.reportTranslation('audio-file-queue-overload', event, active);
+          active.abortController.abort(new AudioFileError('queue_overload', 'Queue overload.'));
+          void this.cancelManagedSession(active);
+          return;
+        }
+        this.failureMapper.reportTranslation('audio-file-sidecar-failed', event, active);
+        active.abortController.abort(new AudioFileError('sidecar_failed', 'Sidecar failed.'));
+        void this.cancelManagedSession(active);
         return;
       default:
         return;
     }
   }
 
-  private handleTranscriptReady(entry: ManagedAudioFileSession, event: TranscriptReadyEvent): void {
-    if (entry.phase === 'cancelling' || entry.phase === 'stopped') {
-      return;
-    }
-    const work = this.acceptTranscript(entry, event);
-    entry.pendingTranscriptWork.add(work);
-    const removeWork = (): void => {
-      entry.pendingTranscriptWork.delete(work);
-    };
-    void work.then(removeWork, removeWork);
-  }
-
-  private async acceptTranscript(
-    entry: ManagedAudioFileSession,
-    event: TranscriptReadyEvent,
-  ): Promise<void> {
-    let result: SessionAcceptResult;
-    try {
-      const revision = toTranscriptRevision(event, entry.timestamps);
-      result = entry.session.acceptTranscript(revision);
-    } catch (error) {
-      if (entry.phase !== 'cancelling' && entry.phase !== 'stopped') {
-        this.reportFeedback('audio-file-transcript-write-failed', error, entry);
-        await this.cancelActiveSession(entry);
-      }
-      return;
-    }
-    if (result.kind === 'rejected' && entry.phase !== 'cancelling' && entry.phase !== 'stopped') {
-      this.reportFeedback('audio-file-transcript-write-failed', new Error(result.reason), entry);
-      await this.cancelActiveSession(entry);
-    }
-  }
-
-  private handleContextRequest(entry: ManagedAudioFileSession, event: ContextRequestEvent): void {
-    const glossary = entry.useNoteAsContext
-      ? entry.session.readNoteGlossary(event.budgetChars)
+  private handleContextRequest(managed: ManagedAudioFileSession, event: ContextRequestEvent): void {
+    const glossary = managed.useNoteAsContext
+      ? managed.transcript.readNoteGlossary(event.budgetChars)
       : null;
     try {
       this.dependencies.sidecarConnection.sendContextResponse(
@@ -599,233 +661,34 @@ export class AudioFileTranscriptionController {
             },
       );
     } catch (error) {
-      this.dependencies.logger?.warn(
-        'session',
-        'failed to send audio-file context response',
-        error,
-      );
+      this.dependencies.logger?.warn('session', 'failed to send audio-file context', error);
     }
-  }
-
-  private async handleSidecarError(
-    entry: ManagedAudioFileSession,
-    event: Extract<SidecarEvent, { type: 'error' }>,
-  ): Promise<void> {
-    if (event.code === 'utterance_queue_overload') {
-      this.reportFeedback('audio-file-queue-overload', event, entry);
-      entry.abortController.abort(
-        new AudioFileError('queue_overload', 'The sidecar queue overloaded.'),
-      );
-      entry.phase = 'stopping';
-      this.requestGracefulStop(entry);
-      return;
-    }
-
-    this.reportFeedback(
-      event.code === 'session_capacity_exceeded'
-        ? 'audio-file-start-failed'
-        : 'audio-file-sidecar-failed',
-      event,
-      entry,
-    );
-    entry.abortController.abort(
-      new AudioFileError('sidecar_failed', 'The sidecar failed during audio-file transcription.'),
-    );
-    await this.cancelActiveSession(entry);
-  }
-
-  private async handleRunFailure(entry: ManagedAudioFileSession, error: unknown): Promise<void> {
-    if (entry.phase === 'stopped') {
-      await entry.completion;
-      return;
-    }
-    if (entry.phase === 'stopping' && isQueueAbort(error)) {
-      this.requestGracefulStop(entry);
-      await entry.completion;
-      return;
-    }
-    if (isAudioFileCancellation(error) || entry.phase === 'cancelling') {
-      await this.cancelActiveSession(entry);
-      return;
-    }
-    if (error instanceof AudioFileBackpressureTimeoutError || isQueueAbort(error)) {
-      this.reportFeedback('audio-file-queue-overload', error, entry);
-      entry.abortController.abort(
-        new AudioFileError('queue_overload', 'The source exceeded the backpressure deadline.'),
-      );
-      entry.phase = 'stopping';
-      this.requestGracefulStop(entry);
-      await entry.completion;
-      return;
-    }
-
-    this.reportWorkflowError(error, entry);
-    await this.cancelActiveSession(entry);
-  }
-
-  private handleStartFailure(error: unknown): void {
-    if (this.activeSession !== null || isAudioFileCancellation(error)) {
-      return;
-    }
-    if (error instanceof SidecarNotInstalledError) {
-      this.reportFeedback('audio-file-sidecar-missing', error);
-      return;
-    }
-    this.reportWorkflowError(error);
-  }
-
-  private reportWorkflowError(error: unknown, entry?: ManagedAudioFileSession): void {
-    const translationKey = resolveWorkflowTranslationKey(error);
-    this.reportFeedback(translationKey, error, entry);
-  }
-
-  private reportFeedback(
-    translationKey: FileWorkflowTranslationKey,
-    cause: unknown,
-    entry?: ManagedAudioFileSession,
-  ): void {
-    if (entry !== undefined) {
-      if (entry.feedbackClaimed) {
-        return;
-      }
-      entry.feedbackClaimed = true;
-    }
-    this.dependencies.feedback.show({
-      cause,
-      intent: resolveFeedbackIntent(translationKey),
-      key: translationKey,
-      message: t(translationKey, translationParameters(translationKey, cause)),
-    });
-    if (translationKey === 'audio-file-sidecar-missing') {
-      this.dependencies.onSidecarMissing?.();
-    }
-    if (translationKey === 'audio-file-model-required') {
-      this.dependencies.onModelMissing?.();
-    }
-  }
-
-  private showWorkflowError(error: AudioFileWorkflowError): void {
-    this.reportWorkflowError(error);
-  }
-
-  private requestGracefulStop(entry: ManagedAudioFileSession): void {
-    if (entry.stopRequested || entry.phase === 'stopped' || entry.phase === 'cancelling') {
-      return;
-    }
-    entry.stopRequested = true;
-    try {
-      this.dependencies.sidecarConnection.requestStopSession(entry.sessionId);
-    } catch (error) {
-      this.dependencies.logger?.warn(
-        'session',
-        'failed to request graceful audio-file session stop',
-        error,
-      );
-      void this.cancelActiveSession(entry);
-      return;
-    }
-    entry.stopTimeoutHandle = window.setTimeout(() => {
-      void this.handleStopTimeout(entry);
-    }, this.dependencies.sessionStopTimeoutMs);
-  }
-
-  private async handleStopTimeout(entry: ManagedAudioFileSession): Promise<void> {
-    if (this.activeSession !== entry || entry.phase === 'stopped' || entry.cancellationStarted) {
-      return;
-    }
-    this.dependencies.logger?.warn(
-      'session',
-      'audio-file session stop timed out; cancelling local session',
-    );
-    await this.cancelActiveSession(entry);
-  }
-
-  private async cancelActiveSession(entry: ManagedAudioFileSession): Promise<void> {
-    if (entry.phase === 'stopped') {
-      await entry.completion;
-      return;
-    }
-    if (!entry.cancellationStarted) {
-      entry.cancellationStarted = true;
-      entry.phase = 'cancelling';
-      entry.abortController.abort(createAudioFileCancellationError());
-      try {
-        await this.dependencies.sidecarConnection.cancelSession(entry.sessionId);
-      } catch (error) {
-        this.dependencies.logger?.warn(
-          'session',
-          'failed to cancel audio-file session cleanly',
-          error,
-        );
-        await this.finalizeStoppedSession(entry, 'user_cancel');
-      }
-    }
-    await entry.completion;
-  }
-
-  private async finalizeStoppedSession(
-    entry: ManagedAudioFileSession,
-    reason: Extract<SidecarEvent, { type: 'session_stopped' }>['reason'],
-  ): Promise<void> {
-    if (entry.phase === 'stopped') {
-      return;
-    }
-    if (reason === 'queue_overload') {
-      this.reportFeedback('audio-file-queue-overload', new Error(reason), entry);
-      entry.abortController.abort(
-        new AudioFileError('queue_overload', 'The sidecar queue overloaded.'),
-      );
-    } else if ((reason === 'session_error' || reason === 'timeout') && !entry.feedbackClaimed) {
-      this.reportFeedback('audio-file-sidecar-failed', new Error(reason), entry);
-    }
-    entry.phase = 'stopped';
-    if (entry.stopTimeoutHandle !== null) {
-      window.clearTimeout(entry.stopTimeoutHandle);
-      entry.stopTimeoutHandle = null;
-    }
-    entry.speechLease.release();
-    if (this.activeSession === entry) {
-      this.activeSession = null;
-    }
-    while (entry.pendingTranscriptWork.size > 0) {
-      await Promise.allSettled([...entry.pendingTranscriptWork]);
-    }
-    try {
-      entry.session.clearSessionProcessingMark();
-    } catch (error) {
-      this.dependencies.logger?.warn(
-        'session',
-        'failed to clear audio-file processing state',
-        error,
-      );
-    }
-    try {
-      entry.session.dispose();
-    } catch (error) {
-      this.dependencies.logger?.warn(
-        'session',
-        'failed to dispose audio-file editor session',
-        error,
-      );
-    }
-    this.applyState('idle');
-    entry.completionResolve();
   }
 
   private failTarget(
-    translationKey:
-      | 'audio-file-surface-changed'
-      | 'audio-file-target-closed'
-      | 'audio-file-target-deleted',
+    translationKey: Extract<
+      FileWorkflowTranslationKey,
+      'audio-file-surface-changed' | 'audio-file-target-closed' | 'audio-file-target-deleted'
+    >,
     sessionId: string,
   ): void {
-    const entry = this.activeSession;
-    if (entry === null || entry.sessionId !== sessionId) {
-      return;
-    }
-    this.reportFeedback(translationKey, new Error(translationKey), entry);
-    entry.abortController.abort(createAudioFileCancellationError());
-    void this.cancelActiveSession(entry);
+    const managed = this.activeSession;
+    if (managed === null || managed.sessionId !== sessionId || managed.isTerminal()) return;
+    this.failureMapper.reportTranslation(translationKey, new Error(translationKey), managed);
+    managed.abortController.abort(createAudioFileCancellationError());
+    void this.cancelManagedSession(managed);
+  }
+
+  private releaseQuarantinedLease(sessionId: string): void {
+    const quarantined = this.quarantinedSessions.get(sessionId);
+    if (quarantined === undefined) return;
+    this.quarantinedSessions.delete(sessionId);
+    quarantined.lease.release();
+  }
+
+  private releaseAllQuarantinedLeases(): void {
+    for (const quarantined of this.quarantinedSessions.values()) quarantined.lease.release();
+    this.quarantinedSessions.clear();
   }
 
   private throwIfCancelled(signal: AbortSignal): void {
@@ -860,107 +723,9 @@ function createRendererOptions(
   };
 }
 
-function toTranscriptRevision(
-  event: TranscriptReadyEvent,
-  timestamps: TranscriptRenderOptions['timestamps'],
-): TranscriptRevision {
-  const text = event.text.trim();
-  return {
-    isFinal: event.isFinal,
-    llmPostprocessRawText: null,
-    pauseMsBeforeUtterance: event.pauseMsBeforeUtterance,
-    revision: event.revision,
-    segments: event.segments,
-    sessionId: event.sessionId,
-    speakerIndex: event.speakerIndex,
-    spans: buildTranscriptSpans(event.segments, text, event.speakerIndex, {
-      timestamps,
-      utteranceStartMsInSession: event.utteranceStartMsInSession,
-    }),
-    stageResults: event.stageResults,
-    text,
-    utteranceEndMsInSession: event.utteranceEndMsInSession,
-    utteranceId: event.utteranceId,
-    utteranceIndex: event.utteranceIndex,
-    utteranceStartMsInSession: event.utteranceStartMsInSession,
-  };
+function isSuccessfulCancellationResult(result: CancelSessionResult): boolean {
+  return (
+    result.type === 'session_stopped' ||
+    (result.type === 'warning' && result.code === 'no_active_session')
+  );
 }
-
-function resolveWorkflowTranslationKey(error: unknown): FileWorkflowTranslationKey {
-  if (error instanceof AudioFileWorkflowError) {
-    return error.translationKey;
-  }
-  if (error instanceof SidecarError) {
-    return error.code === 'session_capacity_exceeded'
-      ? 'audio-file-start-failed'
-      : 'audio-file-sidecar-failed';
-  }
-  if (error instanceof AudioFileError) {
-    switch (error.code) {
-      case 'cancelled':
-        return 'audio-file-busy';
-      case 'decoded_memory':
-        return 'audio-file-decoded-memory';
-      case 'decode_failed':
-      case 'invalid_decode':
-        return 'audio-file-decode-failed';
-      case 'duration':
-        return 'audio-file-duration';
-      case 'encoded_size':
-        return 'audio-file-encoded-size';
-      case 'empty':
-        return 'audio-file-empty';
-      case 'model_duration':
-        return 'audio-file-model-duration';
-      case 'queue_overload':
-        return 'audio-file-queue-overload';
-      case 'read_failed':
-        return 'audio-file-read-failed';
-      case 'sidecar_failed':
-        return 'audio-file-sidecar-failed';
-    }
-  }
-  if (error instanceof AudioFileBackpressureTimeoutError) {
-    return 'audio-file-queue-overload';
-  }
-  return 'audio-file-start-failed';
-}
-
-function resolveFeedbackIntent(
-  translationKey: FileWorkflowTranslationKey,
-): FeedbackRequest['intent'] {
-  if (
-    translationKey === 'audio-file-maintenance' ||
-    translationKey === 'audio-file-queue-overload'
-  ) {
-    return 'warning';
-  }
-  if (
-    translationKey === 'audio-file-language-unsupported' ||
-    translationKey === 'audio-file-model-changed' ||
-    translationKey === 'audio-file-model-not-batch' ||
-    translationKey === 'audio-file-model-required'
-  ) {
-    return 'action-required';
-  }
-  return 'error';
-}
-
-function translationParameters(
-  translationKey: FileWorkflowTranslationKey,
-  error: unknown,
-): Record<string, string> {
-  if (
-    translationKey === 'audio-file-language-unsupported' &&
-    error instanceof AudioFileWorkflowError
-  ) {
-    return error.parameters;
-  }
-  return {};
-}
-
-function isQueueAbort(error: unknown): boolean {
-  return error instanceof AudioFileError && error.code === 'queue_overload';
-}
-
-export type { AudioFileSession, CreateAudioFileSessionOptions };
