@@ -679,13 +679,15 @@ export class ManageModelsModal extends Modal {
               .onClick(() => {
                 void this.runAction(
                   async () => {
-                    await this.deps.manager.select({
+                    const result = await this.deps.manager.select({
                       familyId: row.model.familyId,
                       kind: 'catalog_model',
                       modelId: row.model.modelId,
                       runtimeId: row.model.runtimeId,
                     });
+                    if (!result.committed) return false;
                     this.close();
+                    return true;
                   },
                   {
                     failureMessage: t('models.manage.selectFailed'),
@@ -996,7 +998,7 @@ export class ManageModelsModal extends Modal {
   // -------------------------------------------------------------------------
 
   private async runAction(
-    action: () => Promise<void>,
+    action: () => Promise<unknown>,
     messages: { failureMessage?: string; successMessage?: string } = {},
   ): Promise<void> {
     if (this.actionInProgress) {
@@ -1007,7 +1009,8 @@ export class ManageModelsModal extends Modal {
     this.renderModelList();
 
     try {
-      await action();
+      const committed = await action();
+      if (committed === false) return;
       if (messages.successMessage !== undefined) {
         this.deps.feedback.show({ intent: 'success', message: messages.successMessage });
       }

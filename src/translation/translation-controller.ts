@@ -120,6 +120,7 @@ interface ActiveTranslation {
   configuration: TranslationConfiguration;
   editor: Editor;
   job: TranslationJob;
+  modelSelectionGeneration: number;
   release: () => void;
   snapshot: TranslationSnapshot;
 }
@@ -217,6 +218,7 @@ export class TranslationController {
       configuration: { model, sourceLanguage, styleInstruction, targetLanguage },
       editor,
       job,
+      modelSelectionGeneration: 0,
       release: () => {},
       snapshot,
     };
@@ -239,7 +241,7 @@ export class TranslationController {
       feedback: this.dependencies.feedback,
       job: active.job,
       configuration: active.configuration,
-      installedModelOptions: this.installedTranslationModels(),
+      modelManager: this.dependencies.modelManager,
       snapshot: active.snapshot,
       onApplied: () => this.clearActive(),
       onDismissed: () => this.clearActive(),
@@ -259,13 +261,23 @@ export class TranslationController {
         return this.persistTranslationLanguages(sourceLanguage, targetLanguage);
       },
       onModelChange: async (model, sourceLanguage, targetLanguage) => {
+        const generation = ++active.modelSelectionGeneration;
+        let committed = true;
         if (this.modelIsInstalled(model)) {
-          await this.dependencies.modelManager.select({
+          const result = await this.dependencies.modelManager.select({
             familyId: model.familyId,
             kind: 'catalog_model',
             modelId: model.modelId,
             runtimeId: model.runtimeId,
           });
+          committed = result.committed;
+        }
+        if (
+          this.active !== active ||
+          active.modelSelectionGeneration !== generation ||
+          !committed
+        ) {
+          return false;
         }
         active.configuration = {
           model,
@@ -273,6 +285,7 @@ export class TranslationController {
           styleInstruction: active.configuration.styleInstruction,
           targetLanguage,
         };
+        return true;
       },
       onCancelPackInstall: () => this.dependencies.modelManager.cancel(),
       onInstallPack: async (model, sourceLanguage, targetLanguage) => {
@@ -362,16 +375,6 @@ export class TranslationController {
       source,
       ...(active.snapshot.kind === 'note' ? { to: endPosition(source) } : {}),
     };
-  }
-  private installedTranslationModels(): CatalogModelRecord[] {
-    const state = this.dependencies.modelManager.getState();
-    return state.catalog.models.filter(
-      (model) =>
-        model.task === 'translation' &&
-        state.installedModels.some((installed) =>
-          matchesModelTriple(installed, model.runtimeId, model.familyId, model.modelId),
-        ),
-    );
   }
   private modelIsInstalled(model: CatalogModelRecord): boolean {
     return this.dependencies.modelManager
