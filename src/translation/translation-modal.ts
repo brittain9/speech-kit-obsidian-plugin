@@ -317,11 +317,18 @@ export class TranslationModal extends Modal {
           }
         });
     });
-    languagePair.createSpan({
-      attr: { 'aria-hidden': 'true' },
-      cls: 'local-stt-translation-modal__direction',
-      text: '→',
+    const swapLabel = t('translation.modal.swap');
+    const swapButton = languagePair.createEl('button', {
+      attr: {
+        'aria-label': swapLabel,
+        title: swapLabel,
+        type: 'button',
+      },
+      cls: 'clickable-icon local-stt-translation-modal__swap',
     });
+    swapButton.disabled = !this.canSwapLanguages(active);
+    setIcon(swapButton, 'arrow-left-right');
+    swapButton.addEventListener('click', () => this.swapLanguages());
     const target = languagePair.createDiv({
       cls: 'local-stt-translation-modal__language-control',
     });
@@ -341,6 +348,28 @@ export class TranslationModal extends Modal {
           }
         });
     });
+  }
+
+  private canSwapLanguages(active: boolean): boolean {
+    return (
+      !active &&
+      this.draftModelIsInstalled() &&
+      isSupportedTranslationPair(
+        this.draftTargetLanguage,
+        this.draftSourceLanguage,
+        this.draftModel,
+      )
+    );
+  }
+  private swapLanguages(): void {
+    const active =
+      this.installingPack || this.state.phase === 'loading' || this.state.phase === 'translating';
+    if (!this.canSwapLanguages(active)) return;
+    [this.draftSourceLanguage, this.draftTargetLanguage] = [
+      this.draftTargetLanguage,
+      this.draftSourceLanguage,
+    ];
+    this.acceptDraftConfiguration();
   }
 
   private acceptDraftConfiguration(): void {

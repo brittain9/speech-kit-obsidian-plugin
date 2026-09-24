@@ -8,7 +8,7 @@ import type { PluginSettings } from '../src/settings/plugin-settings';
 import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import type { SidecarEvent } from '../src/sidecar/protocol';
 import { TranslationController } from '../src/translation/translation-controller';
-import { Modal, Setting } from './__mocks__/obsidian';
+import { Modal, Setting, type TestElement } from './__mocks__/obsidian';
 
 describe('TranslationController', () => {
   afterEach(() => {
@@ -231,6 +231,75 @@ describe('TranslationController', () => {
 
     await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledTimes(2));
     expect(startTranslation.mock.calls[1]?.[0].texts).toEqual(['Updated version.']);
+  });
+
+  it('persists a swapped preview direction through the language-change path', async () => {
+    Modal.instances.length = 0;
+    Setting.reset();
+    const listeners: ((event: SidecarEvent) => void)[] = [];
+    let translationId = '';
+    const startTranslation = vi.fn(async (payload: { translationId: string }) => {
+      translationId = payload.translationId;
+    });
+    const model = translationModel('hy-mt-1.8b', 'HY-MT 2 1.8B');
+    const settings: PluginSettings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      selectedTranslationModel: selectionFor(model),
+    };
+    const saveSettings = vi.fn(async () => {});
+    const controller = new TranslationController({
+      app: {} as never,
+      canReadAloud: () => false,
+      feedback: { show: vi.fn() },
+      getSettings: () => settings,
+      logger: { error: vi.fn(), warn: vi.fn() } as never,
+      modelManager: {
+        getState: () => ({
+          catalog: { models: [model] },
+          installedModels: [installedRecord(model)],
+          selectedTranslationModel: settings.selectedTranslationModel,
+        }),
+      } as never,
+      onReadAloud: vi.fn(),
+      saveSettings,
+      sidecarConnection: {
+        cancelTranslation: vi.fn(),
+        startTranslation,
+        subscribe: (next: (event: SidecarEvent) => void) => {
+          listeners.push(next);
+          return () => {};
+        },
+      } as never,
+    });
+
+    controller.translateNote({
+      getValue: () => 'Translate this note.',
+      replaceRange: vi.fn(),
+    } as never);
+    await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledOnce());
+    listeners[0]?.({
+      type: 'translation_complete',
+      translationId,
+      translations: ['Traduzca esta nota.'],
+    });
+    await vi.waitFor(() => expect(Setting.buttonNamed('Replace')).toBeDefined());
+
+    const modal = Modal.instances.at(-1);
+    if (modal === undefined) throw new Error('Expected the translation preview modal.');
+    const swap = (modal.contentEl as unknown as TestElement).querySelector(
+      '.local-stt-translation-modal__swap',
+    );
+    swap?.dispatchEvent({ key: ' ', type: 'keydown' });
+
+    await vi.waitFor(() => {
+      expect(saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          translationSourceLanguage: 'es',
+          translationTargetLanguage: 'en',
+        }),
+      );
+    });
+    expect(startTranslation).toHaveBeenCalledOnce();
   });
 
   it('lists only installed translation models without a model-management action', async () => {

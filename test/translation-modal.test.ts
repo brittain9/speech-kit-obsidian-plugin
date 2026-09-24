@@ -388,6 +388,98 @@ describe('TranslationModal mutation safety', () => {
     expect(replaceRange).not.toHaveBeenCalled();
   });
 
+  it('swaps a supported installed model direction from the keyboard and marks the preview stale', async () => {
+    Setting.reset();
+    const model = createModalModel();
+    const runTranslation = vi.fn(async () => ({
+      kind: 'translated' as const,
+      sourceUnitsKept: 0,
+      text: 'Traduzca esto.',
+    }));
+    const onLanguageChange = vi.fn(async () => {});
+    const onRestart = vi.fn();
+    const modal = createModal({
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      installedModelOptions: [model],
+      onLanguageChange,
+      onRestart,
+      runTranslation,
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(Setting.buttonNamed('Replace').disabled).toBe(false));
+
+    const content = modal.contentEl as unknown as TestElement;
+    const swap = content.querySelector('.local-stt-translation-modal__swap');
+    expect(swap?.tagName).toBe('BUTTON');
+    expect(swap?.getAttribute('type')).toBe('button');
+    expect(swap?.getAttribute('aria-label')).toBe('Swap');
+    expect(swap?.getAttribute('title')).toBe('Swap');
+    expect(swap?.disabled).toBe(false);
+
+    swap?.dispatchEvent({ key: 'Enter', type: 'keydown' });
+    await vi.waitFor(() => expect(onLanguageChange).toHaveBeenCalledExactlyOnceWith('es', 'en'));
+
+    expect(content.querySelector('h2')?.textContent).toBe('Translate: Español → English');
+    expect((content.querySelector('textarea') as unknown as HTMLTextAreaElement).value).toBe(
+      'Traduzca esto.',
+    );
+    expect(
+      content.findByText(
+        'Translation setup changed. Select Translate again to update the preview.',
+      ),
+    ).toBeDefined();
+    expect(Setting.buttonNamed('Translate again')).toBeDefined();
+    const latestActions = Setting.instances
+      .filter((setting) => setting.buttonComponents.length > 0)
+      .at(-1);
+    expect(latestActions?.buttonComponents.some((button) => button.text === 'Replace')).toBe(false);
+    expect(runTranslation).toHaveBeenCalledOnce();
+    expect(onRestart).not.toHaveBeenCalled();
+  });
+
+  it('keeps swap disabled when the selected installed model does not support the reverse direction', async () => {
+    Setting.reset();
+    const model = createModalModel({
+      translationSupport: {
+        kind: 'pairs',
+        pairs: [{ source: 'en', target: 'es' }],
+      },
+    });
+    const onLanguageChange = vi.fn(async () => {});
+    const modal = createModal({
+      editor: {
+        getValue: () => SNAPSHOT.source,
+        replaceRange: vi.fn(),
+      },
+      installedModelOptions: [model],
+      jobModel: model,
+      onLanguageChange,
+      runTranslation: vi.fn(async () => ({
+        kind: 'translated' as const,
+        sourceUnitsKept: 0,
+        text: 'Traduzca esto.',
+      })),
+    });
+
+    modal.open();
+    await vi.waitFor(() => expect(Setting.buttonNamed('Replace').disabled).toBe(false));
+
+    const content = modal.contentEl as unknown as TestElement;
+    const swap = content.querySelector('.local-stt-translation-modal__swap');
+    expect(swap?.tagName).toBe('BUTTON');
+    expect(swap?.disabled).toBe(true);
+    await swap?.click();
+    swap?.dispatchEvent({ key: 'Enter', type: 'keydown' });
+
+    expect(onLanguageChange).not.toHaveBeenCalled();
+    expect(content.querySelector('h2')?.textContent).toBe('Translate: English → Español');
+    expect(Setting.buttonNamed('Replace').disabled).toBe(false);
+  });
+
   it('does not translate automatically when the language pair changes', async () => {
     Setting.reset();
     const runTranslation = vi.fn(async () => ({
@@ -717,7 +809,7 @@ function createModal({
   });
 }
 
-function createModalModel(): CatalogModelRecord {
+function createModalModel(overrides: Partial<CatalogModelRecord> = {}): CatalogModelRecord {
   return {
     artifacts: [],
     collectionId: 'translation',
@@ -736,5 +828,6 @@ function createModalModel(): CatalogModelRecord {
     task: 'translation',
     translationSupport: { kind: 'all_to_all', languages: ['en', 'es'] },
     uxTags: [],
+    ...overrides,
   };
 }
