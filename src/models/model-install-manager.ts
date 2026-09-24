@@ -705,6 +705,39 @@ export class ModelInstallManager {
     }
   }
 
+  private async detachAuthoritativeCapabilitySnapshot(
+    selection: SelectedModel,
+    task: CapabilityTask,
+    expectedSelectionGeneration: number,
+    canCommit: (settings: Readonly<PluginSettings>) => boolean,
+  ): Promise<void> {
+    const settings = this.deps.getSettings();
+    const current = task === 'tts' ? settings.selectedTtsModel : settings.selectedModel;
+    if (current === null || !selectedModelEquals(current, selection)) return;
+
+    if (this.selectionGenerations[task] === expectedSelectionGeneration) {
+      this.setCapabilities(task, { selection, status: 'pending' });
+      this.notify();
+    }
+    await this.deps.commitSettingsIf(
+      (currentSettings) => {
+        const currentSelection =
+          task === 'tts' ? currentSettings.selectedTtsModel : currentSettings.selectedModel;
+        return (
+          canCommit(currentSettings) &&
+          currentSelection !== null &&
+          selectedModelEquals(currentSelection, selection)
+        );
+      },
+      (currentSettings) => ({
+        ...currentSettings,
+        ...(task === 'tts'
+          ? { selectedTtsModelCapabilitiesSnapshot: null }
+          : { selectedModelCapabilitiesSnapshot: null }),
+      }),
+    );
+  }
+
   private async selectWithGuard(
     selection: SelectedModel,
     task: ModelTask,
@@ -713,6 +746,14 @@ export class ModelInstallManager {
     canCommit: (settings: Readonly<PluginSettings>) => boolean,
     canApplyCapabilities: (settings: Readonly<PluginSettings>) => boolean = canCommit,
   ): Promise<ModelProbeResultEvent> {
+    if (task !== 'translation') {
+      await this.detachAuthoritativeCapabilitySnapshot(
+        selection,
+        task,
+        expectedSelectionGeneration,
+        canCommit,
+      );
+    }
     const probeResult = await this.deps.sidecarConnection.probeModelSelection({
       modelSelection: selection,
       ...createModelStoreOverridePayload(this.deps.getSettings().modelStorePathOverride),
