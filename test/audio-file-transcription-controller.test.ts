@@ -5,7 +5,8 @@ import type { DecodedAudioFile } from '../src/audio/audio-file-decoder';
 import { AudioFileTranscriptionController } from '../src/dictation/audio-file-transcription-controller';
 import type { NotePlacementOptions, SurfaceDesynchronization } from '../src/editor/note-surface';
 import { LocalMediaSource } from '../src/media/local-media-source';
-import type { AcquisitionEvent, LocalMediaLease } from '../src/media/media-source';
+import { MEDIA_ACQUISITION_LIMITS } from '../src/media/media-policy';
+import type { AcquisitionEvent, MediaAcquireRequest, MediaLease } from '../src/media/media-source';
 import type {
   EngineCapabilitiesRecord,
   SelectedModel,
@@ -256,7 +257,7 @@ function createHarness(
   );
   const decoder = {
     decode: vi.fn(async (_file: File, _signal: AbortSignal) => createAudio()),
-    decodeMedia: vi.fn(async (_lease: LocalMediaLease, signal: AbortSignal) => {
+    decodeMedia: vi.fn(async (_lease: MediaLease, signal: AbortSignal) => {
       return await decoder.decode(
         createGeneratedWavFile('fixture.wav', {
           channelCount: 1,
@@ -271,7 +272,7 @@ function createHarness(
   let modelCapabilities = readyCapabilities();
   const configuredDecoder = { ...decoder, ...overrides.decoder } as typeof decoder;
   if (overrides.decoder?.decodeMedia === undefined) {
-    configuredDecoder.decodeMedia = vi.fn(async (_lease: LocalMediaLease, signal: AbortSignal) =>
+    configuredDecoder.decodeMedia = vi.fn(async (_lease: MediaLease, signal: AbortSignal) =>
       configuredDecoder.decode(
         createGeneratedWavFile('fixture.wav', {
           channelCount: 1,
@@ -1203,7 +1204,7 @@ describe('AudioFileTranscriptionController', () => {
 
   it('adapts the local source lease into the provider-neutral pipeline and releases it', async () => {
     const release = vi.fn(async () => {});
-    const lease: LocalMediaLease = {
+    const lease: MediaLease = {
       encodedBytes: 44,
       mediaId: 'media-test',
       openReadStream: vi.fn(async () => new ReadableStream<Uint8Array>()),
@@ -1212,13 +1213,14 @@ describe('AudioFileTranscriptionController', () => {
         adapterVersion: '1',
         rights: { kind: 'user_supplied_file' },
         sourceId: 'local_file',
-        sourceRef: { fileToken: 'opaque-token', kind: 'local_file' },
         temporaryMedia: true,
       },
       release,
     };
+    let acquisitionRequest: MediaAcquireRequest | null = null;
     const source = {
-      acquire: async function* (): AsyncIterable<AcquisitionEvent> {
+      acquire: async function* (request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent> {
+        acquisitionRequest = request;
         yield {
           plan: { displayName: 'Local audio file', sourceId: 'local_file' },
           type: 'plan',
@@ -1228,10 +1230,6 @@ describe('AudioFileTranscriptionController', () => {
       },
       adapterVersion: '1',
       id: 'local_file' as const,
-      inspect: async () => ({
-        plan: { displayName: 'Local audio file', sourceId: 'local_file' },
-        ref: { fileToken: 'opaque-token', kind: 'local_file' as const },
-      }),
     };
     const progress: string[] = [];
     const decoded = createAudio();
@@ -1261,6 +1259,10 @@ describe('AudioFileTranscriptionController', () => {
     });
     await transcribing;
 
+    expect(acquisitionRequest).toMatchObject({
+      kind: 'interactive',
+      ...MEDIA_ACQUISITION_LIMITS,
+    });
     expect(harness.pickAudioFile).not.toHaveBeenCalled();
     expect(decodeMedia).toHaveBeenCalledWith(lease, expect.any(AbortSignal));
     expect(release).toHaveBeenCalledOnce();

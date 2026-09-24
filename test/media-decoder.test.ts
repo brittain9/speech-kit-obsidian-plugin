@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { pumpDecodedAudioFrames, WebAudioAudioFileDecoder } from '../src/audio/audio-file-decoder';
-import type { LocalMediaLease } from '../src/media/media-source';
+import type { MediaLease } from '../src/media/media-source';
 import { createGeneratedWavBytes, decodeGeneratedPcm16Wav } from './fixtures/audio-file';
 
 class GeneratedWavAudioContext {
@@ -33,7 +33,7 @@ describe('media lease decoding', () => {
     const decoder = new WebAudioAudioFileDecoder({
       getAudioContext: () => AudioContextConstructor,
     });
-    const lease: LocalMediaLease = {
+    const lease: MediaLease = {
       encodedBytes: bytes.byteLength,
       mediaId: 'lease-1',
       openReadStream: async () => new Blob([bytes]).stream(),
@@ -42,7 +42,6 @@ describe('media lease decoding', () => {
         adapterVersion: '1',
         rights: { kind: 'user_supplied_file' },
         sourceId: 'local_file',
-        sourceRef: { fileToken: 'opaque', kind: 'local_file' },
         temporaryMedia: true,
       },
       release: vi.fn(async () => {}),

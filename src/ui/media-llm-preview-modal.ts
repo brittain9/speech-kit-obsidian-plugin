@@ -1,6 +1,7 @@
 import { type App, Modal } from 'obsidian';
 
 import type { MediaLlmPreview } from '../dictation/media-llm-processor';
+import { formatMediaLlmDisclosure } from '../llm/media-llm-policy';
 import { t } from '../shared/i18n';
 
 export function confirmMediaLlmPreview(
@@ -50,7 +51,7 @@ class MediaLlmPreviewModal extends Modal {
     if (this.preview.disclosure !== undefined) {
       contentEl.createEl('p', {
         cls: 'local-stt-media-llm-preview__disclosure',
-        text: this.preview.disclosure,
+        text: formatMediaLlmDisclosure(this.preview.disclosure),
       });
     }
     contentEl.createEl('pre', {

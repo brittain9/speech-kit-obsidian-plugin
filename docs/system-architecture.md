@@ -107,15 +107,16 @@ microphone capture. It is available only in the Obsidian desktop app and uses a
 renderer-local `File`; there is no URL fetch, upload, or remote fallback.
 
 The file picker is the first `MediaSource` adapter. It emits provider-neutral
-plan/progress/ready events and returns a short-lived `LocalMediaLease` with an
-opaque `ReadableStream` and typed provenance. Interactive acquisition opens the
-picker once; a public referenced acquisition is bound to the exact token
-returned by inspection and never reopens the picker. The lease is released
+plan/progress/ready events and returns a short-lived `MediaLease` implemented by
+`LocalMediaLease`, with an opaque pull-driven `ReadableStream` and typed
+provenance. Interactive acquisition opens the picker once and does not retain an
+abandoned `File` or expose a local token/reference API. The lease is released
 immediately after decode/VAD/ASR transcript projection and before optional
 post-completion AI work, with an idempotent cleanup promise covering success,
 failure, cancellation, and disposal. The ASR, renderer, and LLM layers never
 receive a provider URL, path, credential, subprocess, or remote response body.
-Local-file acquisition remains the only adapter in this release.
+Local-file acquisition remains the only adapter in this release; referenced
+provider sources arrive in the next stacked PR.
 
 The media controller owns the provider-neutral sequence: acquire → local decode
 → the existing VAD/batch-ASR `Session` → timestamps, diarization, and smart
@@ -138,8 +139,11 @@ actionable feedback. Disabling media processing or all LLM features aborts an
 in-flight provider request. A user edit latches the range and wins over pending
 AI output. Replacement is one undoable editor operation, raw recovery restores
 the pre-AI range, and additive outputs leave the raw range and citation boundary
-untouched. The setting defaults to off, so file behavior is unchanged unless
-the user opts in.
+untouched. Custom OpenAI-compatible chat uses a CORS-free Node HTTP(S) stream
+with bounded response reads, early Content-Length rejection, timeout, and
+AbortSignal propagation; model discovery retains the existing requestUrl probe.
+The setting defaults to off, so file behavior is unchanged unless the user opts
+in.
 
 1. The command captures the exact active/fallback Markdown target and validates
    a validated non-streaming speech-to-text model, configured dictation language,

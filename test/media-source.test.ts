@@ -10,7 +10,7 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
 
 function request(signal = new AbortController().signal) {
   return {
-    kind: 'interactive_local' as const,
+    kind: 'interactive' as const,
     maxBytes: Number.MAX_SAFE_INTEGER,
     maxDurationMs: Number.MAX_SAFE_INTEGER,
     signal,
@@ -26,9 +26,10 @@ function makeFile(name = 'private-name.wav') {
 }
 
 describe('LocalMediaSource', () => {
-  it('emits provider-neutral events and an idempotent local lease', async () => {
+  it('opens the picker once and returns a provider-neutral ready lease', async () => {
     const file = makeFile();
-    const source = new LocalMediaSource({ pickFile: vi.fn(async () => file) });
+    const pickFile = vi.fn(async () => file);
+    const source = new LocalMediaSource({ pickFile });
     const events = await collect(source.acquire(request()));
 
     expect(events.map((event) => event.type)).toEqual(['plan', 'progress', 'ready']);
@@ -42,6 +43,7 @@ describe('LocalMediaSource', () => {
     expect(serialized).not.toContain('private-name.wav');
     expect(serialized).not.toContain('file://');
     expect(serialized).not.toContain('/private/');
+    expect(pickFile).toHaveBeenCalledOnce();
 
     const firstRelease = ready.lease.release();
     expect(ready.lease.release()).toBe(firstRelease);
@@ -49,59 +51,35 @@ describe('LocalMediaSource', () => {
     await expect(ready.lease.openReadStream()).rejects.toMatchObject({ code: 'read_failed' });
   });
 
-  it('binds a referenced acquisition to the inspected token without reopening the picker', async () => {
-    const file = makeFile('token.wav');
-    const pickFile = vi.fn(async () => file);
-    const source = new LocalMediaSource({ pickFile });
-    const inspected = await source.inspect({
-      kind: 'interactive_local',
-      signal: new AbortController().signal,
-    });
-    expect(inspected).not.toBeNull();
-    if (inspected === null) return;
-
-    const events = await collect(
-      source.acquire({
-        kind: 'referenced',
-        maxBytes: Number.MAX_SAFE_INTEGER,
-        maxDurationMs: Number.MAX_SAFE_INTEGER,
-        ref: inspected.ref,
-        signal: new AbortController().signal,
-      }),
-    );
-    const ready = events[2];
-    if (ready?.type !== 'ready') throw new Error('Expected a ready lease.');
-    expect(ready.lease.provenance.sourceRef).toEqual(inspected.ref);
-    expect(pickFile).toHaveBeenCalledTimes(1);
-
-    await ready.lease.release();
-    await expect(
-      collect(
-        source.acquire({
-          kind: 'referenced',
-          maxBytes: Number.MAX_SAFE_INTEGER,
-          maxDurationMs: Number.MAX_SAFE_INTEGER,
-          ref: inspected.ref,
-          signal: new AbortController().signal,
+  it('uses a pull-driven stream and cancels the single source reader on release', async () => {
+    let pulls = 0;
+    let cancellations = 0;
+    const file = {
+      size: 4,
+      stream: () =>
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            pulls += 1;
+            controller.enqueue(new Uint8Array([1, 2]));
+          },
+          cancel() {
+            cancellations += 1;
+          },
         }),
-      ),
-    ).rejects.toMatchObject({ code: 'read_failed' });
-    expect(pickFile).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns a real stream and cancels an active reader when the lease is released', async () => {
-    const source = new LocalMediaSource({ pickFile: async () => makeFile() });
+    } as File;
+    const source = new LocalMediaSource({ pickFile: async () => file });
     const events = await collect(source.acquire(request()));
     const ready = events[2];
     if (ready?.type !== 'ready') throw new Error('Expected a ready lease.');
     const stream = await ready.lease.openReadStream();
     const reader = stream.getReader();
-    expect(stream.locked).toBe(true);
-    await reader.cancel('test cancellation');
-    expect(stream.locked).toBe(true);
-    reader.releaseLock();
-    expect(stream.locked).toBe(false);
-    await ready.lease.release();
+    expect(pulls).toBeLessThanOrEqual(1);
+    expect(await reader.read()).toMatchObject({ done: false, value: new Uint8Array([1, 2]) });
+    const release = ready.lease.release();
+    await release;
+    expect(cancellations).toBe(1);
+    await expect(reader.read()).rejects.toMatchObject({ code: 'read_failed' });
+    expect(ready.lease.release()).toBe(release);
   });
 
   it('does not emit a lease when the picker is cancelled or dismissed', async () => {

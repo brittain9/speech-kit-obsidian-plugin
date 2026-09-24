@@ -61,6 +61,28 @@ export const en = {
     'The media transcript changed while AI processing was pending, so the raw transcript was kept.',
   'media-llm-readiness':
     'Media AI is not ready ({issue}). Configure the selected provider, model, and credentials before enabling it.',
+  'llm.mediaDisclosure.none':
+    'No AI provider is selected. Configure a provider before enabling media AI.',
+  'llm.mediaDisclosure.local':
+    'Media AI processes {payload} with {provider} ({model}) on this device.',
+  'llm.mediaDisclosure.network':
+    'Media AI sends {payload} to {provider} ({model}) over the network.',
+  'llm.mediaDisclosure.unknown':
+    'Media AI provider {provider} ({model}) has unknown data egress for {payload}.',
+  'media-llm-readiness-provider_missing':
+    'Media AI has no selected provider. Choose a provider and try again.',
+  'media-llm-readiness-provider_unavailable':
+    'Media AI is unavailable because its provider or preview service is not configured.',
+  'media-llm-readiness-routing_invalid':
+    'Media AI routing is invalid. Choose a valid provider policy and try again.',
+  'media-llm-readiness-model_missing':
+    'Media AI has no model configured. Choose a model and try again.',
+  'media-llm-readiness-api_key_missing':
+    'Media AI has no API key configured. Add the provider key and try again.',
+  'media-llm-readiness-base_url_invalid':
+    'The custom media AI endpoint is not a valid HTTP or HTTPS URL. Correct it and try again.',
+  'llm.mediaPayload.transcriptOnly': 'transcript text only',
+  'llm.mediaPayload.transcriptAndBoundedNoteContext': 'transcript text and bounded note context',
   'media.progress.acquire': 'Preparing media…',
   'media.progress.decode': 'Decoding media…',
   'media.progress.transcribe': 'Transcribing media…',

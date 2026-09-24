@@ -17,11 +17,8 @@ import type { NotePlacementOptions, SurfaceDesynchronization } from '../editor/n
 import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-recovery';
 import { dictationLanguageLabel, languageSupportIncludes } from '../language/dictation-language';
 import type { LlmRouter } from '../llm/router';
-import type {
-  LocalMediaLease,
-  MediaSource,
-  MediaTranscriptionProgress,
-} from '../media/media-source';
+import { MEDIA_ACQUISITION_LIMITS } from '../media/media-policy';
+import type { MediaLease, MediaSource, MediaTranscriptionProgress } from '../media/media-source';
 import {
   type SelectedModel,
   type SelectedModelCapabilities,
@@ -68,7 +65,7 @@ export type AudioFileTranscriptionState =
 
 interface AudioFileDecoder {
   decode(file: File, signal: AbortSignal): Promise<DecodedAudioFile>;
-  decodeMedia?(lease: LocalMediaLease, signal: AbortSignal): Promise<DecodedAudioFile>;
+  decodeMedia?(lease: MediaLease, signal: AbortSignal): Promise<DecodedAudioFile>;
 }
 
 interface CreateAudioFileSessionOptions {
@@ -230,7 +227,7 @@ export class AudioFileTranscriptionController {
     this.applyState('selecting');
     const abortController = new AbortController();
     let decodedAudio: DecodedAudioFile | null = null;
-    let mediaLease: LocalMediaLease | null = null;
+    let mediaLease: MediaLease | null = null;
     let pending: PendingAudioFileStart | null = null;
     let speechLease: SidecarLifecycleLease | null = null;
     let releaseStartOperation: (() => void) | null = null;
@@ -464,12 +461,11 @@ export class AudioFileTranscriptionController {
     if (this.activeSession === null) this.applyState('idle');
   }
 
-  private async acquireMediaLease(signal: AbortSignal): Promise<LocalMediaLease | null> {
+  private async acquireMediaLease(signal: AbortSignal): Promise<MediaLease | null> {
     const source = this.dependencies.mediaSource;
     for await (const event of source.acquire({
-      kind: 'interactive_local',
-      maxBytes: Number.MAX_SAFE_INTEGER,
-      maxDurationMs: Number.MAX_SAFE_INTEGER,
+      ...MEDIA_ACQUISITION_LIMITS,
+      kind: 'interactive',
       signal,
     })) {
       if (event.type === 'ready') {
@@ -499,7 +495,7 @@ export class AudioFileTranscriptionController {
   }
 
   private async decodeMediaLease(
-    lease: LocalMediaLease,
+    lease: MediaLease,
     signal: AbortSignal,
   ): Promise<DecodedAudioFile> {
     if (this.dependencies.decoder.decodeMedia === undefined) {

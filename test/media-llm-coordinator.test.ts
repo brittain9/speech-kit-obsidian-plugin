@@ -51,8 +51,8 @@ describe('MediaLlmCoordinator', () => {
     expect(coordinator.preflight()).toBe(false);
     expect(feedback.show).toHaveBeenCalledWith(
       expect.objectContaining({
-        key: 'media-llm-readiness',
-        message: expect.stringContaining('api_key_missing'),
+        key: 'media-llm-readiness-api_key_missing',
+        message: expect.stringContaining('API key'),
       }),
     );
   });

@@ -1,11 +1,16 @@
-import type { LocalMediaLease, MediaReadStream } from '../media/media-source';
+import {
+  MEDIA_MAX_DECODED_BYTES,
+  MEDIA_MAX_DURATION_MS,
+  MEDIA_MAX_ENCODED_BYTES,
+} from '../media/media-policy';
+import type { MediaLease, MediaReadStream } from '../media/media-source';
 import { PCM_BYTES_PER_FRAME } from '../shared/pcm-format';
 import type { PluginLogger } from '../shared/plugin-logger';
 import { clearChannels, mixChannelsToMono, PcmFrameProcessor } from './pcm-frame-processor';
 
-export const AUDIO_FILE_MAX_ENCODED_BYTES = 64 * 1024 * 1024;
-export const AUDIO_FILE_MAX_DECODED_BYTES = 192 * 1024 * 1024;
-export const AUDIO_FILE_MAX_DURATION_MS = 30 * 60 * 1_000;
+export const AUDIO_FILE_MAX_ENCODED_BYTES = MEDIA_MAX_ENCODED_BYTES;
+export const AUDIO_FILE_MAX_DECODED_BYTES = MEDIA_MAX_DECODED_BYTES;
+export const AUDIO_FILE_MAX_DURATION_MS = MEDIA_MAX_DURATION_MS;
 const DECODE_CHANNEL_SLICE_SAMPLES = 16_384;
 
 export type AudioFileErrorCode =
@@ -74,7 +79,7 @@ export class WebAudioAudioFileDecoder {
   }
 
   async decodeMedia(
-    lease: LocalMediaLease,
+    lease: MediaLease,
     signal = new AbortController().signal,
   ): Promise<DecodedAudioFile> {
     throwIfCancelled(signal);
@@ -311,6 +316,11 @@ async function readMediaStream(
     throw new AudioFileError('read_failed', 'The media lease could not be read.', { cause: error });
   } finally {
     signal.removeEventListener('abort', abortReader);
+    try {
+      reader.releaseLock();
+    } catch {
+      // A pending read may still be settling after cancellation.
+    }
   }
 }
 

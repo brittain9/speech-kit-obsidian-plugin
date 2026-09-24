@@ -1,28 +1,31 @@
 import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-recovery';
+import type { MediaLlmDisclosure } from '../llm/media-llm-policy';
 import type { LlmPresetOutput } from '../llm/presets';
 import { ProviderError } from '../llm/provider';
 import type { LlmRouter, LlmRouterCleanupResult } from '../llm/router';
 import { resolveLlmOutputBehavior } from '../llm/transform-policy';
 import type { MediaLlmEditorSession } from './audio-file-transcript-adapter';
 
-export interface MediaLlmSnapshot {
-  readonly disclosure?: string;
-  readonly model?: string;
+export interface MediaLlmProcessingPolicy {
   readonly noteContextChars: number;
   readonly output: LlmPresetOutput;
   readonly prompt: string;
-  readonly providerId?: string;
   readonly showRawBelow: boolean;
   readonly temperature: number;
   readonly totalContextCap: number;
   readonly useNoteContext: boolean;
 }
 
-export interface MediaLlmPreview {
-  readonly disclosure?: string;
+export type MediaLlmSnapshot = MediaLlmProcessingPolicy;
+
+export interface MediaLlmPreviewMetadata {
+  readonly disclosure?: MediaLlmDisclosure;
   readonly model?: string;
-  readonly output: LlmPresetOutput;
   readonly providerId?: string;
+}
+
+export interface MediaLlmPreview extends MediaLlmPreviewMetadata {
+  readonly output: LlmPresetOutput;
   readonly text: string;
 }
 
@@ -43,6 +46,7 @@ export interface MediaLlmProcessorDependencies {
   readonly confirm: (preview: MediaLlmPreview, signal: AbortSignal) => Promise<boolean>;
   readonly isEnabled?: () => boolean;
   readonly onRawTranscriptRecoveryAvailable: (receipt: RawTranscriptRecoveryReceipt) => void;
+  readonly previewMetadata?: MediaLlmPreviewMetadata;
   readonly router: LlmRouter;
   readonly signal: AbortSignal;
   readonly snapshot: MediaLlmSnapshot;
@@ -110,16 +114,8 @@ export async function processMediaLlm(
 
     const confirmed = await dependencies.confirm(
       {
-        ...(dependencies.snapshot.disclosure === undefined
-          ? {}
-          : { disclosure: dependencies.snapshot.disclosure }),
-        ...(dependencies.snapshot.model === undefined
-          ? {}
-          : { model: dependencies.snapshot.model }),
+        ...dependencies.previewMetadata,
         output: dependencies.snapshot.output,
-        ...(dependencies.snapshot.providerId === undefined
-          ? {}
-          : { providerId: dependencies.snapshot.providerId }),
         text,
       },
       dependencies.signal,

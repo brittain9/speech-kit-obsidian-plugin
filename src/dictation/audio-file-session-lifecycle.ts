@@ -1,5 +1,5 @@
 import type { AudioFileBackpressureGate } from '../audio/audio-file-backpressure';
-import type { LocalMediaLease } from '../media/media-source';
+import type { MediaLease } from '../media/media-source';
 import type { SidecarLifecycleLease } from '../sidecar/sidecar-lifecycle-gate';
 import type { AudioFileTranscriptAdapter } from './audio-file-transcript-adapter';
 
@@ -36,7 +36,7 @@ export class ManagedAudioFileSession {
   private startCompletionResolve: () => void = () => {};
   private postCompletion: (() => Promise<void>) | null = null;
   private postCompletionStarted = false;
-  private mediaLease: LocalMediaLease | null = null;
+  private mediaLease: MediaLease | null = null;
   private mediaReleasePromise: Promise<void> | null = null;
 
   private constructor(
@@ -88,7 +88,7 @@ export class ManagedAudioFileSession {
     this.postCompletion = operation;
   }
 
-  setMediaLease(lease: LocalMediaLease): void {
+  setMediaLease(lease: MediaLease): void {
     this.mediaLease = lease;
   }
 

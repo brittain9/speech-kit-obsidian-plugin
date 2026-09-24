@@ -2,6 +2,7 @@ import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-reco
 import { resolveMediaLlmDisclosure } from '../llm/media-llm-policy';
 import { type LlmReadinessIssueCode, resolveLlmReadiness } from '../llm/readiness';
 import type { LlmRouter } from '../llm/router';
+import { llmSettingsFingerprint } from '../llm/settings-fingerprint';
 import { resolveLlmTransformSnapshot } from '../llm/transform-policy';
 import type { MediaTranscriptionProgress } from '../media/media-source';
 import type { PluginSettings } from '../settings/plugin-settings';
@@ -57,15 +58,17 @@ export class MediaLlmCoordinator {
       this.feedback('media-llm-empty');
       return;
     }
-    const disclosure = resolveMediaLlmDisclosure(settings, router, rawText.length);
     const transform = resolveLlmTransformSnapshot(settings);
+    const disclosure = resolveMediaLlmDisclosure(
+      settings,
+      router,
+      rawText.length,
+      transform.useNoteContext,
+    );
     const snapshot: MediaLlmSnapshot = {
-      disclosure: disclosure.text,
-      model: disclosure.model,
       noteContextChars: transform.noteContextChars,
       output: transform.output,
       prompt: transform.prompt,
-      providerId: disclosure.providerId,
       showRawBelow: transform.showRawBelow,
       temperature: transform.temperature,
       totalContextCap: transform.totalContextCap,
@@ -82,6 +85,11 @@ export class MediaLlmCoordinator {
         isEnabled: () => this.isCurrentConfiguration(settings),
         onRawTranscriptRecoveryAvailable: (receipt) =>
           this.dependencies.onRawTranscriptRecoveryAvailable?.(receipt),
+        previewMetadata: {
+          disclosure,
+          model: disclosure.model,
+          providerId: disclosure.providerId,
+        },
         router,
         signal: abortController.signal,
         snapshot,
@@ -125,7 +133,7 @@ export class MediaLlmCoordinator {
     return (
       current.mediaLlmProcessing &&
       current.llmFeaturesEnabled &&
-      mediaLlmSettingsKey(current) === mediaLlmSettingsKey(settings)
+      llmSettingsFingerprint(current) === llmSettingsFingerprint(settings)
     );
   }
 
@@ -152,29 +160,32 @@ export class MediaLlmCoordinator {
       | 'media-llm-readiness',
     issue?: MediaLlmReadinessFailureCode,
   ): void {
-    this.dependencies.feedback.show({
-      intent: key === 'media-llm-readiness' ? 'warning' : 'warning',
-      key,
-      message: t(key, issue === undefined ? {} : { issue }),
-    });
+    if (key === 'media-llm-readiness' && issue !== undefined) {
+      const messageKey = readinessMessageKeys[issue];
+      this.dependencies.feedback.show({
+        intent: 'warning',
+        key: messageKey,
+        message: t(messageKey),
+      });
+      return;
+    }
+    this.dependencies.feedback.show({ intent: 'warning', key, message: t(key) });
   }
 }
 
-function mediaLlmSettingsKey(settings: PluginSettings): string {
-  return JSON.stringify({
-    activePresetRef: settings.llmPostprocessActivePresetRef,
-    llmFeaturesEnabled: settings.llmFeaturesEnabled,
-    mediaLlmProcessing: settings.mediaLlmProcessing,
-    noteContextChars: settings.llmPostprocessNoteContextChars,
-    userPresets: settings.llmPostprocessUserPresets,
-    postprocessMode: settings.llmPostprocessMode,
-    priorUtterancesN: settings.llmPostprocessPriorUtterancesN,
-    providerConfigurations: settings.llmProviderConfigurations,
-    routingPolicy: settings.llmRoutingPolicy,
-    showRawBelow: settings.llmPostprocessShowRawBelow,
-    skipMinWords: settings.llmPostprocessSkipMinWords,
-    temperature: settings.llmPostprocessTemperature,
-    totalContextCap: settings.llmPostprocessTotalContextCap,
-    useLlmNoteContext: settings.useLlmNoteContext,
-  });
-}
+const readinessMessageKeys: Record<
+  MediaLlmReadinessFailureCode,
+  | 'media-llm-readiness-provider_missing'
+  | 'media-llm-readiness-provider_unavailable'
+  | 'media-llm-readiness-routing_invalid'
+  | 'media-llm-readiness-model_missing'
+  | 'media-llm-readiness-api_key_missing'
+  | 'media-llm-readiness-base_url_invalid'
+> = {
+  provider_missing: 'media-llm-readiness-provider_missing',
+  provider_unavailable: 'media-llm-readiness-provider_unavailable',
+  routing_invalid: 'media-llm-readiness-routing_invalid',
+  model_missing: 'media-llm-readiness-model_missing',
+  api_key_missing: 'media-llm-readiness-api_key_missing',
+  base_url_invalid: 'media-llm-readiness-base_url_invalid',
+};

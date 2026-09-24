@@ -1,12 +1,15 @@
+import http from 'node:http';
+import type { Socket } from 'node:net';
 import {
   type RequestUrlParam,
   type RequestUrlResponse,
   type RequestUrlResponsePromise,
   requestUrl,
 } from 'obsidian';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MAX_RESPONSE_BYTES } from '../../src/llm/http-shared';
+import { fetchJson, MAX_RESPONSE_BYTES } from '../../src/llm/http-shared';
 import { OpenAiCompatibleProvider } from '../../src/llm/openai-compatible-provider';
 import { validateOpenAiCompatibleBaseUrl } from '../../src/llm/openai-compatible-url';
 import type { ProviderError } from '../../src/llm/provider';
@@ -168,12 +171,112 @@ describe('OpenAiCompatibleProvider', () => {
   });
 });
 
+describe('OpenAI-compatible node transport', () => {
+  it('posts to a real local HTTP server without CORS', async () => {
+    const server = await startLocalServer((_request, response) => {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ choices: [{ message: { content: 'Node result.' } }] }));
+    });
+    try {
+      const custom = new OpenAiCompatibleProvider({ apiKey: '', baseUrl: `${server.baseUrl}/v1` });
+      await expect(custom.cleanup(cleanupOptions())).resolves.toBe('Node result.');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('rejects an oversized declared Content-Length before reading the body', async () => {
+    const server = await startLocalServer((_request, response) => {
+      response.statusCode = 200;
+      response.setHeader('content-length', String(MAX_RESPONSE_BYTES + 1));
+      response.end('{}');
+    });
+    try {
+      await expect(
+        new OpenAiCompatibleProvider({ apiKey: '', baseUrl: `${server.baseUrl}/v1` }).cleanup(
+          cleanupOptions(),
+        ),
+      ).rejects.toMatchObject({ code: 'invalid_response' });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('rejects an oversized streamed response while reading', async () => {
+    const server = await startLocalServer((_request, response) => {
+      response.write('x'.repeat(64 * 1024));
+      response.end('x'.repeat(MAX_RESPONSE_BYTES));
+    });
+    try {
+      const custom = new OpenAiCompatibleProvider({ apiKey: '', baseUrl: `${server.baseUrl}/v1` });
+      await expect(custom.cleanup(cleanupOptions())).rejects.toMatchObject({
+        code: 'invalid_response',
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('propagates abort and timeout to the underlying request', async () => {
+    const server = await startLocalServer(() => {
+      // Intentionally leave the response open.
+    });
+    try {
+      const abortController = new AbortController();
+      const aborted = new OpenAiCompatibleProvider({
+        apiKey: '',
+        baseUrl: `${server.baseUrl}/v1`,
+      }).cleanup({
+        ...cleanupOptions(),
+        abortSignal: abortController.signal,
+      });
+      abortController.abort();
+      await expect(aborted).rejects.toMatchObject({ code: 'aborted' });
+
+      await expect(
+        new OpenAiCompatibleProvider({
+          apiKey: '',
+          baseUrl: `${server.baseUrl}/v1`,
+          timeoutMs: 20,
+        }).cleanup(cleanupOptions()),
+      ).rejects.toMatchObject({ code: 'timeout' });
+    } finally {
+      await server.close();
+    }
+  });
+});
+
+async function startLocalServer(
+  handler: (request: http.IncomingMessage, response: http.ServerResponse) => void,
+): Promise<{ baseUrl: string; close: () => Promise<void> }> {
+  const server = http.createServer(handler);
+  const sockets = new Set<Socket>();
+  server.on('connection', (socket) => {
+    sockets.add(socket);
+    socket.once('close', () => sockets.delete(socket));
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (address === null || typeof address === 'string') {
+    throw new Error('Test server did not expose a TCP address.');
+  }
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error === undefined ? resolve() : reject(error)));
+        for (const socket of sockets) socket.destroy();
+      }),
+  };
+}
+
 function provider(
   overrides: Partial<ConstructorParameters<typeof OpenAiCompatibleProvider>[0]> = {},
 ): OpenAiCompatibleProvider {
   return new OpenAiCompatibleProvider({
     apiKey: '',
     baseUrl: 'https://example.com/v1',
+    requestJson: fetchJson,
     ...overrides,
   });
 }

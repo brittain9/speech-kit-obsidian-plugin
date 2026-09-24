@@ -9,13 +9,10 @@ import type {
   AcquisitionEvent,
   LocalMediaLease,
   MediaAcquireRequest,
-  MediaInspection,
-  MediaInspectRequest,
   MediaPlan,
   MediaProvenance,
   MediaReadStream,
   MediaSource,
-  SourceRef,
 } from './media-source';
 
 export interface LocalMediaSourceDependencies {
@@ -27,107 +24,36 @@ const LOCAL_MEDIA_ADAPTER_VERSION = '1';
 export class LocalMediaSource implements MediaSource {
   readonly adapterVersion = LOCAL_MEDIA_ADAPTER_VERSION;
   readonly id = 'local_file' as const;
-  private readonly inspectedFiles = new Map<string, File>();
 
   constructor(private readonly dependencies: LocalMediaSourceDependencies) {}
 
-  async inspect(request: MediaInspectRequest): Promise<MediaInspection | null> {
-    throwIfCancelled(request.signal);
-    if (request.kind === 'referenced') {
-      if (request.ref.kind !== 'local_file' || !this.inspectedFiles.has(request.ref.fileToken)) {
-        throw new AudioFileError(
-          'read_failed',
-          'The inspected local media token is no longer available.',
-        );
-      }
-      const file = this.inspectedFiles.get(request.ref.fileToken);
-      if (file === undefined) {
-        throw new AudioFileError(
-          'read_failed',
-          'The inspected local media token is no longer available.',
-        );
-      }
-      return { plan: this.createPlan(file.size), ref: request.ref };
-    }
-
-    const file = await this.selectInteractiveFile(request.signal);
-    if (file === null) {
-      return null;
-    }
-    const ref = this.bindInspectedFile(file);
-    return { plan: this.createPlan(file.size), ref };
-  }
-
   async *acquire(request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent> {
     throwIfCancelled(request.signal);
-    const selected =
-      request.kind === 'interactive_local'
-        ? await this.selectInteractiveSelection(request.signal)
-        : this.takeReferencedFile(request.ref);
-    if (selected === null) {
-      return;
-    }
+    const file = await this.dependencies.pickFile(request.signal);
     throwIfCancelled(request.signal);
-    assertEncodedFileSize(selected.file.size);
-    if (selected.file.size > request.maxBytes) {
+    if (file === null) return;
+
+    assertEncodedFileSize(file.size);
+    if (file.size > request.maxBytes) {
       throw new AudioFileError(
         'encoded_size',
         `The encoded audio file exceeds the ${request.maxBytes}-byte safety limit.`,
       );
     }
 
-    const plan = this.createPlan(selected.file.size);
+    const plan = this.createPlan(file.size);
     yield { plan, type: 'plan' };
-    yield { bytes: 0, phase: 'read', totalBytes: selected.file.size, type: 'progress' };
+    yield { bytes: 0, phase: 'read', totalBytes: file.size, type: 'progress' };
     yield {
       lease: createLocalMediaLease({
         acquiredAt: new Date().toISOString(),
         adapterVersion: this.adapterVersion,
-        encodedBytes: selected.file.size,
-        file: selected.file,
+        encodedBytes: file.size,
+        file,
         sourceId: this.id,
-        sourceRef: selected.ref,
       }),
       type: 'ready',
     };
-  }
-
-  private async selectInteractiveSelection(
-    signal: AbortSignal,
-  ): Promise<{ file: File; ref: SourceRef } | null> {
-    const file = await this.selectInteractiveFile(signal);
-    return file === null ? null : { file, ref: this.createFileRef() };
-  }
-
-  private async selectInteractiveFile(signal: AbortSignal): Promise<File | null> {
-    const file = await this.dependencies.pickFile(signal);
-    throwIfCancelled(signal);
-    return file;
-  }
-
-  private bindInspectedFile(file: File): SourceRef {
-    const ref = this.createFileRef();
-    this.inspectedFiles.set(ref.fileToken, file);
-    return ref;
-  }
-
-  private createFileRef(): Extract<SourceRef, { kind: 'local_file' }> {
-    return { fileToken: randomUUID(), kind: 'local_file' };
-  }
-
-  private takeReferencedFile(ref: SourceRef): { file: File; ref: SourceRef } | null {
-    if (ref.kind !== 'local_file') {
-      throw new AudioFileError('read_failed', 'The selected media source is not a local file.');
-    }
-    const file = this.inspectedFiles.get(ref.fileToken);
-    if (file === undefined) {
-      throw new AudioFileError(
-        'read_failed',
-        'The inspected local media token is no longer available.',
-      );
-    }
-    this.inspectedFiles.delete(ref.fileToken);
-    return { file, ref };
   }
 
   private createPlan(estimatedBytes: number): MediaPlan {
@@ -145,7 +71,6 @@ function createLocalMediaLease(args: {
   encodedBytes: number;
   file: File;
   sourceId: LocalMediaSource['id'];
-  sourceRef: SourceRef;
 }): LocalMediaLease {
   let released = false;
   let releasePromise: Promise<void> | null = null;
@@ -155,14 +80,11 @@ function createLocalMediaLease(args: {
     adapterVersion: args.adapterVersion,
     rights: { kind: 'user_supplied_file' },
     sourceId: args.sourceId,
-    sourceRef: args.sourceRef,
     temporaryMedia: true,
   };
 
   const release = (): Promise<void> => {
-    if (releasePromise !== null) {
-      return releasePromise;
-    }
+    if (releasePromise !== null) return releasePromise;
     releasePromise = (async () => {
       released = true;
       const streams = [...activeStreams];
@@ -180,9 +102,7 @@ function createLocalMediaLease(args: {
       if (released) {
         throw new AudioFileError('read_failed', 'The local media lease has been released.');
       }
-      const tracked = openTrackedFileStream(args.file, () => {
-        activeStreams.delete(tracked);
-      });
+      const tracked = openTrackedFileStream(args.file, () => activeStreams.delete(tracked));
       activeStreams.add(tracked);
       if (released) {
         activeStreams.delete(tracked);
@@ -200,8 +120,18 @@ interface TrackedMediaStream {
   readonly stream: MediaReadStream;
 }
 
+/**
+ * A single-reader, pull-driven view over File.stream(). No read is started until
+ * the consumer asks for data, so a slow decoder cannot accumulate an encoded
+ * copy in the adapter queue.
+ */
 function openTrackedFileStream(file: File, onClose: () => void): TrackedMediaStream {
-  let sourceReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  if (typeof file.stream !== 'function') {
+    throw new AudioFileError('read_failed', 'The local file does not expose a readable stream.');
+  }
+
+  const sourceReader = file.stream().getReader();
+  let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
   let sourceCancelled = false;
   let closed = false;
   const close = (): void => {
@@ -213,57 +143,39 @@ function openTrackedFileStream(file: File, onClose: () => void): TrackedMediaStr
     if (sourceCancelled) return;
     sourceCancelled = true;
     close();
-    await sourceReader?.cancel(reason);
+    try {
+      controller?.error(reason instanceof Error ? reason : releaseCancellationError());
+    } catch {
+      // The stream may already be closed by its consumer.
+    }
+    await sourceReader.cancel(reason).catch(() => {});
   };
 
   const stream = new ReadableStream<Uint8Array>({
-    start: (controller) => {
-      if (typeof file.stream === 'function') {
-        sourceReader = file.stream().getReader();
-        void pumpFileReader(sourceReader, controller, close, () => sourceCancelled);
-        return;
+    start: (streamController) => {
+      controller = streamController;
+    },
+    pull: async (pullController) => {
+      if (sourceCancelled) return;
+      if (pullController.desiredSize !== null && pullController.desiredSize <= 0) return;
+      try {
+        const result = await sourceReader.read();
+        if (sourceCancelled) return;
+        if (result.done) {
+          pullController.close();
+          close();
+          return;
+        }
+        pullController.enqueue(result.value);
+      } catch (error) {
+        if (sourceCancelled) return;
+        pullController.error(error);
+        close();
       }
-      void file.arrayBuffer().then(
-        (buffer) => {
-          if (sourceCancelled) return;
-          controller.enqueue(new Uint8Array(buffer));
-          controller.close();
-          close();
-        },
-        (error: unknown) => {
-          if (sourceCancelled) return;
-          controller.error(error);
-          close();
-        },
-      );
     },
     cancel,
   });
   return { cancel, stream };
-}
-
-async function pumpFileReader(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  controller: ReadableStreamDefaultController<Uint8Array>,
-  close: () => void,
-  isCancelled: () => boolean,
-): Promise<void> {
-  try {
-    while (true) {
-      const result = await reader.read();
-      if (result.done) {
-        controller.close();
-        close();
-        return;
-      }
-      if (isCancelled()) return;
-      controller.enqueue(result.value);
-    }
-  } catch (error) {
-    if (isCancelled()) return;
-    controller.error(error);
-    close();
-  }
 }
 
 function releaseCancellationError(): Error {

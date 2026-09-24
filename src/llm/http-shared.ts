@@ -90,8 +90,8 @@ export async function fetchJson(
 
 // Obsidian's renderer fetch is subject to browser CORS, which many local
 // OpenAI-compatible servers (including LM Studio) do not enable. requestUrl is
-// retained for non-chat model probes only. Chat completions use fetchJson so
-// their response byte cap and abort signal apply to the underlying HTTP read.
+// retained for non-chat model probes only. Custom chat completions use the
+// Node streaming transport so byte caps and aborts reach the underlying socket.
 export async function requestUrlJson(
   url: string,
   init: RequestInit = {},
