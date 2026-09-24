@@ -113,7 +113,7 @@ export class PersonalCorrectionRulesModal extends Modal {
     const row = new Setting(this.contentEl)
       .setName(`${index + 1}. ${rule.find || t('settings.corrections.modal.find')}`)
       .setDesc(
-        `${t('settings.corrections.modal.find')}: ${rule.find} → ${t('settings.corrections.modal.replace')}: ${rule.replace}`,
+        `${t('settings.corrections.modal.find')}: ${rule.find} → ${t('settings.corrections.modal.replace')}: ${rule.replace} · ${t('settings.corrections.modal.enabled')}: ${rule.enabled ? t('common.on') : t('common.off')}`,
       );
 
     row.addToggle((toggle) => {
