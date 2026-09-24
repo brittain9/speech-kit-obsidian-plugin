@@ -273,6 +273,7 @@ export class Session {
     cleanText: string,
     options: {
       rawTextForCallout?: string;
+      rejectUserEdits?: boolean;
       showRawBelow?: boolean;
     } = {},
   ): SessionRangeReplacementResult {
@@ -299,11 +300,14 @@ export class Session {
     // read, cleaned, and locked, so allow overwriting spans the user edited
     // mid-session — their edits were already folded into the cleaned text.
     // Passing [] here made any in-note edit during dictation bail the rewrite
-    // and discard the (already paid-for) cleanup result.
+    // and discard the (already paid-for) cleanup result. Media LLM processing
+    // opts into the stricter check so a user edit always wins.
     const result = this.surface.rewriteRegion(
       range,
       replacement,
-      this.rawSessionEntries.map((entry) => ({ utteranceId: entry.utteranceId })),
+      options.rejectUserEdits === true
+        ? []
+        : this.rawSessionEntries.map((entry) => ({ utteranceId: entry.utteranceId })),
     );
 
     if (result.kind === 'denied' && result.reason.kind === 'surface_desynchronized') {
@@ -330,7 +334,11 @@ export class Session {
     };
   }
 
-  insertAdjacentToSessionRange(blockText: string, placement: 'above' | 'below'): boolean {
+  insertAdjacentToSessionRange(
+    blockText: string,
+    placement: 'above' | 'below',
+    options: { rejectUserEdits?: boolean } = {},
+  ): boolean {
     if (this.surface === null || this.rawSessionEntries.length === 0) {
       return false;
     }
@@ -354,7 +362,9 @@ export class Session {
     const result = this.surface.rewriteRegion(
       range,
       replacement,
-      this.rawSessionEntries.map((entry) => ({ utteranceId: entry.utteranceId })),
+      options.rejectUserEdits === true
+        ? []
+        : this.rawSessionEntries.map((entry) => ({ utteranceId: entry.utteranceId })),
     );
 
     if (result.kind === 'denied' && result.reason.kind === 'surface_desynchronized') {

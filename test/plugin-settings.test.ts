@@ -135,6 +135,13 @@ describe('resolvePluginSettings', () => {
     expect(resolvePluginSettings({ lastObsidianLanguage: 42 }).lastObsidianLanguage).toBeNull();
   });
 
+  it('keeps media LLM processing off for existing settings until explicitly enabled', () => {
+    expect(DEFAULT_PLUGIN_SETTINGS.mediaLlmProcessing).toBe(false);
+    expect(resolvePluginSettings({ schemaVersion: 10 }).mediaLlmProcessing).toBe(false);
+    expect(resolvePluginSettings({ mediaLlmProcessing: true }).mediaLlmProcessing).toBe(true);
+    expect(resolvePluginSettings({ mediaLlmProcessing: 'yes' }).mediaLlmProcessing).toBe(false);
+  });
+
   it('enables LLM capabilities but keeps transformation off by default', () => {
     expect(DEFAULT_PLUGIN_SETTINGS).toMatchObject({
       llmFeaturesEnabled: true,

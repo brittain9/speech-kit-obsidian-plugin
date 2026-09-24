@@ -484,6 +484,16 @@ export class LocalSttSettingTab extends PluginSettingTab {
     });
 
     new Setting(llmCard)
+      .setName(t('settings.llm.mediaProcessing.name'))
+      .setDesc(t('settings.llm.mediaProcessing.desc'))
+      .addToggle((toggle) => {
+        toggle.setValue(settings.mediaLlmProcessing);
+        toggle.onChange(async (value) => {
+          await this.access.persistOne('mediaLlmProcessing', value);
+        });
+      });
+
+    new Setting(llmCard)
       .setName(t('settings.llm.restoreDefaults.name'))
       .setDesc(t('settings.llm.restoreDefaults.desc'))
       .addButton((button) => {

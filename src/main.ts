@@ -25,6 +25,7 @@ import { TemporaryLeafPinLeaseManager } from './editor/temporary-leaf-pin';
 import { syncDictationLanguageWithObsidian } from './language/dictation-language-sync';
 import type { LlmCleanupFailure } from './llm/provider';
 import { createConfiguredLlmRouter } from './llm/runtime';
+import { LocalMediaSource } from './media/local-media-source';
 import { ManageModelsModal, type ModelPickerOptions } from './models/manage-models-modal';
 import { ModelInstallManager } from './models/model-install-manager';
 import {
@@ -91,6 +92,7 @@ import { ReadAloudController, type ReadAloudState } from './tts/read-aloud-contr
 import { didReadAloudSettingsChange, resolveReadAloudVoiceId } from './tts/read-aloud-selection';
 import { DictationRibbonController } from './ui/dictation-ribbon';
 import { LOCAL_DICTATION_VIEW_TYPE, LocalDictationView } from './ui/local-dictation-view';
+import { confirmMediaLlmPreview } from './ui/media-llm-preview-modal';
 
 export default class LocalSttPlugin extends Plugin {
   private audioCaptureStream: AudioCaptureStream | null = null;
@@ -327,8 +329,15 @@ export default class LocalSttPlugin extends Plugin {
       stopDictation: () => this.requireDictationController().stopDictation(),
     });
     this.renderReadAloudStatus('idle');
+    const localMediaSource = new LocalMediaSource({
+      pickFile: (signal) => pickLocalAudioFile(signal),
+    });
     this.audioFileTranscriptionController = new AudioFileTranscriptionController({
       backpressureTimeoutMs: 30_000,
+      confirmMediaLlm: (preview, signal) => confirmMediaLlmPreview(this.app, preview, signal),
+      createLlmRouter: (settings) =>
+        createConfiguredLlmRouter(settings, (secretId) => this.getSecret(secretId)),
+      mediaSource: localMediaSource,
       createSession: ({ callbacks, placement, rendererOptions, sessionId, target }) =>
         Session.createFromTarget(this.app, target, {
           callbacks,
@@ -348,6 +357,9 @@ export default class LocalSttPlugin extends Plugin {
       logger: this.logger,
       onModelMissing: () => {
         void this.openModelPicker();
+      },
+      onRawTranscriptRecoveryAvailable: (receipt) => {
+        this.rawTranscriptRecovery.record(receipt);
       },
       onSidecarMissing: () => {
         void this.openSetupWizard();

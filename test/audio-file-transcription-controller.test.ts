@@ -4,12 +4,17 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DecodedAudioFile } from '../src/audio/audio-file-decoder';
 import { AudioFileTranscriptionController } from '../src/dictation/audio-file-transcription-controller';
 import type { NotePlacementOptions, SurfaceDesynchronization } from '../src/editor/note-surface';
+import type { AcquisitionEvent, LocalMediaLease } from '../src/media/media-source';
 import type {
   EngineCapabilitiesRecord,
   SelectedModel,
   SelectedModelCapabilities,
 } from '../src/models/model-management-types';
-import type { SessionAcceptResult, SessionTarget } from '../src/session/session';
+import type {
+  SessionAcceptResult,
+  SessionRangeReplacementResult,
+  SessionTarget,
+} from '../src/session/session';
 import type { TranscriptRevision } from '../src/session/session-journal';
 import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
 import type {
@@ -21,6 +26,7 @@ import type { CancelSessionResult } from '../src/sidecar/sidecar-connection';
 import { SidecarLifecycleGate } from '../src/sidecar/sidecar-lifecycle-gate';
 import type { TranscriptRenderOptions } from '../src/transcript/renderer';
 import { createGeneratedWavFile } from './fixtures/audio-file';
+import { createFakeLlmRouter } from './fixtures/llm';
 
 function createTarget(kind: SessionTarget['kind'] = 'active'): SessionTarget {
   return {
@@ -48,11 +54,47 @@ class FakeSession {
     this.accepted.push(revision);
     return { kind: 'accepted' };
   });
+  public joinRawSessionText(): string {
+    return this.accepted
+      .filter((revision) => revision.isFinal)
+      .map((revision) => revision.text)
+      .join(' ');
+  }
   public readonly clearSessionProcessingMark = vi.fn();
   public readonly dispose = vi.fn();
+  public readonly insertAdjacentToSessionRange = vi.fn(
+    (_blockText: string, _placement: 'above' | 'below', _options?: { rejectUserEdits?: boolean }) =>
+      true,
+  );
+  public readonly markSessionRangeAsProcessing = vi.fn(() => true);
   public readonly readNoteGlossary = vi.fn(
     (_maxChars: number): { text: string; truncated: boolean } | null => null,
   );
+  public readonly readNoteText = vi.fn(
+    (_maxChars: number): { text: string; truncated: boolean } | null => ({
+      text: 'Note context',
+      truncated: false,
+    }),
+  );
+  public readonly replaceSessionRangeWithCleaned = vi.fn(
+    (
+      text: string,
+      options?: { rawTextForCallout?: string; rejectUserEdits?: boolean; showRawBelow?: boolean },
+    ): SessionRangeReplacementResult => ({
+      kind: 'replaced',
+      recovery: {
+        documentText: text,
+        file: {} as TFile,
+        filePath: 'test.md',
+        from: 0,
+        rawText: options?.rawTextForCallout ?? this.accepted.at(-1)?.text ?? '',
+        to: text.length,
+        transformedText: text,
+        view: {} as never,
+      },
+    }),
+  );
+  public readonly setAnchorMode = vi.fn((_mode: 'hidden' | 'visible') => {});
 }
 
 class FakeDecodedAudio implements DecodedAudioFile {
@@ -1128,6 +1170,143 @@ describe('AudioFileTranscriptionController', () => {
     await sidecarFailure.controller.transcribe();
     expect(sidecarFailure.feedback.show).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'audio-file-start-failed' }),
+    );
+  });
+
+  it('adapts the local source lease into the provider-neutral pipeline and releases it', async () => {
+    const release = vi.fn(async () => {});
+    const lease: LocalMediaLease = {
+      encodedBytes: 44,
+      mediaId: 'media-test',
+      openReadStream: vi.fn(async () => new ReadableStream<Uint8Array>()),
+      provenance: {
+        access: 'local',
+        acquiredAt: new Date(0).toISOString(),
+        adapterVersion: '1',
+        rights: { kind: 'user_supplied_file' },
+        sourceId: 'local_file',
+        sourceRef: { fileToken: 'opaque-token', kind: 'local_file' },
+        temporaryMedia: true,
+      },
+      release,
+    };
+    const source = {
+      acquirePicked: async function* (): AsyncIterable<AcquisitionEvent> {
+        yield {
+          plan: {
+            access: 'local',
+            displayName: 'Local audio file',
+            requiresConsent: false,
+            restrictions: [],
+            sourceId: 'local_file',
+            warnings: [],
+          },
+          type: 'plan',
+        };
+        yield { lease, type: 'ready' };
+      },
+    };
+    const progress: string[] = [];
+    const decoded = createAudio();
+    const decodeMedia = vi.fn(async () => decoded);
+    const harness = createHarness({
+      decoder: {
+        decode: async () => decoded,
+        decodeMedia,
+      },
+      mediaSource: source,
+      onMediaProgress: (event) => progress.push(event.phase),
+    });
+
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+    const payload = harness.sidecarConnection.startSessionWithControl.mock.calls[0]?.[0];
+    if (payload === undefined) throw new Error('Expected a media session.');
+    harness.sidecarConnection.emit(transcriptReady(payload.sessionId, 'Media transcript'));
+    harness.sidecarConnection.emit({
+      reason: 'user_stop',
+      sessionId: payload.sessionId,
+      type: 'session_stopped',
+    });
+    await transcribing;
+
+    expect(harness.pickAudioFile).not.toHaveBeenCalled();
+    expect(decodeMedia).toHaveBeenCalledWith(lease, expect.any(AbortSignal));
+    expect(release).toHaveBeenCalledOnce();
+    expect(progress).toEqual(
+      expect.arrayContaining(['acquire', 'decode', 'transcribe', 'format', 'insert']),
+    );
+  });
+
+  it('does not create an LLM router when media processing is off', async () => {
+    const createLlmRouter = vi.fn(() => null);
+    const harness = createHarness({ createLlmRouter });
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+    const sessionId =
+      harness.sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    if (sessionId === undefined) throw new Error('Expected a raw media session.');
+    harness.sidecarConnection.emit(transcriptReady(sessionId, 'Raw transcript.'));
+    harness.sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await transcribing;
+
+    expect(createLlmRouter).not.toHaveBeenCalled();
+  });
+
+  it('keeps the raw media transcript until explicit LLM confirmation and records recovery', async () => {
+    const cleanup = vi.fn(async (_options: unknown) => ({
+      model: 'fake-model',
+      providerId: 'ollama' as const,
+      text: 'Clean media transcript.',
+    }));
+    const confirm = vi.fn(async () => true);
+    const recoveries: unknown[] = [];
+    const progress: string[] = [];
+    const harness = createHarness({
+      confirmMediaLlm: confirm,
+      createLlmRouter: () => createFakeLlmRouter({ cleanup }),
+      getSettings: () => createSettings({ mediaLlmProcessing: true }),
+      onMediaProgress: (event) => progress.push(event.phase),
+      onRawTranscriptRecoveryAvailable: (receipt) => recoveries.push(receipt),
+    });
+
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+    const sessionId =
+      harness.sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    if (sessionId === undefined) throw new Error('Expected a media LLM session.');
+    harness.sidecarConnection.emit(transcriptReady(sessionId, 'Raw media transcript.'));
+    harness.sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await transcribing;
+
+    expect(cleanup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: expect.stringContaining(
+          '<media_transcript>\nRaw media transcript.\n</media_transcript>',
+        ),
+      }),
+    );
+    expect(confirm).toHaveBeenCalledWith(
+      { output: 'replace', text: 'Clean media transcript.' },
+      expect.any(AbortSignal),
+    );
+    expect(progress).toContain('ai_processing');
+    expect(harness.sessions[0]?.replaceSessionRangeWithCleaned).toHaveBeenCalledWith(
+      'Clean media transcript.',
+      expect.objectContaining({
+        rawTextForCallout: 'Raw media transcript.',
+        rejectUserEdits: true,
+      }),
+    );
+    expect(recoveries).toHaveLength(1);
+    expect(harness.feedback.show).not.toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'media-llm-failed' }),
     );
   });
 });

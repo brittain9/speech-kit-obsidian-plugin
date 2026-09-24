@@ -52,6 +52,12 @@ export const en = {
     'Audio-file transcription stopped because its target note was deleted. Restore or recreate the note, then run the command again.',
   'audio-file-surface-changed':
     'Audio-file transcription stopped because the note changed in a way Speech Kit could not safely track. Restore the intended note and run the command again.',
+  'media-llm-empty': 'AI returned no media text, so the raw transcript was kept.',
+  'media-llm-failed':
+    'AI media processing failed, so the raw transcript was kept. Check the configured provider and try again.',
+  'media-llm-cancelled': 'AI media processing was cancelled; the raw transcript was kept.',
+  'media-llm-range-unavailable':
+    'The media transcript changed while AI processing was pending, so the raw transcript was kept.',
   'notice.dictationStartFailed': 'Could not start dictation.',
   'notice.dictationStopFailed': 'Could not stop dictation.',
   'notice.finalizedUtteranceAutoCopyFailed':
@@ -63,6 +69,10 @@ export const en = {
   'notice.lastUtteranceReinserted': 'Reinserted the last finalized utterance.',
   'notice.lastUtteranceUnavailable': 'No finalized utterance is available.',
   'notice.llmTransformEmpty': 'LLM transform returned nothing to add.',
+  'llm.mediaPreview.title': 'Preview media transcript transformation',
+  'llm.mediaPreview.description':
+    'Review the text result before applying it. The raw media transcript remains available for recovery.',
+  'llm.mediaPreview.apply': 'Apply result',
   'notice.microphoneDisconnected':
     'Microphone disconnected. Dictation stopped and will finish processing audio already captured. Reconnect the microphone, then start dictation again.',
   'notice.rawTranscriptChanged':
@@ -439,6 +449,9 @@ export const en = {
   'settings.llm.enableFeatures.name': 'Enable LLM features',
   'settings.llm.enableFeatures.desc':
     'Make LLM transformations available. Turn transformation on or off in the sidebar.',
+  'settings.llm.mediaProcessing.name': 'Process media transcripts with AI',
+  'settings.llm.mediaProcessing.desc':
+    'After a local media transcript finishes, use the active preset on its text. You will preview or confirm the result before it is applied; media and source details are never sent.',
   'settings.llm.restoreDefaults.name': 'Restore transform defaults',
   'settings.llm.restoreDefaults.desc':
     'Reset preset, timing, context, minimum words, and temperature. Saved presets and models are kept.',

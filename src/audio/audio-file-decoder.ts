@@ -1,3 +1,4 @@
+import type { LocalMediaLease, MediaReadStream } from '../media/media-source';
 import { PCM_BYTES_PER_FRAME } from '../shared/pcm-format';
 import type { PluginLogger } from '../shared/plugin-logger';
 import { clearChannels, mixChannelsToMono, PcmFrameProcessor } from './pcm-frame-processor';
@@ -69,6 +70,24 @@ export class WebAudioAudioFileDecoder {
     assertEncodedFileSize(file.size);
 
     const encodedBytes = await readEncodedAudioFile(file, signal);
+    return await this.decodeEncodedBytes(encodedBytes, signal);
+  }
+
+  async decodeMedia(
+    lease: LocalMediaLease,
+    signal = new AbortController().signal,
+  ): Promise<DecodedAudioFile> {
+    throwIfCancelled(signal);
+    assertEncodedFileSize(lease.encodedBytes);
+    const stream = await abortable(lease.openReadStream(), signal, () => cancellationError(signal));
+    const encodedBytes = await readMediaStream(stream, lease.encodedBytes, signal);
+    return await this.decodeEncodedBytes(encodedBytes, signal);
+  }
+
+  private async decodeEncodedBytes(
+    encodedBytes: ArrayBuffer,
+    signal: AbortSignal,
+  ): Promise<DecodedAudioFile> {
     throwIfCancelled(signal);
 
     let audioContext: AudioContext;
@@ -246,6 +265,52 @@ function* readChannelSlices(decodedAudio: DecodedAudioFile): Generator<Float32Ar
     yield Array.from({ length: decodedAudio.numberOfChannels }, (_, channel) =>
       decodedAudio.getChannelData(channel).subarray(start, end),
     );
+  }
+}
+
+async function readMediaStream(
+  stream: MediaReadStream,
+  expectedBytes: number,
+  signal: AbortSignal,
+): Promise<ArrayBuffer> {
+  const reader = stream.getReader();
+  const bytes = new Uint8Array(expectedBytes);
+  let totalBytes = 0;
+  const abortReader = (): void => {
+    void reader.cancel(createAudioFileCancellationError()).catch(() => {});
+  };
+  signal.addEventListener('abort', abortReader, { once: true });
+
+  try {
+    while (true) {
+      const result = await abortable(reader.read(), signal, () => cancellationError(signal));
+      if (result.done) {
+        break;
+      }
+      const chunk = result.value;
+      const nextTotalBytes = totalBytes + chunk.byteLength;
+      assertEncodedFileSize(nextTotalBytes);
+      if (nextTotalBytes > bytes.byteLength) {
+        throw new AudioFileError('read_failed', 'The media lease changed while it was being read.');
+      }
+      bytes.set(chunk, totalBytes);
+      totalBytes = nextTotalBytes;
+    }
+    throwIfCancelled(signal);
+    if (totalBytes !== bytes.byteLength) {
+      throw new AudioFileError('read_failed', 'The media lease changed while it was being read.');
+    }
+    return bytes.buffer;
+  } catch (error) {
+    if (signal.aborted) {
+      throw cancellationError(signal);
+    }
+    if (error instanceof AudioFileError) {
+      throw error;
+    }
+    throw new AudioFileError('read_failed', 'The media lease could not be read.', { cause: error });
+  } finally {
+    signal.removeEventListener('abort', abortReader);
   }
 }
 

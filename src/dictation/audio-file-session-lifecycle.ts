@@ -33,6 +33,8 @@ export class ManagedAudioFileSession {
   private completionResolve: () => void = () => {};
   private startCompletion: Promise<void> = Promise.resolve();
   private startCompletionResolve: () => void = () => {};
+  private postCompletion: (() => Promise<void>) | null = null;
+  private postCompletionStarted = false;
 
   private constructor(
     readonly abortController: AbortController,
@@ -77,6 +79,18 @@ export class ManagedAudioFileSession {
       () => this.startCompletionResolve(),
       () => this.startCompletionResolve(),
     );
+  }
+
+  setPostCompletion(operation: (() => Promise<void>) | null): void {
+    this.postCompletion = operation;
+  }
+
+  async runPostCompletion(): Promise<void> {
+    if (this.postCompletionStarted) {
+      return;
+    }
+    this.postCompletionStarted = true;
+    await this.postCompletion?.();
   }
 
   runCancellation(operation: () => Promise<void>): Promise<void> {

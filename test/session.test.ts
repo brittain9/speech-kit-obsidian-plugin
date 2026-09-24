@@ -781,6 +781,32 @@ describe('Session', () => {
     session.dispose();
   });
 
+  it('rejects media cleanup replacement after a user edit latches the range', () => {
+    const { session, view } = createRecoveryIntegrationHarness('Existing note');
+    session.acceptTranscript(
+      transcript({
+        isFinal: false,
+        revision: 0,
+        text: 'raw words',
+        utteranceId: 'media-u1',
+      }),
+    );
+    view.dispatch({ changes: { from: 0, insert: 'user edit ' } });
+    session.acceptTranscript(
+      transcript({
+        isFinal: true,
+        revision: 1,
+        text: 'final words',
+        utteranceId: 'media-u1',
+      }),
+    );
+
+    expect(session.replaceSessionRangeWithCleaned('AI result', { rejectUserEdits: true })).toEqual({
+      kind: 'denied',
+    });
+    session.dispose();
+  });
+
   it('omits emptied finalized utterances from joined raw session text', () => {
     const { session } = createSessionHarness();
 
