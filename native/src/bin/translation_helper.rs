@@ -116,8 +116,9 @@ impl HyMtInference for LlamaInference<'_> {
         context
             .decode(&mut batch)
             .context("unable to decode the HY-MT prompt")?;
+        let penalty_last_n = i32::try_from(context_size.get())?;
         let mut sampler = LlamaSampler::chain_simple([
-            LlamaSampler::penalties(-1, 1.05, 0.0, 0.0),
+            LlamaSampler::penalties(self.model.model.n_vocab(), penalty_last_n, 1.05, 0.0, 0.0),
             LlamaSampler::top_k(20),
             LlamaSampler::top_p(0.6, 1),
             LlamaSampler::temp(0.7),
