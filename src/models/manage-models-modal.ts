@@ -80,28 +80,21 @@ export interface ModelLanguageOption {
 
 export const ALL_MODEL_LANGUAGES: ModelLanguageFilter = { kind: 'all' };
 
-const MODEL_LANGUAGE_ORDER = ['en', 'fr', 'de', 'es', 'pt', 'it', 'nl', 'ja'] as const;
+const MODEL_LANGUAGE_ORDER = ['auto', 'en', 'fr', 'de', 'es', 'pt', 'it', 'nl', 'ja'] as const;
 
 export function deriveModelLanguageOptions(
   models: readonly CatalogModelRecord[],
 ): ModelLanguageOption[] {
-  const languageTags = new Set(
-    models.flatMap((model) => [
-      ...model.languageTags,
-      ...(model.translationSupport?.kind === 'all_to_all'
-        ? model.translationSupport.languages
-        : (model.translationSupport?.pairs ?? []).flatMap((pair) => [pair.source, pair.target])),
-    ]),
-  );
+  const languageTags = new Set(models.flatMap((model) => modelLanguageTagsForDiscovery(model)));
   const knownTags = MODEL_LANGUAGE_ORDER.filter((tag) => languageTags.delete(tag));
   const remainingTags = [...languageTags].sort((left, right) => left.localeCompare(right));
 
   return [
     { code: null, filter: ALL_MODEL_LANGUAGES, label: t('models.manage.allLanguages') },
     ...[...knownTags, ...remainingTags].map((tag) => ({
-      code: tag.toUpperCase(),
+      code: tag === 'auto' ? 'AUTO' : tag.toUpperCase(),
       filter: { kind: 'language' as const, tag },
-      label: modelLanguageLabel(tag),
+      label: tag === 'auto' ? t('settings.dictationLanguage.autoDetect') : modelLanguageLabel(tag),
     })),
   ];
 }
@@ -125,8 +118,33 @@ export function modelMatchesLanguageFilter(
     if (support?.kind === 'pairs') {
       return support.pairs.some((pair) => pair.source === filter.tag || pair.target === filter.tag);
     }
+    return false;
   }
   return model.languageTags.includes(filter.tag);
+}
+
+function modelLanguageTagsForDiscovery(
+  model: Pick<
+    CatalogModelRecord,
+    'languageTags' | 'supportsAutomaticLanguageDetection' | 'task' | 'translationSupport'
+  >,
+): string[] {
+  if (model.task === 'translation') {
+    const support = model.translationSupport;
+    if (support?.kind === 'all_to_all') return support.languages;
+    return (support?.pairs ?? []).flatMap((pair) => [pair.source, pair.target]);
+  }
+  return model.supportsAutomaticLanguageDetection && model.task === 'stt'
+    ? [...model.languageTags, 'auto']
+    : model.languageTags;
+}
+
+export function modelLanguageCompatibility(
+  model: Parameters<typeof modelMatchesLanguageFilter>[0],
+  filter: ModelLanguageFilter,
+): 'compatible' | 'incompatible' | 'not_applicable' {
+  if (filter.kind === 'all') return 'not_applicable';
+  return modelMatchesLanguageFilter(model, filter) ? 'compatible' : 'incompatible';
 }
 
 export interface TaskModelAvailability {
@@ -691,11 +709,7 @@ export class ManageModelsModal extends Modal {
       );
       setting.setDesc(fragment);
     } else {
-      const tags = this.buildTagsFragment(
-        row.model,
-        row.installed,
-        row.model.task !== 'stt' || supportsSelectedLanguage,
-      );
+      const tags = this.buildTagsFragment(row.model, row.installed);
       if (!supportsSelectedLanguage) {
         tags.createDiv({
           cls: 'local-stt-model-warning',
@@ -1185,22 +1199,23 @@ export class ManageModelsModal extends Modal {
     };
   }
 
-  private buildTagsFragment(
-    model: CatalogModelRecord,
-    installed: boolean,
-    supportsSelectedLanguage: boolean,
-  ): DocumentFragment {
+  private buildTagsFragment(model: CatalogModelRecord, installed: boolean): DocumentFragment {
     const frag = createFragment();
     const tagsContainer = frag.createSpan({ cls: 'local-stt-tags' });
     tagsContainer.createSpan({
       text: t(installed ? 'models.manage.installed' : 'models.manage.downloadable'),
     });
-    if (model.task === 'stt') {
-      const language = dictationLanguageLabel(this.deps.manager.getDictationLanguage());
+    if (this.activeLanguage.kind !== 'all') {
+      const language =
+        this.activeLanguage.tag === 'auto'
+          ? t('settings.dictationLanguage.autoDetect')
+          : formatCatalogLanguageLabel(this.activeLanguage.tag);
+      const compatibility = modelLanguageCompatibility(model, this.activeLanguage);
       tagsContainer.createSpan({
-        text: supportsSelectedLanguage
-          ? t('models.manage.compatibleLanguage', { language })
-          : t('models.manage.incompatibleLanguage', { language }),
+        text:
+          compatibility === 'compatible'
+            ? t('models.manage.compatibleLanguage', { language })
+            : t('models.manage.incompatibleLanguage', { language }),
       });
     }
     const policy = resolveModelPresentationPolicy(model);

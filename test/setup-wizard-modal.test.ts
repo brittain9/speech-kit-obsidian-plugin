@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { de } from '../src/locales/de';
 import type { ModelInstallManager, ModelManagerState } from '../src/models/model-install-manager';
 import type { CatalogModelRecord } from '../src/models/model-management-types';
-import { SetupWizardModal } from '../src/setup/setup-wizard-modal';
+import { recommendationStateSignature, SetupWizardModal } from '../src/setup/setup-wizard-modal';
 import type { SidecarInstallManager } from '../src/sidecar/sidecar-install-manager';
 import type { TestElement } from './__mocks__/obsidian';
 
@@ -259,6 +259,300 @@ describe('SetupWizardModal first-run guidance', () => {
     expect(button(modal, 'Install and use').textContent).toBe('Install and use');
   });
 
+  it('refreshes a recommendation when catalog loading finishes without a selection change', async () => {
+    vi.stubGlobal('navigator', { deviceMemory: 4, hardwareConcurrency: 4 });
+    let state = modelManagerState({ loadStatus: 'loading' });
+    let notify: (() => void) | undefined;
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => state,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(modalDependencies(manager));
+
+    modal.open();
+    await vi.waitFor(() =>
+      expect(textContent(modal.contentEl as unknown as TestElement)).toContain(
+        'Loading the model catalog',
+      ),
+    );
+
+    state = { ...state, loadStatus: 'ready' };
+    notify?.();
+
+    await vi.waitFor(() =>
+      expect(textContent(modal.contentEl as unknown as TestElement)).toContain('Moonshine Tiny'),
+    );
+  });
+
+  it('does not treat download progress bytes as a recommendation state change', () => {
+    const state = modelManagerState();
+    const installUpdate = {
+      details: null,
+      downloadedBytes: 10,
+      familyId: 'moonshine' as const,
+      installId: 'install-1',
+      message: null,
+      modelId: 'moonshine-small',
+      runtimeId: 'onnx_runtime' as const,
+      state: 'downloading' as const,
+      totalBytes: 200,
+    };
+    const first = {
+      ...state,
+      activeInstall: { installUpdate, lastError: null, phase: 'installing' as const },
+    };
+    const second = {
+      ...first,
+      activeInstall: {
+        ...first.activeInstall,
+        installUpdate: { ...installUpdate, downloadedBytes: 150 },
+      },
+    };
+
+    expect(recommendationStateSignature(first)).toBe(recommendationStateSignature(second));
+  });
+
+  it('distinguishes capability discovery failure from an unavailable language model', async () => {
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => modelManagerState({ capabilityLoadError: 'system info unavailable' }),
+      subscribe: () => () => {},
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(modalDependencies(manager));
+
+    modal.open();
+
+    await vi.waitFor(() => {
+      const text = textContent(modal.contentEl as unknown as TestElement);
+      expect(text).toContain('Model capabilities unavailable');
+      expect(text).toContain('Retry capabilities');
+      expect(text).not.toContain('No starting model for this language');
+    });
+  });
+
+  it('updates an external recommendation install from start to completion', async () => {
+    vi.stubGlobal('navigator', { deviceMemory: 8, hardwareConcurrency: 8 });
+    let state = modelManagerState();
+    let notify: (() => void) | undefined;
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => state,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(modalDependencies(manager));
+
+    modal.open();
+    await vi.waitFor(() => expect(button(modal, 'Install and use')).toBeDefined());
+    state = {
+      ...state,
+      activeInstall: {
+        installUpdate: {
+          details: null,
+          downloadedBytes: 10,
+          familyId: 'moonshine',
+          installId: 'external-install',
+          message: null,
+          modelId: 'moonshine-small',
+          runtimeId: 'onnx_runtime',
+          state: 'downloading',
+          totalBytes: 200,
+        },
+        lastError: null,
+        phase: 'installing',
+      },
+    };
+    notify?.();
+
+    await vi.waitFor(() => expect(button(modal, 'Installing…')).toBeDefined());
+    state = {
+      ...state,
+      activeInstall: null,
+      installedModels: [
+        {
+          catalogVersion: 1,
+          familyId: 'moonshine',
+          installPath: '/models/moonshine-small',
+          installedArtifactIds: ['model'],
+          installedAtUnixMs: 1,
+          installedVoiceIds: [],
+          modelId: 'moonshine-small',
+          runtimeId: 'onnx_runtime',
+          runtimePath: null,
+          totalSizeBytes: 160,
+        },
+      ],
+    };
+    notify?.();
+
+    await vi.waitFor(() => expect(button(modal, 'Use this model')).toBeDefined());
+    expect(recommendationStateSignature(state)).toContain('moonshine-small');
+  });
+
+  it('surfaces an external recommendation failure as a retry action', async () => {
+    const installAndWait = vi.fn(async () => {});
+    const state = modelManagerState({
+      failedInstall: {
+        artifactIds: ['model'],
+        failureId: 'failed-install',
+        message: 'network reset',
+        selection: {
+          familyId: 'moonshine',
+          kind: 'catalog_model',
+          modelId: 'moonshine-small',
+          runtimeId: 'onnx_runtime',
+        },
+      },
+    });
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => state,
+      installAndWait,
+      subscribe: () => () => {},
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(modalDependencies(manager));
+
+    modal.open();
+    await vi.waitFor(() => expect(button(modal, 'Retry install')).toBeDefined());
+    await button(modal, 'Retry install').click();
+
+    expect(installAndWait).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an existing selection authoritative when recommendation state changes', async () => {
+    const selection = {
+      familyId: 'moonshine' as const,
+      kind: 'catalog_model' as const,
+      modelId: 'moonshine-small',
+      runtimeId: 'onnx_runtime' as const,
+    };
+    let state = modelManagerState({ selectedModel: selection });
+    let notify: (() => void) | undefined;
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => state,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(
+      modalDependencies(manager, { hasSelectedModel: () => true }),
+    );
+
+    modal.open();
+    await vi.waitFor(() =>
+      expect(textContent(modal.contentEl as unknown as TestElement)).not.toContain(
+        'Recommended for your setup',
+      ),
+    );
+    state = { ...state, loadStatus: 'loading' };
+    notify?.();
+
+    expect(textContent(modal.contentEl as unknown as TestElement)).not.toContain('Install and use');
+  });
+
+  it('offers Use for an already installed recommendation without downloading', async () => {
+    vi.stubGlobal('navigator', { deviceMemory: 8, hardwareConcurrency: 8 });
+    let hasSelectedModel = false;
+    const state = modelManagerState({
+      installedModels: [
+        {
+          catalogVersion: 1,
+          familyId: 'moonshine',
+          installPath: '/models/moonshine-small',
+          installedArtifactIds: ['model'],
+          installedAtUnixMs: 1,
+          installedVoiceIds: [],
+          modelId: 'moonshine-small',
+          runtimeId: 'onnx_runtime',
+          runtimePath: null,
+          totalSizeBytes: 160,
+        },
+      ],
+    });
+    const select = vi.fn(async (selection: typeof state.selectedModel) => {
+      state.selectedModel = selection;
+      hasSelectedModel = true;
+    });
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => state,
+      select,
+      subscribe: () => () => {},
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(
+      modalDependencies(manager, { hasSelectedModel: () => hasSelectedModel }),
+    );
+
+    modal.open();
+    await vi.waitFor(() => expect(button(modal, 'Use this model')).toBeDefined());
+    await button(modal, 'Use this model').click();
+
+    await vi.waitFor(() => expect(select).toHaveBeenCalledOnce());
+    expect(select).toHaveBeenCalledWith({
+      familyId: 'moonshine',
+      kind: 'catalog_model',
+      modelId: 'moonshine-small',
+      runtimeId: 'onnx_runtime',
+    });
+  });
+
+  it('keeps install failure recovery available and retries the same recommendation', async () => {
+    vi.stubGlobal('navigator', { deviceMemory: 8, hardwareConcurrency: 8 });
+    const state = modelManagerState();
+    let hasSelectedModel = false;
+    const feedback = { show: vi.fn() };
+    const installAndWait = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('network reset'))
+      .mockImplementationOnce(async () => {
+        hasSelectedModel = true;
+        state.selectedModel = {
+          familyId: 'moonshine',
+          kind: 'catalog_model',
+          modelId: 'moonshine-small',
+          runtimeId: 'onnx_runtime',
+        };
+      });
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => state,
+      installAndWait,
+      subscribe: () => () => {},
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(
+      modalDependencies(manager, {
+        feedback,
+        hasSelectedModel: () => hasSelectedModel,
+      }),
+    );
+
+    modal.open();
+    await vi.waitFor(() => expect(button(modal, 'Install and use')).toBeDefined());
+    await button(modal, 'Install and use').click();
+    await vi.waitFor(() =>
+      expect(feedback.show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Could not install and use the recommended model. Try again.',
+        }),
+      ),
+    );
+
+    expect(button(modal, 'Install and use')).toBeDefined();
+    await button(modal, 'Install and use').click();
+    await vi.waitFor(() =>
+      expect(textContent(modal.contentEl as unknown as TestElement)).toContain('Model selected'),
+    );
+    expect(installAndWait).toHaveBeenCalledTimes(2);
+  });
+
   it('states final-only semantics when no live model supports the language', async () => {
     vi.stubGlobal('navigator', { deviceMemory: 8, hardwareConcurrency: 8 });
     const manager = {
@@ -336,7 +630,8 @@ describe('SetupWizardModal first-run guidance', () => {
     expect(de['setup.wizard.recommendation.title']).toBe('Empfehlung für Ihre Einrichtung');
     expect(de['setup.wizard.recommendation.installAndUse']).toBe('Installieren und verwenden');
     expect(de['setup.microphone.checkAgain']).toBe('Erneut prüfen');
-    expect(de['setup.microphone.recovery']).toContain('Erneut prüfen');
+    expect(de['setup.microphone.recheck']).toContain('Erneut prüfen');
+    expect(de['setup.microphone.reopenSetup']).toContain('Setup');
   });
 
   it('starts the recommended download only after the explicit install action', async () => {

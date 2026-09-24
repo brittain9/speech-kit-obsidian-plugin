@@ -6,8 +6,12 @@ import {
 } from '../audio/microphone-permission-message';
 import { formatCatalogLanguageLabel } from '../language/dictation-language';
 import { ManageModelsModal } from '../models/manage-models-modal';
-import type { ModelInstallManager } from '../models/model-install-manager';
-import { matchesModelTriple } from '../models/model-management-types';
+import type { ModelInstallManager, ModelManagerState } from '../models/model-install-manager';
+import {
+  getTotalModelSize,
+  matchesModelTriple,
+  type SelectedModel,
+} from '../models/model-management-types';
 import { openFilteredHotkeySettings } from '../settings/open-hotkey-settings';
 import { formatBytes } from '../shared/format-utils';
 import { t } from '../shared/i18n';
@@ -54,11 +58,15 @@ export class SetupWizardModal extends Modal {
   private sidecarReady = false;
   private modelReady = false;
   private modelManagerUnsub: (() => void) | null = null;
+  private modelStateSignature = '';
   private openGeneration = 0;
   private recommendationPending: 'installing' | 'selecting' | null = null;
   private checkingMicrophone = false;
   private microphoneReadiness = new MicrophoneReadiness();
-  private microphoneResult: MicrophoneReadinessResult = { status: 'denied' };
+  private microphoneResult: MicrophoneReadinessResult = {
+    recovery: 'recheck',
+    status: 'unavailable',
+  };
   private readonly readyActions: SetupReadyActions;
 
   constructor(private readonly deps: WizardDependencies) {
@@ -78,7 +86,7 @@ export class SetupWizardModal extends Modal {
     const generation = ++this.openGeneration;
     this.checkingMicrophone = false;
     this.microphoneReadiness = new MicrophoneReadiness();
-    this.microphoneResult = { status: 'denied' };
+    this.microphoneResult = { recovery: 'recheck', status: 'unavailable' };
     void this.openAsync(generation);
   }
 
@@ -98,13 +106,16 @@ export class SetupWizardModal extends Modal {
       this.currentStep = 'microphone';
     }
 
+    this.modelStateSignature = recommendationStateSignature(
+      this.deps.modelInstallManager.getState(),
+    );
     this.modelManagerUnsub = this.deps.modelInstallManager.subscribe(() => {
-      const next = this.deps.hasSelectedModel();
-      if (next !== this.modelReady) {
-        this.modelReady = next;
-        if (this.currentStep === 'model') {
-          this.render();
-        }
+      const nextSignature = recommendationStateSignature(this.deps.modelInstallManager.getState());
+      if (nextSignature === this.modelStateSignature) return;
+      this.modelStateSignature = nextSignature;
+      this.modelReady = this.deps.hasSelectedModel();
+      if (this.currentStep === 'model') {
+        this.render();
       }
     });
 
@@ -261,30 +272,47 @@ export class SetupWizardModal extends Modal {
       .addEventListener('click', () => this.goBack());
     const customize = actions.createEl('button', { text: t('setup.wizard.openModelPicker') });
     customize.addEventListener('click', () => this.openModelPicker());
+    const capabilityLoadError = this.deps.modelInstallManager.getState().capabilityLoadError;
+    const capabilitiesUnavailable = capabilityLoadError != null;
+    if (capabilitiesUnavailable) {
+      actions
+        .createEl('button', {
+          cls: 'mod-cta',
+          text: t('setup.wizard.recommendation.retryCapabilities'),
+        })
+        .addEventListener('click', () => {
+          void this.deps.modelInstallManager.init();
+        });
+    }
 
     if (this.modelReady) {
       const next = actions.createEl('button', { cls: 'mod-cta', text: t('common.next') });
       next.addEventListener('click', () => this.goNext());
     } else if (recommendation !== null) {
-      const installed = this.deps.modelInstallManager
-        .getState()
-        .installedModels.some((model) =>
-          matchesModelTriple(
-            model,
-            recommendation.model.runtimeId,
-            recommendation.model.familyId,
-            recommendation.model.modelId,
-          ),
-        );
+      const state = this.deps.modelInstallManager.getState();
+      const installed = state.installedModels.some((model) =>
+        matchesModelTriple(
+          model,
+          recommendation.model.runtimeId,
+          recommendation.model.familyId,
+          recommendation.model.modelId,
+        ),
+      );
+      const actionState = recommendationActionState(
+        state,
+        recommendation,
+        installed,
+        this.recommendationPending,
+      );
       const action = actions.createEl('button', {
         cls: 'mod-cta',
-        text: recommendationActionLabel(installed, this.recommendationPending),
+        text: actionState.label,
       });
-      action.disabled = this.recommendationPending !== null;
+      action.disabled = actionState.disabled;
       action.addEventListener('click', () => {
         void this.useStartingModel(recommendation, installed);
       });
-    } else {
+    } else if (!capabilitiesUnavailable) {
       customize.addClass('mod-cta');
     }
   }
@@ -297,6 +325,11 @@ export class SetupWizardModal extends Modal {
     }
     if (state.loadStatus === 'error') {
       body.createEl('p', { text: t('models.manage.loadCatalogFailed') });
+      return;
+    }
+    if (state.capabilityLoadError != null) {
+      body.createEl('h3', { text: t('setup.wizard.recommendation.capabilitiesUnavailableTitle') });
+      body.createEl('p', { text: t('setup.wizard.recommendation.capabilitiesUnavailableDesc') });
       return;
     }
 
@@ -352,7 +385,7 @@ export class SetupWizardModal extends Modal {
 
   private resolveStartingModelRecommendation(): StartingModelRecommendation | null {
     const state = this.deps.modelInstallManager.getState();
-    if (state.loadStatus !== 'ready') return null;
+    if (state.loadStatus !== 'ready' || state.capabilityLoadError != null) return null;
     return resolveStartingModelRecommendation(
       state,
       this.deps.modelInstallManager.getDictationLanguage(),
@@ -445,7 +478,13 @@ export class SetupWizardModal extends Modal {
           formatMicrophoneCaptureErrorMessage(this.microphoneResult.error) ??
           formatMicrophonePermissionDeniedMessage(),
       });
-      recovery.createEl('p', { text: t('setup.microphone.recovery') });
+      recovery.createEl('p', {
+        text: t(
+          this.microphoneResult.recovery === 'reopen'
+            ? 'setup.microphone.reopenSetup'
+            : 'setup.microphone.recheck',
+        ),
+      });
     }
 
     const actions = this.contentEl.createDiv({ cls: 'local-stt-wizard-actions' });
@@ -572,15 +611,110 @@ export class SetupWizardModal extends Modal {
   }
 }
 
-function recommendationActionLabel(
+export function recommendationStateSignature(state: ModelManagerState): string {
+  const active = state.activeInstall;
+  return JSON.stringify({
+    activeInstall:
+      active === null
+        ? null
+        : [modelTripleKey(active.installUpdate), active.phase, active.installUpdate.state],
+    capabilityLoadError: state.capabilityLoadError ?? null,
+    catalog: [
+      state.catalog.catalogVersion,
+      state.catalog.models.map((model) => [
+        model.runtimeId,
+        model.familyId,
+        model.modelId,
+        model.displayName,
+        model.task,
+        model.languageTags,
+        model.supportsAutomaticLanguageDetection,
+        model.uxTags,
+        getTotalModelSize(model),
+      ]),
+    ],
+    compiledAdapters: state.compiledAdapters.map((adapter) => [
+      adapter.runtimeId,
+      adapter.familyId,
+      adapter.familyCapabilities.task,
+      adapter.familyCapabilities.supportsStreaming,
+      adapter.familyCapabilities.supportedLanguages,
+    ]),
+    compiledRuntimes: state.compiledRuntimes.map((runtime) => runtime.runtimeId),
+    failedInstall:
+      state.failedInstall === null
+        ? null
+        : [state.failedInstall.failureId, modelTripleKey(state.failedInstall.selection)],
+    installedModels: state.installedModels.map(modelTripleKey).sort(),
+    loadError: state.loadError,
+    loadStatus: state.loadStatus,
+    selectedModel: selectedModelKey(state.selectedModel),
+  });
+}
+
+function modelTripleKey(model: { familyId: string; modelId: string; runtimeId: string }): string {
+  return `${model.runtimeId}:${model.familyId}:${model.modelId}`;
+}
+
+function selectedModelKey(selection: SelectedModel | null): string | null {
+  if (selection === null) return null;
+  return selection.kind === 'catalog_model'
+    ? modelTripleKey(selection)
+    : `external:${selection.familyId}:${selection.filePath}`;
+}
+
+interface RecommendationActionState {
+  disabled: boolean;
+  label: string;
+}
+
+function recommendationActionState(
+  state: ModelManagerState,
+  recommendation: StartingModelRecommendation,
   installed: boolean,
   pending: 'installing' | 'selecting' | null,
-): string {
-  if (pending === 'installing') return t('setup.wizard.recommendation.installing');
-  if (pending === 'selecting') return t('setup.wizard.recommendation.selecting');
-  return installed
-    ? t('setup.wizard.recommendation.use')
-    : t('setup.wizard.recommendation.installAndUse');
+): RecommendationActionState {
+  if (pending === 'installing') {
+    return { disabled: true, label: t('setup.wizard.recommendation.installing') };
+  }
+  if (pending === 'selecting') {
+    return { disabled: true, label: t('setup.wizard.recommendation.selecting') };
+  }
+  const active = state.activeInstall?.installUpdate;
+  if (
+    active !== undefined &&
+    matchesModelTriple(
+      active,
+      recommendation.model.runtimeId,
+      recommendation.model.familyId,
+      recommendation.model.modelId,
+    )
+  ) {
+    return { disabled: true, label: t('setup.wizard.recommendation.installing') };
+  }
+  if (active !== undefined) {
+    return {
+      disabled: true,
+      label: t('setup.wizard.recommendation.anotherInstallActive'),
+    };
+  }
+  if (
+    state.failedInstall !== null &&
+    matchesModelTriple(
+      state.failedInstall.selection,
+      recommendation.model.runtimeId,
+      recommendation.model.familyId,
+      recommendation.model.modelId,
+    )
+  ) {
+    return { disabled: false, label: t('setup.wizard.recommendation.retry') };
+  }
+  return {
+    disabled: false,
+    label: installed
+      ? t('setup.wizard.recommendation.use')
+      : t('setup.wizard.recommendation.installAndUse'),
+  };
 }
 
 function recommendationReason(recommendation: StartingModelRecommendation): string {
@@ -599,7 +733,11 @@ function recommendationReason(recommendation: StartingModelRecommendation): stri
 function hardwareReason(recommendation: StartingModelRecommendation): string {
   switch (recommendation.hardwareClass) {
     case 'constrained':
-      return t('setup.wizard.recommendation.reason.hardware.constrained');
+      return t(
+        recommendation.resourceClass === 'demanding'
+          ? 'setup.wizard.recommendation.reason.hardware.constrainedFallback'
+          : 'setup.wizard.recommendation.reason.hardware.constrained',
+      );
     case 'standard':
       return t('setup.wizard.recommendation.reason.hardware.standard');
     case 'unknown':

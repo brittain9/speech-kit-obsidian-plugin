@@ -70,6 +70,26 @@ describe('setup ready actions', () => {
     expect(harness.startDictation).toHaveBeenCalledOnce();
   });
 
+  it('keeps the wizard open with localized recovery when target creation fails', async () => {
+    const cause = new Error('vault create failed');
+    const harness = createHarness({
+      hasDictationTarget: () => false,
+      prepareDictationTarget: vi.fn().mockRejectedValue(cause),
+    });
+
+    await harness.actions.tryDictationNow();
+
+    expect(harness.feedback.show).toHaveBeenCalledWith({
+      cause,
+      intent: 'error',
+      key: 'setup-wizard-target-preparation',
+      message: "Couldn't open a safe dictation note. Try again.",
+    });
+    expect(harness.onCompleted).not.toHaveBeenCalled();
+    expect(harness.closeWizard).not.toHaveBeenCalled();
+    expect(harness.startDictation).not.toHaveBeenCalled();
+  });
+
   it('keeps Done as a completion-only path', async () => {
     const harness = createHarness();
 

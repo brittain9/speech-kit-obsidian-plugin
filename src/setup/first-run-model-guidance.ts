@@ -20,6 +20,7 @@ export interface StartingModelRecommendation {
   mode: 'final' | 'live';
   model: CatalogModelRecord;
   reason: StartingModelReason;
+  resourceClass: 'demanding' | 'standard';
   supportedLanguages: string[];
   totalSizeBytes: number;
 }
@@ -93,6 +94,10 @@ export function resolveStartingModelRecommendation(
           : language === 'en'
             ? 'liveEnglish'
             : 'multilingual',
+    resourceClass:
+      hardware.hardwareClass === 'constrained' && !model.uxTags.includes('lightweight')
+        ? 'demanding'
+        : 'standard',
     supportedLanguages: [...model.languageTags],
     totalSizeBytes: getTotalModelSize(model),
   };

@@ -1,6 +1,7 @@
 export interface MicrophoneReadinessResult {
   error?: unknown;
-  status: 'denied' | 'ready';
+  recovery: 'recheck' | 'reopen';
+  status: 'ready' | 'unavailable';
 }
 
 interface ReadinessNavigator {
@@ -9,7 +10,10 @@ interface ReadinessNavigator {
 }
 
 export class MicrophoneReadiness {
-  private lastResult: MicrophoneReadinessResult = { status: 'denied' };
+  private lastResult: MicrophoneReadinessResult = {
+    recovery: 'recheck',
+    status: 'unavailable',
+  };
   private mediaRequestAttempted = false;
   private pending: Promise<MicrophoneReadinessResult> | null = null;
   private ready = false;
@@ -17,7 +21,7 @@ export class MicrophoneReadiness {
   constructor(private readonly navigator: ReadinessNavigator | undefined = window.navigator) {}
 
   check(): Promise<MicrophoneReadinessResult> {
-    if (this.ready) return Promise.resolve({ status: 'ready' });
+    if (this.ready) return Promise.resolve({ recovery: 'recheck', status: 'ready' });
     if (this.pending !== null) return this.pending;
 
     this.pending = this.runCheck().finally(() => {
@@ -29,16 +33,13 @@ export class MicrophoneReadiness {
   private async runCheck(): Promise<MicrophoneReadinessResult> {
     const permissionState = await this.readPermissionState();
     if (permissionState === 'denied') {
-      return this.remember(
-        this.lastResult.error === undefined
-          ? {
-              error: namedError('NotAllowedError', 'Microphone permission denied.'),
-              status: 'denied',
-            }
-          : this.lastResult,
-      );
+      return this.remember({
+        error: namedError('NotAllowedError', 'Microphone permission denied.'),
+        recovery: 'recheck',
+        status: 'unavailable',
+      });
     }
-    if (permissionState === 'prompt' && this.mediaRequestAttempted) {
+    if (this.mediaRequestAttempted && permissionState !== 'granted') {
       return this.remember(this.lastResult);
     }
 
@@ -47,7 +48,8 @@ export class MicrophoneReadiness {
     if (mediaDevices === undefined || getUserMedia === undefined) {
       return this.remember({
         error: namedError('NotFoundError', 'Microphone capture is unavailable.'),
-        status: 'denied',
+        recovery: 'recheck',
+        status: 'unavailable',
       });
     }
 
@@ -59,9 +61,13 @@ export class MicrophoneReadiness {
       });
       stopTracks(stream);
       this.ready = true;
-      return this.remember({ status: 'ready' });
+      return this.remember({ recovery: 'recheck', status: 'ready' });
     } catch (error) {
-      return this.remember({ error, status: 'denied' });
+      return this.remember({
+        error,
+        recovery: permissionState === null ? 'reopen' : 'recheck',
+        status: 'unavailable',
+      });
     }
   }
 

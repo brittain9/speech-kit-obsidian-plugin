@@ -777,8 +777,10 @@ export const en = {
   'setup.microphone.readyTitle': 'Microphone ready',
   'setup.microphone.readyDesc':
     'Access is available. The next step starts one ordinary dictation session; you can stop it from the ribbon or your hotkey.',
-  'setup.microphone.recovery':
+  'setup.microphone.recheck':
     'After changing access, choose Check again. This wizard will not show another permission prompt unless you reopen setup.',
+  'setup.microphone.reopenSetup':
+    'This runtime cannot report permission changes. Reopen setup after changing access; checking again here will not ask for permission again.',
   'setup.wizard.welcomeTitle': 'Welcome to Speech Kit',
   'setup.wizard.title': 'Set up Speech Kit',
   'setup.wizard.engineReadyTitle': 'Speech engine ready',
@@ -815,6 +817,8 @@ export const en = {
     'This is the smallest compatible model, but words are finalized after a pause rather than shown live.',
   'setup.wizard.recommendation.reason.hardware.constrained':
     'It is the smaller choice for this lower-power computer.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFallback':
+    'No compact model supports this language. This is the only compatible choice, so its download and local resource cost are higher.',
   'setup.wizard.recommendation.reason.hardware.standard':
     'It fits the CPU and memory reported by this computer.',
   'setup.wizard.recommendation.reason.hardware.unknown':
@@ -831,6 +835,12 @@ export const en = {
   'setup.wizard.recommendation.use': 'Use this model',
   'setup.wizard.recommendation.installing': 'Installing…',
   'setup.wizard.recommendation.selecting': 'Selecting…',
+  'setup.wizard.recommendation.anotherInstallActive': 'Another model is installing',
+  'setup.wizard.recommendation.retry': 'Retry install',
+  'setup.wizard.recommendation.retryCapabilities': 'Retry capabilities',
+  'setup.wizard.recommendation.capabilitiesUnavailableTitle': 'Model capabilities unavailable',
+  'setup.wizard.recommendation.capabilitiesUnavailableDesc':
+    'The model catalog loaded, but Speech Kit could not read the installed speech-engine capabilities. Retry here, or reopen setup after checking the speech engine.',
   'setup.wizard.recommendation.failed':
     'Could not install and use the recommended model. Try again.',
   'setup.wizard.recommendation.selectFailed': 'Could not select the recommended model. Try again.',

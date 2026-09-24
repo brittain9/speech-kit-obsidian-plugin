@@ -130,6 +130,22 @@ describe('ModelInstallManager', () => {
         loadStatus: 'error',
       });
     });
+
+    it('keeps catalog data ready but reports capability discovery failure when only system info fails', async () => {
+      configureSidecarForInit(harness.sidecarConnection);
+      harness.sidecarConnection.getSystemInfo.mockRejectedValue(new Error('system info timed out'));
+
+      await harness.manager.init();
+
+      expect(harness.manager.getState()).toMatchObject({
+        capabilityLoadError: 'system info timed out',
+        compiledAdapters: [],
+        compiledRuntimes: [],
+        loadError: null,
+        loadStatus: 'ready',
+      });
+      expect(harness.manager.getState().catalog.models).toHaveLength(3);
+    });
   });
 
   describe('install lifecycle', () => {

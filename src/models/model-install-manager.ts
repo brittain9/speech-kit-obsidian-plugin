@@ -67,6 +67,7 @@ type LoadStatus = 'error' | 'loading' | 'ready';
 
 export interface ModelManagerState {
   activeInstall: ActiveInstallInfo | null;
+  capabilityLoadError?: string | null;
   catalog: ModelCatalogRecord;
   compiledAdapters: CompiledAdapterInfo[];
   compiledRuntimes: CompiledRuntimeInfo[];
@@ -247,6 +248,7 @@ export class ModelInstallManager {
   private activeSelectionCount = 0;
   private activeInstall: ActiveInstallInfo | null = null;
   private cancelStuckTimer: number | null = null;
+  private capabilityLoadError: string | null = null;
   private catalog: ModelCatalogRecord = EMPTY_CATALOG;
   private compiledAdapters: CompiledAdapterInfo[] = [];
   private compiledRuntimes: CompiledRuntimeInfo[] = [];
@@ -275,6 +277,7 @@ export class ModelInstallManager {
   async init(): Promise<void> {
     this.loadStatus = 'loading';
     this.loadError = null;
+    this.capabilityLoadError = null;
 
     // Wire up the sidecar event listener before fetching so we don't miss
     // install events that arrive during the init fetch.
@@ -288,7 +291,7 @@ export class ModelInstallManager {
       const settings = this.deps.getSettings();
       const overridePayload = createModelStoreOverridePayload(settings.modelStorePathOverride);
 
-      const [catalogEvent, installedEvent, modelStoreEvent, systemInfo] = await Promise.all([
+      const [catalogEvent, installedEvent, modelStoreEvent, capabilityResult] = await Promise.all([
         this.deps.sidecarConnection.listModelCatalog(),
         this.deps.sidecarConnection.listInstalledModels(overridePayload.modelStorePathOverride),
         this.deps.sidecarConnection.getModelStore(overridePayload.modelStorePathOverride),
@@ -298,8 +301,9 @@ export class ModelInstallManager {
       this.catalog = catalogEvent;
       this.installedModels = installedEvent.models;
       this.modelStore = modelStoreEvent;
-      this.compiledRuntimes = systemInfo?.compiledRuntimes ?? [];
-      this.compiledAdapters = systemInfo?.compiledAdapters ?? [];
+      this.compiledRuntimes = capabilityResult.systemInfo?.compiledRuntimes ?? [];
+      this.compiledAdapters = capabilityResult.systemInfo?.compiledAdapters ?? [];
+      this.capabilityLoadError = capabilityResult.error;
       this.loadStatus = 'ready';
       this.loadError = null;
     } catch (error) {
@@ -407,6 +411,7 @@ export class ModelInstallManager {
   getState(): Readonly<ModelManagerState> {
     return {
       activeInstall: this.activeInstall,
+      capabilityLoadError: this.capabilityLoadError,
       catalog: this.catalog,
       compiledAdapters: this.compiledAdapters,
       compiledRuntimes: this.compiledRuntimes,
@@ -1220,11 +1225,17 @@ export class ModelInstallManager {
     }
   }
 
-  private async fetchSystemInfo(): Promise<SystemInfoEvent | null> {
+  private async fetchSystemInfo(): Promise<{
+    error: string | null;
+    systemInfo: SystemInfoEvent | null;
+  }> {
     try {
-      return await this.deps.sidecarConnection.getSystemInfo();
-    } catch {
-      return null;
+      return { error: null, systemInfo: await this.deps.sidecarConnection.getSystemInfo() };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : String(error),
+        systemInfo: null,
+      };
     }
   }
 

@@ -541,8 +541,10 @@ export const de = {
   'setup.microphone.readyTitle': 'Mikrofon ist bereit',
   'setup.microphone.readyDesc':
     'Der Zugriff ist verfügbar. Im nächsten Schritt startet eine normale Diktatsitzung, die Sie über die Ribbon oder Ihren Hotkey beenden können.',
-  'setup.microphone.recovery':
+  'setup.microphone.recheck':
     'Ändern Sie den Zugriff und wählen Sie dann „Erneut prüfen“. Dieser Assistent zeigt erst dann erneut eine Berechtigungsabfrage, wenn Sie Setup erneut öffnen.',
+  'setup.microphone.reopenSetup':
+    'Diese Laufzeit kann Berechtigungsänderungen nicht melden. Öffnen Sie Setup nach der Zugriffsänderung erneut; eine erneute Prüfung hier fragt nicht noch einmal nach.',
   'setup.wizard.welcomeTitle': 'Willkommen bei Speech Kit',
   'setup.wizard.title': 'Richten Sie Speech Kit ein',
   'setup.wizard.engineReadyTitle': 'Sprachmodul bereit',
@@ -566,7 +568,7 @@ export const de = {
   'setup.wizard.recommendation.title': 'Empfehlung für Ihre Einrichtung',
   'setup.wizard.recommendation.task': 'Startaufgabe: Diktat',
   'setup.wizard.recommendation.reason.liveEnglish':
-    'Dieses Live-englische Modell bietet eine ausgewogene Mischung aus schneller Rückmeldung und alltäglichem Ressourcenbedarf.',
+    'Dieses englische Live-Modell bietet eine ausgewogene Mischung aus schneller Rückmeldung und alltäglichem Ressourcenbedarf.',
   'setup.wizard.recommendation.reason.multilingual':
     'Dieses Live-Modell unterstützt die ausgewählte Sprache, ohne einen größeren Download mit Vorrang für Qualität zu benötigen.',
   'setup.wizard.recommendation.reason.automatic':
@@ -575,6 +577,8 @@ export const de = {
     'Dies ist das kleinste kompatible Modell, aber Wörter werden nach einer Pause statt live abgeschlossen.',
   'setup.wizard.recommendation.reason.hardware.constrained':
     'Auf diesem Computer mit geringeren Ressourcen ist dies die kleinere Auswahl.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFallback':
+    'Für diese Sprache gibt es kein kompaktes Modell. Dies ist die einzige kompatible Auswahl; Download und lokaler Ressourcenbedarf sind daher höher.',
   'setup.wizard.recommendation.reason.hardware.standard':
     'Es passt zu der von diesem Computer gemeldeten CPU und Arbeitsspeichermenge.',
   'setup.wizard.recommendation.reason.hardware.unknown':
@@ -591,6 +595,12 @@ export const de = {
   'setup.wizard.recommendation.use': 'Dieses Modell verwenden',
   'setup.wizard.recommendation.installing': 'Wird installiert…',
   'setup.wizard.recommendation.selecting': 'Wird ausgewählt…',
+  'setup.wizard.recommendation.anotherInstallActive': 'Ein anderes Modell wird installiert',
+  'setup.wizard.recommendation.retry': 'Installation wiederholen',
+  'setup.wizard.recommendation.retryCapabilities': 'Funktionen erneut prüfen',
+  'setup.wizard.recommendation.capabilitiesUnavailableTitle': 'Modellfunktionen nicht verfügbar',
+  'setup.wizard.recommendation.capabilitiesUnavailableDesc':
+    'Der Modellkatalog wurde geladen, aber Speech Kit konnte die Funktionen der installierten Sprach-Engine nicht lesen. Versuchen Sie es hier erneut oder öffnen Sie Setup nach einer Prüfung der Sprach-Engine erneut.',
   'setup.wizard.recommendation.failed':
     'Das empfohlene Modell konnte nicht installiert und verwendet werden. Versuchen Sie es erneut.',
   'setup.wizard.recommendation.selectFailed':
