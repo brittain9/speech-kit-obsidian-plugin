@@ -5,8 +5,9 @@ import { Modal, Setting } from 'obsidian';
 
 import { type TranslationKey, t, tPlural } from '../shared/i18n';
 import {
+  buildPersonalCorrectionRuleDrafts,
   compilePersonalCorrectionPreview,
-  type InvalidRuleDraft,
+  InvalidRuleDraft,
   normalizePersonalCorrectionRules,
   type PersonalCorrectionPreviewResult,
   type PersonalCorrectionRule,
@@ -47,14 +48,11 @@ export class PersonalCorrectionRulesModal extends Modal {
   ) {
     super(app);
     const settings = dependencies.getSettings();
-    this.draft = [
-      ...settings.personalCorrectionRules,
-      ...settings.personalCorrectionRuleDiagnostics.map((diagnostic) => ({
-        diagnostic,
-        invalid: true as const,
-        raw: diagnostic.raw,
-      })),
-    ];
+    this.draft = buildPersonalCorrectionRuleDrafts(
+      settings.personalCorrectionRules,
+      settings.personalCorrectionRuleDiagnostics,
+      settings.personalCorrectionRuleOrder,
+    );
     this.knownSettingsFingerprint = correctionSettingsFingerprint(settings);
   }
 
@@ -208,8 +206,7 @@ export class PersonalCorrectionRulesModal extends Modal {
     this.draft = this.draft.map((rule, ruleIndex) => {
       if (ruleIndex !== index) return rule;
       if (isInvalidDraft(rule)) {
-        const raw = isRecord(rule.raw) ? rule.raw : {};
-        return { ...raw, ...update };
+        return rule.update(update);
       }
       return isRecord(rule) ? { ...rule, ...update } : { ...update };
     });
@@ -320,6 +317,7 @@ export class PersonalCorrectionRulesModal extends Modal {
     const revision = this.dirtyRevision;
     const normalized = normalizePersonalCorrectionRules(this.draftInputs());
     const rules = normalized.rules;
+    const order = normalized.order;
     this.pendingSaves += 1;
     this.saveState = 'saving';
     this.updateSaveStatus();
@@ -331,6 +329,7 @@ export class PersonalCorrectionRulesModal extends Modal {
         return {
           ...settings,
           personalCorrectionRuleDiagnostics: normalized.diagnostics,
+          personalCorrectionRuleOrder: order,
           personalCorrectionRules: rules,
         };
       }),
@@ -419,7 +418,7 @@ function draftEnabled(draft: PersonalCorrectionRuleDraft): boolean {
 }
 
 function isInvalidDraft(draft: PersonalCorrectionRuleDraft): draft is InvalidRuleDraft {
-  return isRecord(draft) && draft.invalid === true;
+  return draft instanceof InvalidRuleDraft;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -436,6 +435,7 @@ class SettingsConflictError extends Error {
 function correctionSettingsFingerprint(settings: PluginSettings): string {
   return JSON.stringify({
     diagnostics: settings.personalCorrectionRuleDiagnostics,
+    order: settings.personalCorrectionRuleOrder,
     rules: settings.personalCorrectionRules,
   });
 }

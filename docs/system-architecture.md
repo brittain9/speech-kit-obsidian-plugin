@@ -417,14 +417,17 @@ reporting a localized correction-settings error instead of sending a malformed
 frame.
 
 Persisted settings use a recoverable schema-12 policy. Schema 11 and earlier
-correction entries are validated independently: valid entries remain active,
-malformed entries are omitted from the active snapshot, and their raw values,
-field/index context, and count are retained as repair diagnostics. Dictation
-starts with the valid rules and a localized warning such as “N stored rules could
-not be read and were skipped; repair settings”; the invalid entries do not brick
-sessions. Unknown top-level fields and newer schema fields are preserved.
-Malformed wire values received from the sidecar are not treated as this
-recoverable persisted state: they are rejected with the typed protocol error.
+correction entries are validated independently: the first 100 valid entries
+remain active, malformed and overflow entries are omitted from the active
+snapshot, and their raw values, original indexes, field context, and count are
+retained as repair diagnostics. Active and invalid drafts are reconstructed in
+their original persisted order, so repairing an invalid middle rule preserves
+cascade order. Dictation starts with the valid rules and a localized warning
+such as “N stored rules could not be read and were skipped; repair settings”;
+the invalid entries do not brick sessions. Unknown top-level fields and newer
+schema fields are preserved. Malformed wire values received from the sidecar are
+not treated as this recoverable persisted state: they are rejected with the
+typed protocol error.
 
 The stage enforces utterance-wide absolute output (`1,000,000` characters),
 relative amplification (`8x`), normalized-input, indexed-search, and frame
@@ -614,6 +617,7 @@ A representative slice of user-facing settings (full list and defaults in
 | `transcriptFormatting` | `smart` | How utterance boundaries render |
 | `personalCorrectionRules` | `[]` | Ordered local literal find/replace rules applied to final segments in the next session |
 | `personalCorrectionRuleDiagnostics` | `[]` | Repair metadata for persisted entries omitted from the active rule snapshot |
+| `personalCorrectionRuleOrder` | `[]` | Original persisted indexes for active and invalid correction entries |
 | `timestampsEnabled` | `false` | Render timestamps in the note |
 | `timestampClock` | `elapsed` | `elapsed` session time vs `wallclock` |
 | `timestampDensity` | `sparse` | `sparse` (interval), `every_utterance`, or `paragraph` |
@@ -626,10 +630,13 @@ A representative slice of user-facing settings (full list and defaults in
 | `developerMode` | `false` | Verbose logging |
 
 Settings surfaces that need to mutate one part of the resolved snapshot use the
-serialized `SettingsMutationFacade` in `src/settings/settings-mutation.ts`.
-The correction modal and the LLM preset surfaces share that ownership boundary;
-mutations are applied to the latest snapshot, then persisted by the plugin's
-transactional `applySettings` path.
+serialized `SettingsMutationFacade` in `src/settings/settings-mutation.ts` and
+`SettingsStateStore` in `src/settings/settings-state.ts`. The correction modal
+and the LLM preset surfaces share that ownership boundary; the store reloads
+and merges correction rules from `data.json` before each mutation so a stale
+window cannot overwrite a cross-window correction-rule write. Mutations are
+applied to the latest snapshot, then persisted by the plugin's transactional
+`applySettings` path.
 
 ---
 

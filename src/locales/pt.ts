@@ -686,6 +686,7 @@ export const pt = {
   'sidecarError.audio_too_long': 'O clipe de áudio excede a duração máxima deste motor.',
   'sidecarError.event_frame_too_large':
     'O motor de voz produziu um evento que excede o limite seguro do fotograma.',
+  'sidecarError.invalid_session_id': 'O ID da sessão é muito longo.',
   'sidecarError.invalid_correction_rules':
     'As regras de correção pessoal são inválidas. Corrija-as antes de iniciar a ditagem.',
   'sidecarError.engine_inference_failed': 'A transcrição local falhou.',

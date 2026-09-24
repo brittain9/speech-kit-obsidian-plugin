@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PersonalCorrectionRulesModal } from '../src/settings/personal-correction-rules-modal';
-import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
+import {
+  DEFAULT_PLUGIN_SETTINGS,
+  type PluginSettings,
+  resolvePluginSettings,
+} from '../src/settings/plugin-settings';
+import { SettingsStateStore } from '../src/settings/settings-state';
 import { Setting } from './__mocks__/obsidian';
 
 describe('PersonalCorrectionRulesModal', () => {
@@ -166,6 +171,69 @@ describe('PersonalCorrectionRulesModal', () => {
       ).toBe('Correction rules changed elsewhere. Reopen this dialog before saving.'),
     );
     expect(settings.personalCorrectionRules).toEqual([externalRule]);
+  });
+
+  it('detects a cross-window data.json correction write before committing', async () => {
+    let settings = resolvePluginSettings({
+      personalCorrectionRules: [{ enabled: true, find: 'cat', id: 'local', replace: 'dog' }],
+    });
+    const persisted = resolvePluginSettings({
+      personalCorrectionRules: [
+        { enabled: true, find: 'external', id: 'external', replace: 'value' },
+      ],
+    });
+    const store = new SettingsStateStore({
+      commit: async (next) => {
+        settings = next;
+      },
+      getSettings: () => settings,
+      loadData: async () => persisted,
+      onExternalChange: vi.fn(),
+      warn: vi.fn(),
+    });
+    const modal = new PersonalCorrectionRulesModal({} as never, {
+      getSettings: () => settings,
+      mutateSettings: store.mutateSettings.bind(store),
+    });
+    modal.open();
+
+    Setting.named('1. cat').textComponents[0]?.change('kitten');
+    await vi.waitFor(() =>
+      expect(
+        modal.contentEl.querySelector('.local-stt-corrections-modal__save-status')?.textContent,
+      ).toBe('Correction rules changed elsewhere. Reopen this dialog before saving.'),
+    );
+    expect(settings.personalCorrectionRules).toEqual(persisted.personalCorrectionRules);
+  });
+
+  it('keeps repaired invalid rules in their original cascade position', async () => {
+    let settings = resolvePluginSettings({
+      personalCorrectionRules: [
+        { enabled: true, find: 'a', id: 'a', replace: 'b' },
+        { enabled: true, find: ' ', id: 'repair-b', replace: 'd' },
+        { enabled: true, find: 'c', id: 'c', replace: 'd' },
+      ],
+    });
+    const mutateSettings = vi.fn(async (mutation: (current: PluginSettings) => PluginSettings) => {
+      settings = mutation(settings);
+    });
+    new PersonalCorrectionRulesModal({} as never, {
+      getSettings: () => settings,
+      mutateSettings,
+    }).open();
+
+    expect(Setting.named('1. a')).toBeDefined();
+    const repairRow = Setting.instances.find((setting) => setting.name.startsWith('2.'));
+    expect(repairRow).toBeDefined();
+    expect(Setting.named('3. c')).toBeDefined();
+    repairRow?.textComponents[1]?.change('b');
+    await vi.waitFor(() => expect(settings.personalCorrectionRules).toHaveLength(3));
+    expect(settings.personalCorrectionRules.map((rule) => rule.id)).toEqual(['a', 'repair-b', 'c']);
+    expect(settings.personalCorrectionRuleOrder.map((entry) => entry.kind)).toEqual([
+      'active',
+      'active',
+      'active',
+    ]);
   });
 
   it('renders an invalid persisted row as repairable draft input', async () => {

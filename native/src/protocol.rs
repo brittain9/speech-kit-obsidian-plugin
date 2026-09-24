@@ -23,6 +23,7 @@ const JSON_FRAME_KIND: u8 = 0x01;
 const AUDIO_FRAME_KIND: u8 = 0x02;
 const SYNTHESIS_AUDIO_FRAME_KIND: u8 = 0x03;
 const FRAME_HEADER_LENGTH: usize = 5;
+pub const MAX_SESSION_ID_CHARS: usize = 128;
 pub const MAX_FRAME_PAYLOAD: usize = 16 * 1024 * 1024;
 const SESSION_ID_BYTES: usize = 16;
 const SYNTHESIS_AUDIO_HEADER_BYTES: usize = 8;
@@ -212,10 +213,26 @@ pub struct TranscriptWord {
     pub timestamp_source: TimestampSource,
 }
 
-const INVALID_CORRECTION_OBJECT: &str = "\u{0}invalid-correction-object";
-const INVALID_CORRECTION_ID: &str = "\u{0}invalid-correction-id";
-const INVALID_CORRECTION_FIND: &str = "\u{0}invalid-correction-find";
-const INVALID_CORRECTION_REPLACE: &str = "\u{0}invalid-correction-replace";
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PersonalCorrectionRuleValidity {
+    pub enabled: bool,
+    pub find: bool,
+    pub id: bool,
+    pub object: bool,
+    pub replace: bool,
+}
+
+impl Default for PersonalCorrectionRuleValidity {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            find: false,
+            id: false,
+            object: true,
+            replace: false,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -227,6 +244,8 @@ pub struct PersonalCorrectionRule {
     pub find: String,
     pub id: String,
     pub replace: String,
+    #[serde(skip)]
+    pub validity: PersonalCorrectionRuleValidity,
 }
 
 impl<'de> Deserialize<'de> for PersonalCorrectionRule {
@@ -240,49 +259,46 @@ impl<'de> Deserialize<'de> for PersonalCorrectionRule {
         let Some(object) = object else {
             return Ok(Self {
                 enabled: None,
-                find: INVALID_CORRECTION_FIND.to_string(),
-                id: INVALID_CORRECTION_OBJECT.to_string(),
-                replace: INVALID_CORRECTION_REPLACE.to_string(),
+                find: String::new(),
+                id: String::new(),
+                replace: String::new(),
+                validity: PersonalCorrectionRuleValidity {
+                    enabled: true,
+                    find: true,
+                    id: true,
+                    object: false,
+                    replace: true,
+                },
             });
         };
         Ok(Self {
             enabled: object.get("enabled").and_then(serde_json::Value::as_bool),
             find: object
                 .get("find")
-                .filter(|value| value.is_string())
                 .and_then(serde_json::Value::as_str)
-                .unwrap_or_else(|| {
-                    if object.contains_key("find") {
-                        INVALID_CORRECTION_FIND
-                    } else {
-                        ""
-                    }
-                })
+                .unwrap_or_default()
                 .to_string(),
             id: object
                 .get("id")
-                .filter(|value| value.is_string())
                 .and_then(serde_json::Value::as_str)
-                .unwrap_or_else(|| {
-                    if object.contains_key("id") {
-                        INVALID_CORRECTION_ID
-                    } else {
-                        ""
-                    }
-                })
+                .unwrap_or_default()
                 .to_string(),
             replace: object
                 .get("replace")
-                .filter(|value| value.is_string())
                 .and_then(serde_json::Value::as_str)
-                .unwrap_or_else(|| {
-                    if object.contains_key("replace") {
-                        INVALID_CORRECTION_REPLACE
-                    } else {
-                        ""
-                    }
-                })
+                .unwrap_or_default()
                 .to_string(),
+            validity: PersonalCorrectionRuleValidity {
+                enabled: object
+                    .get("enabled")
+                    .is_some_and(|value| !value.is_boolean()),
+                find: object.get("find").is_some_and(|value| !value.is_string()),
+                id: object.get("id").is_some_and(|value| !value.is_string()),
+                object: true,
+                replace: object
+                    .get("replace")
+                    .is_some_and(|value| !value.is_string()),
+            },
         })
     }
 }
@@ -729,6 +745,12 @@ impl CommandEnvelope {
 }
 
 fn validate_command(command: Command) -> Result<Command> {
+    if let Command::StartSession { session_id, .. } = &command {
+        ensure!(
+            session_id.chars().count() <= MAX_SESSION_ID_CHARS,
+            "session id exceeds {MAX_SESSION_ID_CHARS} characters"
+        );
+    }
     if let Command::StartTranslation {
         style_instruction: Some(style_instruction),
         ..
@@ -812,7 +834,7 @@ pub fn validate_correction_rules(
     let mut ids = HashSet::new();
     let mut finds = HashSet::new();
     for (index, rule) in rules.iter().enumerate() {
-        if rule.id == INVALID_CORRECTION_OBJECT {
+        if !rule.validity.object {
             return Err(correction_validation_error(
                 "invalid_rule",
                 "rules",
@@ -820,7 +842,7 @@ pub fn validate_correction_rules(
                 "rule must be an object",
             ));
         }
-        if rule.id == INVALID_CORRECTION_ID {
+        if rule.validity.id {
             return Err(correction_validation_error(
                 "invalid_id",
                 "id",
@@ -861,7 +883,7 @@ pub fn validate_correction_rules(
                 "id is duplicated",
             ));
         }
-        if rule.find == INVALID_CORRECTION_FIND {
+        if rule.validity.find {
             return Err(correction_validation_error(
                 "invalid_find",
                 "find",
@@ -877,7 +899,7 @@ pub fn validate_correction_rules(
                 "find text must not be blank",
             ));
         }
-        if rule.replace == INVALID_CORRECTION_REPLACE {
+        if rule.validity.replace {
             return Err(correction_validation_error(
                 "invalid_replace",
                 "replace",
@@ -1130,14 +1152,14 @@ fn read_exact_or_eof<R: Read>(reader: &mut R, buffer: &mut [u8]) -> Result<usize
 #[cfg(test)]
 mod tests {
     use super::{
-        AUDIO_FRAME_KIND, AccelerationPreference, AudioFrame, Command, Event, EventEnvelope,
-        FRAME_HEADER_LENGTH, IncomingFrame, JSON_FRAME_KIND, ListeningMode, MAX_FRAME_PAYLOAD,
-        MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS, ModelInstallState, ModelProbeStatus,
-        PCM_BYTES_PER_FRAME, PersonalCorrectionRule, QueueBackpressureTier,
-        SYNTHESIS_AUDIO_FRAME_KIND, SelectedModel, SessionStopReason, SourceRange, SpeakingStyle,
-        TimestampGranularity, TimestampSource, TranscriptSegment, TranscriptWord,
-        encode_audio_frame_envelope, read_frame, validate_correction_rules, write_event_frame,
-        write_frame, write_synthesis_audio_frame,
+        AUDIO_FRAME_KIND, AccelerationPreference, AudioFrame, Command, CommandEnvelope, Event,
+        EventEnvelope, FRAME_HEADER_LENGTH, IncomingFrame, JSON_FRAME_KIND, ListeningMode,
+        MAX_FRAME_PAYLOAD, MAX_SESSION_ID_CHARS, MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS,
+        ModelInstallState, ModelProbeStatus, PCM_BYTES_PER_FRAME, PersonalCorrectionRule,
+        QueueBackpressureTier, SYNTHESIS_AUDIO_FRAME_KIND, SelectedModel, SessionStopReason,
+        SourceRange, SpeakingStyle, TimestampGranularity, TimestampSource, TranscriptSegment,
+        TranscriptWord, encode_audio_frame_envelope, read_frame, validate_correction_rules,
+        write_event_frame, write_frame, write_synthesis_audio_frame,
     };
     use crate::engine::capabilities::{ModelFamilyId, RuntimeId};
     use uuid::Uuid;
@@ -1345,6 +1367,38 @@ mod tests {
             assert!(!error.code.is_empty());
             assert!(!error.field.is_empty());
         }
+    }
+
+    #[test]
+    fn correction_rules_allow_former_nul_sentinel_values() {
+        let rule: PersonalCorrectionRule = serde_json::from_value(serde_json::json!({
+            "enabled": true,
+            "find": "\u{0000}invalid-correction-find",
+            "id": "\u{0000}invalid-correction-id",
+            "replace": "\u{0000}invalid-correction-replace"
+        }))
+        .expect("legitimate NUL values should deserialize");
+        validate_correction_rules(&[rule]).expect("legitimate NUL values should validate");
+    }
+
+    #[test]
+    fn oversized_session_id_is_rejected_before_command_dispatch() {
+        let payload = serde_json::to_vec(&serde_json::json!({
+            "type": "start_session",
+            "sessionId": "x".repeat(MAX_SESSION_ID_CHARS + 1),
+            "mode": "always_on",
+            "modelSelection": {
+                "kind": "external_file",
+                "runtimeId": "whisper_cpp",
+                "familyId": "whisper",
+                "filePath": "/tmp/model.bin"
+            },
+            "language": "en",
+            "sessionStartUnixMs": 1_700_000_000_000_u64
+        }))
+        .expect("payload should serialize");
+        let error = CommandEnvelope::parse_json(&payload).expect_err("oversized id should reject");
+        assert!(error.to_string().contains("session id exceeds"));
     }
 
     #[test]

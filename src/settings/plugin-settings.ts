@@ -41,7 +41,9 @@ import {
   normalizePersonalCorrectionRules,
   type PersonalCorrectionRule,
   type PersonalCorrectionRuleDiagnostic,
+  type PersonalCorrectionRuleOrderEntry,
   readPersonalCorrectionRuleDiagnostics,
+  readPersonalCorrectionRuleOrder,
 } from './personal-correction-rules';
 
 export const DICTATION_ANCHORS = ['at_cursor', 'end_of_note'] as const;
@@ -196,6 +198,7 @@ export interface PluginSettings {
   modelStorePathOverride: string;
   personalCorrectionRules: PersonalCorrectionRule[];
   personalCorrectionRuleDiagnostics: PersonalCorrectionRuleDiagnostic[];
+  personalCorrectionRuleOrder: PersonalCorrectionRuleOrderEntry[];
   readAloudLanguage: DictationLanguage;
   retainLastUtterance: boolean;
   schemaVersion: number;
@@ -270,6 +273,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   modelStorePathOverride: '',
   personalCorrectionRules: [],
   personalCorrectionRuleDiagnostics: [],
+  personalCorrectionRuleOrder: [],
   readAloudLanguage: 'auto',
   retainLastUtterance: true,
   schemaVersion: 12,
@@ -327,6 +331,19 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
     personalCorrectionRules.diagnostics.length > 0
       ? personalCorrectionRules.diagnostics
       : readPersonalCorrectionRuleDiagnostics(raw.personalCorrectionRuleDiagnostics);
+  const persistedCorrectionOrder = readPersonalCorrectionRuleOrder(raw.personalCorrectionRuleOrder);
+  const personalCorrectionRuleOrder =
+    personalCorrectionRules.diagnostics.length > 0
+      ? personalCorrectionRules.order
+      : persistedCorrectionOrder.length > 0
+        ? persistedCorrectionOrder
+        : [
+            ...personalCorrectionRules.order,
+            ...personalCorrectionRuleDiagnostics.map((_, index) => ({
+              index: personalCorrectionRules.rules.length + index,
+              kind: 'invalid' as const,
+            })),
+          ];
 
   return {
     // Preserve fields introduced by a newer plugin/schema. Known fields below
@@ -414,6 +431,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
     ),
     personalCorrectionRules: personalCorrectionRules.rules,
     personalCorrectionRuleDiagnostics,
+    personalCorrectionRuleOrder,
     readAloudLanguage: isDictationLanguage(raw.readAloudLanguage)
       ? raw.readAloudLanguage
       : DEFAULT_PLUGIN_SETTINGS.readAloudLanguage,

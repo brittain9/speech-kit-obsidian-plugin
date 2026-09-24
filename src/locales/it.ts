@@ -690,6 +690,7 @@ export const it = {
 
   'sidecarError.event_frame_too_large':
     'Il motore vocale ha prodotto un evento che supera il limite sicuro del frame.',
+  'sidecarError.invalid_session_id': 'L’ID della sessione è troppo lungo.',
   'sidecarError.invalid_correction_rules':
     'Le regole di correzione personali non sono valide. Correggile prima di iniziare la dettatura.',
 

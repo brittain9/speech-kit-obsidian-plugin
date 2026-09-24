@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import LocalSttPlugin from '../src/main';
-import { LlmPresetStateStore } from '../src/settings/llm-preset-state';
 import {
   DEFAULT_PLUGIN_SETTINGS,
   type PluginSettings,
   resolvePluginSettings,
 } from '../src/settings/plugin-settings';
+import { SettingsStateStore } from '../src/settings/settings-state';
 
 interface TestablePlugin {
   applySettings: (settings: PluginSettings, options: { persist: boolean }) => Promise<void>;
@@ -61,7 +61,7 @@ describe('settings persistence', () => {
       throw new Error('disk full');
     });
     const plugin = createTestPlugin(latest, saveData);
-    const store = new LlmPresetStateStore({
+    const store = new SettingsStateStore({
       commit: (settings, options) => plugin.applySettings(settings, options),
       getSettings: () => plugin.settings,
       loadData: async () => plugin.settings,

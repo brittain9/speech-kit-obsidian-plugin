@@ -996,6 +996,7 @@ export const en = {
   'sidecarError.audio_too_long': 'Audio clip exceeds the maximum duration for this engine.',
   'sidecarError.event_frame_too_large':
     'The speech engine produced an event that exceeds the safe frame limit.',
+  'sidecarError.invalid_session_id': 'The session id is too long.',
   'sidecarError.invalid_correction_rules':
     'The personal correction rules are invalid. Fix them before starting dictation.',
   'sidecarError.engine_inference_failed': 'Local transcription failed.',

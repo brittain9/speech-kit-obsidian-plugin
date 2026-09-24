@@ -89,7 +89,7 @@ interface SettingsTabDependencies {
   resetLlmTransformation: () => Promise<void>;
   restartSidecar: () => Promise<void>;
   saveSettings: (settings: PluginSettings) => Promise<void>;
-  mutateSettings?: (mutation: SettingsMutation) => Promise<void>;
+  mutateSettings: (mutation: SettingsMutation) => Promise<void>;
   sidecarConnection: Pick<SidecarConnection, 'probeSystemAudio' | 'shutdown'>;
   sidecarInstallManager: SidecarInstallManager;
   sidecarLifecycleGate: SidecarLifecycleGate;
@@ -375,11 +375,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
         button.setButtonText(t('settings.corrections.manage')).onClick(() => {
           new PersonalCorrectionRulesModal(this.app, {
             getSettings: () => this.dependencies.getSettings(),
-            mutateSettings:
-              this.dependencies.mutateSettings ??
-              (async (mutation) => {
-                await this.dependencies.saveSettings(mutation(this.dependencies.getSettings()));
-              }),
+            mutateSettings: this.dependencies.mutateSettings,
           }).open();
         });
       });

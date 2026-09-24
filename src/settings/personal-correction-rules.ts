@@ -65,21 +65,47 @@ export interface PersonalCorrectionRulesValidation {
   valid: boolean;
 }
 
+export interface PersonalCorrectionRuleOrderEntry {
+  index: number;
+  kind: 'active' | 'invalid';
+}
+
 export interface NormalizedPersonalCorrectionRules {
   diagnostics: PersonalCorrectionRuleDiagnostic[];
+  order: PersonalCorrectionRuleOrderEntry[];
   rules: PersonalCorrectionRule[];
+}
+
+/** A non-serializable repair draft; persisted `invalid: true` data is not this type. */
+export class InvalidRuleDraft {
+  private rawValue: unknown;
+
+  static from(diagnostic: PersonalCorrectionRuleDiagnostic, raw: unknown): InvalidRuleDraft {
+    return new InvalidRuleDraft(diagnostic, raw);
+  }
+
+  private constructor(
+    readonly diagnostic: PersonalCorrectionRuleDiagnostic,
+    raw: unknown,
+  ) {
+    this.rawValue = raw;
+  }
+
+  get raw(): unknown {
+    return this.rawValue;
+  }
+
+  update(update: Partial<PersonalCorrectionRule>): InvalidRuleDraft {
+    const raw = isRecord(this.rawValue) ? { ...this.rawValue } : {};
+    this.rawValue = { ...raw, ...update };
+    return this;
+  }
 }
 
 export type PersonalCorrectionRuleDraft =
   | PersonalCorrectionRule
   | PersonalCorrectionRuleInput
   | InvalidRuleDraft;
-
-export interface InvalidRuleDraft {
-  diagnostic: PersonalCorrectionRuleDiagnostic;
-  invalid: true;
-  raw: unknown;
-}
 
 export type PersonalCorrectionPreviewResult =
   | {
@@ -302,26 +328,69 @@ export function readPersonalCorrectionRuleDiagnostics(
   });
 }
 
+export function readPersonalCorrectionRuleOrder(
+  value: unknown,
+): PersonalCorrectionRuleOrderEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    if (
+      typeof entry.index !== 'number' ||
+      !Number.isInteger(entry.index) ||
+      entry.index < 0 ||
+      (entry.kind !== 'active' && entry.kind !== 'invalid')
+    ) {
+      return [];
+    }
+    return [{ index: entry.index, kind: entry.kind }];
+  });
+}
+
+export function buildPersonalCorrectionRuleDrafts(
+  activeRules: readonly PersonalCorrectionRule[],
+  diagnostics: readonly PersonalCorrectionRuleDiagnostic[],
+  order: readonly PersonalCorrectionRuleOrderEntry[],
+): PersonalCorrectionRuleDraft[] {
+  const remainingActive = [...activeRules];
+  const remainingInvalid = diagnostics.map((diagnostic) =>
+    InvalidRuleDraft.from(diagnostic, diagnostic.raw),
+  );
+  if (order.length === 0) return [...remainingActive, ...remainingInvalid];
+
+  const drafts: PersonalCorrectionRuleDraft[] = [];
+  for (const entry of order) {
+    if (entry.kind === 'active') {
+      const rule = remainingActive.shift();
+      if (rule !== undefined) drafts.push(rule);
+    } else {
+      const invalid = remainingInvalid.shift();
+      if (invalid !== undefined) drafts.push(invalid);
+    }
+  }
+  return [...drafts, ...remainingActive, ...remainingInvalid];
+}
+
 export function normalizePersonalCorrectionRules(
   value: unknown,
 ): NormalizedPersonalCorrectionRules {
-  if (value === undefined) return { diagnostics: [], rules: [] };
+  if (value === undefined) return { diagnostics: [], order: [], rules: [] };
   if (!Array.isArray(value)) {
+    const diagnostic: PersonalCorrectionRuleDiagnostic = {
+      code: 'invalid_rule',
+      field: 'rules',
+      index: 0,
+      message: t('settings.corrections.validation.invalidRule'),
+      raw: value,
+    };
     return {
-      diagnostics: [
-        {
-          code: 'invalid_rule',
-          field: 'rules',
-          index: 0,
-          message: t('settings.corrections.validation.invalidRule'),
-          raw: value,
-        },
-      ],
+      diagnostics: [diagnostic],
+      order: [{ index: 0, kind: 'invalid' }],
       rules: [],
     };
   }
 
   const diagnostics: PersonalCorrectionRuleDiagnostic[] = [];
+  const order: PersonalCorrectionRuleOrderEntry[] = [];
   const rules: PersonalCorrectionRule[] = [];
   const ids = new Set<string>();
   const finds = new Set<string>();
@@ -334,6 +403,7 @@ export function normalizePersonalCorrectionRules(
         message: t('settings.corrections.validation.invalidRule'),
         raw,
       });
+      order.push({ index, kind: 'invalid' });
       return;
     }
 
@@ -347,6 +417,7 @@ export function normalizePersonalCorrectionRules(
         message: firstError?.message ?? t('settings.corrections.validation.invalidRule'),
         raw,
       });
+      order.push({ index, kind: 'invalid' });
       return;
     }
 
@@ -359,6 +430,20 @@ export function normalizePersonalCorrectionRules(
         message: t('settings.corrections.validation.invalidRule'),
         raw,
       });
+      order.push({ index, kind: 'invalid' });
+      return;
+    }
+    if (rules.length >= PERSONAL_CORRECTION_RULE_MAX_COUNT) {
+      diagnostics.push({
+        code: 'too_many_rules',
+        field: 'rules',
+        index,
+        message: t('settings.corrections.validation.tooMany', {
+          max: PERSONAL_CORRECTION_RULE_MAX_COUNT,
+        }),
+        raw,
+      });
+      order.push({ index, kind: 'invalid' });
       return;
     }
     const id = rule.id;
@@ -373,14 +458,16 @@ export function normalizePersonalCorrectionRules(
           : t('settings.corrections.validation.duplicateFind'),
         raw,
       });
+      order.push({ index, kind: 'invalid' });
       return;
     }
     ids.add(id);
     finds.add(find);
     rules.push(rule);
+    order.push({ index, kind: 'active' });
   });
 
-  return { diagnostics, rules };
+  return { diagnostics, order, rules };
 }
 
 export function compilePersonalCorrectionPreview(
@@ -401,16 +488,19 @@ export function compilePersonalCorrectionPreview(
   const originalLength = unicodeLength(input);
   const budget = new CorrectionWorkBudget();
   let output = input;
+  const normalizedCache: { value: NormalizedInputCache | null } = { value: null };
   let replacements = 0;
   let rulesApplied = 0;
   for (const [index, rule] of validatedRules.entries()) {
     if (!rule.enabled) continue;
-    const application = preflightRule(output, rule, originalLength, budget);
+    const application = preflightRule(output, rule, originalLength, budget, normalizedCache);
     if (!application.ok) {
       return { error: withRuleContext(application.error, index), ok: false };
     }
     if (application.application.matches.length === 0) continue;
-    output = materializeRule(output, rule, application.application.matches);
+    const nextOutput = materializeRule(output, rule, application.application.matches);
+    if (nextOutput !== output) normalizedCache.value = null;
+    output = nextOutput;
     replacements += application.application.matches.length;
     rulesApplied += 1;
   }
@@ -463,6 +553,11 @@ class CorrectionWorkBudget {
 
 type RuleMatch = { end: number; start: number };
 
+type NormalizedInputCache = {
+  input: string;
+  normalized: NormalizedInput;
+};
+
 type NormalizedInput = {
   boundaryMap: Array<number | undefined>;
   chars: string[];
@@ -477,8 +572,18 @@ function preflightRule(
   rule: PersonalCorrectionRule,
   cascadeInputLength: number,
   budget: CorrectionWorkBudget,
+  cache: { value: NormalizedInputCache | null },
 ): RuleApplicationResult {
-  const scan = findMatches(input, rule.find, budget);
+  let normalized: NormalizedInput;
+  if (cache.value?.input === input) {
+    normalized = cache.value.normalized;
+  } else {
+    const normalizedResult = normalizeInput(input, budget);
+    if (!normalizedResult.ok) return normalizedResult;
+    normalized = normalizedResult.normalized;
+    cache.value = { input, normalized };
+  }
+  const scan = findMatchesInNormalizedInput(normalized, rule.find, budget);
   if (!scan.ok) return scan;
   const matches = scan.application.matches;
   const inputLength = unicodeLength(input);
@@ -557,14 +662,11 @@ function materializeRule(
   return pieces.join('');
 }
 
-function findMatches(
-  input: string,
+function findMatchesInNormalizedInput(
+  normalized: NormalizedInput,
   find: string,
   budget: CorrectionWorkBudget,
 ): RuleApplicationResult {
-  const normalizedResult = normalizeInput(input, budget);
-  if (!normalizedResult.ok) return normalizedResult;
-  const normalized = normalizedResult.normalized;
   const findChars = Array.from(find.normalize('NFD'));
   if (findChars.length === 0) return { application: { matches: [] }, ok: true };
 

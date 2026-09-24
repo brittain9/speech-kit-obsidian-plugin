@@ -7,7 +7,6 @@ import {
   type LlmPresetOverrides,
   type LlmPresetTiming,
 } from '../llm/presets';
-import type { LlmPresetState } from '../settings/llm-preset-state';
 import {
   LLM_MIN_WORDS_MAX,
   LLM_TEMPERATURE_MAX,
@@ -15,6 +14,7 @@ import {
   LLM_USER_PRESET_MAX_DESCRIPTION_CHARS,
   LLM_USER_PRESET_MAX_LABEL_CHARS,
 } from '../settings/plugin-settings';
+import type { LlmPresetState } from '../settings/settings-state';
 import { t } from '../shared/i18n';
 import { type BoundedNumberOptions, validateBoundedNumber } from './validated-number-setting';
 

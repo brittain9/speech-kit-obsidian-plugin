@@ -10,9 +10,9 @@ import {
   resolveActivePresetEntry,
 } from '../llm/presets';
 import type { LlmCleanupFailure } from '../llm/provider';
-import type { LlmPresetStateMutation } from '../settings/llm-preset-state';
 import type { PluginSettings } from '../settings/plugin-settings';
 import { createSettingGroup } from '../settings/setting-helpers';
+import type { LlmPresetStateMutation } from '../settings/settings-state';
 import { t } from '../shared/i18n';
 import type { PluginLogger } from '../shared/plugin-logger';
 import type { UserFeedback } from '../shared/user-feedback';

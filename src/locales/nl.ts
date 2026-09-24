@@ -683,6 +683,7 @@ export const nl = {
   'sidecarError.audio_too_long': 'Audioclip overschrijdt de maximale duur voor deze engine.',
   'sidecarError.event_frame_too_large':
     'De spraakengine heeft een gebeurtenis gegenereerd die de veilige framelimiet overschrijdt.',
+  'sidecarError.invalid_session_id': 'De sessie-ID is te lang.',
   'sidecarError.invalid_correction_rules':
     'De persoonlijke correctieregels zijn ongeldig. Corrigeer ze voordat je met dicteren begint.',
   'sidecarError.engine_inference_failed': 'Lokale transcriptie is mislukt.',

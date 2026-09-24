@@ -686,6 +686,7 @@ export const fr = {
   'sidecarError.audio_too_long': 'Le clip audio dépasse la durée maximale pour ce moteur.',
   'sidecarError.event_frame_too_large':
     'Le moteur vocal a produit un événement qui dépasse la limite de trame sûre.',
+  'sidecarError.invalid_session_id': 'L’identifiant de session est trop long.',
   'sidecarError.invalid_correction_rules':
     'Les règles de correction personnelle sont invalides. Corrigez-les avant de démarrer la dictée.',
   'sidecarError.engine_inference_failed': 'La transcription locale a échoué.',

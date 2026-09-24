@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   compilePersonalCorrectionPreview,
   MAX_CORRECTION_OUTPUT_CHARS,
+  normalizePersonalCorrectionRules,
   PERSONAL_CORRECTION_RULE_MAX_CHARS,
   type PersonalCorrectionRule,
   validatePersonalCorrectionRules,
@@ -120,6 +121,19 @@ describe('personal correction rule semantics', () => {
     );
   });
 
+  it('reuses normalized input across nonmatching rules for native budget parity', () => {
+    const input = 'a'.repeat(700_000);
+    const result = compilePersonalCorrectionPreview(
+      [
+        rule('b', 'x', { id: 'missing-1' }),
+        rule('c', 'x', { id: 'missing-2' }),
+        rule('d', 'x', { id: 'missing-3' }),
+      ],
+      input,
+    );
+    expect(result).toMatchObject({ ok: true, output: input });
+  });
+
   it('rejects pathological NFD near-matches by deterministic search work', () => {
     const input = 'e\u0301'.repeat(50_000);
     const result = compilePersonalCorrectionPreview(
@@ -127,6 +141,15 @@ describe('personal correction rule semantics', () => {
       input,
     );
     expect(result).toMatchObject({ error: { code: 'work_budget' }, ok: false });
+  });
+
+  it('treats persisted invalid:true data as an ordinary future field', () => {
+    const normalized = normalizePersonalCorrectionRules([
+      { enabled: true, find: 'cat', id: 'future', invalid: true, replace: 'dog' },
+    ]);
+    expect(normalized.rules).toHaveLength(1);
+    expect(normalized.rules[0]).toMatchObject({ invalid: true });
+    expect(normalized.diagnostics).toEqual([]);
   });
 
   it('rejects partial canonical scalar matches without dropping combining marks', () => {

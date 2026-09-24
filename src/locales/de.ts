@@ -693,6 +693,7 @@ export const de = {
   'sidecarError.audio_too_long': 'Der Audioclip überschreitet die maximale Dauer für diese Engine.',
   'sidecarError.event_frame_too_large':
     'Das Sprachmodul hat ein Ereignis erzeugt, das die sichere Frame-Grenze überschreitet.',
+  'sidecarError.invalid_session_id': 'Die Sitzungs-ID ist zu lang.',
   'sidecarError.invalid_correction_rules':
     'Die persönlichen Korrekturregeln sind ungültig. Korrigiere sie vor dem Start des Diktierens.',
   'sidecarError.engine_inference_failed': 'Lokale Transkription fehlgeschlagen.',

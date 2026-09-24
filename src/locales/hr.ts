@@ -912,6 +912,7 @@ export const hr = {
 
   'sidecarError.event_frame_too_large':
     'Govorni modul stvorio je događaj koji prelazi sigurnosno ograničenje okvira.',
+  'sidecarError.invalid_session_id': 'ID sesije je predug.',
   'sidecarError.invalid_correction_rules':
     'Osobna pravila ispravka nisu valjana. Ispravite ih prije početka diktiranja.',
 

@@ -681,6 +681,7 @@ export const ja = {
   'sidecarError.audio_too_long': 'オーディオ クリップがこのエンジンの最大継続時間を超えています。',
   'sidecarError.event_frame_too_large':
     '音声エンジンが安全なフレーム上限を超えるイベントを生成しました。',
+  'sidecarError.invalid_session_id': 'セッションIDが長すぎます。',
   'sidecarError.invalid_correction_rules':
     '個人訂正ルールが無効です。音声入力を開始する前に修正してください。',
   'sidecarError.engine_inference_failed': 'ローカルでの転写に失敗しました。',

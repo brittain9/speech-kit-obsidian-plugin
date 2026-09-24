@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-
+import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
 import {
   areLlmPresetStatesEqual,
-  LlmPresetStateStore,
   readLlmPresetState,
+  SettingsStateStore,
   withLlmPresetState,
-} from '../src/settings/llm-preset-state';
-import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
+} from '../src/settings/settings-state';
 import { createUserPreset } from './fixtures/llm';
 
 function settings(overrides: Partial<PluginSettings> = {}): PluginSettings {
@@ -26,7 +25,7 @@ function createStore(args: {
   const onExternalChange = vi.fn();
   const warn = vi.fn();
   const loadData = vi.fn(args.loadData ?? (async () => current));
-  const store = new LlmPresetStateStore({
+  const store = new SettingsStateStore({
     commit,
     getSettings: () => current,
     loadData,
@@ -92,7 +91,7 @@ describe('LLM preset state helpers', () => {
   });
 });
 
-describe('LlmPresetStateStore.synchronize', () => {
+describe('SettingsStateStore.synchronize', () => {
   it('imports external preset additions while preserving unrelated memory settings', async () => {
     const externalPreset = createUserPreset({ id: 'external' });
     const fixture = createStore({
@@ -114,6 +113,29 @@ describe('LlmPresetStateStore.synchronize', () => {
     });
     expect(fixture.commit).toHaveBeenCalledWith(expect.any(Object), { persist: false });
     expect(fixture.onExternalChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('imports cross-window correction-rule writes before generic mutations', async () => {
+    const externalRule = { enabled: true, find: 'external', id: 'external', replace: 'value' };
+    const fixture = createStore({
+      current: settings({
+        developerMode: true,
+        personalCorrectionRules: [{ enabled: true, find: 'stale', id: 'stale', replace: 'value' }],
+      }),
+      loadData: async () => ({
+        ...DEFAULT_PLUGIN_SETTINGS,
+        personalCorrectionRuleOrder: [{ index: 0, kind: 'active' }],
+        personalCorrectionRules: [externalRule],
+      }),
+    });
+
+    await fixture.store.synchronize();
+
+    expect(fixture.getCurrent()).toMatchObject({
+      developerMode: true,
+      personalCorrectionRules: [externalRule],
+    });
+    expect(fixture.commit).toHaveBeenCalledWith(expect.any(Object), { persist: false });
   });
 
   it('imports external edits and deletions as authoritative preset state', async () => {
@@ -222,7 +244,7 @@ describe('LlmPresetStateStore.synchronize', () => {
     expect(fixture.getCurrent()).toBe(current);
     expect(fixture.commit).not.toHaveBeenCalled();
     expect(fixture.warn).toHaveBeenCalledWith(
-      'Failed to synchronize presets from data.json',
+      'Failed to synchronize settings from data.json',
       expect.any(Error),
     );
   });
@@ -241,13 +263,13 @@ describe('LlmPresetStateStore.synchronize', () => {
     expect(fixture.getCurrent()).toBe(current);
     expect(fixture.commit).not.toHaveBeenCalled();
     expect(fixture.warn).toHaveBeenCalledWith(
-      'Failed to synchronize presets from data.json',
+      'Failed to synchronize settings from data.json',
       expect.any(Error),
     );
   });
 });
 
-describe('LlmPresetStateStore.mutate', () => {
+describe('SettingsStateStore.mutateLlmState', () => {
   it('reloads first and mutates the latest external preset state', async () => {
     const external = createUserPreset({ id: 'external' });
     const fixture = createStore({
@@ -258,7 +280,7 @@ describe('LlmPresetStateStore.mutate', () => {
       }),
     });
 
-    await fixture.store.mutate((state) => ({
+    await fixture.store.mutateLlmState((state) => ({
       ...state,
       activePresetRef: 'user:external',
     }));
@@ -273,7 +295,7 @@ describe('LlmPresetStateStore.mutate', () => {
   it('normalizes mutation output before persisting', async () => {
     const fixture = createStore({});
 
-    await fixture.store.mutate(() => ({
+    await fixture.store.mutateLlmState(() => ({
       activePresetRef: 'user:new',
       userPresets: [
         {
@@ -314,7 +336,7 @@ describe('LlmPresetStateStore.mutate', () => {
       llmPostprocessUserPresets: [],
     });
 
-    await fixture.store.commitPreservingPresetState(stale);
+    await fixture.store.commitPreservingSettings(stale);
 
     expect(fixture.getCurrent().developerMode).toBe(true);
     expect(readLlmPresetState(fixture.getCurrent())).toEqual({
@@ -335,9 +357,7 @@ describe('LlmPresetStateStore.mutate', () => {
 
     const synchronization = fixture.store.synchronize();
     await Promise.resolve();
-    const ordinarySave = fixture.store.commitPreservingPresetState(
-      settings({ developerMode: true }),
-    );
+    const ordinarySave = fixture.store.commitPreservingSettings(settings({ developerMode: true }));
 
     resolveLoad?.({
       ...DEFAULT_PLUGIN_SETTINGS,
@@ -355,7 +375,7 @@ describe('LlmPresetStateStore.mutate', () => {
   });
 });
 
-describe('LlmPresetStateStore.commitPreservingPresetStateIf', () => {
+describe('SettingsStateStore.commitPreservingSettingsIf', () => {
   it('commits when the condition matches and preserves preset state', async () => {
     const preset = createUserPreset({ id: 'keep' });
     const fixture = createStore({
@@ -366,7 +386,7 @@ describe('LlmPresetStateStore.commitPreservingPresetStateIf', () => {
       }),
     });
 
-    const updated = await fixture.store.commitPreservingPresetStateIf(
+    const updated = await fixture.store.commitPreservingSettingsIf(
       (current) => current.audioInputDevice?.deviceId === 'missing-device',
       (current) => ({
         ...current,
@@ -390,12 +410,12 @@ describe('LlmPresetStateStore.commitPreservingPresetStateIf', () => {
         audioInputDevice: { deviceId: 'missing-device', label: 'Desk microphone' },
       }),
     });
-    const selectNewMicrophone = fixture.store.commitPreservingPresetState(
+    const selectNewMicrophone = fixture.store.commitPreservingSettings(
       settings({
         audioInputDevice: { deviceId: 'new-device', label: 'Headset microphone' },
       }),
     );
-    const clearUnavailableMicrophone = fixture.store.commitPreservingPresetStateIf(
+    const clearUnavailableMicrophone = fixture.store.commitPreservingSettingsIf(
       (current) => current.audioInputDevice?.deviceId === 'missing-device',
       (current) => ({ ...current, audioInputDevice: null }),
     );
@@ -427,14 +447,14 @@ describe('LlmPresetStateStore.commitPreservingPresetStateIf', () => {
       },
     });
 
-    const clearUnavailableMicrophone = fixture.store.commitPreservingPresetStateIf(
+    const clearUnavailableMicrophone = fixture.store.commitPreservingSettingsIf(
       (current) => current.audioInputDevice?.deviceId === 'missing-device',
       (current) => ({ ...current, audioInputDevice: null }),
     );
     await vi.waitFor(() => {
       expect(fixture.commit).toHaveBeenCalledTimes(1);
     });
-    const selectNewMicrophone = fixture.store.commitPreservingPresetState(
+    const selectNewMicrophone = fixture.store.commitPreservingSettings(
       settings({
         audioInputDevice: { deviceId: 'new-device', label: 'Headset microphone' },
       }),
@@ -467,12 +487,12 @@ describe('LlmPresetStateStore.commitPreservingPresetStateIf', () => {
     });
 
     await expect(
-      fixture.store.commitPreservingPresetStateIf(
+      fixture.store.commitPreservingSettingsIf(
         (current) => current.audioInputDevice?.deviceId === 'missing-device',
         (current) => ({ ...current, audioInputDevice: null }),
       ),
     ).rejects.toBe(persistenceError);
-    await fixture.store.commitPreservingPresetState(
+    await fixture.store.commitPreservingSettings(
       settings({
         audioInputDevice: { deviceId: 'new-device', label: 'Headset microphone' },
       }),

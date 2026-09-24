@@ -4,7 +4,9 @@ use serde::Serialize;
 use unicode_general_category::{GeneralCategory, get_general_category};
 use unicode_normalization::UnicodeNormalization;
 
-use crate::protocol::{MAX_FRAME_PAYLOAD, PersonalCorrectionRule, StageId, TranscriptSegment};
+use crate::protocol::{
+    MAX_FRAME_PAYLOAD, MAX_SESSION_ID_CHARS, PersonalCorrectionRule, StageId, TranscriptSegment,
+};
 use crate::stages::{StageContext, StageProcess, StageProcessor};
 use crate::transcription::Transcript;
 
@@ -13,8 +15,14 @@ pub const MAX_CORRECTION_AMPLIFICATION: usize = 8;
 pub const MAX_CORRECTION_INPUT_CHARS: usize = 1_000_000;
 pub const MAX_CORRECTION_NORMALIZED_SCAN_CHARS: usize = 2_000_000;
 pub const MAX_CORRECTION_SEARCH_STEPS: usize = 4_000_000;
+const MAX_SESSION_ID_EVENT_BYTES: usize = 32 + MAX_SESSION_ID_CHARS * 6;
 
 const VERSION: u32 = 2;
+#[cfg(test)]
+thread_local! {
+    static NORMALIZED_INPUT_VECTOR_CONSTRUCTIONS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
 const ABSOLUTE_AMPLIFICATION_CODE: &str = "absolute_amplification";
 const RELATIVE_AMPLIFICATION_CODE: &str = "relative_amplification";
 const WORK_BUDGET_CODE: &str = "work_budget";
@@ -216,16 +224,17 @@ impl UtteranceBudget {
         }
     }
 
-    fn add_normalized(&mut self, count: usize) -> Result<(), RuleApplicationError> {
-        self.normalized_chars = self
+    fn reserve_normalized(&mut self, count: usize) -> Result<(), RuleApplicationError> {
+        let next = self
             .normalized_chars
             .checked_add(count)
             .ok_or_else(|| RuleApplicationError::work("normalized correction input overflows"))?;
-        if self.normalized_chars > MAX_CORRECTION_NORMALIZED_SCAN_CHARS {
+        if next > MAX_CORRECTION_NORMALIZED_SCAN_CHARS {
             return Err(RuleApplicationError::work(
                 "normalized correction input exceeds the safety budget",
             ));
         }
+        self.normalized_chars = next;
         Ok(())
     }
 
@@ -378,15 +387,23 @@ struct NormalizedInput<'a> {
 
 impl<'a> NormalizedInput<'a> {
     fn new(input: &'a str, budget: &mut UtteranceBudget) -> Result<Self, RuleApplicationError> {
-        let normalized_len = input.nfd().count();
+        let normalized_len = input.chars().try_fold(0_usize, |total, character| {
+            total
+                .checked_add(character.to_string().nfd().count())
+                .ok_or_else(|| RuleApplicationError::work("normalized correction input overflows"))
+        })?;
         if normalized_len > MAX_CORRECTION_INPUT_CHARS {
             return Err(RuleApplicationError::work(
                 "normalized correction input exceeds the safety budget",
             ));
         }
+        // Reserve the aggregate budget before constructing any full normalized,
+        // original-character, or boundary vectors.
+        budget.reserve_normalized(normalized_len)?;
+        #[cfg(test)]
+        NORMALIZED_INPUT_VECTOR_CONSTRUCTIONS.with(|counter| counter.set(counter.get() + 1));
         let original_chars = input.chars().collect::<Vec<_>>();
         let normalized = input.nfd().collect::<Vec<_>>();
-        budget.add_normalized(normalized.len())?;
         let mut boundary_map = vec![None; normalized.len() + 1];
         let mut safe_boundaries = vec![false; normalized.len() + 1];
         let mut normalized_index = 0;
@@ -551,7 +568,7 @@ fn estimate_transcript_event_bytes(
     // JSON escaping can consume six bytes for one Unicode scalar. Count both
     // the segment text and the duplicate joined `text` field conservatively,
     // plus fixed metadata/frame overhead for words, timings, and stage history.
-    let mut estimate = 2_048usize;
+    let mut estimate = 2_048usize.saturating_add(MAX_SESSION_ID_EVENT_BYTES);
     for segment in segments {
         estimate = estimate.saturating_add(256);
         estimate = estimate.saturating_add(segment.text.chars().count().saturating_mul(6));
@@ -680,6 +697,7 @@ mod tests {
             find: find.to_string(),
             id: format!("{find}-{replace}"),
             replace: replace.to_string(),
+            validity: Default::default(),
         }
     }
 
@@ -869,6 +887,29 @@ mod tests {
         )
         .expect_err("pathological NFD near-match must exhaust the work budget");
         assert_eq!(error.code, "work_budget");
+    }
+
+    #[test]
+    fn normalized_budget_rejects_before_boundary_vector_allocation() {
+        let input = "e\u{301}".repeat(50_000);
+        let mut budget = UtteranceBudget::new(input.chars().count());
+        budget.normalized_chars = MAX_CORRECTION_NORMALIZED_SCAN_CHARS - 1;
+        let before = NORMALIZED_INPUT_VECTOR_CONSTRUCTIONS.with(std::cell::Cell::get);
+        let error = match NormalizedInput::new(&input, &mut budget) {
+            Err(error) => error,
+            Ok(_) => panic!("aggregate normalized budget should reject before vectors"),
+        };
+        assert_eq!(error.code, "work_budget");
+        assert_eq!(
+            NORMALIZED_INPUT_VECTOR_CONSTRUCTIONS.with(std::cell::Cell::get),
+            before
+        );
+    }
+
+    #[test]
+    fn correction_frame_estimate_reserves_worst_case_session_id_bytes() {
+        let estimate = estimate_transcript_event_bytes(&[segment("ok")], &[]);
+        assert!(estimate >= 2_048 + MAX_SESSION_ID_EVENT_BYTES);
     }
 
     #[test]

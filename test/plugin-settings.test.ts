@@ -275,6 +275,27 @@ describe('resolvePluginSettings', () => {
     },
   );
 
+  it('retains the first 100 valid rules and diagnoses overflow with original indexes', () => {
+    const valid = Array.from({ length: 101 }, (_, index) => ({
+      enabled: true,
+      find: `find-${index}`,
+      id: `rule-${index}`,
+      replace: `replace-${index}`,
+    }));
+    const settings = resolvePluginSettings({
+      personalCorrectionRules: [null, ...valid],
+      schemaVersion: 12,
+    });
+
+    expect(settings.personalCorrectionRules).toHaveLength(100);
+    expect(settings.personalCorrectionRules.at(-1)?.id).toBe('rule-99');
+    expect(settings.personalCorrectionRuleDiagnostics).toMatchObject([
+      { code: 'invalid_rule', index: 0 },
+      { code: 'too_many_rules', field: 'rules', index: 101 },
+    ]);
+    expect(settings.personalCorrectionRuleOrder).toHaveLength(102);
+  });
+
   it('retains repair diagnostics after active rules have been normalized', () => {
     const settings = resolvePluginSettings({
       personalCorrectionRuleDiagnostics: [

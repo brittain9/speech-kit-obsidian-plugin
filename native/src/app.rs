@@ -19,9 +19,9 @@ use crate::model_store::{
 };
 use crate::protocol::{
     AccelerationPreference, AudioFrame, Command, CompiledAdapterInfo, CompiledRuntimeInfo,
-    ContextWindow, Event, HealthStatus, ListeningMode, ModelInstallState, ModelProbeStatus,
-    QueueBackpressureTier, SelectedModel, SessionState, SessionStopReason, system_info_string,
-    validate_correction_rules,
+    ContextWindow, Event, HealthStatus, ListeningMode, MAX_SESSION_ID_CHARS, ModelInstallState,
+    ModelProbeStatus, QueueBackpressureTier, SelectedModel, SessionState, SessionStopReason,
+    system_info_string, validate_correction_rules,
 };
 use crate::session::{
     FinalizedUtterance, ListeningSession, SessionAction, SessionBaseState, SessionConfig,
@@ -827,6 +827,17 @@ impl AppState {
                 session_id,
                 speaking_style,
             } => {
+                if session_id.chars().count() > MAX_SESSION_ID_CHARS {
+                    events.push(Event::Error {
+                        code: "invalid_session_id".to_string(),
+                        details: Some(format!(
+                            "session id exceeds the {MAX_SESSION_ID_CHARS}-character limit"
+                        )),
+                        message: "The session id is too long.".to_string(),
+                        session_id: None,
+                    });
+                    return (ControlFlow::Continue, events);
+                }
                 if let Err(error) = validate_correction_rules(&correction_rules) {
                     events.push(Event::Error {
                         code: "invalid_correction_rules".to_string(),
@@ -2223,9 +2234,9 @@ mod tests {
     use crate::engine::traits::{LoadedModel, ModelFamilyAdapter, Runtime};
     use crate::protocol::{
         AccelerationPreference, AudioFrame, Command, ContextWindow, ContextWindowSource, Event,
-        HealthStatus, ListeningMode, ModelProbeStatus, PCM_BYTES_PER_FRAME, PersonalCorrectionRule,
-        QueueBackpressureTier, SelectedModel, SessionState, SessionStopReason, SourceRange,
-        StageId, StageOutcome, StageStatus, SynthesisTextChunk,
+        HealthStatus, ListeningMode, MAX_SESSION_ID_CHARS, ModelProbeStatus, PCM_BYTES_PER_FRAME,
+        PersonalCorrectionRule, QueueBackpressureTier, SelectedModel, SessionState,
+        SessionStopReason, SourceRange, StageId, StageOutcome, StageStatus, SynthesisTextChunk,
     };
     use crate::session::{FinalizedUtterance, ListeningSession, SessionInitError, SpeakingStyle};
     use crate::system_audio::{AudioFrameSink, SystemAudioCapture, SystemAudioError};
@@ -4167,6 +4178,25 @@ mod tests {
     }
 
     #[test]
+    fn start_session_rejects_oversized_id_before_creating_a_session() {
+        let mut command =
+            start_session_command("oversized-id", std::path::Path::new("/tmp/model.bin"));
+        let Command::StartSession { session_id, .. } = &mut command else {
+            panic!("expected start session");
+        };
+        *session_id = "x".repeat(MAX_SESSION_ID_CHARS + 1);
+
+        let mut app = test_app();
+        let (_, events) = app.handle_command(command);
+
+        assert!(app.active_sessions.is_empty());
+        assert!(matches!(
+            events.as_slice(),
+            [Event::Error { code, session_id: None, .. }] if code == "invalid_session_id"
+        ));
+    }
+
+    #[test]
     fn start_session_rejects_invalid_correction_rules_before_creating_a_session() {
         let mut command =
             start_session_command("invalid-rules", std::path::Path::new("/tmp/model.bin"));
@@ -4181,6 +4211,7 @@ mod tests {
             find: "cat".to_string(),
             id: "missing-enabled".to_string(),
             replace: "dog".to_string(),
+            validity: Default::default(),
         });
 
         let mut app = test_app();

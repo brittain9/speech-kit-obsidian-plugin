@@ -12,6 +12,7 @@ export const SIDECAR_EVENT_TRANSLATION_KEYS = {
   internal_error: 'sidecarError.internal_error',
   event_frame_too_large: 'sidecarError.event_frame_too_large',
   invalid_correction_rules: 'sidecarError.invalid_correction_rules',
+  invalid_session_id: 'sidecarError.invalid_session_id',
   invalid_audio_buffer: 'sidecarError.invalid_audio_buffer',
   invalid_audio_frame: 'sidecarError.invalid_audio_frame',
   invalid_diarization_speaker_limit: 'sidecarError.invalid_diarization_speaker_limit',
