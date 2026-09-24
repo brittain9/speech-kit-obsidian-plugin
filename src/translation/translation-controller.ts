@@ -296,7 +296,6 @@ export class TranslationController {
       modelManager: this.dependencies.modelManager,
       getModelSelectionState: () => ({
         generation: active.modelSelectionGeneration,
-        pendingGeneration: active.modelSelectionPendingGeneration,
       }),
       isModelSelectionPending: () => active.modelSelectionPendingGeneration !== null,
       snapshot: active.snapshot,

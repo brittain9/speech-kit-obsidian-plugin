@@ -51,7 +51,6 @@ interface TranslationModalDependencies {
   modelManager: Pick<ModelInstallManager, 'getState' | 'subscribe'>;
   getModelSelectionState: () => {
     generation: number;
-    pendingGeneration: number | null;
   };
   isModelSelectionPending: () => boolean;
   onApplied: () => void;
