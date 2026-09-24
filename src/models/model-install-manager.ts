@@ -221,6 +221,11 @@ interface InstallRefresh {
   reconcileFailure: FailedInstallInfo | null;
 }
 
+interface SelectionAttemptState {
+  committed: boolean;
+  retriedAfterStaleInit: boolean;
+}
+
 function createFailedInstall(request: InstallRequest, message: unknown): FailedInstallInfo {
   return {
     artifactIds: request.artifactIds === null ? null : [...request.artifactIds],
@@ -694,6 +699,7 @@ export class ModelInstallManager {
       return await this.selectWithGuard(
         selection,
         task,
+        expectedLifecycleGeneration,
         expectedInitGeneration,
         expectedSelectionGeneration,
         () =>
@@ -741,10 +747,47 @@ export class ModelInstallManager {
   private async selectWithGuard(
     selection: SelectedModel,
     task: ModelTask,
+    expectedLifecycleGeneration: number,
     expectedInitGeneration: number,
     expectedSelectionGeneration: number,
     canCommit: (settings: Readonly<PluginSettings>) => boolean,
     canApplyCapabilities: (settings: Readonly<PluginSettings>) => boolean = canCommit,
+  ): Promise<ModelProbeResultEvent> {
+    const attemptState: SelectionAttemptState = {
+      committed: false,
+      retriedAfterStaleInit: false,
+    };
+    try {
+      return await this.selectWithGuardAttempt(
+        selection,
+        task,
+        expectedInitGeneration,
+        expectedSelectionGeneration,
+        canCommit,
+        canApplyCapabilities,
+        attemptState,
+      );
+    } catch (error) {
+      if (!attemptState.committed && !attemptState.retriedAfterStaleInit) {
+        await this.recoverFailedSelection(
+          selection,
+          task,
+          expectedLifecycleGeneration,
+          expectedSelectionGeneration,
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async selectWithGuardAttempt(
+    selection: SelectedModel,
+    task: ModelTask,
+    expectedInitGeneration: number,
+    expectedSelectionGeneration: number,
+    canCommit: (settings: Readonly<PluginSettings>) => boolean,
+    canApplyCapabilities: (settings: Readonly<PluginSettings>) => boolean,
+    attemptState: SelectionAttemptState,
   ): Promise<ModelProbeResultEvent> {
     if (task !== 'translation') {
       await this.detachAuthoritativeCapabilitySnapshot(
@@ -764,9 +807,8 @@ export class ModelInstallManager {
       // The user explicitly (re-)probed this exact selection and it's
       // confirmed broken now — drop any cached "ready" snapshot for it so a
       // future startup doesn't trust stale, now-incorrect capabilities.
-      let retriedAfterStaleInit = false;
       if (task !== 'translation') {
-        retriedAfterStaleInit = await this.applyProbeResultToCapabilities(
+        attemptState.retriedAfterStaleInit = await this.applyProbeResultToCapabilities(
           selection,
           probeResult,
           task,
@@ -793,7 +835,7 @@ export class ModelInstallManager {
           canCommit,
         );
         if (
-          !retriedAfterStaleInit &&
+          !attemptState.retriedAfterStaleInit &&
           hadMatchingSnapshot &&
           !invalidated &&
           expectedInitGeneration !== this.initGeneration
@@ -865,6 +907,7 @@ export class ModelInstallManager {
       };
     });
     if (!committed) return probeResult;
+    attemptState.committed = true;
     if (task === 'translation') {
       this.notify();
     } else {
@@ -883,6 +926,33 @@ export class ModelInstallManager {
       );
     }
     return probeResult;
+  }
+
+  private async recoverFailedSelection(
+    attemptedSelection: SelectedModel,
+    task: ModelTask,
+    expectedLifecycleGeneration: number,
+    expectedSelectionGeneration: number,
+  ): Promise<void> {
+    if (task === 'translation') return;
+    if (
+      this.lifecycleGeneration !== expectedLifecycleGeneration ||
+      this.selectionGenerations[task] !== expectedSelectionGeneration
+    ) {
+      return;
+    }
+    const currentSelection = selectedModelForTask(this.deps.getSettings(), task);
+    if (currentSelection === null || selectedModelEquals(currentSelection, attemptedSelection)) {
+      return;
+    }
+    await this.refreshSelectedCapabilities(
+      currentSelection,
+      task,
+      this.initGeneration,
+      this.selectionGenerations[task],
+      false,
+      true,
+    );
   }
 
   async remove(selection: CatalogModelSelection): Promise<void> {
@@ -1383,6 +1453,7 @@ export class ModelInstallManager {
           await this.selectWithGuard(
             completed,
             completedTask,
+            refresh.expectedLifecycleGeneration,
             expectedInitGeneration,
             expectedSelectionGeneration,
             canCommitAutoSelection,

@@ -1828,6 +1828,122 @@ describe('ModelInstallManager', () => {
       expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(2);
     });
 
+    it('rehydrates the current model when a newer different-model selection fails', async () => {
+      const currentSelection = sampleSelection();
+      const failedSelection = sampleSelection('whisper_small_en_q5_1');
+      const initialCapabilities = sampleMergedCapabilities();
+      const recoveryCapabilities = {
+        ...initialCapabilities,
+        family: {
+          ...initialCapabilities.family,
+          supportsWordTimestamps: !initialCapabilities.family.supportsWordTimestamps,
+        },
+      };
+      harness = createManagerHarness({
+        selectedModel: currentSelection,
+        selectedModelCapabilitiesSnapshot: {
+          capabilities: initialCapabilities,
+          selection: currentSelection,
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      const currentProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
+      harness.sidecarConnection.probeModelSelection
+        .mockReturnValueOnce(currentProbe.promise)
+        .mockRejectedValueOnce(new Error('new model failed'))
+        .mockResolvedValueOnce({
+          ...sampleReadyProbeResult(currentSelection),
+          mergedCapabilities: recoveryCapabilities,
+        });
+
+      const selectingCurrent = harness.manager.select(currentSelection);
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().selectedModelCapabilities).toEqual({
+          selection: currentSelection,
+          status: 'pending',
+        });
+        expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
+      });
+
+      const selectingFailed = harness.manager.select(failedSelection);
+      await expect(selectingFailed).rejects.toThrow('new model failed');
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+          capabilities: recoveryCapabilities,
+          selection: currentSelection,
+          status: 'ready',
+        });
+      });
+      expect(harness.getSettings().selectedModel).toEqual(currentSelection);
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        capabilities: recoveryCapabilities,
+        selection: currentSelection,
+      });
+
+      currentProbe.resolve(sampleReadyProbeResult(currentSelection));
+      await selectingCurrent;
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not recover the old model when a newer selection supersedes a failed one', async () => {
+      const currentSelection = sampleSelection();
+      const failedSelection = sampleSelection('whisper_small_en_q5_1');
+      const newerSelection = sampleMoonshineSelection();
+      const initialCapabilities = sampleMergedCapabilities();
+      harness = createManagerHarness({
+        selectedModel: currentSelection,
+        selectedModelCapabilitiesSnapshot: {
+          capabilities: initialCapabilities,
+          selection: currentSelection,
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      const currentProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
+      const failedProbe = deferred<ModelProbeResultEvent>();
+      const unavailableProbe: ModelProbeResultEvent = {
+        ...sampleReadyProbeResult(failedSelection),
+        available: false,
+        installed: false,
+        mergedCapabilities: null,
+        message: 'The failed model is unavailable.',
+        status: 'missing',
+        type: 'model_probe_result',
+      };
+      harness.sidecarConnection.probeModelSelection
+        .mockReturnValueOnce(currentProbe.promise)
+        .mockReturnValueOnce(failedProbe.promise)
+        .mockResolvedValueOnce(sampleReadyProbeResult(newerSelection));
+
+      const selectingCurrent = harness.manager.select(currentSelection);
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().selectedModelCapabilities).toEqual({
+          selection: currentSelection,
+          status: 'pending',
+        });
+        expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
+      });
+
+      const selectingFailed = harness.manager.select(failedSelection);
+      const selectingNewer = harness.manager.select(newerSelection);
+      await selectingNewer;
+      failedProbe.resolve(unavailableProbe);
+      await selectingFailed;
+      currentProbe.resolve(sampleReadyProbeResult(currentSelection));
+      await selectingCurrent;
+
+      expect(harness.getSettings().selectedModel).toEqual(newerSelection);
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        capabilities: sampleReadyProbeResult(newerSelection).mergedCapabilities,
+        selection: newerSelection,
+      });
+      expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+        capabilities: sampleReadyProbeResult(newerSelection).mergedCapabilities,
+        selection: newerSelection,
+        status: 'ready',
+      });
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(3);
+    });
+
     it('does not retain a stale ready snapshot when a same-model reselect is unavailable across init', async () => {
       const selection = sampleSelection();
       const initialCapabilities = sampleMergedCapabilities();
