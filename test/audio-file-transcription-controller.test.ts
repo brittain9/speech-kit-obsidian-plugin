@@ -6,7 +6,12 @@ import { AudioFileTranscriptionController } from '../src/dictation/audio-file-tr
 import type { NotePlacementOptions, SurfaceDesynchronization } from '../src/editor/note-surface';
 import { LocalMediaSource } from '../src/media/local-media-source';
 import { MEDIA_ACQUISITION_LIMITS } from '../src/media/media-policy';
-import type { AcquisitionEvent, MediaAcquireRequest, MediaLease } from '../src/media/media-source';
+import type {
+  AcquisitionEvent,
+  MediaAcquireRequest,
+  MediaLease,
+  MediaSource,
+} from '../src/media/media-source';
 import type {
   EngineCapabilitiesRecord,
   SelectedModel,
@@ -338,6 +343,19 @@ function createSettings(overrides: Partial<PluginSettings> = {}): PluginSettings
 }
 
 describe('AudioFileTranscriptionController', () => {
+  it('rechecks the provider kill switch before acquiring provider media', async () => {
+    const acquire = vi.fn();
+    const source = { acquire, adapterVersion: '1', id: 'provider' } as unknown as MediaSource;
+    const harness = createHarness({
+      getSettings: () => createSettings({ youtubeMediaSourceEnabled: false }),
+      mediaTranscriptionEntry: { createRequest: () => ({}), source },
+    });
+
+    await harness.controller.transcribeProvider({});
+
+    expect(acquire).not.toHaveBeenCalled();
+  });
+
   it('guards mobile before busy state, picker, and decoder work', async () => {
     const originalDesktop = Platform.isDesktopApp;
     Platform.isDesktopApp = false;

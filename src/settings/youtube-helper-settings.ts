@@ -47,25 +47,53 @@ export function renderYouTubeHelperSettings(
 
   const currentPath = dependencies.getSettings().youtubeHelperPath;
   let selectedPath = currentPath;
+  let probeController: AbortController | null = null;
+  let probeGeneration = 0;
+  let persistenceQueue: Promise<void> = Promise.resolve();
   const checkHelper = async (): Promise<void> => {
-    const normalized = normalizeYouTubeHelperPath(selectedPath);
+    probeController?.abort();
+    const controller = new AbortController();
+    probeController = controller;
+    const generation = ++probeGeneration;
+    const requestedPath = selectedPath;
+    const normalized = normalizeYouTubeHelperPath(requestedPath);
     if (normalized === null) {
       status.setText(t('youtube.settings.pathRequired'));
+      probeController = null;
       return;
     }
     try {
-      const result = await probeYtDlpVersion(normalized);
+      const result = await probeYtDlpVersion(normalized, { signal: controller.signal });
+      if (
+        controller.signal.aborted ||
+        generation !== probeGeneration ||
+        selectedPath !== requestedPath
+      ) {
+        return;
+      }
       status.setText(
         t('youtube.settings.helperReady', { version: result.version, path: result.path }),
       );
     } catch {
-      status.setText(t('youtube.settings.helperError'));
+      if (
+        !controller.signal.aborted &&
+        generation === probeGeneration &&
+        selectedPath === requestedPath
+      ) {
+        status.setText(t('youtube.settings.helperError'));
+      }
+    } finally {
+      if (probeController === controller) probeController = null;
     }
   };
   setting.addText((text) => {
     text.setPlaceholder(t('youtube.modal.helperPlaceholder'));
     text.setValue(currentPath);
-    text.onChange(async (value) => {
+    text.onChange((value) => {
+      probeGeneration += 1;
+      probeController?.abort();
+      probeController = null;
+      const generation = probeGeneration;
       const normalized = normalizeYouTubeHelperPath(value);
       if (normalized === null) {
         status.setText(t('youtube.settings.pathRequired'));
@@ -73,8 +101,13 @@ export function renderYouTubeHelperSettings(
         return;
       }
       selectedPath = normalized;
-      await dependencies.access.persistOne('youtubeHelperPath', normalized);
-      status.setText(t('youtube.settings.pathSaved'));
+      persistenceQueue = persistenceQueue
+        .catch(() => {})
+        .then(async () => {
+          if (generation !== probeGeneration) return;
+          await dependencies.access.persistOne('youtubeHelperPath', normalized);
+          if (generation === probeGeneration) status.setText(t('youtube.settings.pathSaved'));
+        });
     });
   });
   setting.addButton((button) =>
@@ -83,15 +116,4 @@ export function renderYouTubeHelperSettings(
     }),
   );
   return setting;
-}
-
-export function youtubeHelperDescription(settings: PluginSettings): string {
-  if (!settings.youtubeMediaSourceEnabled || settings.youtubeHelperPath.length === 0) {
-    return t('youtube.settings.disabledDescription');
-  }
-  return t('youtube.settings.enabledDescription');
-}
-
-export function youtubeHelperSettingName(): string {
-  return t('commands.transcribeYouTube');
 }

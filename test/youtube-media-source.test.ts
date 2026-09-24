@@ -4,6 +4,7 @@ import {
   mkdir,
   mkdtemp,
   readdir,
+  readFile,
   rename,
   rm,
   symlink,
@@ -16,7 +17,10 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { AcquisitionEvent } from '../src/media/media-source';
-import { createPathBackedMediaLease } from '../src/media/path-backed-media-lease';
+import {
+  createPathBackedMediaLease,
+  openValidatedMediaFile,
+} from '../src/media/path-backed-media-lease';
 import {
   discoverYtDlpCandidates,
   interpretVersionResult,
@@ -26,6 +30,7 @@ import {
 import {
   buildYouTubeAcquisitionArgs,
   classifyYouTubeHelperFailure,
+  createPrivateJobRoot,
   explicitYouTubeRightsConfirmation,
   hasYouTubeRightsConfirmation,
   parseYouTubeHelperMetadata,
@@ -201,18 +206,7 @@ describe('YouTube path-backed MediaLease', () => {
     await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
     const mediaPath = join(jobRoot, 'source.webm');
     await writeFile(mediaPath, 'audio');
-    const lease = await createPathBackedMediaLease({
-      encodedBytes: 5,
-      jobRoot,
-      maxBytes: 10,
-      mediaPath,
-      provenance: {
-        acquiredAt: new Date().toISOString(),
-        adapterVersion: 'test',
-        sourceId: 'local_file',
-        temporaryMedia: true,
-      },
-    });
+    const lease = await createLease(jobRoot, mediaPath);
     const stream = await lease.openReadStream();
     const reader = stream.getReader();
     expect(new TextDecoder().decode((await reader.read()).value)).toBe('audio');
@@ -231,20 +225,9 @@ describe('YouTube path-backed MediaLease', () => {
     const mediaPath = join(jobRoot, 'source.webm');
     await writeFile(target, 'audio');
     await symlink(target, mediaPath);
-    await expect(
-      createPathBackedMediaLease({
-        encodedBytes: 5,
-        jobRoot,
-        maxBytes: 10,
-        mediaPath,
-        provenance: {
-          acquiredAt: new Date().toISOString(),
-          adapterVersion: 'test',
-          sourceId: 'local_file',
-          temporaryMedia: true,
-        },
-      }),
-    ).rejects.toMatchObject({ code: 'read_failed' });
+    await expect(openValidatedMediaFile(jobRoot, mediaPath, 10)).rejects.toMatchObject({
+      code: 'integrity_failed',
+    });
   });
 
   it('rejects hard-linked media and keeps the validated descriptor after path replacement', async () => {
@@ -256,35 +239,13 @@ describe('YouTube path-backed MediaLease', () => {
     const mediaPath = join(jobRoot, 'source.webm');
     await writeFile(outside, 'outside');
     await link(outside, mediaPath);
-    await expect(
-      createPathBackedMediaLease({
-        encodedBytes: 7,
-        jobRoot,
-        maxBytes: 10,
-        mediaPath,
-        provenance: {
-          acquiredAt: new Date().toISOString(),
-          adapterVersion: 'test',
-          sourceId: 'local_file',
-          temporaryMedia: true,
-        },
-      }),
-    ).rejects.toMatchObject({ code: 'read_failed' });
+    await expect(openValidatedMediaFile(jobRoot, mediaPath, 10)).rejects.toMatchObject({
+      code: 'integrity_failed',
+    });
 
     await rm(mediaPath);
     await writeFile(mediaPath, 'original');
-    const lease = await createPathBackedMediaLease({
-      encodedBytes: 8,
-      jobRoot,
-      maxBytes: 10,
-      mediaPath,
-      provenance: {
-        acquiredAt: new Date().toISOString(),
-        adapterVersion: 'test',
-        sourceId: 'local_file',
-        temporaryMedia: true,
-      },
-    });
+    const lease = await createLease(jobRoot, mediaPath);
     const replacement = join(root, 'replacement');
     await writeFile(replacement, 'replaced');
     await rename(replacement, mediaPath);
@@ -295,6 +256,70 @@ describe('YouTube path-backed MediaLease', () => {
     await expect(lease.openReadStream()).rejects.toMatchObject({ code: 'released' });
   });
 
+  it('rejects arbitrary handles and preserves a replacement job root', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-misuse-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    const mediaPath = join(jobRoot, 'source.webm');
+    await writeFile(mediaPath, 'audio');
+    await expect(
+      createPathBackedMediaLease({
+        provenance: {
+          acquiredAt: new Date().toISOString(),
+          adapterVersion: 'test',
+          sourceId: 'local_file',
+          temporaryMedia: true,
+        },
+        validatedMediaFile: {
+          handle: {} as never,
+          path: mediaPath,
+          size: 5,
+        } as never,
+      }),
+    ).rejects.toMatchObject({ code: 'integrity_failed' });
+
+    const lease = await createLease(jobRoot, mediaPath);
+    const movedRoot = join(root, 'job-original');
+    await rename(jobRoot, movedRoot);
+    await (await import('node:fs/promises')).mkdir(jobRoot);
+    const replacementMarker = join(jobRoot, 'replacement.txt');
+    await writeFile(replacementMarker, 'keep');
+    await lease.release();
+    await expect(readFile(replacementMarker)).resolves.toEqual(Buffer.from('keep'));
+  });
+
+  it('settles a pending outer read when the lease is released', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-pending-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    const mediaPath = join(jobRoot, 'source.webm');
+    await writeFile(mediaPath, Buffer.alloc(512 * 1024, 1));
+    const lease = await createLease(jobRoot, mediaPath, 600_000);
+    const reader = (await lease.openReadStream()).getReader();
+    await reader.read();
+    const pendingRead = reader.read();
+    const pendingResult = expect(pendingRead).rejects.toMatchObject({ code: 'released' });
+    await lease.release();
+    await pendingResult;
+  });
+
+  it('rejects containment violations and keeps release errors contained', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-containment-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    const outside = join(root, 'outside');
+    await writeFile(outside, 'outside');
+    await expect(openValidatedMediaFile(jobRoot, outside, 10)).rejects.toMatchObject({
+      code: 'integrity_failed',
+    });
+    const mediaPath = join(jobRoot, 'source.webm');
+    await writeFile(mediaPath, 'audio');
+    const lease = await createLease(jobRoot, mediaPath);
+    await expect(lease.release()).resolves.toBeUndefined();
+  });
   it('removes active reader registrations at EOF and on cancel', async () => {
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-test-'));
     temporaryPaths.push(root);
@@ -302,18 +327,7 @@ describe('YouTube path-backed MediaLease', () => {
     await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
     const mediaPath = join(jobRoot, 'source.webm');
     await writeFile(mediaPath, 'eof');
-    const lease = await createPathBackedMediaLease({
-      encodedBytes: 3,
-      jobRoot,
-      maxBytes: 10,
-      mediaPath,
-      provenance: {
-        acquiredAt: new Date().toISOString(),
-        adapterVersion: 'test',
-        sourceId: 'local_file',
-        temporaryMedia: true,
-      },
-    });
+    const lease = await createLease(jobRoot, mediaPath);
     const eofReader = (await lease.openReadStream()).getReader();
     expect((await eofReader.read()).done).toBe(false);
     expect((await eofReader.read()).done).toBe(true);
@@ -401,6 +415,7 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     const old = join(root, 'speech-kit-youtube-old');
     await mkdir(recent);
     await mkdir(old);
+    await writeFile(join(recent, 'owner.json'), JSON.stringify({ pid: process.pid }));
     await utimes(recent, new Date(20_000), new Date(20_000));
     await utimes(old, new Date(0), new Date(0));
     await sweepAbandonedYouTubeJobs(root, { minAgeMs: 10, now: () => 20_000 });
@@ -410,11 +425,19 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     await writeFile(join(current, 'owner.json'), JSON.stringify({ pid: process.pid }));
     await utimes(current, new Date(0), new Date(0));
     await sweepAbandonedYouTubeJobs(root, { minAgeMs: 10, now: () => 20_000 });
-    await expect(readdir(root)).resolves.toEqual([
-      'speech-kit-youtube-current',
-      'speech-kit-youtube-recent',
-    ]);
+    await expect(readdir(root)).resolves.toEqual(['speech-kit-youtube-recent']);
   });
+  it('cleans a partial private job root when directory setup fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-partial-'));
+    temporaryPaths.push(root);
+    await expect(
+      createPrivateJobRoot(root, { subdirectories: ['owner.json'] }),
+    ).rejects.toMatchObject({ code: 'tool_failed' });
+    expect(
+      (await readdir(root)).filter((entry) => entry.startsWith('speech-kit-youtube-')),
+    ).toEqual([]);
+  });
+
   it('enforces wall, output, size, and tool limits with local fake helpers', async () => {
     const wallHelper = await makeHelper(true);
     const wallRoot = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-wall-'));
@@ -502,6 +525,19 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     ).toEqual([]);
   });
 });
+
+async function createLease(jobRoot: string, mediaPath: string, maxBytes = 10) {
+  const validatedMediaFile = await openValidatedMediaFile(jobRoot, mediaPath, maxBytes);
+  return await createPathBackedMediaLease({
+    provenance: {
+      acquiredAt: new Date().toISOString(),
+      adapterVersion: 'test',
+      sourceId: 'local_file',
+      temporaryMedia: true,
+    },
+    validatedMediaFile,
+  });
+}
 
 function youtubeRequest(signal: AbortSignal): YouTubeMediaAcquireRequest {
   return {

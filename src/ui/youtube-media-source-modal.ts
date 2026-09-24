@@ -5,34 +5,52 @@ import {
   normalizeYouTubeHelperPath,
   probeYtDlpVersion,
 } from '../media/youtube-helper';
-import type { YouTubeConsentGrant } from '../media/youtube-media-source';
 import {
   explicitYouTubeRightsConfirmation,
   hasYouTubeRightsConfirmation,
   YOUTUBE_POLICY_VERSION,
+  type YouTubeConsentGrant,
 } from '../media/youtube-media-source';
 import { parseYouTubeVideoUrl, type YouTubeVideoRef } from '../media/youtube-url';
 import { t } from '../shared/i18n';
 
 export interface YouTubeMediaSourceRequest {
   readonly consent: YouTubeConsentGrant;
+  readonly helperPath: string;
+  readonly helperVersion: string;
   readonly ref: YouTubeVideoRef;
 }
 
 export interface YouTubeMediaSourceModalDependencies {
   readonly getHelperPath: () => string;
   readonly getPolicyVersion: () => string | null;
-  readonly onHelperSelected: (path: string, version: string, signal: AbortSignal) => Promise<void>;
-  readonly onRightsConfirmed: (signal: AbortSignal) => Promise<void>;
+}
+
+export interface YouTubeMediaSourceModalSession {
+  readonly close: () => void;
+  readonly result: Promise<YouTubeMediaSourceRequest | null>;
 }
 
 export function openYouTubeMediaSourceModal(
   app: App,
   dependencies: YouTubeMediaSourceModalDependencies,
 ): Promise<YouTubeMediaSourceRequest | null> {
-  return new Promise((resolve) => {
-    new YouTubeMediaSourceModal(app, dependencies, resolve).open();
+  return openYouTubeMediaSourceModalSession(app, dependencies).result;
+}
+
+export function openYouTubeMediaSourceModalSession(
+  app: App,
+  dependencies: YouTubeMediaSourceModalDependencies,
+): YouTubeMediaSourceModalSession {
+  let resolveRequest: ((request: YouTubeMediaSourceRequest | null) => void) | null = null;
+  const result = new Promise<YouTubeMediaSourceRequest | null>((resolve) => {
+    resolveRequest = resolve;
   });
+  const modal = new YouTubeMediaSourceModal(app, dependencies, (request) =>
+    resolveRequest?.(request),
+  );
+  modal.open();
+  return { close: () => modal.close(), result };
 }
 
 class YouTubeMediaSourceModal extends Modal {
@@ -51,7 +69,7 @@ class YouTubeMediaSourceModal extends Modal {
 
   constructor(
     app: App,
-    private readonly dependencies: YouTubeMediaSourceModalDependencies,
+    readonly dependencies: YouTubeMediaSourceModalDependencies,
     resolveRequest: (request: YouTubeMediaSourceRequest | null) => void,
   ) {
     super(app);
@@ -71,8 +89,12 @@ class YouTubeMediaSourceModal extends Modal {
       text.setPlaceholder(t('youtube.modal.helperPlaceholder'));
       text.setValue(this.helperPath);
       text.onChange((value) => {
+        this.generation += 1;
+        this.probeController?.abort();
+        this.probeController = null;
         this.helperPath = value;
         this.helperVersion = '';
+        this.setError('');
       });
     });
     helperSetting.addButton((button) =>
@@ -127,6 +149,10 @@ class YouTubeMediaSourceModal extends Modal {
   }
 
   override onClose(): void {
+    if (this.settled) {
+      this.contentEl.empty();
+      return;
+    }
     this.settled = true;
     this.generation += 1;
     this.lifecycle.abort();
@@ -167,21 +193,22 @@ class YouTubeMediaSourceModal extends Modal {
     const controller = new AbortController();
     this.probeController = controller;
     const generation = this.generation;
-    const normalized = normalizeYouTubeHelperPath(this.helperPath);
+    const requestedPath = this.helperPath;
+    const normalized = normalizeYouTubeHelperPath(requestedPath);
     if (normalized === null) {
       this.setError(t('youtube.modal.pathRequired'));
+      this.probeController = null;
       return;
     }
     try {
       const result = await probeYtDlpVersion(normalized, { signal: controller.signal });
-      if (!this.isCurrent(generation, controller.signal)) return;
+      if (!this.isCurrent(generation, controller.signal) || this.helperPath !== requestedPath)
+        return;
       this.helperPath = result.path;
       this.helperVersion = result.version;
-      await this.dependencies.onHelperSelected(result.path, result.version, this.lifecycle.signal);
-      if (!this.isCurrent(generation, controller.signal)) return;
       this.setError(t('youtube.modal.helperReady', { version: result.version }));
     } catch {
-      if (this.isCurrent(generation, controller.signal)) {
+      if (this.isCurrent(generation, controller.signal) && this.helperPath === requestedPath) {
         this.helperVersion = '';
         this.setError(t('youtube.modal.helperError'));
       }
@@ -197,19 +224,18 @@ class YouTubeMediaSourceModal extends Modal {
     const generation = this.generation;
     try {
       const video = parseYouTubeVideoUrl(this.url);
-      const normalized = normalizeYouTubeHelperPath(this.helperPath);
-      if (normalized === null) throw new Error('absolute helper path required');
+      if (normalizeYouTubeHelperPath(this.helperPath) === null)
+        throw new Error('absolute helper path required');
       if (this.helperVersion.length === 0) {
         await this.probeSelectedHelper();
         if (!this.isCurrent(generation, this.lifecycle.signal)) return;
       }
       if (!this.rightsConfirmed) throw new Error('rights confirmation required');
-      if (!hasYouTubeRightsConfirmation(this.dependencies.getPolicyVersion())) {
-        await this.dependencies.onRightsConfirmed(this.lifecycle.signal);
-        if (!this.isCurrent(generation, this.lifecycle.signal)) return;
-      }
+      if (!this.isCurrent(generation, this.lifecycle.signal)) return;
       const request: YouTubeMediaSourceRequest = {
         consent: explicitYouTubeRightsConfirmation(),
+        helperPath: normalizeYouTubeHelperPath(this.helperPath) ?? this.helperPath,
+        helperVersion: this.helperVersion,
         ref: video,
       };
       if (!this.isCurrent(generation, this.lifecycle.signal)) return;

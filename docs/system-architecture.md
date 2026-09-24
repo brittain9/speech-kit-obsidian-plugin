@@ -124,7 +124,8 @@ that is not an exact non-live VOD identity match, and keeps YouTube-specific
 metadata outside the shared media contract. The adapter does not pass its URL,
 helper, path, or provenance to the decoder, ASR, renderer, or optional LLM.
 
-The media controller owns the provider-neutral sequence: acquire → local decode
+The shared media transcription coordinator owns the provider-neutral sequence:
+acquire → local decode
 → the existing VAD/batch-ASR `Session` → timestamps, diarization, and smart
 formatting → safe editor insertion. Progress exposes `acquire`, `decode`,
 `transcribe`, `format`, `AI processing`, and `insert` independently. Existing

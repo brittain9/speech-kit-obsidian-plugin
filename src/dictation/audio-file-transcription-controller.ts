@@ -19,12 +19,12 @@ import { dictationLanguageLabel, languageSupportIncludes } from '../language/dic
 import type { LlmRouter } from '../llm/router';
 import { MEDIA_ACQUISITION_LIMITS } from '../media/media-policy';
 import type {
-  MediaAcquireRequest,
+  MediaAcquireOverrides,
   MediaLease,
   MediaSource,
+  MediaTranscriptionEntry,
   MediaTranscriptionProgress,
 } from '../media/media-source';
-import type { YouTubeAcquisitionContext, YouTubeMediaSource } from '../media/youtube-media-source';
 import {
   type SelectedModel,
   type SelectedModelCapabilities,
@@ -50,6 +50,7 @@ import {
   AudioFileFailureMapper,
   AudioFileWorkflowError,
   type FileWorkflowTranslationKey,
+  type MediaFailureAdapter,
 } from './audio-file-failure';
 import {
   type AudioFileSessionPhase,
@@ -97,10 +98,6 @@ interface AudioFileModelConfiguration {
   readonly speakingStyle: PluginSettings['speakingStyle'];
 }
 
-type MediaAcquisitionOverrides = Partial<Omit<MediaAcquireRequest, 'kind' | 'signal'>> & {
-  readonly provider?: unknown;
-};
-
 interface PendingAudioFileStart {
   readonly abortController: AbortController;
   readonly speechLease: SidecarLifecycleLease;
@@ -128,7 +125,8 @@ export interface AudioFileTranscriptionControllerDependencies {
   readonly onRawTranscriptRecoveryAvailable?: (receipt: RawTranscriptRecoveryReceipt) => void;
   readonly onSidecarMissing?: () => void;
   readonly mediaSource: MediaSource;
-  readonly youtubeSource?: YouTubeMediaSource;
+  readonly mediaFailureAdapters?: readonly MediaFailureAdapter[];
+  readonly mediaTranscriptionEntry?: MediaTranscriptionEntry;
   readonly mediaLlmCoordinator?: MediaLlmCoordinator;
   readonly onMediaProgress?: (progress: MediaTranscriptionProgress | null) => void;
   readonly sessionStopTimeoutMs: number;
@@ -160,6 +158,9 @@ export class AudioFileTranscriptionController {
   constructor(private readonly dependencies: AudioFileTranscriptionControllerDependencies) {
     this.failureMapper = new AudioFileFailureMapper({
       feedback: dependencies.feedback,
+      ...(dependencies.mediaFailureAdapters === undefined
+        ? {}
+        : { mediaFailureAdapters: dependencies.mediaFailureAdapters }),
       ...(dependencies.onModelMissing !== undefined
         ? { onModelMissing: dependencies.onModelMissing }
         : {}),
@@ -212,17 +213,18 @@ export class AudioFileTranscriptionController {
     await this.startTranscription(this.dependencies.mediaSource);
   }
 
-  async transcribeYouTube(context: YouTubeAcquisitionContext): Promise<void> {
-    const source = this.dependencies.youtubeSource;
-    if (source === undefined) {
-      throw new Error('YouTube media source is unavailable.');
+  async transcribeProvider(context: unknown): Promise<void> {
+    const entry = this.dependencies.mediaTranscriptionEntry;
+    if (entry === undefined) {
+      throw new Error('The media transcription provider is unavailable.');
     }
-    await this.startTranscription(source, { provider: context });
+    if (!this.dependencies.getSettings().youtubeMediaSourceEnabled) return;
+    await this.startTranscription(entry.source, entry.createRequest(context));
   }
 
   private async startTranscription(
     source: MediaSource,
-    request?: MediaAcquisitionOverrides,
+    request?: MediaAcquireOverrides,
   ): Promise<void> {
     if (this.activeTranscribeCompletion !== null) return;
     const operation = this.runTranscribe(source, request);
@@ -238,10 +240,7 @@ export class AudioFileTranscriptionController {
     this.mediaLlmCoordinator.settingsChanged();
   }
 
-  private async runTranscribe(
-    source: MediaSource,
-    request?: MediaAcquisitionOverrides,
-  ): Promise<void> {
+  private async runTranscribe(source: MediaSource, request?: MediaAcquireOverrides): Promise<void> {
     // Keep this guard before the busy check: mobile callers must not mutate a
     // running desktop workflow or open a native-only picker accidentally.
     if (!Platform.isDesktopApp) {
@@ -496,7 +495,7 @@ export class AudioFileTranscriptionController {
   private async acquireMediaLease(
     signal: AbortSignal,
     source: MediaSource,
-    request?: MediaAcquisitionOverrides,
+    request?: MediaAcquireOverrides,
   ): Promise<MediaLease | null> {
     for await (const event of source.acquire({
       ...MEDIA_ACQUISITION_LIMITS,

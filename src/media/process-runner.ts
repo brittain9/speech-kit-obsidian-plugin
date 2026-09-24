@@ -1,4 +1,4 @@
-import { type ChildProcess, execFileSync, type SpawnOptions, spawn } from 'node:child_process';
+import { type ChildProcess, type SpawnOptions, spawn } from 'node:child_process';
 
 export type ProcessSignal = 'SIGTERM' | 'SIGKILL';
 
@@ -24,6 +24,13 @@ export interface ManagedProcessOptions {
 export interface ManagedProcessSpawnOptions extends SpawnOptions {
   readonly platform?: NodeJS.Platform;
   readonly spawnProcess?: typeof spawn;
+  readonly taskkillEnvironment?: NodeJS.ProcessEnv;
+  readonly taskkillPath?: string;
+}
+
+interface TaskkillOptions {
+  readonly command: string;
+  readonly environment: NodeJS.ProcessEnv;
 }
 
 export async function runManagedProcess(
@@ -34,19 +41,27 @@ export async function runManagedProcess(
 ): Promise<ManagedProcessResult> {
   const spawnProcess = options.spawnProcess ?? spawn;
   const platform = options.platform ?? process.platform;
-  const { platform: _platform, spawnProcess: _spawnProcess, ...spawnOptions } = options;
+  const {
+    platform: _platform,
+    spawnProcess: _spawnProcess,
+    taskkillEnvironment: _taskkillEnvironment,
+    taskkillPath: _taskkillPath,
+    ...spawnOptions
+  } = options;
+  const taskkill = taskkillOptions(options, platform);
   const child = spawnProcess(command, args, {
     ...spawnOptions,
     detached: platform !== 'win32',
     shell: false,
   });
-  return await collectProcessOutput(child, platform, spawnProcess, limits);
+  return await collectProcessOutput(child, platform, spawnProcess, taskkill, limits);
 }
 
 async function collectProcessOutput(
   child: ChildProcess,
   platform: NodeJS.Platform,
   spawnProcess: typeof spawn,
+  taskkill: TaskkillOptions,
   limits: ManagedProcessOptions,
 ): Promise<ManagedProcessResult> {
   let stdout = '';
@@ -57,30 +72,47 @@ async function collectProcessOutput(
   let timedOut = false;
   let cancelled = false;
   let settled = false;
+  let exitObserved = false;
+  let observedExitCode: number | null = null;
   let forceTimer: number | undefined;
   let timeoutTimer: number | undefined;
-  let treePollTimer: number | undefined;
-  const descendantPids = new Set<number>();
   let terminationPromise: Promise<void> | null = null;
+  let exitCleanupPromise: Promise<void> | null = null;
   let resolveResult!: (result: ManagedProcessResult) => void;
   const resultPromise = new Promise<ManagedProcessResult>((resolve) => {
     resolveResult = resolve;
   });
+  const childPid = child.pid;
 
   const clearForceTimer = (): void => {
-    if (forceTimer !== undefined) {
-      window.clearTimeout(forceTimer);
-      forceTimer = undefined;
-    }
+    if (forceTimer === undefined) return;
+    window.clearTimeout(forceTimer);
+    forceTimer = undefined;
   };
   const terminate = (signal: ProcessSignal, scheduleForce: boolean): void => {
-    if (settled) return;
-    terminationPromise = killProcessTree(child, platform, spawnProcess, signal, descendantPids);
+    if (settled || exitObserved) return;
+    terminationPromise = killProcessTree({
+      allowDirectChild: true,
+      child,
+      childPid,
+      platform,
+      signal,
+      spawnProcess,
+      taskkill,
+    });
     if (scheduleForce && forceTimer === undefined) {
       forceTimer = window.setTimeout(() => {
         forceTimer = undefined;
-        if (!settled)
-          void killProcessTree(child, platform, spawnProcess, 'SIGKILL', descendantPids);
+        if (settled || exitObserved) return;
+        void killProcessTree({
+          allowDirectChild: true,
+          child,
+          childPid,
+          platform,
+          signal: 'SIGKILL',
+          spawnProcess,
+          taskkill,
+        });
       }, 1_000);
     }
   };
@@ -92,21 +124,15 @@ async function collectProcessOutput(
       window.clearTimeout(timeoutTimer);
       timeoutTimer = undefined;
     }
-    if (treePollTimer !== undefined) {
-      window.clearInterval(treePollTimer);
-      treePollTimer = undefined;
-    }
     limits.signal?.removeEventListener('abort', abort);
     child.stdout?.removeListener('data', onStdout);
     child.stderr?.removeListener('data', onStderr);
     child.removeListener('error', onError);
+    child.removeListener('exit', onExit);
     child.removeListener('close', onClose);
-    // A detached helper can leave descendants behind after its leader exits.
-    // Terminate the group/tree before settling, but never schedule a later kill.
-    const cleanup =
-      !cancelled && !timedOut && !outputLimitExceeded
-        ? killProcessTree(child, platform, spawnProcess, 'SIGKILL', descendantPids)
-        : (terminationPromise ?? Promise.resolve());
+    // No kill is initiated from close. Normal descendant cleanup starts at
+    // exit, while cancellation/timeout cleanup starts while the child is live.
+    const cleanup = exitCleanupPromise ?? terminationPromise ?? Promise.resolve();
     void cleanup.finally(() => {
       resolveResult({
         cancelled,
@@ -152,7 +178,22 @@ async function collectProcessOutput(
     terminate('SIGKILL', false);
     finish(null, true);
   };
-  const onClose = (code: number | null): void => finish(code, code !== 0);
+  const onExit = (code: number | null): void => {
+    if (settled) return;
+    exitObserved = true;
+    observedExitCode = code;
+    exitCleanupPromise = killProcessTree({
+      allowDirectChild: false,
+      child,
+      childPid,
+      platform,
+      signal: 'SIGKILL',
+      spawnProcess,
+      taskkill,
+    });
+  };
+  const onClose = (code: number | null): void =>
+    finish(observedExitCode ?? code, observedExitCode !== 0);
   timeoutTimer = window.setTimeout(
     () => {
       timedOut = true;
@@ -160,107 +201,96 @@ async function collectProcessOutput(
     },
     Math.max(1, limits.timeoutMs),
   );
-  if (platform !== 'win32' && child.pid !== undefined) {
-    treePollTimer = window.setInterval(() => {
-      for (const pid of collectDescendantPids(child.pid as number)) descendantPids.add(pid);
-    }, 10);
-  }
 
   child.stdout?.on('data', onStdout);
   child.stderr?.on('data', onStderr);
   child.once('error', onError);
+  child.once('exit', onExit);
   child.once('close', onClose);
   limits.signal?.addEventListener('abort', abort, { once: true });
   if (limits.signal?.aborted === true) abort();
   return await resultPromise;
 }
 
-async function killProcessTree(
-  child: ChildProcess,
-  platform: NodeJS.Platform,
-  spawnProcess: typeof spawn,
-  signal: ProcessSignal,
-  descendants: ReadonlySet<number> = new Set(),
-): Promise<void> {
+async function killProcessTree(options: {
+  readonly allowDirectChild: boolean;
+  readonly child: ChildProcess;
+  readonly childPid: number | undefined;
+  readonly platform: NodeJS.Platform;
+  readonly signal: ProcessSignal;
+  readonly spawnProcess: typeof spawn;
+  readonly taskkill: TaskkillOptions;
+}): Promise<void> {
+  const { allowDirectChild, child, childPid, platform, signal, spawnProcess, taskkill } = options;
   if (platform === 'win32') {
-    if (child.pid === undefined) {
-      child.kill(signal);
-      return;
-    }
+    if (childPid === undefined) return;
     await new Promise<void>((resolve) => {
-      let taskkill: ChildProcess;
+      let taskkillProcess: ChildProcess;
       try {
-        taskkill = spawnProcess('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+        taskkillProcess = spawnProcess(taskkill.command, ['/pid', String(childPid), '/T', '/F'], {
+          env: taskkill.environment,
           shell: false,
           stdio: 'ignore',
           windowsHide: true,
         });
       } catch {
-        child.kill(signal);
+        if (allowDirectChild) child.kill(signal);
         resolve();
         return;
       }
+      let settled = false;
       const finish = (): void => {
+        if (settled) return;
+        settled = true;
         window.clearTimeout(timer);
         resolve();
       };
       const timer = window.setTimeout(() => {
-        taskkill.kill('SIGKILL');
-        child.kill(signal);
+        taskkillProcess.kill('SIGKILL');
+        if (allowDirectChild) child.kill(signal);
         finish();
       }, 1_000);
-      taskkill.once('error', () => {
-        child.kill(signal);
+      taskkillProcess.once('error', () => {
+        if (allowDirectChild) child.kill(signal);
         finish();
       });
-      taskkill.once('close', finish);
+      taskkillProcess.once('close', finish);
     });
     return;
   }
-  for (const pid of descendants) {
-    try {
-      process.kill(pid, signal);
-    } catch {
-      // The descendant may have exited between snapshots.
-    }
+  if (childPid === undefined) {
+    if (allowDirectChild) child.kill(signal);
+    return;
   }
-  if (child.pid !== undefined) {
-    try {
-      process.kill(-child.pid, signal);
-      return;
-    } catch {
-      // Fall through for a child without a detached process group.
-    }
+  try {
+    process.kill(-childPid, signal);
+  } catch {
+    if (allowDirectChild) child.kill(signal);
   }
-  child.kill(signal);
 }
 
-function collectDescendantPids(rootPid: number): number[] {
-  try {
-    const output = execFileSync('ps', ['-axo', 'pid=,ppid='], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    const children = new Map<number, number[]>();
-    for (const line of output.split(/\r?\n/u)) {
-      const match = /^\s*(\d+)\s+(\d+)\s*$/u.exec(line);
-      if (match === null) continue;
-      const pid = Number(match[1]);
-      const parent = Number(match[2]);
-      const siblings = children.get(parent) ?? [];
-      siblings.push(pid);
-      children.set(parent, siblings);
-    }
-    const descendants: number[] = [];
-    const pending = [...(children.get(rootPid) ?? [])];
-    while (pending.length > 0) {
-      const pid = pending.pop();
-      if (pid === undefined) continue;
-      descendants.push(pid);
-      pending.push(...(children.get(pid) ?? []));
-    }
-    return descendants;
-  } catch {
-    return [];
+function taskkillOptions(
+  options: ManagedProcessSpawnOptions,
+  platform: NodeJS.Platform,
+): TaskkillOptions {
+  if (platform !== 'win32') {
+    return { command: '', environment: {} };
   }
+  const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
+  const command = options.taskkillPath ?? `${systemRoot}\\System32\\taskkill.exe`;
+  if (!isWindowsAbsolutePath(command)) {
+    throw new Error('The Windows taskkill executable must be an absolute path.');
+  }
+  return {
+    command,
+    environment: options.taskkillEnvironment ?? {
+      ComSpec: `${systemRoot}\\System32\\cmd.exe`,
+      PATH: '',
+      SystemRoot: systemRoot,
+    },
+  };
+}
+
+function isWindowsAbsolutePath(value: string): boolean {
+  return /^[A-Za-z]:[\\/]/u.test(value) || value.startsWith('\\\\');
 }

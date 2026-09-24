@@ -1,10 +1,12 @@
 import { spawn } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { chmod, mkdir, mkdtemp, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { t } from '../shared/i18n';
 import type {
   AcquisitionEvent,
+  MediaAcquireOverrides,
   MediaAcquireRequest,
   MediaLease,
   MediaPlan,
@@ -53,6 +55,7 @@ export type YouTubeFailureCode =
   | 'network_failed'
   | 'extractor_changed'
   | 'live_stream'
+  | 'integrity_failed'
   | 'rights_not_established'
   | 'helper_unavailable'
   | 'helper_version_unsupported'
@@ -118,6 +121,7 @@ export class YouTubeAcquisitionError extends Error {
 
 export interface YouTubeMediaSourceDependencies {
   readonly getHelperPath: () => string;
+  readonly isEnabled?: () => boolean;
   readonly tempRoot?: string;
   readonly spawnProcess?: typeof spawn;
   readonly wallTimeMs?: number;
@@ -158,21 +162,26 @@ export class YouTubeMediaSource implements MediaSource {
     this.platform = dependencies.platform ?? process.platform;
   }
 
-  async inspect(ref: YouTubeVideoRef, signal: AbortSignal): Promise<YouTubeMediaPlan> {
-    throwIfCancelled(signal);
-    return createPlan(ref, this.id);
-  }
-
   cancel(): void {
     this.activeAbortController?.abort(
       new YouTubeAcquisitionError('cancelled', 'The YouTube acquisition was cancelled.'),
     );
   }
 
+  createRequest(context: unknown): MediaAcquireOverrides {
+    if (!isYouTubeAcquisitionContext(context)) {
+      throw new YouTubeAcquisitionError('invalid_or_unsupported_url', 'Enter one YouTube VOD URL.');
+    }
+    return { provider: context };
+  }
+
   acquire(request: YouTubeMediaAcquireRequest): AsyncIterable<AcquisitionEvent<YouTubeMediaLease>>;
   acquire(request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent>;
   async *acquire(request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent> {
     const typedRequest = requireYouTubeRequest(request);
+    if (this.dependencies.isEnabled?.() === false) {
+      throw new YouTubeAcquisitionError('cancelled', 'The YouTube media source is disabled.');
+    }
     throwIfCancelled(typedRequest.signal);
     const video = typedRequest.provider.ref;
     assertConsent(typedRequest.provider.consent);
@@ -205,6 +214,9 @@ export class YouTubeMediaSource implements MediaSource {
         spawnProcess: this.spawnProcess,
       });
       const helperVersion = version.version;
+      if (this.dependencies.isEnabled?.() === false) {
+        throw new YouTubeAcquisitionError('cancelled', 'The YouTube media source is disabled.');
+      }
       jobRoot = await createPrivateJobRoot(this.tempRoot);
       const plan = createPlan(video, this.id);
       yield { plan, type: 'plan' };
@@ -251,20 +263,17 @@ export class YouTubeMediaSource implements MediaSource {
       let baseLease: MediaLease;
       try {
         baseLease = await createLease({
-          encodedBytes: validated.size,
-          jobRoot,
-          maxBytes: request.maxBytes,
-          mediaHandle: validated.handle,
-          mediaPath: validated.path,
           provenance: {
             acquiredAt: new Date(this.now()).toISOString(),
             adapterVersion: this.adapterVersion,
             sourceId: this.id,
             temporaryMedia: true,
           },
+          validatedMediaFile: validated,
         });
       } catch (error) {
         await validated.handle.close().catch(() => {});
+        await validated.root.handle.close().catch(() => {});
         throw error;
       }
       let releasePromise: Promise<void> | null = null;
@@ -321,7 +330,6 @@ export async function sweepAbandonedYouTubeJobs(
           const jobRoot = join(root, entry.name);
           const jobStat = await stat(jobRoot);
           if (now() - jobStat.mtimeMs < minAgeMs) return;
-          if (await hasLiveOwner(jobRoot)) return;
           const { removeMediaJob } = await import('./path-backed-media-lease');
           await removeMediaJob(jobRoot);
         }),
@@ -329,26 +337,6 @@ export async function sweepAbandonedYouTubeJobs(
   } catch {
     // Startup cleanup is best effort and must not prevent plugin loading.
   }
-}
-
-async function hasLiveOwner(jobRoot: string): Promise<boolean> {
-  try {
-    const marker = JSON.parse(await readFile(join(jobRoot, 'owner.json'), 'utf8')) as {
-      pid?: unknown;
-    };
-    const pid = marker.pid;
-    if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return false;
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return isProcessAliveError(error);
-  }
-}
-
-function isProcessAliveError(error: unknown): boolean {
-  return (
-    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'EPERM'
-  );
 }
 
 export function buildYouTubeAcquisitionArgs(options: {
@@ -531,17 +519,34 @@ function validateYouTubeMetadata(
   };
 }
 
-async function createPrivateJobRoot(tempRoot: string): Promise<string> {
+export async function createPrivateJobRoot(
+  tempRoot: string,
+  options: { readonly subdirectories?: readonly string[] } = {},
+): Promise<string> {
   await mkdir(tempRoot, { recursive: true });
   const jobRoot = await mkdtemp(join(tempRoot, YOUTUBE_JOB_PREFIX));
-  await chmod(jobRoot, 0o700);
-  await writeFile(join(jobRoot, 'owner.json'), JSON.stringify({ pid: process.pid }), {
-    mode: 0o600,
-  });
-  for (const directory of ['home', 'tmp', 'cache', 'config', 'data']) {
-    await mkdir(join(jobRoot, directory), { recursive: true, mode: 0o700 });
+  try {
+    await chmod(jobRoot, 0o700);
+    await writeFile(
+      join(jobRoot, 'owner.json'),
+      JSON.stringify({ createdAt: Date.now(), instanceId: randomUUID(), pid: process.pid }),
+      { mode: 0o600 },
+    );
+    for (const directory of options.subdirectories ?? ['home', 'tmp', 'cache', 'config', 'data']) {
+      await mkdir(join(jobRoot, directory), { recursive: true, mode: 0o700 });
+    }
+    return jobRoot;
+  } catch (error) {
+    const { removeMediaJob } = await import('./path-backed-media-lease');
+    await removeMediaJob(jobRoot).catch(() => {});
+    throw new YouTubeAcquisitionError(
+      'tool_failed',
+      'The private YouTube job directory could not be created.',
+      {
+        cause: error,
+      },
+    );
   }
-  return jobRoot;
 }
 
 async function createLease(options: PathBackedMediaLeaseOptions) {
@@ -550,7 +555,7 @@ async function createLease(options: PathBackedMediaLeaseOptions) {
   } catch (error) {
     if (error instanceof PathMediaLeaseError) {
       throw new YouTubeAcquisitionError(
-        'resource_limit',
+        error.code === 'resource_limit' ? 'resource_limit' : 'integrity_failed',
         'The acquired YouTube media failed validation.',
       );
     }
@@ -591,6 +596,14 @@ function createPlan(video: YouTubeVideoRef, sourceId: string): YouTubeMediaPlan 
   };
 }
 
+function isYouTubeAcquisitionContext(value: unknown): value is YouTubeAcquisitionContext {
+  if (typeof value !== 'object' || value === null) return false;
+  const context = value as Partial<YouTubeAcquisitionContext>;
+  return (
+    typeof context.ref === 'object' && context.ref !== null && isYouTubeVideoId(context.ref.videoId)
+  );
+}
+
 function requireYouTubeRequest(request: MediaAcquireRequest): YouTubeMediaAcquireRequest {
   const provider = (request as Partial<YouTubeMediaAcquireRequest>).provider;
   if (
@@ -619,11 +632,12 @@ function normalizeAcquisitionError(error: unknown, signal: AbortSignal): unknown
   if (signal.aborted)
     return new YouTubeAcquisitionError('cancelled', 'The YouTube acquisition was cancelled.');
   if (error instanceof YouTubeAcquisitionError || error instanceof YouTubeHelperError) return error;
-  if (error instanceof PathMediaLeaseError)
+  if (error instanceof PathMediaLeaseError) {
     return new YouTubeAcquisitionError(
-      'resource_limit',
+      error.code === 'resource_limit' ? 'resource_limit' : 'integrity_failed',
       'The acquired YouTube media failed validation.',
     );
+  }
   return new YouTubeAcquisitionError(
     'tool_failed',
     'The YouTube helper could not complete the acquisition.',

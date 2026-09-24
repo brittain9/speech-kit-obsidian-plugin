@@ -75,6 +75,10 @@ export const en = {
     'The helper could not reach YouTube. Check the network and try again.',
   'youtube.error.extractor_changed':
     'The YouTube extractor changed or returned incomplete metadata. Try again later.',
+  'youtube.error.integrity_failed':
+    'The downloaded YouTube media failed integrity checks and was discarded. Try again or choose another video.',
+  'youtube.error.helper_probe_failed':
+    'The selected yt-dlp helper probe failed. Check that the absolute executable can run, then try again.',
   'youtube.error.live_stream':
     'This is an active or non-VOD YouTube stream. Live content is not supported.',
   'youtube.error.rights_not_established':
@@ -125,10 +129,6 @@ export const en = {
   'youtube.settings.helperReady': 'Helper ready: {version} ({path})',
   'youtube.settings.helperError':
     'The selected helper could not be run or is not a supported version.',
-  'youtube.settings.disabledDescription':
-    'Experimental YouTube media is disabled until explicitly enabled with an absolute yt-dlp path in Settings.',
-  'youtube.settings.enabledDescription':
-    'Experimental YouTube media is enabled with the selected unofficial yt-dlp helper. It may stop working.',
   'media-llm-empty':
     'The media transcript is empty or the AI provider returned no text. The raw transcript was kept; record a non-empty transcript or check the provider and try again.',
   'media-llm-failed':

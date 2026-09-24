@@ -94,7 +94,7 @@ export class ManagedAudioFileSession {
 
   releaseMediaLease(): Promise<void> {
     if (this.mediaReleasePromise !== null) return this.mediaReleasePromise;
-    this.mediaReleasePromise = this.mediaLease?.release() ?? Promise.resolve();
+    this.mediaReleasePromise = (this.mediaLease?.release() ?? Promise.resolve()).catch(() => {});
     return this.mediaReleasePromise;
   }
 

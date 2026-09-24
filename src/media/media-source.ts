@@ -44,6 +44,15 @@ export interface MediaAcquireRequest {
   readonly signal: AbortSignal;
 }
 
+export type MediaAcquireOverrides = Partial<Omit<MediaAcquireRequest, 'kind' | 'signal'>> & {
+  readonly provider?: unknown;
+};
+
+export interface MediaTranscriptionEntry {
+  readonly createRequest: (context: unknown) => MediaAcquireOverrides;
+  readonly source: MediaSource;
+}
+
 export interface MediaAcquisition {
   acquire(request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent>;
 }
