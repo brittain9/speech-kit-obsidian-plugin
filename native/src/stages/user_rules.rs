@@ -147,19 +147,33 @@ fn apply_rules_to_segment(
 ) -> Result<SegmentApplication, RuleApplicationError> {
     let original_text = segment.text.as_str();
     let original_length = original_text.chars().count();
-    let mut text = original_text.to_string();
+    let mut text: Option<String> = None;
     let mut applied_rule_count = 0;
     let mut replacement_count = 0;
 
     for rule in rules.iter().filter(|rule| rule.enabled) {
-        let application = preflight_rule(&text, rule, original_length)?;
+        let current = text.as_deref().unwrap_or(original_text);
+        let application = preflight_rule(current, rule, original_length)?;
         if application.matches.is_empty() {
             continue;
         }
-        text = materialize_rule(&text, rule, &application.matches);
+        let next = match text.take() {
+            Some(current) => materialize_rule(&current, rule, &application.matches),
+            None => materialize_rule(original_text, rule, &application.matches),
+        };
+        text = Some(next);
         applied_rule_count += 1;
         replacement_count += application.matches.len();
     }
+
+    let Some(text) = text else {
+        return Ok(SegmentApplication {
+            applied_rule_count,
+            changed: false,
+            replacement_count,
+            segment: segment.clone(),
+        });
+    };
 
     Ok(SegmentApplication {
         applied_rule_count,
