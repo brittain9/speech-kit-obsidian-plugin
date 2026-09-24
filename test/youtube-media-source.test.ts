@@ -13,6 +13,8 @@ import {
 } from '../src/media/youtube-helper';
 import {
   buildYouTubeAcquisitionArgs,
+  explicitYouTubeRightsConfirmation,
+  hasYouTubeRightsConfirmation,
   sanitizedAcquisitionEnvironment,
   YOUTUBE_POLICY_VERSION,
   YouTubeMediaSource,
@@ -57,6 +59,16 @@ describe('YouTube URL inspection', () => {
 });
 
 describe('yt-dlp helper policy', () => {
+  it('creates a policy record only from the explicit confirmation operation', () => {
+    expect(hasYouTubeRightsConfirmation(null)).toBe(false);
+    expect(hasYouTubeRightsConfirmation('old-policy')).toBe(false);
+    expect(hasYouTubeRightsConfirmation(YOUTUBE_POLICY_VERSION)).toBe(true);
+    expect(explicitYouTubeRightsConfirmation()).toEqual({
+      kind: 'declared_by_source',
+      policyVersion: YOUTUBE_POLICY_VERSION,
+    });
+  });
+
   it('discovers existing absolute PATH candidates without executing them', () => {
     const calls: string[] = [];
     const candidates = discoverYtDlpCandidates({

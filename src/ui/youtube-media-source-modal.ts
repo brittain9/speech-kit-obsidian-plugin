@@ -5,7 +5,11 @@ import {
   normalizeYouTubeHelperPath,
   probeYtDlpVersion,
 } from '../media/youtube-helper';
-import { YOUTUBE_POLICY_VERSION } from '../media/youtube-media-source';
+import {
+  explicitYouTubeRightsConfirmation,
+  hasYouTubeRightsConfirmation,
+  YOUTUBE_POLICY_VERSION,
+} from '../media/youtube-media-source';
 import { parseYouTubeVideoUrl } from '../media/youtube-url';
 import { t } from '../shared/i18n';
 
@@ -49,7 +53,7 @@ class YouTubeMediaSourceModal extends Modal {
   ) {
     super(app);
     this.helperPath = dependencies.getHelperPath();
-    this.rightsConfirmed = dependencies.getPolicyVersion() === YOUTUBE_POLICY_VERSION;
+    this.rightsConfirmed = hasYouTubeRightsConfirmation(dependencies.getPolicyVersion());
     this.resolveRequest = resolveRequest;
   }
 
@@ -178,14 +182,14 @@ class YouTubeMediaSourceModal extends Modal {
         await this.dependencies.onHelperSelected(result.path, result.version);
       }
       if (!this.rightsConfirmed) throw new Error('rights confirmation required');
-      if (this.dependencies.getPolicyVersion() !== YOUTUBE_POLICY_VERSION) {
+      if (!hasYouTubeRightsConfirmation(this.dependencies.getPolicyVersion())) {
         await this.dependencies.onRightsConfirmed();
       }
       const request: YouTubeMediaSourceRequest = {
         helperPath: this.helperPath,
         helperVersion: this.helperVersion,
         ref: { kind: 'youtube_video_id', videoId: video.videoId },
-        rights: { kind: 'declared_by_source', policyVersion: YOUTUBE_POLICY_VERSION },
+        rights: explicitYouTubeRightsConfirmation(),
       };
       this.resolveRequest?.(request);
       this.resolveRequest = null;

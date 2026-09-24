@@ -40,6 +40,14 @@ export const YOUTUBE_MAX_RETRIES = 0;
 export const YOUTUBE_RATE_LIMIT = '2M';
 export const YOUTUBE_JOB_PREFIX = 'speech-kit-youtube-';
 
+export function hasYouTubeRightsConfirmation(storedPolicyVersion: string | null): boolean {
+  return storedPolicyVersion === YOUTUBE_POLICY_VERSION;
+}
+
+export function explicitYouTubeRightsConfirmation(): MediaRights {
+  return { kind: 'declared_by_source', policyVersion: YOUTUBE_POLICY_VERSION };
+}
+
 export class YouTubeAcquisitionError extends Error {
   override readonly cause?: unknown;
 
@@ -198,7 +206,7 @@ export class YouTubeMediaSource implements MediaSource {
         adapterVersion: this.adapterVersion,
         canonicalUrl: video.canonicalUrl,
         helperVersion,
-        rights: { kind: 'declared_by_source', policyVersion: YOUTUBE_POLICY_VERSION },
+        rights: explicitYouTubeRightsConfirmation(),
         sourceId: this.id,
         sourceRef: { kind: 'youtube_video_id', videoId: video.videoId },
         temporaryMedia: true,
@@ -227,11 +235,12 @@ export class YouTubeMediaSource implements MediaSource {
       handedOff = true;
       yield { lease, type: 'ready' };
     } catch (error) {
+      throw normalizeAcquisitionError(error, request.signal);
+    } finally {
       if (!handedOff) {
         this.jobInUse = false;
         await removeJobBestEffort(jobRoot);
       }
-      throw normalizeAcquisitionError(error, request.signal);
     }
   }
 }
@@ -585,7 +594,7 @@ async function runHelper(
       killChild(child);
     };
     const pollTimer = window.setInterval(() => {
-      const progress = parseProgress(stdout);
+      const progress = parseYouTubeProgress(stdout);
       if (progress !== null && progress.bytes !== lastProgressBytes && events.length < 256) {
         lastProgressBytes = progress.bytes;
         events.push({ ...progress, type: 'progress' });
@@ -637,10 +646,10 @@ async function runHelper(
   };
 }
 
-function parseProgress(
+export function parseYouTubeProgress(
   output: string,
 ): { bytes?: number; phase: string; totalBytes?: number } | null {
-  const match = /(?:\[download\]\s+)?(\d+(?:\.\d+)?)(?:%|MiB|KiB|GiB|B|KB|MB|GB)/iu.exec(output);
+  const match = /(?:\[download\]\s+)?(\d+(?:\.\d+)?)(?:MiB|KiB|GiB|B|KB|MB|GB)/iu.exec(output);
   if (match === null) return null;
   const bytes = parseProgressBytes(match[0]);
   if (bytes === undefined) return null;
@@ -648,22 +657,20 @@ function parseProgress(
 }
 
 function parseProgressBytes(value: string): number | undefined {
-  const match = /^(\d+(?:\.\d+)?)(%|MiB|KiB|GiB|B|KB|MB|GB)$/iu.exec(value.trim());
+  const match = /^(\d+(?:\.\d+)?)(MiB|KiB|GiB|B|KB|MB|GB)$/iu.exec(value.trim());
   if (match === null) return undefined;
   const amount = Number(match[1]);
   const unit = match[2]?.toLowerCase();
   const multiplier =
-    unit === '%'
+    unit === 'b'
       ? 1
-      : unit === 'b'
-        ? 1
-        : unit === 'kb' || unit === 'kib'
-          ? 1024
-          : unit === 'mb' || unit === 'mib'
-            ? 1024 * 1024
-            : unit === 'gb' || unit === 'gib'
-              ? 1024 * 1024 * 1024
-              : 1;
+      : unit === 'kb' || unit === 'kib'
+        ? 1024
+        : unit === 'mb' || unit === 'mib'
+          ? 1024 * 1024
+          : unit === 'gb' || unit === 'gib'
+            ? 1024 * 1024 * 1024
+            : 1;
   return Math.round(amount * multiplier);
 }
 

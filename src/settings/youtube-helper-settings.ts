@@ -5,7 +5,10 @@ import {
   normalizeYouTubeHelperPath,
   probeYtDlpVersion,
 } from '../media/youtube-helper';
-import { YOUTUBE_POLICY_VERSION } from '../media/youtube-media-source';
+import {
+  hasYouTubeRightsConfirmation,
+  YOUTUBE_POLICY_VERSION,
+} from '../media/youtube-media-source';
 import { t } from '../shared/i18n';
 import type { PluginSettings } from './plugin-settings';
 import type { SettingAccess } from './setting-helpers';
@@ -31,10 +34,9 @@ export function renderYouTubeHelperSettings(
   }
   const policy = dependencies.getSettings().youtubePolicyVersion;
   status.createDiv({
-    text:
-      policy === YOUTUBE_POLICY_VERSION
-        ? `Rights confirmation: accepted for ${YOUTUBE_POLICY_VERSION}.`
-        : 'Rights confirmation: required before the first YouTube job.',
+    text: hasYouTubeRightsConfirmation(policy)
+      ? `Rights confirmation: accepted for ${YOUTUBE_POLICY_VERSION}.`
+      : 'Rights confirmation: required before the first YouTube job.',
   });
 
   const currentPath = dependencies.getSettings().youtubeHelperPath;

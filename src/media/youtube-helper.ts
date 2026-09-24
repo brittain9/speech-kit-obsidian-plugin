@@ -1,5 +1,6 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { lstatSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { delimiter, isAbsolute, join, resolve } from 'node:path';
 
 import type { AcquisitionFailureCode } from './media-source';
@@ -39,6 +40,7 @@ export interface YtDlpCandidateOptions {
 }
 
 export interface YtDlpVersionProbeOptions {
+  readonly cwd?: string;
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
   readonly spawnProcess?: typeof spawn;
@@ -108,7 +110,7 @@ export async function probeYtDlpVersion(
   const spawnProcess = options.spawnProcess ?? spawn;
   const timeoutMs = options.timeoutMs ?? YOUTUBE_HELPER_PROBE_TIMEOUT_MS;
   const child = spawnProcess(path, ['--version'], {
-    cwd: process.cwd(),
+    cwd: options.cwd ?? tmpdir(),
     env: sanitizedProbeEnvironment(),
     shell: false,
     stdio: ['ignore', 'pipe', 'pipe'],
