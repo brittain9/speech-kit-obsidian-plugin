@@ -2461,6 +2461,34 @@ describe('ModelInstallManager', () => {
       expect(onStateChange).toHaveBeenCalledTimes(2);
     });
 
+    it('marks a thrown same-model reselect unavailable without changing selection', async () => {
+      const selection = sampleSelection();
+      const initialCapabilities = sampleMergedCapabilities();
+      harness = createManagerHarness({
+        selectedModel: selection,
+        selectedModelCapabilitiesSnapshot: {
+          capabilities: initialCapabilities,
+          selection,
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      await harness.manager.init();
+      harness.sidecarConnection.probeModelSelection.mockRejectedValueOnce(
+        new Error('same-model probe failed'),
+      );
+
+      await expect(harness.manager.select(selection)).rejects.toThrow('same-model probe failed');
+
+      expect(harness.getSettings().selectedModel).toEqual(selection);
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
+      expect(harness.manager.getState().selectedModelCapabilities).toEqual({
+        reason: 'probe_failed',
+        selection,
+        status: 'unavailable',
+      });
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledOnce();
+    });
+
     it('clearSelection() clears the persisted capabilities snapshot', async () => {
       harness = createManagerHarness({
         selectedModel: sampleSelection(),
