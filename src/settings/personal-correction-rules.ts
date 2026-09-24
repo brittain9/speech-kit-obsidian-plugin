@@ -338,6 +338,8 @@ function findPersonalCorrectionMatches(input: string, find: string): PersonalCor
   const findChars = Array.from(normalizedFind);
   const originalChars = Array.from(input);
   const originalBoundaries = originalCharBoundaries(originalChars);
+  const originalPrefixLengths =
+    inputChars.length === originalChars.length ? null : nfdPrefixLengths(originalChars);
   const matches: PersonalCorrectionRuleMatch[] = [];
 
   for (let index = 0; index + findChars.length <= inputChars.length; ) {
@@ -362,12 +364,14 @@ function findPersonalCorrectionMatches(input: string, find: string): PersonalCor
       originalBoundaries,
       index,
       inputChars.length,
+      originalPrefixLengths,
     );
     const end = mapNormalizedBoundary(
       originalChars,
       originalBoundaries,
       afterIndex,
       inputChars.length,
+      originalPrefixLengths,
     );
     matches.push({ end, start });
     index = afterIndex;
@@ -431,14 +435,29 @@ function originalCharBoundaries(chars: readonly string[]): number[] {
   return boundaries;
 }
 
+function nfdPrefixLengths(chars: readonly string[]): number[] {
+  const lengths = [0];
+  let total = 0;
+  for (const char of chars) {
+    total += Array.from(char.normalize('NFD')).length;
+    lengths.push(total);
+  }
+  return lengths;
+}
+
 function mapNormalizedBoundary(
   originalChars: readonly string[],
   originalBoundaries: readonly number[],
   normalizedIndex: number,
   normalizedLength: number,
+  originalPrefixLengths: number[] | null,
 ): number {
   if (normalizedLength === originalChars.length) {
     return originalBoundaries[Math.min(originalChars.length, normalizedIndex)] ?? 0;
+  }
+  if (originalPrefixLengths !== null) {
+    const exactIndex = originalPrefixLengths.indexOf(normalizedIndex);
+    if (exactIndex >= 0) return originalBoundaries[exactIndex] ?? 0;
   }
   const approximate = Math.min(originalChars.length, Math.max(0, normalizedIndex));
   const start = Math.max(0, approximate - 8);

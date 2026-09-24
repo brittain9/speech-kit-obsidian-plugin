@@ -37,6 +37,7 @@ describe('personal correction rule semantics', () => {
     expect(applyPersonalCorrectionRules('cafe\u0301', [rule('café', 'coffee')])).toBe('coffee');
     expect(applyPersonalCorrectionRules('café', [rule('cafe\u0301', 'tea')])).toBe('tea');
     expect(applyPersonalCorrectionRules('cafe\u0301', [rule('cafe', 'tea')])).toBe('cafe\u0301');
+    expect(applyPersonalCorrectionRules('é é', [rule('é', 'e')])).toBe('e e');
   });
 
   it('rejects blank, oversized, and duplicate drafts before compiling a preview', () => {

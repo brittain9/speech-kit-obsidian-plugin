@@ -234,6 +234,8 @@ fn find_matches(input: &str, find: &str) -> Vec<(usize, usize)> {
     let normalized_find: Vec<char> = find.nfd().collect();
     let original_chars: Vec<char> = input.chars().collect();
     let original_boundaries = char_boundaries(&original_chars);
+    let original_prefix_lengths = (normalized_input.len() != original_chars.len())
+        .then(|| nfd_prefix_lengths(&original_chars));
     let mut matches = Vec::new();
     let mut index = 0;
 
@@ -261,12 +263,14 @@ fn find_matches(input: &str, find: &str) -> Vec<(usize, usize)> {
             &original_boundaries,
             index,
             normalized_input.len(),
+            original_prefix_lengths.as_deref(),
         );
         let end = map_normalized_boundary(
             &original_chars,
             &original_boundaries,
             after_index,
             normalized_input.len(),
+            original_prefix_lengths.as_deref(),
         );
         matches.push((start, end));
         index = after_index;
@@ -348,14 +352,32 @@ fn char_boundaries(chars: &[char]) -> Vec<usize> {
     boundaries
 }
 
+fn nfd_prefix_lengths(chars: &[char]) -> Vec<usize> {
+    let mut lengths = vec![0];
+    let mut total = 0;
+    for character in chars {
+        total += character.to_string().nfd().count();
+        lengths.push(total);
+    }
+    lengths
+}
+
 fn map_normalized_boundary(
     original_chars: &[char],
     original_boundaries: &[usize],
     normalized_index: usize,
     normalized_length: usize,
+    original_prefix_lengths: Option<&[usize]>,
 ) -> usize {
     if normalized_length == original_chars.len() {
         return original_boundaries[normalized_index.min(original_chars.len())];
+    }
+    if let Some(prefix_lengths) = original_prefix_lengths
+        && let Some(exact_index) = prefix_lengths
+            .iter()
+            .position(|length| *length == normalized_index)
+    {
+        return original_boundaries[exact_index];
     }
     let approximate = normalized_index.min(original_chars.len());
     let start = approximate.saturating_sub(8);
@@ -494,6 +516,7 @@ mod tests {
         );
         assert!(find_matches("cafe\u{301}", "cafe").is_empty());
         assert!(find_matches("cafe\u{301}x", "cafe\u{301}").is_empty());
+        assert_eq!(find_matches("é é", "é"), vec![(0, 2), (3, 5)]);
     }
 
     #[test]
