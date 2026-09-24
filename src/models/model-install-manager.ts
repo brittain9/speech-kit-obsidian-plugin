@@ -284,6 +284,7 @@ export class ModelInstallManager {
   private loadError: string | null = null;
   private loadStatus: LoadStatus = 'loading';
   private modelStore: ModelStoreRecord = EMPTY_MODEL_STORE;
+  private probeGenerations: Record<CapabilityTask, number> = { stt: 0, tts: 0 };
   private releaseSidecarSubscription: (() => void) | null = null;
   private selectedModelCapabilities: SelectedModelCapabilities = { status: 'none' };
   private selectionGenerations: SelectionGenerations = createSelectionGenerations();
@@ -438,6 +439,8 @@ export class ModelInstallManager {
     this.selectionGenerations.stt += 1;
     this.selectionGenerations.translation += 1;
     this.selectionGenerations.tts += 1;
+    this.probeGenerations.stt += 1;
+    this.probeGenerations.tts += 1;
     if (this.cancelStuckTimer !== null) {
       window.clearTimeout(this.cancelStuckTimer);
       this.cancelStuckTimer = null;
@@ -797,6 +800,7 @@ export class ModelInstallManager {
         canCommit,
       );
     }
+    const probeGeneration = task === 'translation' ? 0 : ++this.probeGenerations[task];
     const probeResult = await this.deps.sidecarConnection.probeModelSelection({
       modelSelection: selection,
       ...createModelStoreOverridePayload(this.deps.getSettings().modelStorePathOverride),
@@ -816,6 +820,7 @@ export class ModelInstallManager {
           expectedSelectionGeneration,
           canCommit,
           true,
+          probeGeneration,
         );
       }
       if (!canCommit(this.deps.getSettings())) return probeResult;
@@ -833,9 +838,11 @@ export class ModelInstallManager {
           expectedInitGeneration,
           expectedSelectionGeneration,
           canCommit,
+          probeGeneration,
         );
         if (
           !attemptState.retriedAfterStaleInit &&
+          probeGeneration === this.probeGenerations[task] &&
           hadMatchingSnapshot &&
           !invalidated &&
           expectedInitGeneration !== this.initGeneration
@@ -923,6 +930,7 @@ export class ModelInstallManager {
         expectedSelectionGeneration,
         canApplyCapabilities,
         true,
+        probeGeneration,
       );
     }
     return probeResult;
@@ -1093,6 +1101,7 @@ export class ModelInstallManager {
     retryOnStaleInit: boolean = false,
     invalidateSnapshotOnUnavailable: boolean = false,
   ): Promise<void> {
+    const probeGeneration = ++this.probeGenerations[task];
     try {
       const probeResult = await this.deps.sidecarConnection.probeModelSelection({
         modelSelection: selection,
@@ -1100,7 +1109,8 @@ export class ModelInstallManager {
       });
       if (
         expectedInitGeneration !== this.initGeneration ||
-        expectedSelectionGeneration !== this.selectionGenerations[task]
+        expectedSelectionGeneration !== this.selectionGenerations[task] ||
+        probeGeneration !== this.probeGenerations[task]
       ) {
         return;
       }
@@ -1112,6 +1122,7 @@ export class ModelInstallManager {
         expectedSelectionGeneration,
         undefined,
         retryOnStaleInit,
+        probeGeneration,
       );
       if (
         invalidateSnapshotOnUnavailable &&
@@ -1122,12 +1133,15 @@ export class ModelInstallManager {
           task,
           expectedInitGeneration,
           expectedSelectionGeneration,
+          undefined,
+          probeGeneration,
         );
       }
     } catch (error) {
       if (
         expectedInitGeneration !== this.initGeneration ||
-        expectedSelectionGeneration !== this.selectionGenerations[task]
+        expectedSelectionGeneration !== this.selectionGenerations[task] ||
+        probeGeneration !== this.probeGenerations[task]
       ) {
         return;
       }
@@ -1152,6 +1166,8 @@ export class ModelInstallManager {
             task,
             expectedInitGeneration,
             expectedSelectionGeneration,
+            undefined,
+            probeGeneration,
           );
         }
       }
@@ -1166,12 +1182,14 @@ export class ModelInstallManager {
     expectedSelectionGeneration: number = this.selectionGenerations[task],
     canCommit: (settings: Readonly<PluginSettings>) => boolean = () => true,
     retryOnStaleInit: boolean = false,
+    expectedProbeGeneration: number = this.probeGenerations[task],
   ): Promise<boolean> {
     const canApply = (settings: Readonly<PluginSettings>): boolean => {
       const current = task === 'tts' ? settings.selectedTtsModel : settings.selectedModel;
       return (
         expectedInitGeneration === this.initGeneration &&
         expectedSelectionGeneration === this.selectionGenerations[task] &&
+        expectedProbeGeneration === this.probeGenerations[task] &&
         canCommit(settings) &&
         current !== null &&
         selectedModelEquals(current, selection)
@@ -1185,6 +1203,7 @@ export class ModelInstallManager {
         retryOnStaleInit &&
         expectedInitGeneration !== this.initGeneration &&
         expectedSelectionGeneration === this.selectionGenerations[task] &&
+        expectedProbeGeneration === this.probeGenerations[task] &&
         canCommit(settings) &&
         current !== null &&
         selectedModelEquals(current, selection)
@@ -1260,6 +1279,7 @@ export class ModelInstallManager {
     expectedInitGeneration: number = this.initGeneration,
     expectedSelectionGeneration: number = this.selectionGenerations[task],
     canCommit: (settings: Readonly<PluginSettings>) => boolean = () => true,
+    expectedProbeGeneration: number = this.probeGenerations[task],
   ): Promise<boolean> {
     const settings = this.deps.getSettings();
     const snapshot =
@@ -1274,6 +1294,7 @@ export class ModelInstallManager {
           return (
             expectedInitGeneration === this.initGeneration &&
             expectedSelectionGeneration === this.selectionGenerations[task] &&
+            expectedProbeGeneration === this.probeGenerations[task] &&
             canCommit(currentSettings) &&
             current !== null &&
             selectedModelEquals(current, selection)

@@ -1664,6 +1664,71 @@ describe('ModelInstallManager', () => {
       });
     });
 
+    it.each(['older-first', 'newer-first'] as const)(
+      'lets the latest STT probe win when init-ready and explicit-unavailable complete %s',
+      async (completionOrder) => {
+        const selection = sampleSelection();
+        harness = createManagerHarness({ selectedModel: selection });
+        configureSidecarForInit(harness.sidecarConnection);
+        const explicitProbe = deferred<ModelProbeResultEvent>();
+        const initProbe = deferred<ModelProbeResultEvent>();
+        const unavailableProbe: ModelProbeResultEvent = {
+          ...sampleReadyProbeResult(selection),
+          available: false,
+          installed: false,
+          mergedCapabilities: null,
+          message: 'The explicit probe is unavailable.',
+          status: 'missing',
+          type: 'model_probe_result',
+        };
+        const readyProbe: ModelProbeResultEvent = {
+          ...sampleReadyProbeResult(selection),
+          mergedCapabilities: sampleMergedCapabilities(),
+          type: 'model_probe_result',
+        };
+        harness.sidecarConnection.probeModelSelection
+          .mockReturnValueOnce(explicitProbe.promise)
+          .mockReturnValueOnce(initProbe.promise);
+
+        const selecting = harness.manager.select(selection);
+        await vi.waitFor(() => {
+          expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledOnce();
+        });
+        const initializing = harness.manager.init();
+        await initializing;
+
+        if (completionOrder === 'older-first') {
+          explicitProbe.resolve(unavailableProbe);
+          await expect(selecting).rejects.toThrow('The explicit probe is unavailable.');
+          initProbe.resolve(readyProbe);
+        } else {
+          initProbe.resolve(readyProbe);
+          await vi.waitFor(() => {
+            expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+              capabilities: readyProbe.mergedCapabilities,
+              selection,
+              status: 'ready',
+            });
+          });
+          explicitProbe.resolve(unavailableProbe);
+          await expect(selecting).rejects.toThrow('The explicit probe is unavailable.');
+        }
+
+        await vi.waitFor(() => {
+          expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+            capabilities: readyProbe.mergedCapabilities,
+            selection,
+            status: 'ready',
+          });
+        });
+        expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+          capabilities: readyProbe.mergedCapabilities,
+          selection,
+        });
+        expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(2);
+      },
+    );
+
     it('keeps TTS hydration independent from a translation selection change', async () => {
       const ttsSelection = sampleTtsVoiceSelection();
       const translationModel = sampleTranslationCatalogModel();
@@ -1965,14 +2030,10 @@ describe('ModelInstallManager', () => {
         type: 'model_probe_result',
       };
       const userProbe = deferred<ModelProbeResultEvent>();
-      const firstInitProbe = deferred<ModelProbeResultEvent>();
-      const retryProbe = deferred<ModelProbeResultEvent>();
-      const secondInitProbe = deferred<ModelProbeResultEvent>();
+      const initProbe = deferred<ModelProbeResultEvent>();
       harness.sidecarConnection.probeModelSelection
         .mockReturnValueOnce(userProbe.promise)
-        .mockReturnValueOnce(firstInitProbe.promise)
-        .mockReturnValueOnce(retryProbe.promise)
-        .mockReturnValueOnce(secondInitProbe.promise);
+        .mockReturnValueOnce(initProbe.promise);
 
       const selecting = harness.manager.select(selection);
       await vi.waitFor(() => {
@@ -1983,20 +2044,11 @@ describe('ModelInstallManager', () => {
         expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
       });
 
-      const firstInit = harness.manager.init();
-      await firstInit;
+      const initializing = harness.manager.init();
+      await initializing;
       userProbe.resolve(unavailableProbe);
-      await vi.waitFor(() => {
-        expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(3);
-      });
-
-      const secondInit = harness.manager.init();
-      await secondInit;
-      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(4);
-
-      retryProbe.resolve(unavailableProbe);
       await expect(selecting).rejects.toThrow('The model is unavailable.');
-      secondInitProbe.resolve(unavailableProbe);
+      initProbe.resolve(unavailableProbe);
 
       await vi.waitFor(() => {
         expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
@@ -2007,7 +2059,7 @@ describe('ModelInstallManager', () => {
       });
       expect(harness.getSettings().selectedModel).toEqual(selection);
       expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
-      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(4);
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(2);
     });
 
     it('detaches a same-model reselect snapshot and eventually rehydrates after init changes', async () => {
@@ -2023,7 +2075,6 @@ describe('ModelInstallManager', () => {
       configureSidecarForInit(harness.sidecarConnection);
       const userProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
       const firstInitProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
-      const retryProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
       const refreshedCapabilities = {
         ...initialCapabilities,
         family: {
@@ -2037,8 +2088,7 @@ describe('ModelInstallManager', () => {
       };
       harness.sidecarConnection.probeModelSelection
         .mockReturnValueOnce(userProbe.promise)
-        .mockReturnValueOnce(firstInitProbe.promise)
-        .mockReturnValueOnce(retryProbe.promise);
+        .mockReturnValueOnce(firstInitProbe.promise);
 
       const selecting = harness.manager.select(selection);
       await vi.waitFor(() => {
@@ -2052,10 +2102,9 @@ describe('ModelInstallManager', () => {
       await backgroundInit;
       userProbe.resolve(sampleReadyProbeResult(selection));
       await vi.waitFor(() => {
-        expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(3);
+        expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(2);
       });
       firstInitProbe.resolve(freshProbeResult);
-      retryProbe.resolve(freshProbeResult);
       await selecting;
 
       await vi.waitFor(() => {
