@@ -5,7 +5,7 @@ import {
   Transaction,
   type TransactionSpec,
 } from '@codemirror/state';
-import type { EditorView, ViewUpdate } from '@codemirror/view';
+import { EditorView, type ViewUpdate } from '@codemirror/view';
 import { describe, expect, it, vi } from 'vitest';
 import {
   dictationAnchorExtension,
@@ -13,7 +13,7 @@ import {
   setAnchorEffect,
   setAnchorModeEffect,
 } from '../src/editor/dictation-anchor-extension';
-import { NoteSurface } from '../src/editor/note-surface';
+import { NoteSurface, noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
 import {
   provisionalTranscriptDecorationsField,
   provisionalTranscriptExtension,
@@ -44,6 +44,7 @@ class FakeEditorView {
       extensions,
       selection: EditorSelection.cursor(selectionHead),
     });
+    this.updateListeners.push(...this.state.facet(EditorView.updateListener));
   }
 
   dispatch(spec: TransactionSpec): void {
@@ -540,6 +541,18 @@ describe('NoteSurface', () => {
     expect(surface.replaceAnchor('u1', 'FIRST', 'first').kind).toBe('denied');
   });
 
+  it('latches exact start and end boundary edits through the real NoteSurface extension', () => {
+    for (const position of [0, 5]) {
+      const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+      expect(append(surface, 'u1', 'first').kind).toBe('appended');
+      view.dispatch({
+        annotations: Transaction.userEvent.of('input.type'),
+        changes: { from: position, insert: 'X' },
+      });
+      expect(surface.replaceAnchor('u1', 'FIRST', 'first').kind).toBe('denied');
+      surface.dispose();
+    }
+  });
   it('lets only the newest session drive the shared cursor and clears it on the last dispose', () => {
     const view = new FakeEditorView('', 0, dictationAnchorExtension());
     const earlier = new NoteSurface(view as unknown as EditorView, { anchor: 'at_cursor' });

@@ -146,6 +146,7 @@ export class Session {
   private readonly refs: Array<{ offref: (ref: EventRef) => void; ref: EventRef }> = [];
   private surface: NoteSurfaceLike | null;
   private surfaceDesynchronized = false;
+  private lastProjectionInserted = false;
 
   static hasDictationTarget(app: Pick<App, 'workspace'>): boolean {
     return resolveDictationTarget(app) !== null;
@@ -210,6 +211,7 @@ export class Session {
   }
 
   acceptTranscript(revision: TranscriptRevision): SessionAcceptResult {
+    this.lastProjectionInserted = false;
     const result = this.journal.upsert(revision);
 
     if (result.kind !== 'accepted') {
@@ -224,6 +226,10 @@ export class Session {
     this.projectRevision(result.revision);
 
     return { kind: 'accepted' };
+  }
+
+  wasLastTranscriptInserted(): boolean {
+    return this.lastProjectionInserted;
   }
 
   readNoteGlossary(maxChars: number): { text: string; truncated: boolean } | null {
@@ -476,6 +482,7 @@ export class Session {
     }
 
     if (result.kind === 'appended') {
+      this.lastProjectionInserted = true;
       this.projectionByUtterance.set(revision.utteranceId, {
         kind: 'projected',
         lastRevision: revision.revision,
@@ -551,6 +558,7 @@ export class Session {
     }
 
     if (result.kind === 'replaced') {
+      this.lastProjectionInserted = true;
       this.projectionByUtterance.set(revision.utteranceId, {
         kind: 'projected',
         lastRevision: revision.revision,

@@ -1,12 +1,17 @@
 import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-recovery';
 import type { LlmPresetOutput } from '../llm/presets';
-import type { LlmRouter } from '../llm/router';
+import { ProviderError } from '../llm/provider';
+import type { LlmRouter, LlmRouterCleanupResult } from '../llm/router';
+import { resolveLlmOutputBehavior } from '../llm/transform-policy';
 import type { MediaLlmEditorSession } from './audio-file-transcript-adapter';
 
 export interface MediaLlmSnapshot {
+  readonly disclosure?: string;
+  readonly model?: string;
   readonly noteContextChars: number;
   readonly output: LlmPresetOutput;
   readonly prompt: string;
+  readonly providerId?: string;
   readonly showRawBelow: boolean;
   readonly temperature: number;
   readonly totalContextCap: number;
@@ -14,7 +19,10 @@ export interface MediaLlmSnapshot {
 }
 
 export interface MediaLlmPreview {
+  readonly disclosure?: string;
+  readonly model?: string;
   readonly output: LlmPresetOutput;
+  readonly providerId?: string;
   readonly text: string;
 }
 
@@ -33,6 +41,7 @@ export class MediaLlmProcessingError extends Error {
 
 export interface MediaLlmProcessorDependencies {
   readonly confirm: (preview: MediaLlmPreview, signal: AbortSignal) => Promise<boolean>;
+  readonly isEnabled?: () => boolean;
   readonly onRawTranscriptRecoveryAvailable: (receipt: RawTranscriptRecoveryReceipt) => void;
   readonly router: LlmRouter;
   readonly signal: AbortSignal;
@@ -49,9 +58,13 @@ export async function processMediaLlm(
 ): Promise<{ readonly applied: boolean; readonly text: string }> {
   const rawText = session.joinRawSessionText();
   if (rawText.trim().length === 0) {
-    return { applied: false, text: '' };
+    throw new MediaLlmProcessingError(
+      'empty',
+      'The media transcript is empty. Record or select a non-empty transcript before AI processing.',
+    );
   }
 
+  assertEnabled(dependencies);
   session.setAnchorMode('hidden');
   if (!session.markSessionRangeAsProcessing()) {
     throw new MediaLlmProcessingError(
@@ -61,16 +74,30 @@ export async function processMediaLlm(
   }
 
   try {
-    throwIfCancelled(dependencies.signal);
+    assertEnabled(dependencies);
     const noteContext = readBoundedNoteContext(session, dependencies.snapshot);
     const userMessage = formatMediaLlmMessage(noteContext, rawText);
-    const result = await dependencies.router.cleanup({
-      abortSignal: dependencies.signal,
-      prompt: dependencies.snapshot.prompt,
-      temperature: dependencies.snapshot.temperature,
-      transcriptChars: rawText.length,
-      userMessage,
-    });
+    let result: LlmRouterCleanupResult;
+    try {
+      result = await dependencies.router.cleanup({
+        abortSignal: dependencies.signal,
+        prompt: dependencies.snapshot.prompt,
+        temperature: dependencies.snapshot.temperature,
+        transcriptChars: rawText.length,
+        userMessage,
+      });
+    } catch (error) {
+      if (
+        dependencies.signal.aborted ||
+        (error instanceof ProviderError && error.code === 'aborted')
+      ) {
+        throw new MediaLlmProcessingError('cancelled', 'Media AI processing was cancelled.', {
+          cause: error,
+        });
+      }
+      throw error;
+    }
+    assertEnabled(dependencies);
     throwIfCancelled(dependencies.signal);
 
     const text = result.text.trim();
@@ -82,15 +109,31 @@ export async function processMediaLlm(
     }
 
     const confirmed = await dependencies.confirm(
-      { output: dependencies.snapshot.output, text },
+      {
+        ...(dependencies.snapshot.disclosure === undefined
+          ? {}
+          : { disclosure: dependencies.snapshot.disclosure }),
+        ...(dependencies.snapshot.model === undefined
+          ? {}
+          : { model: dependencies.snapshot.model }),
+        output: dependencies.snapshot.output,
+        ...(dependencies.snapshot.providerId === undefined
+          ? {}
+          : { providerId: dependencies.snapshot.providerId }),
+        text,
+      },
       dependencies.signal,
     );
+    assertEnabled(dependencies);
     throwIfCancelled(dependencies.signal);
     if (!confirmed) {
       return { applied: false, text };
     }
 
-    if (dependencies.snapshot.output === 'replace') {
+    assertEnabled(dependencies);
+    throwIfCancelled(dependencies.signal);
+    const outputBehavior = resolveLlmOutputBehavior(dependencies.snapshot.output);
+    if (outputBehavior.kind === 'replace') {
       const replacement = session.replaceSessionRangeWithCleaned(text, {
         rawTextForCallout: rawText,
         rejectUserEdits: true,
@@ -104,8 +147,7 @@ export async function processMediaLlm(
       }
       dependencies.onRawTranscriptRecoveryAvailable(replacement.recovery);
     } else {
-      const placement = dependencies.snapshot.output === 'add_above' ? 'above' : 'below';
-      const inserted = session.insertAdjacentToSessionRange(text, placement, {
+      const inserted = session.insertAdjacentToSessionRange(text, outputBehavior.placement, {
         rejectUserEdits: true,
       });
       if (!inserted) {
@@ -144,6 +186,13 @@ function formatMediaLlmMessage(noteContext: string, transcriptText: string): str
   }
   sections.push(`<media_transcript>\n${transcriptText.trim()}\n</media_transcript>`);
   return sections.join('\n\n');
+}
+
+function assertEnabled(dependencies: MediaLlmProcessorDependencies): void {
+  throwIfCancelled(dependencies.signal);
+  if (dependencies.isEnabled?.() === false) {
+    throw new MediaLlmProcessingError('cancelled', 'Media AI processing was disabled.');
+  }
 }
 
 function throwIfCancelled(signal: AbortSignal): void {

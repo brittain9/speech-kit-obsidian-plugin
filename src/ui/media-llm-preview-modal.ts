@@ -47,6 +47,12 @@ class MediaLlmPreviewModal extends Modal {
     contentEl.empty();
     contentEl.createEl('h2', { text: t('llm.mediaPreview.title') });
     contentEl.createEl('p', { text: t('llm.mediaPreview.description') });
+    if (this.preview.disclosure !== undefined) {
+      contentEl.createEl('p', {
+        cls: 'local-stt-media-llm-preview__disclosure',
+        text: this.preview.disclosure,
+      });
+    }
     contentEl.createEl('pre', {
       cls: 'local-stt-media-llm-preview',
       text: this.preview.text,

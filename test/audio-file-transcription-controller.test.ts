@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DecodedAudioFile } from '../src/audio/audio-file-decoder';
 import { AudioFileTranscriptionController } from '../src/dictation/audio-file-transcription-controller';
 import type { NotePlacementOptions, SurfaceDesynchronization } from '../src/editor/note-surface';
+import { LocalMediaSource } from '../src/media/local-media-source';
 import type { AcquisitionEvent, LocalMediaLease } from '../src/media/media-source';
 import type {
   EngineCapabilitiesRecord,
@@ -253,9 +254,35 @@ function createHarness(
         samples: [new Float32Array([0, 0])],
       }),
   );
-  const decoder = { decode: vi.fn(async (_file: File, _signal: AbortSignal) => createAudio()) };
+  const decoder = {
+    decode: vi.fn(async (_file: File, _signal: AbortSignal) => createAudio()),
+    decodeMedia: vi.fn(async (_lease: LocalMediaLease, signal: AbortSignal) => {
+      return await decoder.decode(
+        createGeneratedWavFile('fixture.wav', {
+          channelCount: 1,
+          sampleRate: 16_000,
+          samples: [new Float32Array([0, 0])],
+        }),
+        signal,
+      );
+    }),
+  };
   let settings = createSettings();
   let modelCapabilities = readyCapabilities();
+  const configuredDecoder = { ...decoder, ...overrides.decoder } as typeof decoder;
+  if (overrides.decoder?.decodeMedia === undefined) {
+    configuredDecoder.decodeMedia = vi.fn(async (_lease: LocalMediaLease, signal: AbortSignal) =>
+      configuredDecoder.decode(
+        createGeneratedWavFile('fixture.wav', {
+          channelCount: 1,
+          sampleRate: 16_000,
+          samples: [new Float32Array([0, 0])],
+        }),
+        signal,
+      ),
+    );
+  }
+  const mediaSource = overrides.mediaSource ?? new LocalMediaSource({ pickFile: pickAudioFile });
   const dependencies: ConstructorParameters<typeof AudioFileTranscriptionController>[0] = {
     backpressureTimeoutMs: 100,
     createSession: (_options: CreateSessionOptions) => {
@@ -263,7 +290,6 @@ function createHarness(
       sessions.push(session);
       return session;
     },
-    decoder,
     feedback,
     getModelCapabilities: () => modelCapabilities,
     getSettings: () => settings,
@@ -271,18 +297,19 @@ function createHarness(
     isDictationBusy: () => false,
     logger: { debug: vi.fn(), error: vi.fn(), warn: vi.fn() },
     onSidecarMissing: vi.fn(),
-    pickAudioFile,
     sessionStopTimeoutMs: 1_000,
     sidecarConnection,
     sidecarLifecycleGate,
     stopConflictingSpeech: vi.fn(),
     ...overrides,
+    decoder: configuredDecoder,
+    mediaSource,
   };
   const controller = new AudioFileTranscriptionController(dependencies);
 
   return {
     controller,
-    decoder,
+    decoder: configuredDecoder,
     feedback,
     pickAudioFile,
     sessions,
@@ -677,8 +704,9 @@ describe('AudioFileTranscriptionController', () => {
 
     const transcribing = harness.controller.transcribe();
     await vi.waitFor(() => expect(sidecarConnection.ensureStarted).toHaveBeenCalledOnce());
-    await harness.controller.cancel();
+    const cancelling = harness.controller.cancel();
     finishEnsureStarted?.();
+    await cancelling;
     await transcribing;
 
     expect(sidecarConnection.startSessionWithControl).toHaveBeenCalledOnce();
@@ -1180,7 +1208,6 @@ describe('AudioFileTranscriptionController', () => {
       mediaId: 'media-test',
       openReadStream: vi.fn(async () => new ReadableStream<Uint8Array>()),
       provenance: {
-        access: 'local',
         acquiredAt: new Date(0).toISOString(),
         adapterVersion: '1',
         rights: { kind: 'user_supplied_file' },
@@ -1191,20 +1218,20 @@ describe('AudioFileTranscriptionController', () => {
       release,
     };
     const source = {
-      acquirePicked: async function* (): AsyncIterable<AcquisitionEvent> {
+      acquire: async function* (): AsyncIterable<AcquisitionEvent> {
         yield {
-          plan: {
-            access: 'local',
-            displayName: 'Local audio file',
-            requiresConsent: false,
-            restrictions: [],
-            sourceId: 'local_file',
-            warnings: [],
-          },
+          plan: { displayName: 'Local audio file', sourceId: 'local_file' },
           type: 'plan',
         };
+        yield { bytes: 0, phase: 'read', totalBytes: lease.encodedBytes, type: 'progress' };
         yield { lease, type: 'ready' };
       },
+      adapterVersion: '1',
+      id: 'local_file' as const,
+      inspect: async () => ({
+        plan: { displayName: 'Local audio file', sourceId: 'local_file' },
+        ref: { fileToken: 'opaque-token', kind: 'local_file' as const },
+      }),
     };
     const progress: string[] = [];
     const decoded = createAudio();
@@ -1215,7 +1242,9 @@ describe('AudioFileTranscriptionController', () => {
         decodeMedia,
       },
       mediaSource: source,
-      onMediaProgress: (event) => progress.push(event.phase),
+      onMediaProgress: (event) => {
+        if (event !== null) progress.push(event.phase);
+      },
     });
 
     const transcribing = harness.controller.transcribe();
@@ -1269,8 +1298,18 @@ describe('AudioFileTranscriptionController', () => {
     const harness = createHarness({
       confirmMediaLlm: confirm,
       createLlmRouter: () => createFakeLlmRouter({ cleanup }),
-      getSettings: () => createSettings({ mediaLlmProcessing: true }),
-      onMediaProgress: (event) => progress.push(event.phase),
+      getSettings: () =>
+        createSettings({
+          llmProviderConfigurations: {
+            ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations,
+            ollama: { model: 'fake-model' },
+          },
+          llmRoutingPolicy: { kind: 'fixed', providerId: 'ollama' },
+          mediaLlmProcessing: true,
+        }),
+      onMediaProgress: (event) => {
+        if (event !== null) progress.push(event.phase);
+      },
       onRawTranscriptRecoveryAvailable: (receipt) => recoveries.push(receipt),
     });
 
@@ -1293,7 +1332,7 @@ describe('AudioFileTranscriptionController', () => {
       }),
     );
     expect(confirm).toHaveBeenCalledWith(
-      { output: 'replace', text: 'Clean media transcript.' },
+      expect.objectContaining({ output: 'replace', text: 'Clean media transcript.' }),
       expect.any(AbortSignal),
     );
     expect(progress).toContain('ai_processing');

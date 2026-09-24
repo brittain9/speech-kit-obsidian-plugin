@@ -1,4 +1,5 @@
 import type { AudioFileBackpressureGate } from '../audio/audio-file-backpressure';
+import type { LocalMediaLease } from '../media/media-source';
 import type { SidecarLifecycleLease } from '../sidecar/sidecar-lifecycle-gate';
 import type { AudioFileTranscriptAdapter } from './audio-file-transcript-adapter';
 
@@ -35,6 +36,8 @@ export class ManagedAudioFileSession {
   private startCompletionResolve: () => void = () => {};
   private postCompletion: (() => Promise<void>) | null = null;
   private postCompletionStarted = false;
+  private mediaLease: LocalMediaLease | null = null;
+  private mediaReleasePromise: Promise<void> | null = null;
 
   private constructor(
     readonly abortController: AbortController,
@@ -83,6 +86,16 @@ export class ManagedAudioFileSession {
 
   setPostCompletion(operation: (() => Promise<void>) | null): void {
     this.postCompletion = operation;
+  }
+
+  setMediaLease(lease: LocalMediaLease): void {
+    this.mediaLease = lease;
+  }
+
+  releaseMediaLease(): Promise<void> {
+    if (this.mediaReleasePromise !== null) return this.mediaReleasePromise;
+    this.mediaReleasePromise = this.mediaLease?.release() ?? Promise.resolve();
+    return this.mediaReleasePromise;
   }
 
   async runPostCompletion(): Promise<void> {

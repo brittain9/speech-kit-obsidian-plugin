@@ -93,6 +93,7 @@ import { didReadAloudSettingsChange, resolveReadAloudVoiceId } from './tts/read-
 import { DictationRibbonController } from './ui/dictation-ribbon';
 import { LOCAL_DICTATION_VIEW_TYPE, LocalDictationView } from './ui/local-dictation-view';
 import { confirmMediaLlmPreview } from './ui/media-llm-preview-modal';
+import { renderMediaProgressStatus } from './ui/media-progress-presenter';
 
 export default class LocalSttPlugin extends Plugin {
   private audioCaptureStream: AudioCaptureStream | null = null;
@@ -134,6 +135,7 @@ export default class LocalSttPlugin extends Plugin {
   private readAloudFollowAlong: ReadAloudFollowAlong | null = null;
   private releaseReadAloudModelSubscription: (() => void) | null = null;
   private readAloudStatus: HTMLElement | null = null;
+  private mediaTranscriptionStatus: HTMLElement | null = null;
   override settings: PluginSettings = DEFAULT_PLUGIN_SETTINGS;
   private sidecarConnection: SidecarConnection | null = null;
   private sidecarInstallManager: SidecarInstallManager | null = null;
@@ -311,7 +313,10 @@ export default class LocalSttPlugin extends Plugin {
     });
     this.readAloudStatus = this.addStatusBarItem();
     this.translationStatus = this.addStatusBarItem();
+    this.mediaTranscriptionStatus = this.addStatusBarItem();
     this.readAloudStatus.addClass('local-stt-read-aloud-status');
+    this.mediaTranscriptionStatus.addClass('local-stt-media-transcription-status');
+    renderMediaProgressStatus(this.mediaTranscriptionStatus, null);
     this.readAloudController = new ReadAloudController({
       feedback: this.feedback,
       followAlong: this.requireReadAloudFollowAlong(),
@@ -351,6 +356,7 @@ export default class LocalSttPlugin extends Plugin {
       feedback: this.feedback,
       getModelCapabilities: () =>
         this.requireModelInstallManager().getState().selectedModelCapabilities,
+      getSecret: (secretId) => this.getSecret(secretId),
       getSettings: () => this.settings,
       getTarget: () => Session.getDictationTarget(this.app),
       isDictationBusy: () => this.requireDictationController().isCaptureActive(),
@@ -358,13 +364,17 @@ export default class LocalSttPlugin extends Plugin {
       onModelMissing: () => {
         void this.openModelPicker();
       },
+      onMediaProgress: (progress) => {
+        if (this.mediaTranscriptionStatus !== null) {
+          renderMediaProgressStatus(this.mediaTranscriptionStatus, progress);
+        }
+      },
       onRawTranscriptRecoveryAvailable: (receipt) => {
         this.rawTranscriptRecovery.record(receipt);
       },
       onSidecarMissing: () => {
         void this.openSetupWizard();
       },
-      pickAudioFile: (signal) => pickLocalAudioFile(signal),
       sessionStopTimeoutMs: this.settings.sidecarRequestTimeoutSeconds * 1_000,
       sidecarConnection: this.requireSidecarConnection(),
       sidecarLifecycleGate: this.sidecarLifecycleGate,
@@ -823,7 +833,11 @@ export default class LocalSttPlugin extends Plugin {
       await this.readAloudController?.restartRemainingPlayback(this.settings.ttsSpeed);
       this.renderReadAloudStatus(this.readAloudController?.getState() ?? 'idle');
     }
-    if (previousSettings.llmFeaturesEnabled !== this.settings.llmFeaturesEnabled) {
+    if (
+      previousSettings.llmFeaturesEnabled !== this.settings.llmFeaturesEnabled ||
+      previousSettings.mediaLlmProcessing !== this.settings.mediaLlmProcessing
+    ) {
+      this.audioFileTranscriptionController?.onSettingsChanged();
       await this.syncLocalDictationSidebar();
       return;
     }

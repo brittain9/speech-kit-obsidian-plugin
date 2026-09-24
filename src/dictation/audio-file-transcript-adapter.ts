@@ -8,6 +8,7 @@ export interface AudioFileEditorSession {
   readonly clearSessionProcessingMark: () => void;
   readonly dispose: () => void;
   readonly readNoteGlossary: (maxChars: number) => { text: string; truncated: boolean } | null;
+  readonly wasLastTranscriptInserted?: () => boolean;
 }
 
 export interface MediaLlmEditorSession {
@@ -95,7 +96,7 @@ export class AudioFileTranscriptAdapter {
 
     if (result.kind === 'rejected') {
       this.onProjectionFailure(new Error(result.reason));
-    } else {
+    } else if (result.kind === 'accepted' && (this.session.wasLastTranscriptInserted?.() ?? true)) {
       this.onProjectionPhase?.('insert');
     }
   }

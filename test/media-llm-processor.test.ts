@@ -6,6 +6,7 @@ import {
   processMediaLlm,
 } from '../src/dictation/media-llm-processor';
 import type { RawTranscriptRecoveryReceipt } from '../src/editor/raw-transcript-recovery';
+import { ProviderError } from '../src/llm/provider';
 import type { SessionRangeReplacementResult } from '../src/session/session';
 import { createFakeLlmRouter } from './fixtures/llm';
 
@@ -203,5 +204,80 @@ describe('media LLM processing', () => {
         snapshot: replaceSnapshot,
       }),
     ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'range_unavailable' });
+  });
+
+  it('does not call the provider for an empty raw transcript', async () => {
+    const session = new FakeMediaSession('   ');
+    const cleanup = vi.fn(async () => ({
+      model: 'm',
+      providerId: 'ollama' as const,
+      text: 'Result',
+    }));
+    await expect(
+      processMediaLlm(session, {
+        confirm: async () => true,
+        onRawTranscriptRecoveryAvailable: vi.fn(),
+        router: createFakeLlmRouter({ cleanup }),
+        signal: new AbortController().signal,
+        snapshot: replaceSnapshot,
+      }),
+    ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'empty' });
+    expect(cleanup).not.toHaveBeenCalled();
+  });
+
+  it('aborts an opt-out before provider work and after confirmation', async () => {
+    const session = new FakeMediaSession();
+    const cleanup = vi.fn(async () => ({
+      model: 'm',
+      providerId: 'ollama' as const,
+      text: 'Result',
+    }));
+    await expect(
+      processMediaLlm(session, {
+        confirm: async () => true,
+        isEnabled: () => false,
+        onRawTranscriptRecoveryAvailable: vi.fn(),
+        router: createFakeLlmRouter({ cleanup }),
+        signal: new AbortController().signal,
+        snapshot: replaceSnapshot,
+      }),
+    ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'cancelled' });
+    expect(cleanup).not.toHaveBeenCalled();
+
+    const controller = new AbortController();
+    const pending = processMediaLlm(new FakeMediaSession(), {
+      confirm: async () => {
+        controller.abort();
+        return true;
+      },
+      onRawTranscriptRecoveryAvailable: vi.fn(),
+      router: createFakeLlmRouter({
+        cleanup: async () => ({ model: 'm', providerId: 'ollama' as const, text: 'Result' }),
+      }),
+      signal: controller.signal,
+      snapshot: replaceSnapshot,
+    });
+    await expect(pending).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({
+      code: 'cancelled',
+    });
+  });
+
+  it('maps an aborted provider error to cancellation', async () => {
+    const controller = new AbortController();
+    const router = createFakeLlmRouter({
+      cleanup: async () => {
+        controller.abort();
+        throw new ProviderError('aborted by transport', 'aborted');
+      },
+    });
+    await expect(
+      processMediaLlm(new FakeMediaSession(), {
+        confirm: async () => true,
+        onRawTranscriptRecoveryAvailable: vi.fn(),
+        router,
+        signal: controller.signal,
+        snapshot: replaceSnapshot,
+      }),
+    ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'cancelled' });
   });
 });

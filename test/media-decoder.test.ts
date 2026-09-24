@@ -38,7 +38,6 @@ describe('media lease decoding', () => {
       mediaId: 'lease-1',
       openReadStream: async () => new Blob([bytes]).stream(),
       provenance: {
-        access: 'local',
         acquiredAt: new Date(0).toISOString(),
         adapterVersion: '1',
         rights: { kind: 'user_supplied_file' },

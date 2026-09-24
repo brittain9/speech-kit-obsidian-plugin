@@ -16,11 +16,10 @@ import {
 import type { NotePlacementOptions, SurfaceDesynchronization } from '../editor/note-surface';
 import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-recovery';
 import { dictationLanguageLabel, languageSupportIncludes } from '../language/dictation-language';
-import { resolveActivePresetEntry, resolveEffectiveLlmGlobals } from '../llm/presets';
 import type { LlmRouter } from '../llm/router';
 import type {
-  AcquisitionEvent,
   LocalMediaLease,
+  MediaSource,
   MediaTranscriptionProgress,
 } from '../media/media-source';
 import {
@@ -30,7 +29,6 @@ import {
 } from '../models/model-management-types';
 import { Session, type SessionTarget } from '../session/session';
 import type { PluginSettings } from '../settings/plugin-settings';
-import { t } from '../shared/i18n';
 import type { PluginLogger } from '../shared/plugin-logger';
 import type { UserFeedback } from '../shared/user-feedback';
 import type { ContextRequestEvent, SidecarEvent } from '../sidecar/protocol';
@@ -58,12 +56,8 @@ import {
   type AudioFileEditorSession,
   AudioFileTranscriptAdapter,
 } from './audio-file-transcript-adapter';
-import {
-  type MediaLlmPreview,
-  MediaLlmProcessingError,
-  type MediaLlmSnapshot,
-  processMediaLlm,
-} from './media-llm-processor';
+import { MediaLlmCoordinator } from './media-llm-coordinator';
+import type { MediaLlmPreview } from './media-llm-processor';
 
 export type AudioFileTranscriptionState =
   | 'idle'
@@ -75,10 +69,6 @@ export type AudioFileTranscriptionState =
 interface AudioFileDecoder {
   decode(file: File, signal: AbortSignal): Promise<DecodedAudioFile>;
   decodeMedia?(lease: LocalMediaLease, signal: AbortSignal): Promise<DecodedAudioFile>;
-}
-
-interface MediaPickerSource {
-  acquirePicked(signal: AbortSignal): AsyncIterable<AcquisitionEvent>;
 }
 
 interface CreateAudioFileSessionOptions {
@@ -122,6 +112,7 @@ export interface AudioFileTranscriptionControllerDependencies {
   readonly decoder: AudioFileDecoder;
   readonly feedback: Pick<UserFeedback, 'show'>;
   readonly getModelCapabilities: () => SelectedModelCapabilities;
+  readonly getSecret?: (secretId: string) => string;
   readonly getSettings: () => PluginSettings;
   readonly getTarget: () => SessionTarget | null;
   readonly isDictationBusy: () => boolean;
@@ -129,9 +120,9 @@ export interface AudioFileTranscriptionControllerDependencies {
   readonly onModelMissing?: () => void;
   readonly onRawTranscriptRecoveryAvailable?: (receipt: RawTranscriptRecoveryReceipt) => void;
   readonly onSidecarMissing?: () => void;
-  readonly pickAudioFile: (signal: AbortSignal) => Promise<File | null>;
-  readonly mediaSource?: MediaPickerSource;
-  readonly onMediaProgress?: (progress: MediaTranscriptionProgress) => void;
+  readonly mediaSource: MediaSource;
+  readonly mediaLlmCoordinator?: MediaLlmCoordinator;
+  readonly onMediaProgress?: (progress: MediaTranscriptionProgress | null) => void;
   readonly sessionStopTimeoutMs: number;
   readonly sidecarConnection: Pick<
     SidecarConnection,
@@ -153,9 +144,9 @@ export class AudioFileTranscriptionController {
   private mediaProgress: MediaTranscriptionProgress | null = null;
   private readonly quarantinedSessions = new Map<string, QuarantinedAudioFileSession>();
   private readonly userCancelledSessions = new WeakSet<ManagedAudioFileSession>();
-  private readonly postCompletionCancelledSessions = new WeakSet<ManagedAudioFileSession>();
-  private postCompletionAbortController: AbortController | null = null;
   private readonly releaseSidecarSubscription: () => void;
+  private readonly mediaLlmCoordinator: MediaLlmCoordinator;
+  private activeTranscribeCompletion: Promise<void> | null = null;
   private state: AudioFileTranscriptionState = 'idle';
 
   constructor(private readonly dependencies: AudioFileTranscriptionControllerDependencies) {
@@ -168,6 +159,26 @@ export class AudioFileTranscriptionController {
         ? { onSidecarMissing: dependencies.onSidecarMissing }
         : {}),
     });
+    this.mediaLlmCoordinator =
+      dependencies.mediaLlmCoordinator ??
+      new MediaLlmCoordinator({
+        ...(dependencies.confirmMediaLlm === undefined
+          ? {}
+          : { confirm: dependencies.confirmMediaLlm }),
+        ...(dependencies.createLlmRouter === undefined
+          ? {}
+          : { createRouter: dependencies.createLlmRouter }),
+        feedback: dependencies.feedback,
+        ...(dependencies.getSecret === undefined ? {} : { getSecret: dependencies.getSecret }),
+        getSettings: dependencies.getSettings,
+        ...(dependencies.logger === undefined ? {} : { logger: dependencies.logger }),
+        onProgress: (phase) => this.emitProgress(phase),
+        ...(dependencies.onRawTranscriptRecoveryAvailable === undefined
+          ? {}
+          : {
+              onRawTranscriptRecoveryAvailable: dependencies.onRawTranscriptRecoveryAvailable,
+            }),
+      });
     this.releaseSidecarSubscription = dependencies.sidecarConnection.subscribe((event) => {
       void this.handleSidecarEvent(event);
     });
@@ -190,6 +201,21 @@ export class AudioFileTranscriptionController {
   }
 
   async transcribe(): Promise<void> {
+    if (this.activeTranscribeCompletion !== null) return;
+    const operation = this.runTranscribe();
+    this.activeTranscribeCompletion = operation;
+    try {
+      await operation;
+    } finally {
+      if (this.activeTranscribeCompletion === operation) this.activeTranscribeCompletion = null;
+    }
+  }
+
+  onSettingsChanged(): void {
+    this.mediaLlmCoordinator.settingsChanged();
+  }
+
+  private async runTranscribe(): Promise<void> {
     // Keep this guard before the busy check: mobile callers must not mutate a
     // running desktop workflow or open a native-only picker accidentally.
     if (!Platform.isDesktopApp) {
@@ -219,6 +245,7 @@ export class AudioFileTranscriptionController {
         throw new AudioFileWorkflowError('audio-file-busy');
       }
       const initialConfiguration = this.resolveModelConfiguration();
+      if (!this.mediaLlmCoordinator.preflight(this.dependencies.getSettings())) return;
 
       try {
         speechLease = this.dependencies.sidecarLifecycleGate.acquireSpeech();
@@ -231,14 +258,8 @@ export class AudioFileTranscriptionController {
       this.pendingStart = pending;
 
       this.emitProgress('acquire');
-      let file: File | null = null;
-      if (this.dependencies.mediaSource === undefined) {
-        file = await this.dependencies.pickAudioFile(abortController.signal);
-      } else {
-        mediaLease = await this.acquireMediaLease(abortController.signal);
-        if (mediaLease === null) return;
-      }
-      if (this.dependencies.mediaSource === undefined && file === null) return;
+      mediaLease = await this.acquireMediaLease(abortController.signal);
+      if (mediaLease === null) return;
       this.throwIfCancelled(abortController.signal);
 
       this.revalidateSelection(
@@ -252,14 +273,7 @@ export class AudioFileTranscriptionController {
       this.applyState('preparing');
 
       this.emitProgress('decode');
-      if (mediaLease === null) {
-        if (file === null) {
-          throw new AudioFileError('read_failed', 'The local media source returned no file.');
-        }
-        decodedAudio = await this.dependencies.decoder.decode(file, abortController.signal);
-      } else {
-        decodedAudio = await this.decodeMediaLease(mediaLease, abortController.signal);
-      }
+      decodedAudio = await this.decodeMediaLease(mediaLease, abortController.signal);
       const configuration = this.resolveModelConfiguration();
       if (!selectedModelEquals(initialConfiguration.modelSelection, configuration.modelSelection)) {
         throw new AudioFileWorkflowError('audio-file-model-changed');
@@ -315,9 +329,11 @@ export class AudioFileTranscriptionController {
         transcript,
       );
       this.activeSession = managed;
+      managed.setMediaLease(mediaLease);
       const managedSession = managed;
       managedSession.setPostCompletion(async () => {
-        await this.runMediaLlmPostCompletion(managedSession, transcript, settings);
+        const mediaLlmSession = transcript.getMediaLlmSession();
+        if (mediaLlmSession !== null) await this.mediaLlmCoordinator.run(mediaLlmSession);
       });
       if (this.pendingStart === pending) this.pendingStart = null;
 
@@ -395,7 +411,11 @@ export class AudioFileTranscriptionController {
       }
     } finally {
       decodedAudio?.dispose();
-      await mediaLease?.release();
+      if (managed === null) {
+        await mediaLease?.release();
+      } else {
+        await managed.releaseMediaLease();
+      }
       if (this.pendingStart === pending && pending !== null) this.pendingStart = null;
       if (managed === null) speechLease?.release();
       releaseStartOperation?.();
@@ -406,23 +426,27 @@ export class AudioFileTranscriptionController {
   }
 
   async cancel(): Promise<void> {
-    this.postCompletionAbortController?.abort(createAudioFileCancellationError());
+    this.mediaLlmCoordinator.cancel();
     const pending = this.pendingStart;
     if (pending !== null) {
       pending.abortController.abort(createAudioFileCancellationError());
       pending.speechLease.release();
+      await this.activeTranscribeCompletion;
       return;
     }
     const active = this.activeSession;
-    if (active === null) return;
+    if (active === null) {
+      await this.activeTranscribeCompletion;
+      return;
+    }
     this.userCancelledSessions.add(active);
-    this.postCompletionCancelledSessions.add(active);
     active.abortController.abort(createAudioFileCancellationError());
     await this.cancelManagedSession(active);
+    await this.activeTranscribeCompletion;
   }
 
   async dispose(): Promise<void> {
-    this.postCompletionAbortController?.abort(createAudioFileCancellationError());
+    void this.mediaLlmCoordinator.dispose();
     const pending = this.pendingStart;
     if (pending !== null) {
       pending.abortController.abort(createAudioFileCancellationError());
@@ -431,21 +455,23 @@ export class AudioFileTranscriptionController {
     const active = this.activeSession;
     if (active !== null) {
       this.userCancelledSessions.add(active);
-      this.postCompletionCancelledSessions.add(active);
       const startCompletion = active.getStartCompletion();
       await this.cancelManagedSession(active);
       await startCompletion;
     }
+    await this.activeTranscribeCompletion;
     this.releaseSidecarSubscription();
     if (this.activeSession === null) this.applyState('idle');
   }
 
   private async acquireMediaLease(signal: AbortSignal): Promise<LocalMediaLease | null> {
     const source = this.dependencies.mediaSource;
-    if (source === undefined) {
-      return null;
-    }
-    for await (const event of source.acquirePicked(signal)) {
+    for await (const event of source.acquire({
+      kind: 'interactive_local',
+      maxBytes: Number.MAX_SAFE_INTEGER,
+      maxDurationMs: Number.MAX_SAFE_INTEGER,
+      signal,
+    })) {
       if (event.type === 'ready') {
         if (signal.aborted) {
           await event.lease.release();
@@ -480,80 +506,6 @@ export class AudioFileTranscriptionController {
       throw new AudioFileError('decode_failed', 'The media decoder does not support media leases.');
     }
     return await this.dependencies.decoder.decodeMedia(lease, signal);
-  }
-
-  private async runMediaLlmPostCompletion(
-    managed: ManagedAudioFileSession,
-    transcript: AudioFileTranscriptAdapter,
-    settings: PluginSettings,
-  ): Promise<void> {
-    if (this.postCompletionCancelledSessions.has(managed)) {
-      return;
-    }
-    if (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled) {
-      return;
-    }
-    if (
-      this.dependencies.createLlmRouter === undefined ||
-      this.dependencies.confirmMediaLlm === undefined
-    ) {
-      this.feedbackMediaLlm('media-llm-failed');
-      return;
-    }
-    const session = transcript.getMediaLlmSession();
-    const router = this.dependencies.createLlmRouter(settings);
-    if (session === null || router === null) {
-      this.feedbackMediaLlm('media-llm-failed');
-      return;
-    }
-    const snapshot = createMediaLlmSnapshot(settings);
-    const abortController = new AbortController();
-    this.postCompletionAbortController = abortController;
-    this.emitProgress('ai_processing');
-    try {
-      await processMediaLlm(session, {
-        confirm: this.dependencies.confirmMediaLlm,
-        onRawTranscriptRecoveryAvailable: (receipt) => {
-          this.dependencies.onRawTranscriptRecoveryAvailable?.(receipt);
-        },
-        router,
-        signal: abortController.signal,
-        snapshot,
-      });
-    } catch (error) {
-      if (error instanceof MediaLlmProcessingError) {
-        if (error.code === 'cancelled') {
-          return;
-        }
-        this.feedbackMediaLlm(
-          error.code === 'empty'
-            ? 'media-llm-empty'
-            : error.code === 'range_unavailable'
-              ? 'media-llm-range-unavailable'
-              : 'media-llm-failed',
-        );
-        return;
-      }
-      this.feedbackMediaLlm('media-llm-failed');
-    } finally {
-      if (this.postCompletionAbortController === abortController) {
-        this.postCompletionAbortController = null;
-      }
-    }
-  }
-
-  private feedbackMediaLlm(
-    key:
-      | 'media-llm-cancelled'
-      | 'media-llm-empty'
-      | 'media-llm-failed'
-      | 'media-llm-range-unavailable',
-  ): void {
-    this.dependencies.feedback.show({
-      intent: key === 'media-llm-cancelled' ? 'information' : 'warning',
-      key,
-      message: t(key),
-    });
   }
 
   private emitProgress(
@@ -804,6 +756,7 @@ export class AudioFileTranscriptionController {
       managed.markStopped();
     }
     await managed.transcript.drainPendingProjections();
+    await managed.releaseMediaLease();
     if (runPostCompletion && !quarantined) {
       try {
         await managed.runPostCompletion();
@@ -952,6 +905,7 @@ export class AudioFileTranscriptionController {
     this.state = state;
     if (state === 'idle') {
       this.mediaProgress = null;
+      this.dependencies.onMediaProgress?.(null);
     }
   }
 }
@@ -974,30 +928,6 @@ function createRendererOptions(
       sparseIntervalMs: settings.timestampSparseIntervalMs,
     },
     transcriptFormatting: settings.transcriptFormatting,
-  };
-}
-
-function createMediaLlmSnapshot(settings: PluginSettings): MediaLlmSnapshot {
-  const activePreset = resolveActivePresetEntry(
-    settings.llmPostprocessActivePresetRef,
-    settings.llmPostprocessUserPresets,
-  ).preset;
-  const effective = resolveEffectiveLlmGlobals(
-    {
-      minWords: settings.llmPostprocessSkipMinWords,
-      temperature: settings.llmPostprocessTemperature,
-      useNoteContext: settings.useLlmNoteContext,
-    },
-    activePreset,
-  );
-  return {
-    noteContextChars: effective.useNoteContext ? settings.llmPostprocessNoteContextChars : 0,
-    output: activePreset.output,
-    prompt: activePreset.prompt,
-    showRawBelow: settings.llmPostprocessShowRawBelow,
-    temperature: effective.temperature,
-    totalContextCap: settings.llmPostprocessTotalContextCap,
-    useNoteContext: effective.useNoteContext,
   };
 }
 

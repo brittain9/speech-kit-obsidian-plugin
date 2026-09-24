@@ -108,11 +108,14 @@ renderer-local `File`; there is no URL fetch, upload, or remote fallback.
 
 The file picker is the first `MediaSource` adapter. It emits provider-neutral
 plan/progress/ready events and returns a short-lived `LocalMediaLease` with an
-opaque byte stream and typed provenance. The lease is released in the pipeline's
-`finally` path after success, failure, cancellation, or disposal. The ASR,
-renderer, and LLM layers never receive a provider URL, path, credential,
-subprocess, or remote response body. Local-file acquisition remains the only
-adapter in this release.
+opaque `ReadableStream` and typed provenance. Interactive acquisition opens the
+picker once; a public referenced acquisition is bound to the exact token
+returned by inspection and never reopens the picker. The lease is released
+immediately after decode/VAD/ASR transcript projection and before optional
+post-completion AI work, with an idempotent cleanup promise covering success,
+failure, cancellation, and disposal. The ASR, renderer, and LLM layers never
+receive a provider URL, path, credential, subprocess, or remote response body.
+Local-file acquisition remains the only adapter in this release.
 
 The media controller owns the provider-neutral sequence: acquire → local decode
 → the existing VAD/batch-ASR `Session` → timestamps, diarization, and smart
@@ -122,14 +125,17 @@ encoded/decoded budgets, bounded frame work, sidecar drain/backpressure,
 speech-lease quarantine, exact target ownership, retry, and localization
 behavior are unchanged.
 
-When `mediaLlmProcessing` is explicitly enabled, the controller optionally runs
-one batch text transform after the media session completes, using the existing
-configured provider, active preset, and disclosure. The provider receives only
-the recorded transcript text and explicitly bounded current-note context—never
-media, a media path/name, source URL, provenance, cookies, or tokens. The raw
-media range remains the source of truth. A preview/explicit confirmation is
-required before replace or additive output; empty/failure leaves raw text and
-reports actionable feedback. A user edit latches the range and wins over pending
+When `mediaLlmProcessing` is explicitly enabled, a dedicated media LLM
+coordinator preflights provider/model/key/base-URL readiness before expensive
+local transcription, then re-reads settings at post-completion and before
+application. It uses the existing configured provider, active preset, and
+provider/model/data-egress disclosure. The provider receives only the recorded
+transcript text and explicitly bounded current-note context—never media, a
+media path/name, source URL, provenance, cookies, or tokens. The raw media
+range remains the source of truth. A preview/explicit confirmation is required
+before replace or additive output; empty/failure leaves raw text and reports
+actionable feedback. Disabling media processing or all LLM features aborts an
+in-flight provider request. A user edit latches the range and wins over pending
 AI output. Replacement is one undoable editor operation, raw recovery restores
 the pre-AI range, and additive outputs leave the raw range and citation boundary
 untouched. The setting defaults to off, so file behavior is unchanged unless

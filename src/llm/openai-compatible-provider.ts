@@ -1,6 +1,6 @@
 import { formatErrorMessage } from '../shared/format-utils';
 import { isRecord } from '../shared/type-guards';
-import { PROBE_TIMEOUT_MS, requestUrlJson } from './http-shared';
+import { fetchJson, PROBE_TIMEOUT_MS, requestUrlJson } from './http-shared';
 import { OpenAiChatClient } from './openai-chat-client';
 import {
   type OpenAiCompatibleBaseUrlValidation,
@@ -28,7 +28,8 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       apiKey: options.apiKey,
       baseUrl: validation.normalizedUrl,
       providerName: 'OpenAI-compatible endpoint',
-      requestJson: requestUrlJson,
+      requestJson: fetchJson,
+      probeRequestJson: requestUrlJson,
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     });
   }

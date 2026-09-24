@@ -52,12 +52,21 @@ export const en = {
     'Audio-file transcription stopped because its target note was deleted. Restore or recreate the note, then run the command again.',
   'audio-file-surface-changed':
     'Audio-file transcription stopped because the note changed in a way Speech Kit could not safely track. Restore the intended note and run the command again.',
-  'media-llm-empty': 'AI returned no media text, so the raw transcript was kept.',
+  'media-llm-empty':
+    'The media transcript is empty or the AI provider returned no text. The raw transcript was kept; record a non-empty transcript or check the provider and try again.',
   'media-llm-failed':
     'AI media processing failed, so the raw transcript was kept. Check the configured provider and try again.',
   'media-llm-cancelled': 'AI media processing was cancelled; the raw transcript was kept.',
   'media-llm-range-unavailable':
     'The media transcript changed while AI processing was pending, so the raw transcript was kept.',
+  'media-llm-readiness':
+    'Media AI is not ready ({issue}). Configure the selected provider, model, and credentials before enabling it.',
+  'media.progress.acquire': 'Preparing media…',
+  'media.progress.decode': 'Decoding media…',
+  'media.progress.transcribe': 'Transcribing media…',
+  'media.progress.format': 'Formatting transcript…',
+  'media.progress.aiProcessing': 'Processing transcript with AI…',
+  'media.progress.insert': 'Inserting transcript…',
   'notice.dictationStartFailed': 'Could not start dictation.',
   'notice.dictationStopFailed': 'Could not stop dictation.',
   'notice.finalizedUtteranceAutoCopyFailed':

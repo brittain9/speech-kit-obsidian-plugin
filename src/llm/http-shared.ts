@@ -90,9 +90,8 @@ export async function fetchJson(
 
 // Obsidian's renderer fetch is subject to browser CORS, which many local
 // OpenAI-compatible servers (including LM Studio) do not enable. requestUrl is
-// the supported CORS-free transport. It cannot cancel its underlying request,
-// but the caller still receives timeout/abort failures promptly and ignores any
-// later response, matching the observable provider contract.
+// retained for non-chat model probes only. Chat completions use fetchJson so
+// their response byte cap and abort signal apply to the underlying HTTP read.
 export async function requestUrlJson(
   url: string,
   init: RequestInit = {},

@@ -8,6 +8,7 @@ import {
   isDictationLanguage,
   languageFeatureCoverage,
 } from '../language/dictation-language';
+import { describeMediaLlmConfiguration } from '../llm/media-llm-policy';
 import type { ModelPickerOptions } from '../models/manage-models-modal';
 import type { ModelInstallManager } from '../models/model-install-manager';
 import {
@@ -485,7 +486,9 @@ export class LocalSttSettingTab extends PluginSettingTab {
 
     new Setting(llmCard)
       .setName(t('settings.llm.mediaProcessing.name'))
-      .setDesc(t('settings.llm.mediaProcessing.desc'))
+      .setDesc(
+        `${t('settings.llm.mediaProcessing.desc')} ${describeMediaLlmConfiguration(settings)}`,
+      )
       .addToggle((toggle) => {
         toggle.setValue(settings.mediaLlmProcessing);
         toggle.onChange(async (value) => {
