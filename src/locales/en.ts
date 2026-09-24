@@ -256,6 +256,12 @@ export const en = {
   'models.manage.allLanguages': 'All languages',
   'models.manage.familiesLabel': 'Model families',
   'models.manage.noneForLanguage': 'No models are available for this task and language.',
+  'models.manage.languageAvailabilityTitle': '{language} availability',
+  'models.manage.languageAvailability_none': 'No compatible model',
+  'models.manage.languageAvailability_installed_one': '{count} installed',
+  'models.manage.languageAvailability_installed_other': '{count} installed',
+  'models.manage.languageAvailability_downloads_one': '{count} compatible download',
+  'models.manage.languageAvailability_downloads_other': '{count} compatible downloads',
   'models.manage.installAllVoices': 'Install all voices',
   'models.manage.installAllVoicesDesc':
     'Install the remaining {count} optional voices for this model.',
@@ -750,6 +756,7 @@ export const en = {
   'llm.preset.delete.activeFallback': '"{preset}" was active — switched to Clean up.',
   'common.back': 'Back',
   'common.close': 'Close',
+  'common.continue': 'Continue',
   'common.done': 'Done',
   'common.install': 'Install',
   'common.later': 'Later',
@@ -758,7 +765,24 @@ export const en = {
   'common.tryAgain': 'Try again',
   'setup.ready.waitForDictation': 'Wait for the current dictation to finish, then try again.',
   'setup.ready.openMarkdownNote': 'Open a Markdown note in editing mode, then try dictation again.',
+  'setup.ready.targetPreparationFailed': "Couldn't open a safe dictation note. Try again.",
+  'setup.ready.scratchNoteContent': '# Speech Kit scratch note\n\nStart dictating here.',
   'setup.ready.completionFailed': "Couldn't finish setup. Try again.",
+  'setup.microphone.title': 'Check your microphone',
+  'setup.microphone.intro':
+    'Check access before the first dictation session. Speech Kit opens the microphone briefly, then releases it without recording or starting the speech engine.',
+  'setup.microphone.check': 'Check microphone',
+  'setup.microphone.checkAgain': 'Check again',
+  'setup.microphone.checking': 'Checking…',
+  'setup.microphone.readyTitle': 'Microphone ready',
+  'setup.microphone.readyDesc':
+    'Access is available. The next step starts one ordinary dictation session; you can stop it from the ribbon or your hotkey.',
+  'setup.microphone.recheck':
+    'After changing access, choose Check again. This wizard will not show another permission prompt unless you reopen setup.',
+  'setup.microphone.reopenSetup':
+    'Change the microphone permission or device access, then reopen setup. Checking again here will not ask for permission again.',
+  'setup.microphone.retryDevice':
+    'Connect or enable a microphone, then choose Check again. If another app is using it, release it first. This wizard will not show another permission prompt.',
   'setup.wizard.welcomeTitle': 'Welcome to Speech Kit',
   'setup.wizard.title': 'Set up Speech Kit',
   'setup.wizard.engineReadyTitle': 'Speech engine ready',
@@ -783,7 +807,56 @@ export const en = {
     'Two kinds are available: streaming models show words live as you speak; standard models transcribe after each pause. For hands-free dictation, start with the recommended Moonshine Small model. Nemotron 3.5 ASR is a higher-resource streaming option.',
   'setup.wizard.gpuNote':
     'Whisper models can run much faster with GPU acceleration. If you have an NVIDIA GPU, you can install the CUDA build later from Settings.',
-  'setup.wizard.openModelPicker': 'Open model picker',
+  'setup.wizard.recommendation.title': 'Recommended for your setup',
+  'setup.wizard.recommendation.task': 'Starting task: Dictation',
+  'setup.wizard.recommendation.reason.liveEnglish':
+    'This live English model balances quick feedback with everyday resource use.',
+  'setup.wizard.recommendation.reason.multilingual':
+    'This live model supports the selected language without requiring a larger quality-first download.',
+  'setup.wizard.recommendation.reason.automatic':
+    'This live model supports automatic language detection and is a practical first download.',
+  'setup.wizard.recommendation.reason.finalOnly':
+    'This is the smallest compatible model, but words are finalized after a pause rather than shown live.',
+  'setup.wizard.recommendation.reason.hardware.constrained':
+    'This is the smallest compatible choice based on the available hardware hints.',
+  'setup.wizard.recommendation.reason.hardware.constrainedLive':
+    'This is the smallest compatible live choice for the selected language.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFallback':
+    'This is the smallest compatible live choice for the selected language, but its download and local resource cost are higher.',
+  'setup.wizard.recommendation.reason.hardware.constrainedOnlyLive':
+    'This is the only live choice for the selected language, and its download and local resource cost are higher.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFinalFallback':
+    'This is the smallest compatible choice, but its download and local resource cost are higher.',
+  'setup.wizard.recommendation.reason.hardware.standard':
+    'This is a balanced starting choice based on the available hardware hints.',
+  'setup.wizard.recommendation.reason.hardware.unknown':
+    'Hardware details are unavailable, so this is a starting choice rather than a measured fit.',
+  'setup.wizard.recommendation.mode.live':
+    'Live words appear while you speak; completed phrases can still be revised.',
+  'setup.wizard.recommendation.mode.final':
+    'Final words appear after a pause. There are no live partial words.',
+  'setup.wizard.recommendation.languages': 'Supported dictation languages: {languages}',
+  'setup.wizard.recommendation.cost': '{size} download · Runs locally on CPU',
+  'setup.wizard.recommendation.cudaOptional':
+    'CUDA is optional and can be added later in Settings.',
+  'setup.wizard.recommendation.installAndUse': 'Install and use',
+  'setup.wizard.recommendation.use': 'Use this model',
+  'setup.wizard.recommendation.installing': 'Installing…',
+  'setup.wizard.recommendation.selecting': 'Selecting…',
+  'setup.wizard.recommendation.anotherInstallActive': 'Another model is installing',
+  'setup.wizard.recommendation.retry': 'Retry install',
+  'setup.wizard.recommendation.retryCapabilities': 'Retry capabilities',
+  'setup.wizard.recommendation.capabilitiesUnavailableTitle': 'Model capabilities unavailable',
+  'setup.wizard.recommendation.capabilitiesUnavailableDesc':
+    'The model catalog loaded, but Speech Kit could not read the installed speech-engine capabilities. Retry here, or reopen setup after checking the speech engine.',
+  'setup.wizard.recommendation.failed':
+    'Could not install and use the recommended model. Try again.',
+  'setup.wizard.recommendation.selectFailed': 'Could not select the recommended model. Try again.',
+  'setup.wizard.recommendation.unavailableTitle': 'No starting model for this language',
+  'setup.wizard.recommendation.unavailableDesc':
+    'The current catalog has no downloadable or installed dictation model for this language. Change Dictation language in Settings, or use Customize models to inspect every model.',
+  'setup.wizard.recommendation.catalogLoading': 'Loading the model catalog…',
+  'setup.wizard.openModelPicker': 'Customize models',
   'setup.wizard.readyTitle': "You're ready to dictate",
   'setup.wizard.readyDesc':
     "Try it in the Markdown note that's open now. Speak a few words, then use the ribbon mic or your hotkey to stop.",
@@ -821,9 +894,17 @@ export const en = {
   'models.manage.runSetup': 'Run setup',
   'models.manage.loadingCatalog': 'Loading model catalog…',
   'models.manage.loadCatalogFailed': 'Failed to load the model catalog.',
+  'models.manage.capabilitiesUnavailableTitle': 'Model capabilities unavailable',
+  'models.manage.capabilitiesUnavailableDesc':
+    'The model catalog loaded, but Speech Kit could not read the speech-engine capabilities. Retry here or reopen setup after checking the engine.',
+  'models.manage.capabilitiesRetry': 'Retry capabilities',
+  'models.manage.capabilitiesChecking': 'Checking capabilities…',
   'models.manage.noneAvailable': 'No models available for this engine.',
+  'models.manage.installed': 'Installed',
+  'models.manage.downloadable': 'Downloadable',
+  'models.manage.compatibleLanguage': 'Compatible with {language}',
   'models.manage.unsupportedLanguage':
-    ' · Does not support {language}. Change Dictation language to install or use this model.',
+    'Does not support {language}. Change Dictation language to install or use this model.',
   'models.manage.use': 'Use',
   'models.manage.selected': 'Selected',
   'models.manage.cancelling': 'Cancelling…',

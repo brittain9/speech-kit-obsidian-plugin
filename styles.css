@@ -176,6 +176,30 @@
   font-size: var(--font-smallest);
 }
 
+.local-stt-language-availability {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.local-stt-language-availability h3,
+.local-stt-language-availability p {
+  margin: 0;
+}
+
+.local-stt-language-availability h3 {
+  font-size: var(--font-ui-small);
+}
+
+.local-stt-language-availability p {
+  color: var(--text-muted);
+  font-size: var(--font-smallest);
+}
+
 .local-stt-model-warning {
   margin-top: 6px;
   color: var(--text-warning);
@@ -1345,6 +1369,75 @@
   color: var(--text-muted);
   font-size: var(--font-ui-small);
   margin: 0;
+}
+
+.local-stt-wizard-model-recommendation {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.local-stt-wizard-model-recommendation p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.local-stt-wizard-model-recommendation__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.local-stt-wizard-model-recommendation__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--interactive-accent);
+}
+
+.local-stt-wizard-model-recommendation__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--text-muted);
+  font-size: var(--font-smallest);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.local-stt-wizard-model-recommendation h3 {
+  margin: 0;
+  font-size: var(--font-ui-large);
+}
+
+.local-stt-wizard-model-recommendation p.local-stt-wizard-model-recommendation__task {
+  color: var(--text-normal);
+  font-weight: var(--font-semibold);
+}
+
+.local-stt-wizard-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+  color: var(--text-warning);
+}
+
+.local-stt-wizard-warning p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
 }
 
 .local-stt-wizard-card {

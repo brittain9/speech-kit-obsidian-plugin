@@ -1,13 +1,30 @@
 import type { App } from 'obsidian';
 import { Modal, Platform, setIcon } from 'obsidian';
+import {
+  formatMicrophoneCaptureErrorMessage,
+  formatMicrophonePermissionDeniedMessage,
+} from '../audio/microphone-permission-message';
+import { formatCatalogLanguageLabel } from '../language/dictation-language';
 import { ManageModelsModal } from '../models/manage-models-modal';
-import type { ModelInstallManager } from '../models/model-install-manager';
+import type { ModelInstallManager, ModelManagerState } from '../models/model-install-manager';
+import {
+  getTotalModelSize,
+  matchesModelTriple,
+  type SelectedModel,
+} from '../models/model-management-types';
 import { openFilteredHotkeySettings } from '../settings/open-hotkey-settings';
+import { formatBytes } from '../shared/format-utils';
 import { t } from '../shared/i18n';
 import type { PluginLogger } from '../shared/plugin-logger';
 import type { UserFeedback } from '../shared/user-feedback';
 import type { SidecarConnection } from '../sidecar/sidecar-connection';
 import type { SidecarInstallManager } from '../sidecar/sidecar-install-manager';
+import {
+  readFirstRunHardwareProfile,
+  resolveStartingModelRecommendation,
+  type StartingModelRecommendation,
+} from './first-run-model-guidance';
+import { MicrophoneReadiness, type MicrophoneReadinessResult } from './microphone-readiness';
 import { SetupReadyActions } from './setup-ready-actions';
 import { getInstallCopy } from './sidecar-install-copy';
 import { SidecarInstallModal } from './sidecar-install-modal';
@@ -24,6 +41,7 @@ interface WizardDependencies {
   onCompleted: () => Promise<void>;
   pluginDirectory: string;
   postSidecarInstalled: () => Promise<void>;
+  prepareDictationTarget: () => Promise<boolean>;
   sidecarVersion: string;
   sidecarConnection: Pick<SidecarConnection, 'restart'>;
   sidecarInstallManager: SidecarInstallManager;
@@ -31,16 +49,24 @@ interface WizardDependencies {
   startDictation: () => Promise<void>;
 }
 
-type WizardStepId = 'sidecar' | 'model' | 'ready';
+type WizardStepId = 'sidecar' | 'model' | 'microphone' | 'ready';
 
-const STEP_ORDER: readonly WizardStepId[] = ['sidecar', 'model', 'ready'];
+const STEP_ORDER: readonly WizardStepId[] = ['sidecar', 'model', 'microphone', 'ready'];
 
 export class SetupWizardModal extends Modal {
   private currentStep: WizardStepId = 'sidecar';
   private sidecarReady = false;
   private modelReady = false;
   private modelManagerUnsub: (() => void) | null = null;
+  private modelStateSignature = '';
   private openGeneration = 0;
+  private recommendationPending: 'installing' | 'selecting' | null = null;
+  private checkingMicrophone = false;
+  private microphoneReadiness = new MicrophoneReadiness();
+  private microphoneResult: MicrophoneReadinessResult = {
+    recovery: 'recheck',
+    status: 'unavailable',
+  };
   private readonly readyActions: SetupReadyActions;
 
   constructor(private readonly deps: WizardDependencies) {
@@ -51,12 +77,16 @@ export class SetupWizardModal extends Modal {
       hasDictationTarget: deps.hasDictationTarget,
       isDictationBusy: deps.isDictationBusy,
       onCompleted: deps.onCompleted,
+      prepareDictationTarget: deps.prepareDictationTarget,
       startDictation: deps.startDictation,
     });
   }
 
   override onOpen(): void {
     const generation = ++this.openGeneration;
+    this.checkingMicrophone = false;
+    this.microphoneReadiness = new MicrophoneReadiness();
+    this.microphoneResult = { recovery: 'recheck', status: 'unavailable' };
     void this.openAsync(generation);
   }
 
@@ -73,16 +103,25 @@ export class SetupWizardModal extends Modal {
     } else if (!this.modelReady) {
       this.currentStep = 'model';
     } else {
-      this.currentStep = 'ready';
+      this.currentStep = 'microphone';
     }
 
+    this.modelStateSignature = recommendationStateSignature(
+      this.deps.modelInstallManager.getState(),
+    );
     this.modelManagerUnsub = this.deps.modelInstallManager.subscribe(() => {
-      const next = this.deps.hasSelectedModel();
-      if (next !== this.modelReady) {
-        this.modelReady = next;
-        if (this.currentStep === 'model') {
-          this.render();
-        }
+      const nextSignature = recommendationStateSignature(this.deps.modelInstallManager.getState());
+      if (nextSignature === this.modelStateSignature) return;
+      const wasModelReady = this.modelReady;
+      this.modelStateSignature = nextSignature;
+      this.modelReady = this.deps.hasSelectedModel();
+      if (wasModelReady && !this.modelReady) {
+        this.currentStep = 'model';
+        this.render();
+        return;
+      }
+      if (this.currentStep === 'model') {
+        this.render();
       }
     });
 
@@ -112,6 +151,9 @@ export class SetupWizardModal extends Modal {
       case 'model':
         this.renderModelStep();
         break;
+      case 'microphone':
+        this.renderMicrophoneStep();
+        break;
       case 'ready':
         this.renderReadyStep();
         break;
@@ -137,6 +179,7 @@ export class SetupWizardModal extends Modal {
   private isStepComplete(step: WizardStepId): boolean {
     if (step === 'sidecar') return this.sidecarReady;
     if (step === 'model') return this.modelReady;
+    if (step === 'microphone') return this.microphoneResult.status === 'ready';
     return false;
   }
 
@@ -225,34 +268,184 @@ export class SetupWizardModal extends Modal {
         text: t('setup.wizard.modelSelectedDesc'),
       });
     } else {
-      body.createEl('p', {
-        text: t('setup.wizard.modelIntro'),
-      });
-      body.createEl('p', {
-        text: t('setup.wizard.modelKinds'),
-      });
-      if (!Platform.isMacOS) {
-        body.createEl('p', {
-          cls: 'local-stt-wizard-step__muted',
-          text: t('setup.wizard.gpuNote'),
-        });
-      }
+      this.renderStartingModelRecommendation(body);
     }
 
+    const recommendation = this.modelReady ? null : this.resolveStartingModelRecommendation();
     const actions = this.contentEl.createDiv({ cls: 'local-stt-wizard-actions' });
     actions
       .createEl('button', { text: t('common.back') })
       .addEventListener('click', () => this.goBack());
+    const customize = actions.createEl('button', { text: t('setup.wizard.openModelPicker') });
+    customize.addEventListener('click', () => this.openModelPicker());
+    const capabilityLoadError = this.deps.modelInstallManager.getState().capabilityLoadError;
+    const capabilitiesUnavailable = capabilityLoadError != null;
+    if (capabilitiesUnavailable) {
+      actions
+        .createEl('button', {
+          cls: 'mod-cta',
+          text: t('setup.wizard.recommendation.retryCapabilities'),
+        })
+        .addEventListener('click', () => {
+          void this.deps.modelInstallManager.init();
+        });
+    }
 
     if (this.modelReady) {
       const next = actions.createEl('button', { cls: 'mod-cta', text: t('common.next') });
       next.addEventListener('click', () => this.goNext());
-    } else {
-      const openPicker = actions.createEl('button', {
+    } else if (recommendation !== null) {
+      const state = this.deps.modelInstallManager.getState();
+      const installed = state.installedModels.some((model) =>
+        matchesModelTriple(
+          model,
+          recommendation.model.runtimeId,
+          recommendation.model.familyId,
+          recommendation.model.modelId,
+        ),
+      );
+      const actionState = recommendationActionState(
+        state,
+        recommendation,
+        installed,
+        this.recommendationPending,
+      );
+      const action = actions.createEl('button', {
         cls: 'mod-cta',
-        text: t('setup.wizard.openModelPicker'),
+        text: actionState.label,
       });
-      openPicker.addEventListener('click', () => this.openModelPicker());
+      action.disabled = actionState.disabled;
+      action.addEventListener('click', () => {
+        void this.useStartingModel(recommendation, installed);
+      });
+    } else if (!capabilitiesUnavailable) {
+      customize.addClass('mod-cta');
+    }
+  }
+
+  private renderStartingModelRecommendation(body: HTMLDivElement): void {
+    const state = this.deps.modelInstallManager.getState();
+    if (state.loadStatus === 'loading') {
+      body.createEl('p', { text: t('setup.wizard.recommendation.catalogLoading') });
+      return;
+    }
+    if (state.loadStatus === 'error') {
+      body.createEl('p', { text: t('models.manage.loadCatalogFailed') });
+      return;
+    }
+    if (state.capabilityLoadError != null) {
+      body.createEl('h3', { text: t('setup.wizard.recommendation.capabilitiesUnavailableTitle') });
+      body.createEl('p', { text: t('setup.wizard.recommendation.capabilitiesUnavailableDesc') });
+      return;
+    }
+
+    const recommendation = this.resolveStartingModelRecommendation();
+    if (recommendation === null) {
+      body.createEl('h3', { text: t('setup.wizard.recommendation.unavailableTitle') });
+      body.createEl('p', { text: t('setup.wizard.recommendation.unavailableDesc') });
+      return;
+    }
+
+    const card = body.createDiv({ cls: 'local-stt-wizard-model-recommendation' });
+    const heading = card.createDiv({ cls: 'local-stt-wizard-model-recommendation__heading' });
+    const icon = heading.createSpan({ cls: 'local-stt-wizard-model-recommendation__icon' });
+    setIcon(icon, 'sparkles');
+    const headingText = heading.createDiv();
+    headingText.createSpan({
+      cls: 'local-stt-wizard-model-recommendation__eyebrow',
+      text: t('setup.wizard.recommendation.title'),
+    });
+    headingText.createEl('h3', { text: recommendation.model.displayName });
+
+    card.createEl('p', {
+      cls: 'local-stt-wizard-model-recommendation__task',
+      text: t('setup.wizard.recommendation.task'),
+    });
+    card.createEl('p', {
+      text: `${recommendationReason(recommendation)} ${hardwareReason(recommendation)}`,
+    });
+    card.createEl('p', {
+      text: t(
+        recommendation.mode === 'live'
+          ? 'setup.wizard.recommendation.mode.live'
+          : 'setup.wizard.recommendation.mode.final',
+      ),
+    });
+    card.createEl('p', {
+      text: t('setup.wizard.recommendation.languages', {
+        languages: recommendation.supportedLanguages.map(formatCatalogLanguageLabel).join(', '),
+      }),
+    });
+    card.createEl('p', {
+      text: t('setup.wizard.recommendation.cost', {
+        size: formatBytes(recommendation.totalSizeBytes),
+      }),
+    });
+    if (!Platform.isMacOS) {
+      card.createEl('p', {
+        cls: 'local-stt-wizard-step__muted',
+        text: t('setup.wizard.recommendation.cudaOptional'),
+      });
+    }
+  }
+
+  private resolveStartingModelRecommendation(): StartingModelRecommendation | null {
+    const state = this.deps.modelInstallManager.getState();
+    if (state.loadStatus !== 'ready' || state.capabilityLoadError != null) return null;
+    return resolveStartingModelRecommendation(
+      state,
+      this.deps.modelInstallManager.getDictationLanguage(),
+      readFirstRunHardwareProfile(),
+    );
+  }
+
+  private async useStartingModel(
+    recommendation: StartingModelRecommendation,
+    installed: boolean,
+  ): Promise<void> {
+    if (this.recommendationPending !== null) return;
+    if (this.deps.hasSelectedModel()) {
+      this.modelReady = true;
+      this.render();
+      return;
+    }
+
+    const generation = this.openGeneration;
+    this.recommendationPending = installed ? 'selecting' : 'installing';
+    this.render();
+    const selection = {
+      familyId: recommendation.model.familyId,
+      kind: 'catalog_model' as const,
+      modelId: recommendation.model.modelId,
+      runtimeId: recommendation.model.runtimeId,
+    };
+
+    try {
+      if (installed) {
+        await this.deps.modelInstallManager.select(selection);
+      } else {
+        await this.deps.modelInstallManager.installAndWait(selection);
+      }
+      this.modelReady = this.deps.hasSelectedModel();
+      if (!this.modelReady) {
+        throw new Error('The model was installed but no selection was committed.');
+      }
+    } catch (cause) {
+      this.deps.feedback.show({
+        cause,
+        intent: 'error',
+        key: 'setup-wizard-recommended-model',
+        message: t(
+          installed
+            ? 'setup.wizard.recommendation.selectFailed'
+            : 'setup.wizard.recommendation.failed',
+        ),
+      });
+    } finally {
+      this.recommendationPending = null;
+      if (generation === this.openGeneration) {
+        this.render();
+      }
     }
   }
 
@@ -272,7 +465,78 @@ export class SetupWizardModal extends Modal {
     modal.open();
   }
 
-  // ---------------- Step 3: Ready ----------------
+  // ---------------- Step 3: Microphone ----------------
+  private renderMicrophoneStep(): void {
+    const ready = this.microphoneResult.status === 'ready';
+    const body = this.contentEl.createDiv({ cls: 'local-stt-wizard-step' });
+    body.createEl('h2', {
+      cls: 'local-stt-wizard-step__title',
+      text: t(ready ? 'setup.microphone.readyTitle' : 'setup.microphone.title'),
+    });
+    body.createEl('p', {
+      text: t(ready ? 'setup.microphone.readyDesc' : 'setup.microphone.intro'),
+    });
+
+    if (!ready && this.microphoneResult.error !== undefined) {
+      const recovery = body.createDiv({ cls: 'local-stt-wizard-warning' });
+      recovery.createEl('strong', {
+        text:
+          formatMicrophoneCaptureErrorMessage(this.microphoneResult.error) ??
+          formatMicrophonePermissionDeniedMessage(),
+      });
+      recovery.createEl('p', {
+        text: t(
+          this.microphoneResult.recovery === 'reopen'
+            ? 'setup.microphone.reopenSetup'
+            : this.microphoneResult.recovery === 'retryDevice'
+              ? 'setup.microphone.retryDevice'
+              : 'setup.microphone.recheck',
+        ),
+      });
+    }
+
+    const actions = this.contentEl.createDiv({ cls: 'local-stt-wizard-actions' });
+    actions
+      .createEl('button', { text: t('common.back') })
+      .addEventListener('click', () => this.goBack());
+    if (ready) {
+      actions
+        .createEl('button', { cls: 'mod-cta', text: t('common.continue') })
+        .addEventListener('click', () => this.goNext());
+    } else {
+      const check = actions.createEl('button', {
+        cls: 'mod-cta',
+        text: t(
+          this.checkingMicrophone
+            ? 'setup.microphone.checking'
+            : this.microphoneResult.error === undefined
+              ? 'setup.microphone.check'
+              : 'setup.microphone.checkAgain',
+        ),
+      });
+      check.disabled = this.checkingMicrophone;
+      check.addEventListener('click', () => {
+        void this.checkMicrophone();
+      });
+    }
+  }
+
+  private async checkMicrophone(): Promise<void> {
+    if (this.checkingMicrophone) return;
+    const generation = this.openGeneration;
+    this.checkingMicrophone = true;
+    this.render();
+    try {
+      this.microphoneResult = await this.microphoneReadiness.check();
+    } finally {
+      this.checkingMicrophone = false;
+      if (generation === this.openGeneration) {
+        this.render();
+      }
+    }
+  }
+
+  // ---------------- Step 4: Ready ----------------
   private renderReadyStep(): void {
     const body = this.contentEl.createDiv({ cls: 'local-stt-wizard-step' });
     body.createEl('h2', {
@@ -352,5 +616,148 @@ export class SetupWizardModal extends Modal {
       this.currentStep = prev;
       this.render();
     }
+  }
+}
+
+export function recommendationStateSignature(state: ModelManagerState): string {
+  const active = state.activeInstall;
+  return JSON.stringify({
+    activeInstall:
+      active === null
+        ? null
+        : [modelTripleKey(active.installUpdate), active.phase, active.installUpdate.state],
+    capabilityLoadError: state.capabilityLoadError ?? null,
+    catalog: [
+      state.catalog.catalogVersion,
+      state.catalog.models.map((model) => [
+        model.runtimeId,
+        model.familyId,
+        model.modelId,
+        model.displayName,
+        model.task,
+        model.languageTags,
+        model.supportsAutomaticLanguageDetection,
+        model.uxTags,
+        getTotalModelSize(model),
+      ]),
+    ],
+    compiledAdapters: state.compiledAdapters.map((adapter) => [
+      adapter.runtimeId,
+      adapter.familyId,
+      adapter.familyCapabilities.task,
+      adapter.familyCapabilities.supportsStreaming,
+      adapter.familyCapabilities.supportedLanguages,
+    ]),
+    compiledRuntimes: state.compiledRuntimes.map((runtime) => runtime.runtimeId),
+    failedInstall:
+      state.failedInstall === null
+        ? null
+        : [state.failedInstall.failureId, modelTripleKey(state.failedInstall.selection)],
+    installedModels: state.installedModels.map(modelTripleKey).sort(),
+    loadError: state.loadError,
+    loadStatus: state.loadStatus,
+    selectedModel: selectedModelKey(state.selectedModel),
+  });
+}
+
+function modelTripleKey(model: { familyId: string; modelId: string; runtimeId: string }): string {
+  return `${model.runtimeId}:${model.familyId}:${model.modelId}`;
+}
+
+function selectedModelKey(selection: SelectedModel | null): string | null {
+  if (selection === null) return null;
+  return selection.kind === 'catalog_model'
+    ? modelTripleKey(selection)
+    : `external:${selection.familyId}:${selection.filePath}`;
+}
+
+interface RecommendationActionState {
+  disabled: boolean;
+  label: string;
+}
+
+function recommendationActionState(
+  state: ModelManagerState,
+  recommendation: StartingModelRecommendation,
+  installed: boolean,
+  pending: 'installing' | 'selecting' | null,
+): RecommendationActionState {
+  if (pending === 'installing') {
+    return { disabled: true, label: t('setup.wizard.recommendation.installing') };
+  }
+  if (pending === 'selecting') {
+    return { disabled: true, label: t('setup.wizard.recommendation.selecting') };
+  }
+  const active = state.activeInstall?.installUpdate;
+  if (
+    active !== undefined &&
+    matchesModelTriple(
+      active,
+      recommendation.model.runtimeId,
+      recommendation.model.familyId,
+      recommendation.model.modelId,
+    )
+  ) {
+    return { disabled: true, label: t('setup.wizard.recommendation.installing') };
+  }
+  if (active !== undefined) {
+    return {
+      disabled: true,
+      label: t('setup.wizard.recommendation.anotherInstallActive'),
+    };
+  }
+  if (
+    state.failedInstall !== null &&
+    matchesModelTriple(
+      state.failedInstall.selection,
+      recommendation.model.runtimeId,
+      recommendation.model.familyId,
+      recommendation.model.modelId,
+    )
+  ) {
+    return { disabled: false, label: t('setup.wizard.recommendation.retry') };
+  }
+  return {
+    disabled: false,
+    label: installed
+      ? t('setup.wizard.recommendation.use')
+      : t('setup.wizard.recommendation.installAndUse'),
+  };
+}
+
+function recommendationReason(recommendation: StartingModelRecommendation): string {
+  switch (recommendation.reason) {
+    case 'automatic':
+      return t('setup.wizard.recommendation.reason.automatic');
+    case 'liveEnglish':
+      return t('setup.wizard.recommendation.reason.liveEnglish');
+    case 'multilingual':
+      return t('setup.wizard.recommendation.reason.multilingual');
+    case 'finalOnly':
+      return t('setup.wizard.recommendation.reason.finalOnly');
+  }
+}
+
+function hardwareReason(recommendation: StartingModelRecommendation): string {
+  switch (recommendation.hardwareClass) {
+    case 'constrained':
+      if (recommendation.resourceClass === 'demanding') {
+        if (recommendation.mode === 'live' && recommendation.liveChoiceIsOnly) {
+          return t('setup.wizard.recommendation.reason.hardware.constrainedOnlyLive');
+        }
+        if (recommendation.mode === 'live') {
+          return t('setup.wizard.recommendation.reason.hardware.constrainedFallback');
+        }
+        return t('setup.wizard.recommendation.reason.hardware.constrainedFinalFallback');
+      }
+      return t(
+        recommendation.mode === 'live'
+          ? 'setup.wizard.recommendation.reason.hardware.constrainedLive'
+          : 'setup.wizard.recommendation.reason.hardware.constrained',
+      );
+    case 'standard':
+      return t('setup.wizard.recommendation.reason.hardware.standard');
+    case 'unknown':
+      return t('setup.wizard.recommendation.reason.hardware.unknown');
   }
 }

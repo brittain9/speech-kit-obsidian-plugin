@@ -520,6 +520,44 @@ not record source or translated text.
 
 ## Plugin Orchestration
 
+### First-run setup
+
+The setup wizard is a four-step, explicit path: install the speech engine, choose a
+transcription model, check microphone readiness, and then start dictation. The
+model step reads the existing `ModelInstallManager` catalog and compiled adapter
+capabilities; it does not maintain a second catalog, benchmark models, or select a
+model behind the user's back. A starting card is derived from the selected
+language, task, and browser-reported CPU/memory hints. It explains why the model
+fits, whether words are live or finalized after a pause, its supported languages,
+and its download/local resource cost. `Install and use` is the only action that
+starts a model download. An existing non-null selection remains authoritative,
+and `Customize models` exposes the full task-based manager.
+
+The first-run path is CPU-capable. CUDA is optional and is offered later from
+settings where supported; hardware guidance never makes CUDA a prerequisite.
+Model-manager language discovery uses `languageTags` for STT/TTS, includes `auto`
+only for STT models with automatic detection, and uses `translationSupport` as
+the sole language source for translation. Availability summaries distinguish
+installed models, compatible downloads, and tasks with no compatible model. If
+catalog/store/install discovery succeeds but `get_system_info` fails, the manager
+keeps a capability-load error instead of presenting an empty adapter set as a
+ready catalog; setup explains that capabilities are unavailable and offers a
+retry/reopen path.
+
+Before a real dictation session, the microphone step requests access only when
+the user presses its check action. A permission-prompting `getUserMedia` request
+is attempted at most once per open wizard. If the Permissions API remains
+`prompt` or is unavailable, retries never reprompt; the latter tells the user to
+reopen setup after changing access. A granted permission may be used for a
+non-prompting device check, and any temporary track is stopped immediately.
+
+`Try dictation now` first ensures a Markdown target. In an empty vault, the
+plugin creates (or reopens) one root-level `Speech Kit scratch note.md` without
+overwriting a folder, non-Markdown file, case-colliding path, or user note, and
+opens it in source mode. Non-empty vaults retain the normal open-note guidance.
+A target or microphone failure keeps setup open with localized recovery and does
+not mark setup complete.
+
 ### Listening Modes
 
 | Mode | Behavior | Auto-stop |

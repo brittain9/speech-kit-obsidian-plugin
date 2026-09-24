@@ -515,6 +515,79 @@ export const ja = {
     'Markdown ノートを編集モードで開き、ディクテーションを再試行してください。',
   'setup.ready.completionFailed':
     'セットアップを完了できませんでした。もう一度やり直してください。',
+  'setup.ready.targetPreparationFailed':
+    '安全なディクテーション用ノートを開けませんでした。もう一度やり直してください。',
+  'setup.ready.scratchNoteContent':
+    '# Speech Kit 用下書き\n\nここでディクテーションを開始してください。',
+  'setup.microphone.title': 'マイクを確認',
+  'setup.microphone.intro':
+    '最初のディクテーションセッションの前にアクセスを確認してください。Speech Kit はマイクを短時間だけ開き、録音や音声エンジンの開始せずに解放します。',
+  'setup.microphone.check': 'マイクを確認',
+  'setup.microphone.checkAgain': 'もう一度確認',
+  'setup.microphone.checking': '確認中…',
+  'setup.microphone.readyTitle': 'マイクの準備完了',
+  'setup.microphone.readyDesc':
+    'アクセスは利用できます。次のステップでは通常のディクテーションセッションが開始されます。リボンまたはホットキーで停止できます。',
+  'setup.microphone.recheck':
+    'アクセスを変更したら「もう一度確認」を選択してください。このアシスタントは Setup を再び開かない限り、権限要求をもう一度表示しません。',
+  'setup.microphone.reopenSetup':
+    'マイクの権限またはデバイスへのアクセスを変更してから Setup を再び開いてください。ここでの再確認で権限が再度要求されることはありません。',
+  'setup.microphone.retryDevice':
+    'マイクを接続または有効にしてから「もう一度確認」を選択してください。別のアプリが使用している場合は、先に解放してください。このアシスタントは権限要求をもう一度表示しません。',
+  'setup.wizard.recommendation.title': 'この設定のおすすめ',
+  'setup.wizard.recommendation.task': '最初のタスク: ディクテーション',
+  'setup.wizard.recommendation.reason.liveEnglish':
+    'この英語のライブモデルは、迅速な応答と日常的なリソース使用のバランスを取ります。',
+  'setup.wizard.recommendation.reason.multilingual':
+    'このライブモデルは、選択した言語に対応しながら、品質を優先した大きなダウンロードを必要としません。',
+  'setup.wizard.recommendation.reason.automatic':
+    'このライブモデルは自動言語検出に対応し、実用的な最初のダウンロードです。',
+  'setup.wizard.recommendation.reason.finalOnly':
+    'これは互換性のある最小モデルですが、単語はライブではなく一時停止後に確定します。',
+  'setup.wizard.recommendation.reason.hardware.constrained':
+    '利用可能なハードウェア情報に基づいて、これは互換性のある最小の選択肢です。',
+  'setup.wizard.recommendation.reason.hardware.constrainedLive':
+    '選択した言語向けの互換ライブモデルとしては最小の選択肢です。',
+  'setup.wizard.recommendation.reason.hardware.constrainedFallback':
+    '選択した言語向けの互換ライブモデルとしては最小ですが、ダウンロードサイズとローカルリソース使用量は大きくなります。',
+  'setup.wizard.recommendation.reason.hardware.constrainedOnlyLive':
+    '選択した言語で使えるライブモデルはこの1つだけですが、ダウンロードサイズとローカルリソース使用量は大きくなります。',
+  'setup.wizard.recommendation.reason.hardware.constrainedFinalFallback':
+    '互換性のある最小の選択肢ですが、ダウンロードサイズとローカルリソース使用量は大きくなります。',
+  'setup.wizard.recommendation.reason.hardware.standard':
+    '利用可能なハードウェア情報に基づいて、バランスの良い開始選択肢です。',
+  'setup.wizard.recommendation.reason.hardware.unknown':
+    'ハードウェアの詳細が利用できないため、測定に基づく調整ではなく開始用の選択肢です。',
+  'setup.wizard.recommendation.mode.live':
+    '話している間、単語がライブで表示され、完成した文は後から修正できます。',
+  'setup.wizard.recommendation.mode.final':
+    '最終的な単語は一時停止後に表示されます。ライブ表示される部分的な単語はありません。',
+  'setup.wizard.recommendation.languages': '対応ディクテーション言語: {languages}',
+  'setup.wizard.recommendation.cost': '{size} ダウンロード · CPU 上でローカル実行',
+  'setup.wizard.recommendation.cudaOptional': 'CUDA は任意で、後から設定に追加できます。',
+  'setup.wizard.recommendation.installAndUse': 'インストールして使用',
+  'setup.wizard.recommendation.use': 'このモデルを使用',
+  'setup.wizard.recommendation.installing': 'インストール中…',
+  'setup.wizard.recommendation.selecting': '選択中…',
+  'setup.wizard.recommendation.anotherInstallActive': '別のモデルをインストール中',
+  'setup.wizard.recommendation.retry': 'インストールを再試行',
+  'setup.wizard.recommendation.retryCapabilities': '機能を再確認',
+  'setup.wizard.recommendation.capabilitiesUnavailableTitle': 'モデル機能を利用できません',
+  'setup.wizard.recommendation.capabilitiesUnavailableDesc':
+    'モデルカタログは読み込まれましたが、Speech Kit はインストール済みの音声エンジンの機能を読み取れませんでした。ここで再試行するか、エンジンを確認してから Setup を再び開いてください。',
+  'setup.wizard.recommendation.failed':
+    '推奨モデルをインストールして使用できませんでした。もう一度やり直してください。',
+  'setup.wizard.recommendation.selectFailed':
+    '推奨モデルを選択できませんでした。もう一度やり直してください。',
+  'setup.wizard.recommendation.unavailableTitle': 'この言語の開始モデルはありません',
+  'setup.wizard.recommendation.unavailableDesc':
+    '現在のカタログには、この言語向けのダウンロードまたはインストール済みのディクテーションモデルがありません。設定でディクテーション言語を変更するか、「モデルピッカーを開く」を使用してすべてのモデルを確認してください。',
+  'setup.wizard.recommendation.catalogLoading': 'モデルカタログを読み込み中…',
+  'models.manage.capabilitiesUnavailableTitle': 'モデル機能を利用できません',
+  'models.manage.capabilitiesUnavailableDesc':
+    'モデルカタログは読み込まれましたが、Speech Kit は音声エンジンの機能を読み取れませんでした。ここで再試行するか、エンジンを確認してから Setup を再び開いてください。',
+  'models.manage.capabilitiesRetry': '機能を再確認',
+  'models.manage.capabilitiesChecking': '機能を確認中…',
   'setup.wizard.welcomeTitle': 'Speech Kit へようこそ',
   'setup.wizard.title': 'Speech Kit のセットアップ',
   'setup.wizard.engineReadyTitle': '音声エンジンの準備完了',
@@ -577,7 +650,7 @@ export const ja = {
   'models.manage.loadCatalogFailed': 'モデルカタログの読み込みに失敗しました。',
   'models.manage.noneAvailable': 'このエンジンには利用可能なモデルがありません。',
   'models.manage.unsupportedLanguage':
-    ' · {language}はサポートされていません。このモデルをインストールまたは使用するには、ディクテーション言語を変更してください。',
+    '{language}はサポートされていません。このモデルをインストールまたは使用するには、ディクテーション言語を変更してください。',
   'models.manage.use': '使用',
   'models.manage.selected': '選択済み',
   'models.manage.cancelling': 'キャンセル中…',
@@ -774,6 +847,15 @@ export const ja = {
   'models.manage.dictationModels': '音声からテキスト',
   'models.manage.readAloudModels': 'テキストから音声',
   'models.manage.allLanguages': 'すべての言語',
+  'models.manage.languageAvailabilityTitle': '{language} の対応状況',
+  'models.manage.languageAvailability_none': '対応するモデルはありません',
+  'models.manage.languageAvailability_installed_one': '{count} 個インストール済み',
+  'models.manage.languageAvailability_installed_other': '{count} 個インストール済み',
+  'models.manage.languageAvailability_downloads_one': '{count} 件の互換ダウンロード',
+  'models.manage.languageAvailability_downloads_other': '{count} 件の互換ダウンロード',
+  'models.manage.installed': 'インストール済み',
+  'models.manage.downloadable': 'ダウンロード可能',
+  'models.manage.compatibleLanguage': '{language} に対応',
   'models.manage.familiesLabel': 'モデルファミリー',
   'models.manage.noneForLanguage': 'このタスクと言語で利用できるモデルはありません。',
   'models.manage.optionalVoice': '追加のローカル音声',
