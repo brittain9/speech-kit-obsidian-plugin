@@ -84,6 +84,40 @@ function sttModel(
   };
 }
 
+function translationModel({
+  familyId,
+  languageTags,
+  modelId,
+  runtimeId,
+  translationSupport,
+}: {
+  familyId: 'firefox_translations' | 'tencent_hy_mt';
+  languageTags: string[];
+  modelId: string;
+  runtimeId: 'bergamot_wasm' | 'llama_cpp';
+  translationSupport: NonNullable<CatalogModelRecord['translationSupport']>;
+}): CatalogModelRecord {
+  return {
+    artifacts: [],
+    collectionId: 'translation',
+    displayName: modelId,
+    familyId,
+    languageTags,
+    supportsAutomaticLanguageDetection: false,
+    licenseLabel: 'MPL-2.0',
+    licenseUrl: 'https://example.com/license',
+    modelCardUrl: 'https://example.com/model-card',
+    modelId,
+    notes: [],
+    runtimeId,
+    sourceUrl: 'https://example.com/source',
+    summary: 'Local translation',
+    task: 'translation',
+    translationSupport,
+    uxTags: [],
+  };
+}
+
 function row(model: CatalogModelRecord): ModelRowState {
   return {
     allowedActions: ['install'],
@@ -154,13 +188,123 @@ describe('model browser', () => {
       ttsModel('swedish', 'sv'),
     ];
 
-    expect(deriveModelLanguageOptions(models).map(({ code, label }) => ({ code, label }))).toEqual([
+    expect(
+      deriveModelLanguageOptions(models, 'stt').map(({ code, label }) => ({ code, label })),
+    ).toEqual([
       { code: null, label: 'All languages' },
       { code: 'EN', label: 'English' },
       { code: 'ES', label: 'Español' },
       { code: 'NL', label: 'Nederlands' },
       { code: 'JA', label: '日本語' },
     ]);
+  });
+
+  it('derives text-to-speech language options from languageTags for the active task', () => {
+    const models = [
+      sttModel('english', 'moonshine', ['en']),
+      ttsModel('german', 'de'),
+      ttsModel('french', 'fr'),
+    ];
+
+    expect(
+      deriveModelLanguageOptions(models, 'tts').map(({ code, label }) => ({ code, label })),
+    ).toEqual([
+      { code: null, label: 'All languages' },
+      { code: 'FR', label: 'Français' },
+      { code: 'DE', label: 'Deutsch' },
+    ]);
+    expect(
+      modelMatchesLanguageFilter(ttsModel('german', 'de'), { kind: 'language', tag: 'de' }),
+    ).toBe(true);
+  });
+
+  it('derives exactly the 38 HY-MT 2 languages from all-to-all translation support', () => {
+    const hyMtLanguages = [
+      'zh',
+      'en',
+      'fr',
+      'pt',
+      'es',
+      'ja',
+      'tr',
+      'ru',
+      'ar',
+      'ko',
+      'th',
+      'it',
+      'de',
+      'vi',
+      'ms',
+      'id',
+      'tl',
+      'hi',
+      'zh-Hant',
+      'pl',
+      'cs',
+      'nl',
+      'km',
+      'my',
+      'fa',
+      'gu',
+      'ur',
+      'te',
+      'mr',
+      'he',
+      'bn',
+      'ta',
+      'uk',
+      'bo',
+      'kk',
+      'mn',
+      'ug',
+      'yue',
+    ];
+    const model = translationModel({
+      familyId: 'tencent_hy_mt',
+      languageTags: ['en'],
+      modelId: 'hy-mt-2-1.8b',
+      runtimeId: 'llama_cpp',
+      translationSupport: { kind: 'all_to_all', languages: hyMtLanguages },
+    });
+
+    expect(deriveModelLanguageOptions([model], 'translation')).toHaveLength(39);
+    const languageTags = deriveModelLanguageOptions([model], 'translation').flatMap(({ filter }) =>
+      filter.kind === 'language' ? [filter.tag] : [],
+    );
+    expect(new Set(languageTags)).toEqual(new Set(hyMtLanguages));
+    expect(modelMatchesLanguageFilter(model, { kind: 'language', tag: 'yue' })).toBe(true);
+    expect(modelMatchesLanguageFilter(model, { kind: 'language', tag: 'sv' })).toBe(false);
+  });
+
+  it('derives Firefox translation languages only from exact directed-pair endpoints', () => {
+    const firefox = translationModel({
+      familyId: 'firefox_translations',
+      languageTags: ['de', 'en', 'fr', 'xx'],
+      modelId: 'firefox',
+      runtimeId: 'bergamot_wasm',
+      translationSupport: {
+        kind: 'pairs',
+        pairs: [
+          { source: 'fr', target: 'en' },
+          { source: 'en', target: 'de' },
+        ],
+      },
+    });
+
+    expect(
+      deriveModelLanguageOptions([firefox], 'translation').map(({ code, filter }) => ({
+        code,
+        tag: filter.kind === 'language' ? filter.tag : null,
+      })),
+    ).toEqual([
+      { code: null, tag: null },
+      { code: 'EN', tag: 'en' },
+      { code: 'FR', tag: 'fr' },
+      { code: 'DE', tag: 'de' },
+    ]);
+    expect(modelMatchesLanguageFilter(firefox, { kind: 'language', tag: 'de' })).toBe(true);
+    expect(modelMatchesLanguageFilter(firefox, { kind: 'language', tag: 'fr' })).toBe(true);
+    expect(modelMatchesLanguageFilter(firefox, { kind: 'language', tag: 'xx' })).toBe(false);
   });
 
   it('scopes rows and search to the active task, family, and language', () => {
@@ -292,6 +436,109 @@ describe('model browser', () => {
     expect(preventDefault).toHaveBeenCalledTimes(4);
 
     modal.close();
+  });
+
+  it('restores each task’s own language filter after task switches', async () => {
+    const english = sttModel('english', 'moonshine', ['en', 'fr']);
+    const french = sttModel('french', 'nemotron_asr', ['en', 'fr']);
+    const german = ttsModel('german', 'de');
+    const translation = translationModel({
+      familyId: 'tencent_hy_mt',
+      languageTags: ['en', 'ja'],
+      modelId: 'hy-mt-2-1.8b',
+      runtimeId: 'llama_cpp',
+      translationSupport: { kind: 'all_to_all', languages: ['en', 'ja'] },
+    });
+    const state = {
+      activeInstall: null,
+      catalog: {
+        catalogVersion: 1,
+        collections: [],
+        families: [
+          {
+            displayName: 'Moonshine',
+            familyId: 'moonshine',
+            runtimeId: 'onnx_runtime',
+            summary: '',
+            task: 'stt',
+          },
+          {
+            displayName: 'Nemotron',
+            familyId: 'nemotron_asr',
+            runtimeId: 'onnx_runtime',
+            summary: '',
+            task: 'stt',
+          },
+          {
+            displayName: 'Pocket TTS',
+            familyId: 'pocket_tts',
+            runtimeId: 'onnx_runtime',
+            summary: '',
+            task: 'tts',
+          },
+          {
+            displayName: 'Tencent HY-MT 2',
+            familyId: 'tencent_hy_mt',
+            runtimeId: 'llama_cpp',
+            summary: '',
+            task: 'translation',
+          },
+        ],
+        models: [english, french, german, translation],
+      },
+      compiledAdapters: [
+        { displayName: 'Moonshine', familyId: 'moonshine', runtimeId: 'onnx_runtime' },
+        { displayName: 'Nemotron', familyId: 'nemotron_asr', runtimeId: 'onnx_runtime' },
+        { displayName: 'Pocket TTS', familyId: 'pocket_tts', runtimeId: 'onnx_runtime' },
+        { displayName: 'Tencent HY-MT 2', familyId: 'tencent_hy_mt', runtimeId: 'llama_cpp' },
+      ] as unknown as ModelManagerState['compiledAdapters'],
+      compiledRuntimes: [],
+      failedInstall: null,
+      installedModels: [],
+      loadError: null,
+      loadStatus: 'ready',
+      modelStore: { overridePath: null, path: '/models', usingDefaultPath: true },
+      selectedModel: null,
+      selectedModelCapabilities: { status: 'none' },
+      selectedTtsModel: null,
+      selectedTtsModelCapabilities: { status: 'none' },
+      selectedTranslationModel: null,
+    } satisfies ModelManagerState;
+    const modal = new ManageModelsModal({} as never, {
+      feedback: { show: vi.fn() },
+      manager: {
+        getDictationLanguage: () => 'en',
+        getState: () => state,
+        subscribe: () => () => {},
+      } as unknown as ModelInstallManager,
+      onChanged: vi.fn(),
+    });
+
+    const originalCreateFragment = globalThis.createFragment;
+    globalThis.createFragment = () => new TestElement() as unknown as DocumentFragment;
+    try {
+      modal.open();
+      await selectLanguage(modal, 'Français');
+      expect(activeLanguage(modal)).toBe('Français');
+
+      await selectTask(modal, 'Text to speech');
+      expect(activeLanguage(modal)).toBe('All languages');
+      await selectLanguage(modal, 'Deutsch');
+
+      await selectTask(modal, 'Translation');
+      expect(activeLanguage(modal)).toBe('All languages');
+      await selectLanguage(modal, '日本語');
+
+      await selectTask(modal, 'Speech to text');
+      expect(activeLanguage(modal)).toBe('Français');
+      await selectTask(modal, 'Text to speech');
+      expect(activeLanguage(modal)).toBe('Deutsch');
+      await selectTask(modal, 'Translation');
+      expect(activeLanguage(modal)).toBe('日本語');
+    } finally {
+      modal.close();
+      globalThis.createFragment = originalCreateFragment;
+    }
   });
 
   it('opens the resolved model folder from the model manager', async () => {
@@ -627,4 +874,30 @@ describe('model browser', () => {
 
 function texts(element: TestElement): string[] {
   return [element.textContent, ...element.children.flatMap(texts)];
+}
+
+function activeLanguage(modal: ManageModelsModal): string | null {
+  const content = modal.contentEl as unknown as TestElement;
+  const active = content
+    .querySelectorAll('.local-stt-language-rail__button')
+    .find((button) => button.classList.contains('is-active'));
+  return active === undefined ? null : (texts(active).find((text) => text.length > 0) ?? null);
+}
+
+async function selectLanguage(modal: ManageModelsModal, label: string): Promise<void> {
+  const content = modal.contentEl as unknown as TestElement;
+  const button = content
+    .querySelectorAll('.local-stt-language-rail__button')
+    .find((candidate) => texts(candidate).find((text) => text.length > 0) === label);
+  if (button === undefined) throw new Error(`Language filter not found: ${label}`);
+  await button.click();
+}
+
+async function selectTask(modal: ManageModelsModal, label: string): Promise<void> {
+  const content = modal.contentEl as unknown as TestElement;
+  const button = content
+    .querySelectorAll('.local-stt-task-switcher__button')
+    .find((candidate) => candidate.textContent === label);
+  if (button === undefined) throw new Error(`Model task not found: ${label}`);
+  await button.click();
 }
