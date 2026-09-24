@@ -357,6 +357,9 @@ export default class LocalSttPlugin extends Plugin {
         saveSettings: async (nextSettings) => {
           await this.updateSettings(nextSettings);
         },
+        mutateSettings: async (mutation) => {
+          await this.requirePresetStateStore().mutateSettings(mutation);
+        },
         sidecarConnection: this.requireSidecarConnection(),
         sidecarInstallManager: this.requireSidecarInstallManager(),
         sidecarLifecycleGate: this.sidecarLifecycleGate,

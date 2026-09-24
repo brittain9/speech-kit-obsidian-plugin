@@ -2,7 +2,6 @@ import { type TranslationKey, t } from '../shared/i18n';
 import type { ErrorEvent, WarningEvent } from './protocol';
 
 export const SIDECAR_EVENT_TRANSLATION_KEYS = {
-  absolute_amplification: 'sidecarError.absolute_amplification',
   audio_too_long: 'sidecarError.audio_too_long',
   engine_inference_failed: 'sidecarError.engine_inference_failed',
   helper_protocol_error: 'sidecarError.helper_protocol_error',
@@ -11,6 +10,8 @@ export const SIDECAR_EVENT_TRANSLATION_KEYS = {
   inference_failed: 'sidecarError.inference_failed',
   model_load_failed: 'sidecarError.model_load_failed',
   internal_error: 'sidecarError.internal_error',
+  event_frame_too_large: 'sidecarError.event_frame_too_large',
+  invalid_correction_rules: 'sidecarError.invalid_correction_rules',
   invalid_audio_buffer: 'sidecarError.invalid_audio_buffer',
   invalid_audio_frame: 'sidecarError.invalid_audio_frame',
   invalid_diarization_speaker_limit: 'sidecarError.invalid_diarization_speaker_limit',
@@ -24,7 +25,6 @@ export const SIDECAR_EVENT_TRANSLATION_KEYS = {
   missing_voice_file: 'sidecarError.missing_voice_file',
   no_active_install: 'sidecarError.no_active_install',
   no_active_session: 'sidecarError.no_active_session',
-  relative_amplification: 'sidecarError.relative_amplification',
   session_already_exists: 'sidecarError.session_already_exists',
   session_capacity_exceeded: 'sidecarError.session_capacity_exceeded',
   sidecar_exited: 'sidecarError.sidecar_exited',

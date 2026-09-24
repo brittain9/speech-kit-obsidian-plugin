@@ -687,6 +687,10 @@ export const es = {
   'models.current.unavailable': 'No disponible',
   'models.current.validateBeforeDictating': 'Valide el archivo de modelo externo antes de dictar.',
   'sidecarError.audio_too_long': 'El clip de audio supera la duración máxima para este motor.',
+  'sidecarError.event_frame_too_large':
+    'El motor de voz produjo un evento que supera el límite seguro del fotograma.',
+  'sidecarError.invalid_correction_rules':
+    'Las reglas de corrección personal no son válidas. Corrígelas antes de empezar a dictado.',
   'sidecarError.engine_inference_failed': 'La transcripción local falló.',
   'sidecarError.internal_error': 'El motor de voz encontró un error interno.',
   'sidecarError.invalid_audio_buffer':
@@ -855,6 +859,9 @@ export const es = {
     'Traduce texto de notas localmente con el motor compacto Bergamot y modelos de Firefox.',
   'notice.personalCorrectionRulesSnapshot':
     'Esta sesión usa {enabled} de {total} reglas de corrección personal. Los cambios se aplican a la próxima sesión.',
+  'notice.personalCorrectionRulesInvalid':
+    'La configuración de correcciones personales no es válida: {reason} Corrígela antes de empezar a dictado.',
+
   'settings.corrections.name': 'Reglas de corrección personal',
   'settings.corrections.desc':
     'Aplica correcciones literales locales y ordenadas después de la transcripción. Las reglas se aplican a segmentos finales en la próxima sesión; no son vocabulario de ASR ni hotwords.',
@@ -867,23 +874,40 @@ export const es = {
   'settings.corrections.modal.previewOutput': 'Transcripción corregida',
   'settings.corrections.modal.add': 'Añadir regla',
   'settings.corrections.modal.empty': 'Todavía no hay reglas de corrección.',
-  'settings.corrections.modal.counts': '{enabled} activadas · {total} en total',
-  'settings.corrections.modal.previewSummary': '{replacements} reemplazo(s) de {rules} regla(s).',
+  'settings.corrections.modal.countsOne': '{enabled} activadas · {total} regla',
+  'settings.corrections.modal.countsOther': '{enabled} activadas · {total} reglas',
+  'settings.corrections.modal.previewSummaryOne': '{replacements} reemplazo de {rules} regla',
+  'settings.corrections.modal.previewSummaryOther': '{replacements} reemplazos de {rules} reglas',
   'settings.corrections.modal.find': 'Buscar',
   'settings.corrections.modal.replace': 'Reemplazar con',
   'settings.corrections.modal.enabled': 'Activada',
   'settings.corrections.modal.moveUp': 'Subir',
   'settings.corrections.modal.moveDown': 'Bajar',
   'settings.corrections.modal.delete': 'Eliminar regla',
+  'settings.corrections.modal.saving': 'Guardando…',
+  'settings.corrections.modal.saved': 'Guardado',
+  'settings.corrections.modal.failed': 'No se guardó. Corrige las reglas e inténtalo de nuevo.',
   'settings.corrections.modal.invalid':
     'Corrige la regla indicada antes de guardar o previsualizar.',
   'settings.corrections.field.find': 'Buscar',
+  'settings.corrections.field.enabled': 'Activada',
+  'settings.corrections.field.id': 'ID de regla',
   'settings.corrections.field.replace': 'Reemplazar con',
+  'settings.corrections.field.rules': 'Reglas',
   'settings.corrections.validation.tooMany': 'Añade como máximo {max} reglas.',
   'settings.corrections.validation.blankId': 'Cada regla necesita un ID.',
+  'settings.corrections.validation.invalidId': 'El ID de regla debe ser texto.',
+  'settings.corrections.validation.oversizedId':
+    'El ID de regla no puede superar los {max} caracteres.',
+  'settings.corrections.validation.invalidEnabled': 'Activada debe ser activada o desactivada.',
+  'settings.corrections.validation.invalidFind': 'El texto buscado debe ser texto.',
   'settings.corrections.validation.duplicateId': 'Los ID de regla deben ser únicos.',
   'settings.corrections.validation.blankFind': 'El texto que se busca no puede estar vacío.',
   'settings.corrections.validation.blankReplace': 'El texto de reemplazo no puede estar vacío.',
+  'settings.corrections.validation.invalidReplace': 'El texto de reemplazo debe ser texto.',
+  'settings.corrections.validation.loneSurrogate':
+    'El texto contiene un surrogate Unicode no válido y no se puede guardar.',
+  'settings.corrections.validation.context': 'Regla {index}, {field}: {reason}',
   'settings.corrections.validation.oversized': '{field} no puede superar {max} caracteres.',
   'settings.corrections.validation.duplicateFind':
     'El texto que se busca debe ser único; las reglas posteriores no pueden apuntar al mismo texto.',

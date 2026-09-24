@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import type { App, TextAreaComponent } from 'obsidian';
 import { Modal, Setting } from 'obsidian';
 
-import { t } from '../shared/i18n';
+import { type TranslationKey, t, tPlural } from '../shared/i18n';
+import type { PluginSettingsMutation } from './llm-preset-state';
 import {
   compilePersonalCorrectionPreview,
   type PersonalCorrectionPreviewResult,
@@ -13,8 +14,10 @@ import type { PluginSettings } from './plugin-settings';
 
 interface PersonalCorrectionRulesModalDependencies {
   getSettings: () => PluginSettings;
-  saveSettings: (settings: PluginSettings) => Promise<void>;
+  mutateSettings: (mutation: PluginSettingsMutation) => Promise<void>;
 }
+
+type SaveState = 'failed' | 'idle' | 'saved' | 'saving';
 
 const DEFAULT_PREVIEW_INPUT = 'The café AI system is ready.';
 
@@ -24,7 +27,13 @@ export class PersonalCorrectionRulesModal extends Modal {
   private previewResult: PersonalCorrectionPreviewResult | null = null;
   private previewStatusEl: HTMLElement | null = null;
   private previewOutput: TextAreaComponent | null = null;
+  private countSetting: Setting | null = null;
+  private saveStatusEl: HTMLElement | null = null;
+  private readonly ruleRows = new Map<number, Setting>();
   private persistChain: Promise<void> = Promise.resolve();
+  private pendingSaves = 0;
+  private saveState: SaveState = 'idle';
+  private dirtyRevision = 0;
 
   constructor(
     app: App,
@@ -44,12 +53,18 @@ export class PersonalCorrectionRulesModal extends Modal {
     this.contentEl.empty();
     this.previewStatusEl = null;
     this.previewOutput = null;
+    this.countSetting = null;
+    this.saveStatusEl = null;
+    this.ruleRows.clear();
   }
 
   private render(): void {
     this.contentEl.empty();
     this.previewStatusEl = null;
     this.previewOutput = null;
+    this.countSetting = null;
+    this.saveStatusEl = null;
+    this.ruleRows.clear();
 
     this.contentEl.createEl('p', {
       cls: 'setting-item-description',
@@ -59,16 +74,22 @@ export class PersonalCorrectionRulesModal extends Modal {
     const previewSetting = new Setting(this.contentEl)
       .setName(t('settings.corrections.modal.preview'))
       .setDesc(
-        t('settings.corrections.modal.previewSummary', {
-          replacements: 0,
-          rules: 0,
-        }),
+        tPlural(
+          0,
+          {
+            one: 'settings.corrections.modal.previewSummaryOne',
+            other: 'settings.corrections.modal.previewSummaryOther',
+          },
+          { replacements: 0, rules: 0 },
+        ),
       );
     previewSetting.addTextArea((textArea) => {
       textArea.setValue(this.previewInput);
       textArea.onChange((value) => {
         this.previewInput = value;
-        this.updatePreview();
+        // Editing the example is not a settings mutation and must not enqueue
+        // a write or move focus while the user is typing.
+        this.updatePreview(false);
       });
     });
     this.contentEl.createEl('p', {
@@ -87,18 +108,17 @@ export class PersonalCorrectionRulesModal extends Modal {
     this.previewStatusEl = this.contentEl.createEl('p', {
       cls: 'local-stt-corrections-modal__status',
     });
+    this.saveStatusEl = this.contentEl.createEl('p', {
+      cls: 'local-stt-corrections-modal__save-status',
+    });
 
-    new Setting(this.contentEl)
-      .setName(
-        t('settings.corrections.modal.counts', {
-          enabled: this.draft.filter((rule) => rule.enabled).length,
-          total: this.draft.length,
-        }),
-      )
+    this.countSetting = new Setting(this.contentEl)
+      .setName(this.countsLabel())
       .setDesc(this.draft.length === 0 ? t('settings.corrections.modal.empty') : '')
       .addButton((button) => {
         button.setButtonText(t('settings.corrections.modal.add')).onClick(() => {
           this.draft = [...this.draft, { enabled: true, find: '', id: randomUUID(), replace: '' }];
+          this.dirtyRevision += 1;
           this.render();
         });
       });
@@ -107,34 +127,28 @@ export class PersonalCorrectionRulesModal extends Modal {
       this.renderRule(rule, index);
     });
     this.updatePreview(false);
+    this.updateSaveStatus();
   }
 
   private renderRule(rule: PersonalCorrectionRule, index: number): void {
     const row = new Setting(this.contentEl)
-      .setName(`${index + 1}. ${rule.find || t('settings.corrections.modal.find')}`)
-      .setDesc(
-        `${t('settings.corrections.modal.find')}: ${rule.find} → ${t('settings.corrections.modal.replace')}: ${rule.replace} · ${t('settings.corrections.modal.enabled')}: ${rule.enabled ? t('common.on') : t('common.off')}`,
-      );
+      .setName(this.ruleName(rule, index))
+      .setDesc(this.ruleDescription(rule));
+    this.ruleRows.set(index, row);
 
     row.addToggle((toggle) => {
       toggle.setValue(rule.enabled);
-      toggle.onChange((enabled) => {
-        this.updateRule(index, { enabled });
-      });
+      toggle.onChange((enabled) => this.updateRule(index, { enabled }));
     });
     row.addText((text) => {
       text.setPlaceholder(t('settings.corrections.modal.find'));
       text.setValue(rule.find);
-      text.onChange((value) => {
-        this.updateRule(index, { find: value });
-      });
+      text.onChange((value) => this.updateRule(index, { find: value }));
     });
     row.addText((text) => {
       text.setPlaceholder(t('settings.corrections.modal.replace'));
       text.setValue(rule.replace);
-      text.onChange((value) => {
-        this.updateRule(index, { replace: value });
-      });
+      text.onChange((value) => this.updateRule(index, { replace: value }));
     });
     row.addExtraButton((button) => {
       button
@@ -154,6 +168,7 @@ export class PersonalCorrectionRulesModal extends Modal {
         .setTooltip(t('settings.corrections.modal.delete'))
         .onClick(() => {
           this.draft = this.draft.filter((_, ruleIndex) => ruleIndex !== index);
+          this.dirtyRevision += 1;
           this.render();
           this.persistIfValid();
         });
@@ -164,6 +179,8 @@ export class PersonalCorrectionRulesModal extends Modal {
     this.draft = this.draft.map((rule, ruleIndex) =>
       ruleIndex === index ? { ...rule, ...update } : rule,
     );
+    this.dirtyRevision += 1;
+    this.updateRuleLabels(index);
     this.updatePreview();
   }
 
@@ -174,22 +191,32 @@ export class PersonalCorrectionRulesModal extends Modal {
     if (rule === undefined) return;
     next.splice(targetIndex, 0, rule);
     this.draft = next;
+    this.dirtyRevision += 1;
     this.render();
     this.persistIfValid();
   }
 
   private updatePreview(persist = true): void {
     this.previewResult = compilePersonalCorrectionPreview(this.draft, this.previewInput);
+    this.updateRuleHighlight();
+    this.updateCountLabels();
     if (this.previewOutput !== null) {
       this.previewOutput.setValue(this.previewResult.ok ? this.previewResult.output : '');
     }
     if (this.previewStatusEl === null) return;
     if (this.previewResult.ok) {
       this.previewStatusEl.setText(
-        t('settings.corrections.modal.previewSummary', {
-          replacements: this.previewResult.replacements,
-          rules: this.previewResult.rulesApplied,
-        }),
+        tPlural(
+          this.previewResult.replacements,
+          {
+            one: 'settings.corrections.modal.previewSummaryOne',
+            other: 'settings.corrections.modal.previewSummaryOther',
+          },
+          {
+            replacements: this.previewResult.replacements,
+            rules: this.previewResult.rulesApplied,
+          },
+        ),
       );
       if (persist) this.persistIfValid();
       return;
@@ -197,15 +224,95 @@ export class PersonalCorrectionRulesModal extends Modal {
     this.previewStatusEl.setText(this.previewResult.error.message);
   }
 
+  private updateRuleLabels(index: number): void {
+    const rule = this.draft[index];
+    const row = this.ruleRows.get(index);
+    if (rule === undefined || row === undefined) return;
+    row.setName(this.ruleName(rule, index)).setDesc(this.ruleDescription(rule));
+  }
+
+  private updateRuleHighlight(): void {
+    const invalidIndex =
+      this.previewResult?.ok === false ? this.previewResult.error.index : undefined;
+    for (const [index, row] of this.ruleRows) {
+      row.settingEl.classList.toggle(
+        'local-stt-corrections-modal__rule--invalid',
+        invalidIndex === index,
+      );
+    }
+  }
+
+  private updateCountLabels(): void {
+    this.countSetting?.setName(this.countsLabel());
+  }
+
+  private ruleName(rule: PersonalCorrectionRule, index: number): string {
+    return `${index + 1}. ${rule.find || t('settings.corrections.modal.find')}`;
+  }
+
+  private ruleDescription(rule: PersonalCorrectionRule): string {
+    return `${t('settings.corrections.modal.find')}: ${rule.find} → ${t('settings.corrections.modal.replace')}: ${rule.replace} · ${t('settings.corrections.modal.enabled')}: ${rule.enabled ? t('common.on') : t('common.off')}`;
+  }
+
+  private countsLabel(): string {
+    return tPlural(
+      this.draft.length,
+      {
+        one: 'settings.corrections.modal.countsOne',
+        other: 'settings.corrections.modal.countsOther',
+      },
+      {
+        enabled: this.draft.filter((rule) => rule.enabled).length,
+        total: this.draft.length,
+      },
+    );
+  }
+
   private persistIfValid(): void {
-    if (this.previewResult === null || !this.previewResult.ok) return;
-    const nextSettings = {
-      ...this.dependencies.getSettings(),
-      personalCorrectionRules: cloneRules(this.draft),
-    };
-    this.persistChain = this.persistChain
-      .catch(() => undefined)
-      .then(() => this.dependencies.saveSettings(nextSettings));
+    if (this.previewResult === null || !this.previewResult.ok) {
+      this.saveState = 'failed';
+      this.updateSaveStatus();
+      return;
+    }
+
+    const revision = this.dirtyRevision;
+    const rules = cloneRules(this.draft);
+    this.pendingSaves += 1;
+    this.saveState = 'saving';
+    this.updateSaveStatus();
+    const operation = this.persistChain.then(() =>
+      this.dependencies.mutateSettings((settings) => ({
+        ...settings,
+        personalCorrectionRules: rules,
+      })),
+    );
+    this.persistChain = operation.catch(() => undefined);
+    void operation
+      .then(() => {
+        this.pendingSaves -= 1;
+        if (revision === this.dirtyRevision && this.pendingSaves === 0) {
+          this.saveState = 'saved';
+        }
+        this.updateSaveStatus();
+      })
+      .catch(() => {
+        this.pendingSaves -= 1;
+        this.saveState = 'failed';
+        this.updateSaveStatus();
+      });
+  }
+
+  private updateSaveStatus(): void {
+    if (this.saveStatusEl === null) return;
+    const key: TranslationKey =
+      this.saveState === 'saving'
+        ? 'settings.corrections.modal.saving'
+        : this.saveState === 'saved'
+          ? 'settings.corrections.modal.saved'
+          : this.saveState === 'failed'
+            ? 'settings.corrections.modal.failed'
+            : 'settings.corrections.modal.saved';
+    this.saveStatusEl.setText(t(key));
   }
 }
 

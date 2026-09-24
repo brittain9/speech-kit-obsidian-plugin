@@ -29,6 +29,7 @@ import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
 import { changeHardwareAcceleration } from './hardware-acceleration-action';
 import { renderHardwareAccelerationSetting } from './hardware-acceleration-setting';
+import type { PluginSettingsMutation } from './llm-preset-state';
 import { renderMicrophonePicker } from './microphone-picker';
 import { renderModelSection } from './model-settings-section';
 import { openFilteredHotkeySettings } from './open-hotkey-settings';
@@ -88,6 +89,7 @@ interface SettingsTabDependencies {
   resetLlmTransformation: () => Promise<void>;
   restartSidecar: () => Promise<void>;
   saveSettings: (settings: PluginSettings) => Promise<void>;
+  mutateSettings?: (mutation: PluginSettingsMutation) => Promise<void>;
   sidecarConnection: Pick<SidecarConnection, 'probeSystemAudio' | 'shutdown'>;
   sidecarInstallManager: SidecarInstallManager;
   sidecarLifecycleGate: SidecarLifecycleGate;
@@ -373,10 +375,11 @@ export class LocalSttSettingTab extends PluginSettingTab {
         button.setButtonText(t('settings.corrections.manage')).onClick(() => {
           new PersonalCorrectionRulesModal(this.app, {
             getSettings: () => this.dependencies.getSettings(),
-            saveSettings: async (nextSettings) => {
-              await this.dependencies.saveSettings(nextSettings);
-              this.refreshSettingsTab();
-            },
+            mutateSettings:
+              this.dependencies.mutateSettings ??
+              (async (mutation) => {
+                await this.dependencies.saveSettings(mutation(this.dependencies.getSettings()));
+              }),
           }).open();
         });
       });

@@ -2,6 +2,8 @@ export const en = {
   'notice.dictationNotActive': 'Dictation is not currently active.',
   'notice.personalCorrectionRulesSnapshot':
     'This session uses {enabled} of {total} personal correction rules. Changes apply to the next session.',
+  'notice.personalCorrectionRulesInvalid':
+    'Personal correction settings are invalid: {reason} Fix them before starting dictation.',
   'notice.dictationStartFailed': 'Could not start dictation.',
   'notice.dictationStopFailed': 'Could not stop dictation.',
   'notice.finalizedUtteranceAutoCopyFailed':
@@ -329,23 +331,39 @@ export const en = {
   'settings.corrections.modal.previewOutput': 'Corrected transcript',
   'settings.corrections.modal.add': 'Add rule',
   'settings.corrections.modal.empty': 'No correction rules yet.',
-  'settings.corrections.modal.counts': '{enabled} enabled · {total} total',
-  'settings.corrections.modal.previewSummary':
-    '{replacements} replacement(s) from {rules} rule(s).',
+  'settings.corrections.modal.countsOne': '{enabled} enabled · {total} rule',
+  'settings.corrections.modal.countsOther': '{enabled} enabled · {total} rules',
+  'settings.corrections.modal.previewSummaryOne': '{replacements} replacement from {rules} rule',
+  'settings.corrections.modal.previewSummaryOther':
+    '{replacements} replacements from {rules} rules',
   'settings.corrections.modal.find': 'Find',
   'settings.corrections.modal.replace': 'Replace with',
   'settings.corrections.modal.enabled': 'Enabled',
   'settings.corrections.modal.moveUp': 'Move up',
   'settings.corrections.modal.moveDown': 'Move down',
   'settings.corrections.modal.delete': 'Delete rule',
+  'settings.corrections.modal.saving': 'Saving…',
+  'settings.corrections.modal.saved': 'Saved',
+  'settings.corrections.modal.failed': 'Not saved. Fix the rules and try again.',
   'settings.corrections.modal.invalid': 'Fix the highlighted rule before saving or previewing.',
+  'settings.corrections.field.enabled': 'Enabled',
   'settings.corrections.field.find': 'Find',
+  'settings.corrections.field.id': 'Rule ID',
   'settings.corrections.field.replace': 'Replace with',
+  'settings.corrections.field.rules': 'Rules',
   'settings.corrections.validation.tooMany': 'Add no more than {max} rules.',
   'settings.corrections.validation.blankId': 'Each rule needs an ID.',
+  'settings.corrections.validation.invalidId': 'Rule ID must be text.',
+  'settings.corrections.validation.oversizedId': 'Rule ID cannot exceed {max} characters.',
   'settings.corrections.validation.duplicateId': 'Rule IDs must be unique.',
+  'settings.corrections.validation.invalidEnabled': 'Enabled must be on or off.',
   'settings.corrections.validation.blankFind': 'Find text cannot be blank.',
+  'settings.corrections.validation.invalidFind': 'Find text must be text.',
   'settings.corrections.validation.blankReplace': 'Replacement text cannot be blank.',
+  'settings.corrections.validation.invalidReplace': 'Replacement text must be text.',
+  'settings.corrections.validation.loneSurrogate':
+    'Text contains an invalid Unicode surrogate and cannot be saved.',
+  'settings.corrections.validation.context': 'Rule {index}, {field}: {reason}',
   'settings.corrections.validation.oversized': '{field} cannot exceed {max} characters.',
   'settings.corrections.validation.duplicateFind':
     'Find text must be unique; later rules cannot target the same text.',
@@ -968,9 +986,11 @@ export const en = {
     'The external model is unavailable. Validate the file again to see details.',
   'models.current.unavailable': 'Unavailable',
   'models.current.validateBeforeDictating': 'Validate the external model file before dictating.',
-  'sidecarError.absolute_amplification':
-    'The correction was rejected because its output exceeded the safe size limit.',
   'sidecarError.audio_too_long': 'Audio clip exceeds the maximum duration for this engine.',
+  'sidecarError.event_frame_too_large':
+    'The speech engine produced an event that exceeds the safe frame limit.',
+  'sidecarError.invalid_correction_rules':
+    'The personal correction rules are invalid. Fix them before starting dictation.',
   'sidecarError.engine_inference_failed': 'Local transcription failed.',
   'sidecarError.internal_error': 'The speech engine encountered an internal error.',
   'sidecarError.invalid_audio_buffer': 'Audio buffer was empty when transcription started.',
@@ -986,8 +1006,6 @@ export const en = {
   'sidecarError.missing_voice_file': 'The selected read-aloud voice is not installed.',
   'sidecarError.no_active_install': 'There is no active model install to cancel.',
   'sidecarError.no_active_session': 'There is no active dictation session.',
-  'sidecarError.relative_amplification':
-    'The correction was rejected because it would expand the transcript beyond the safe limit.',
   'sidecarError.session_already_exists': 'A dictation session with this id already exists.',
   'sidecarError.session_capacity_exceeded':
     'Speech Kit already has the maximum number of active sessions.',

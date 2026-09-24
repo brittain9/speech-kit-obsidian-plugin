@@ -19,14 +19,20 @@ export type PersonalCorrectionRuleErrorCode =
   | 'oversized_find'
   | 'oversized_replace'
   | 'blank_id'
+  | 'oversized_id'
+  | 'invalid_id'
+  | 'invalid_enabled'
+  | 'invalid_find'
+  | 'invalid_replace'
   | 'duplicate_id'
   | 'duplicate_find'
+  | 'lone_surrogate'
   | 'absolute_amplification'
   | 'relative_amplification';
 
 export interface PersonalCorrectionRuleValidationError {
   code: PersonalCorrectionRuleErrorCode;
-  field: 'find' | 'id' | 'replace' | 'rules';
+  field: 'enabled' | 'find' | 'id' | 'replace' | 'rules';
   index?: number;
   message: string;
 }
@@ -34,16 +40,6 @@ export interface PersonalCorrectionRuleValidationError {
 export interface PersonalCorrectionRulesValidation {
   errors: PersonalCorrectionRuleValidationError[];
   valid: boolean;
-}
-
-export interface PersonalCorrectionRuleApplication {
-  matches: PersonalCorrectionRuleMatch[];
-  outputLength: number;
-}
-
-export interface PersonalCorrectionRuleMatch {
-  end: number;
-  start: number;
 }
 
 export type PersonalCorrectionPreviewResult =
@@ -75,6 +71,12 @@ export class PersonalCorrectionRuleError extends Error {
   }
 }
 
+/**
+ * Validate settings at the boundary where a draft or persisted snapshot can be
+ * trusted. This function deliberately does not normalize away invalid values:
+ * silently dropping a malformed persisted rule would make the next session
+ * silently behave differently from the saved settings.
+ */
 export function validatePersonalCorrectionRules(
   rules: readonly PersonalCorrectionRule[],
 ): PersonalCorrectionRulesValidation {
@@ -94,79 +96,109 @@ export function validatePersonalCorrectionRules(
   const ids = new Set<string>();
   const finds = new Set<string>();
   rules.forEach((rule, index) => {
-    const id = rule.id.trim();
-    if (id.length === 0) {
+    if (typeof rule.id !== 'string') {
       errors.push(
-        validationError('blank_id', 'id', t('settings.corrections.validation.blankId'), index),
-      );
-    } else if (ids.has(id)) {
-      errors.push(
-        validationError(
-          'duplicate_id',
-          'id',
-          t('settings.corrections.validation.duplicateId'),
-          index,
-        ),
-      );
-    }
-    ids.add(id);
-
-    if (rule.find.trim().length === 0) {
-      errors.push(
-        validationError(
-          'blank_find',
-          'find',
-          t('settings.corrections.validation.blankFind'),
-          index,
-        ),
-      );
-    } else if (unicodeLength(rule.find) > PERSONAL_CORRECTION_RULE_MAX_CHARS) {
-      errors.push(
-        validationError(
-          'oversized_find',
-          'find',
-          t('settings.corrections.validation.oversized', {
-            field: t('settings.corrections.field.find'),
-            max: PERSONAL_CORRECTION_RULE_MAX_CHARS,
-          }),
-          index,
-        ),
+        validationError('invalid_id', 'id', t('settings.corrections.validation.invalidId'), index),
       );
     } else {
-      const normalizedFind = rule.find.normalize('NFD');
-      if (finds.has(normalizedFind)) {
+      const id = rule.id.trim();
+      if (id.length === 0) {
+        errors.push(
+          validationError('blank_id', 'id', t('settings.corrections.validation.blankId'), index),
+        );
+      } else if (unicodeLength(id) > PERSONAL_CORRECTION_RULE_MAX_CHARS) {
         errors.push(
           validationError(
-            'duplicate_find',
-            'find',
-            t('settings.corrections.validation.duplicateFind'),
+            'oversized_id',
+            'id',
+            t('settings.corrections.validation.oversized', {
+              field: correctionFieldLabel('id'),
+              max: PERSONAL_CORRECTION_RULE_MAX_CHARS,
+            }),
+            index,
+          ),
+        );
+      } else if (hasLoneUtf16Surrogate(id)) {
+        errors.push(
+          validationError(
+            'lone_surrogate',
+            'id',
+            t('settings.corrections.validation.loneSurrogate'),
+            index,
+          ),
+        );
+      } else if (ids.has(id)) {
+        errors.push(
+          validationError(
+            'duplicate_id',
+            'id',
+            t('settings.corrections.validation.duplicateId'),
             index,
           ),
         );
       }
-      finds.add(normalizedFind);
+      ids.add(id);
     }
 
-    if (rule.replace.trim().length === 0) {
+    if (typeof rule.enabled !== 'boolean') {
       errors.push(
         validationError(
-          'blank_replace',
-          'replace',
-          t('settings.corrections.validation.blankReplace'),
+          'invalid_enabled',
+          'enabled',
+          t('settings.corrections.validation.invalidEnabled'),
           index,
         ),
       );
-    } else if (unicodeLength(rule.replace) > PERSONAL_CORRECTION_RULE_MAX_CHARS) {
+    }
+
+    if (typeof rule.find !== 'string') {
       errors.push(
         validationError(
-          'oversized_replace',
-          'replace',
-          t('settings.corrections.validation.oversized', {
-            field: t('settings.corrections.field.replace'),
-            max: PERSONAL_CORRECTION_RULE_MAX_CHARS,
-          }),
+          'invalid_find',
+          'find',
+          t('settings.corrections.validation.invalidFind'),
           index,
         ),
+      );
+    } else {
+      validateTextField(rule.find, 'find', 'blank_find', 'oversized_find', index, errors);
+      if (
+        rule.find.trim().length > 0 &&
+        unicodeLength(rule.find) <= PERSONAL_CORRECTION_RULE_MAX_CHARS &&
+        !hasLoneUtf16Surrogate(rule.find)
+      ) {
+        const normalizedFind = rule.find.normalize('NFD');
+        if (finds.has(normalizedFind)) {
+          errors.push(
+            validationError(
+              'duplicate_find',
+              'find',
+              t('settings.corrections.validation.duplicateFind'),
+              index,
+            ),
+          );
+        }
+        finds.add(normalizedFind);
+      }
+    }
+
+    if (typeof rule.replace !== 'string') {
+      errors.push(
+        validationError(
+          'invalid_replace',
+          'replace',
+          t('settings.corrections.validation.invalidReplace'),
+          index,
+        ),
+      );
+    } else {
+      validateTextField(
+        rule.replace,
+        'replace',
+        'blank_replace',
+        'oversized_replace',
+        index,
+        errors,
       );
     }
   });
@@ -174,39 +206,33 @@ export function validatePersonalCorrectionRules(
   return { errors, valid: errors.length === 0 };
 }
 
+/**
+ * Keep structurally recognizable persisted rules, including semantically
+ * invalid values, so session-start validation can report a localized settings
+ * error instead of sending an invalid protocol frame. Unknown rule fields are
+ * retained for forward compatibility.
+ */
 export function normalizePersonalCorrectionRules(value: unknown): PersonalCorrectionRule[] {
   if (!Array.isArray(value)) return [];
 
-  const ids = new Set<string>();
-  const finds = new Set<string>();
-  const normalized: PersonalCorrectionRule[] = [];
-  for (const candidate of value) {
-    if (!isPersonalCorrectionRule(candidate)) continue;
-    const id = candidate.id.trim();
-    const find = candidate.find.trim().length > 0 ? candidate.find : '';
-    const findKey = find.normalize('NFD');
-    if (
-      id.length === 0 ||
-      find.length === 0 ||
-      candidate.replace.trim().length === 0 ||
-      unicodeLength(find) > PERSONAL_CORRECTION_RULE_MAX_CHARS ||
-      unicodeLength(candidate.replace) > PERSONAL_CORRECTION_RULE_MAX_CHARS ||
-      ids.has(id) ||
-      finds.has(findKey)
-    ) {
-      continue;
-    }
-    ids.add(id);
-    finds.add(findKey);
-    normalized.push({
-      enabled: candidate.enabled,
-      find: candidate.find,
-      id,
-      replace: candidate.replace,
-    });
-    if (normalized.length === PERSONAL_CORRECTION_RULE_MAX_COUNT) break;
-  }
-  return normalized;
+  return value.flatMap((candidate) => {
+    if (!isRecord(candidate)) return [];
+    return [
+      {
+        // Keep unknown rule fields for forward-compatible settings round trips.
+        ...candidate,
+        // These casts preserve malformed scalar values for the validator while
+        // keeping the normalized settings shape usable by the rest of the app.
+        enabled:
+          typeof candidate.enabled === 'boolean'
+            ? candidate.enabled
+            : (undefined as unknown as boolean),
+        find: typeof candidate.find === 'string' ? candidate.find : '',
+        id: typeof candidate.id === 'string' ? candidate.id.trim() : '',
+        replace: typeof candidate.replace === 'string' ? candidate.replace : '',
+      },
+    ];
+  });
 }
 
 export function compilePersonalCorrectionPreview(
@@ -215,25 +241,33 @@ export function compilePersonalCorrectionPreview(
 ): PersonalCorrectionPreviewResult {
   const validation = validatePersonalCorrectionRules(rules);
   const firstError = validation.errors[0];
-  if (firstError !== undefined) return { error: firstError, ok: false };
+  if (firstError !== undefined) {
+    return {
+      error:
+        firstError.index === undefined ? firstError : withRuleContext(firstError, firstError.index),
+      ok: false,
+    };
+  }
 
   const originalLength = unicodeLength(input);
   let output = input;
   let replacements = 0;
   let rulesApplied = 0;
-  for (const rule of rules) {
+  for (const [index, rule] of rules.entries()) {
     if (!rule.enabled) continue;
-    const application = preflightPersonalCorrectionRule(output, rule, originalLength);
-    if (application.matches.length > 0) {
-      output = materializePersonalCorrectionRule(output, rule, application.matches);
-      replacements += application.matches.length;
-      rulesApplied += 1;
+    const application = preflightRule(output, rule, originalLength);
+    if (!application.ok) {
+      return { error: withRuleContext(application.error, index), ok: false };
     }
+    if (application.application.matches.length === 0) continue;
+    output = materializeRule(output, rule, application.application.matches);
+    replacements += application.application.matches.length;
+    rulesApplied += 1;
   }
 
   return {
     changed: output !== input,
-    inputLength: unicodeLength(input),
+    inputLength: originalLength,
     ok: true,
     output,
     outputLength: unicodeLength(output),
@@ -251,63 +285,68 @@ export function applyPersonalCorrectionRules(
   return preview.output;
 }
 
-export function preflightPersonalCorrectionRule(
+type RuleApplication = { matches: RuleMatch[] };
+type RuleApplicationResult =
+  | { application: RuleApplication; ok: true }
+  | { error: PersonalCorrectionRuleValidationError; ok: false };
+
+type RuleMatch = { end: number; start: number };
+
+type NormalizedInput = {
+  chars: string[];
+  firstScalarIndices: Map<string, number[]>;
+  originalBoundaries: number[];
+  originalChars: string[];
+  originalPrefixLengths: number[] | null;
+};
+
+function preflightRule(
   input: string,
   rule: PersonalCorrectionRule,
-  cascadeInputLength = unicodeLength(input),
-): PersonalCorrectionRuleApplication {
-  const matches = findPersonalCorrectionMatches(input, rule.find);
+  cascadeInputLength: number,
+): RuleApplicationResult {
+  const matches = findMatches(input, rule.find);
   const inputLength = unicodeLength(input);
   const replaceLength = unicodeLength(rule.replace);
-  const removed = matches.reduce(
-    (total, match) => total + unicodeLength(input.slice(match.start, match.end)),
-    0,
-  );
-  const added = replaceLength * matches.length;
-  const outputLength = inputLength - removed + added;
-
-  if (!Number.isSafeInteger(outputLength)) {
-    throw new PersonalCorrectionRuleError(
-      validationError(
-        'absolute_amplification',
-        'rules',
-        t('settings.corrections.validation.absoluteAmplification', {
-          max: MAX_CORRECTION_OUTPUT_CHARS,
-        }),
-      ),
-    );
+  let removed = 0;
+  for (const match of matches) {
+    removed += unicodeLength(input.slice(match.start, match.end));
   }
-  if (outputLength > MAX_CORRECTION_OUTPUT_CHARS) {
-    throw new PersonalCorrectionRuleError(
-      validationError(
+  const outputLength = inputLength - removed + replaceLength * matches.length;
+
+  if (!Number.isSafeInteger(outputLength) || outputLength > MAX_CORRECTION_OUTPUT_CHARS) {
+    return {
+      error: validationError(
         'absolute_amplification',
         'rules',
         t('settings.corrections.validation.absoluteAmplification', {
           max: MAX_CORRECTION_OUTPUT_CHARS,
         }),
       ),
-    );
+      ok: false,
+    };
   }
   const relativeLimit = Math.ceil(cascadeInputLength * MAX_CORRECTION_AMPLIFICATION);
   if (cascadeInputLength > 0 && outputLength > relativeLimit) {
-    throw new PersonalCorrectionRuleError(
-      validationError(
+    return {
+      error: validationError(
         'relative_amplification',
         'rules',
         t('settings.corrections.validation.relativeAmplification', {
           max: MAX_CORRECTION_AMPLIFICATION,
         }),
       ),
-    );
+      ok: false,
+    };
   }
 
-  return { matches, outputLength };
+  return { application: { matches }, ok: true };
 }
 
-export function materializePersonalCorrectionRule(
+function materializeRule(
   input: string,
   rule: PersonalCorrectionRule,
-  matches: readonly PersonalCorrectionRuleMatch[],
+  matches: readonly RuleMatch[],
 ): string {
   if (matches.length === 0) return input;
   const pieces: string[] = [];
@@ -320,63 +359,84 @@ export function materializePersonalCorrectionRule(
   return pieces.join('');
 }
 
-export function isPersonalCorrectionRule(value: unknown): value is PersonalCorrectionRule {
-  if (typeof value !== 'object' || value === null) return false;
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record.enabled === 'boolean' &&
-    typeof record.find === 'string' &&
-    typeof record.id === 'string' &&
-    typeof record.replace === 'string'
-  );
-}
+function findMatches(input: string, find: string): RuleMatch[] {
+  const normalized = normalizeInput(input);
+  const findChars = Array.from(find.normalize('NFD'));
+  if (findChars.length === 0) return [];
 
-function findPersonalCorrectionMatches(input: string, find: string): PersonalCorrectionRuleMatch[] {
-  const normalizedInput = input.normalize('NFD');
-  const normalizedFind = find.normalize('NFD');
-  const inputChars = Array.from(normalizedInput);
-  const findChars = Array.from(normalizedFind);
-  const originalChars = Array.from(input);
-  const originalBoundaries = originalCharBoundaries(originalChars);
-  const originalPrefixLengths =
-    inputChars.length === originalChars.length ? null : nfdPrefixLengths(originalChars);
-  const matches: PersonalCorrectionRuleMatch[] = [];
+  const matches: RuleMatch[] = [];
+  const firstScalar = findChars[0] ?? '';
+  const candidateIndices = normalized.firstScalarIndices.get(firstScalar) ?? [];
+  for (const index of candidateIndices) {
+    if (index + findChars.length > normalized.chars.length) continue;
+    if (!sameCodePoints(normalized.chars, index, findChars)) continue;
+    if (!isSafeOriginalBoundary(normalized, index)) continue;
+    if (!isSafeOriginalBoundary(normalized, index + findChars.length)) continue;
 
-  for (let index = 0; index + findChars.length <= inputChars.length; ) {
-    if (!sameCodePoints(inputChars, index, findChars)) {
-      index += 1;
-      continue;
-    }
     const beforeIndex = index - 1;
     const afterIndex = index + findChars.length;
     const startEdge = wordEdge(findChars, 0, 1);
     const endEdge = wordEdge(findChars, findChars.length - 1, -1);
     if (
-      isWordBoundary(startEdge, inputChars, beforeIndex, 1) ||
-      isWordBoundary(endEdge, inputChars, afterIndex, -1)
+      isWordBoundary(startEdge, normalized.chars, beforeIndex, 1) ||
+      isWordBoundary(endEdge, normalized.chars, afterIndex, -1)
     ) {
-      index += 1;
       continue;
     }
 
-    const start = mapNormalizedBoundary(
-      originalChars,
-      originalBoundaries,
-      index,
-      inputChars.length,
-      originalPrefixLengths,
-    );
-    const end = mapNormalizedBoundary(
-      originalChars,
-      originalBoundaries,
-      afterIndex,
-      inputChars.length,
-      originalPrefixLengths,
-    );
-    matches.push({ end, start });
-    index = afterIndex;
+    matches.push({
+      end: mapSafeBoundary(normalized, index + findChars.length),
+      start: mapSafeBoundary(normalized, index),
+    });
   }
   return matches;
+}
+
+function normalizeInput(input: string): NormalizedInput {
+  const originalChars = Array.from(input);
+  const originalPrefixLengths = originalChars.some(
+    (char) => Array.from(char.normalize('NFD')).length > 1,
+  )
+    ? nfdPrefixLengths(originalChars)
+    : null;
+  const normalized = input.normalize('NFD');
+  const chars = Array.from(normalized);
+  const firstScalarIndices = new Map<string, number[]>();
+  for (const [index, char] of chars.entries()) {
+    const indices = firstScalarIndices.get(char);
+    if (indices === undefined) firstScalarIndices.set(char, [index]);
+    else indices.push(index);
+  }
+  return {
+    chars,
+    firstScalarIndices,
+    originalBoundaries: originalCharBoundaries(originalChars),
+    originalChars,
+    originalPrefixLengths,
+  };
+}
+
+function isSafeOriginalBoundary(normalized: NormalizedInput, normalizedIndex: number): boolean {
+  if (normalizedIndex < 0 || normalizedIndex > normalized.chars.length) return false;
+  if (
+    normalized.originalPrefixLengths !== null &&
+    !normalized.originalPrefixLengths.includes(normalizedIndex)
+  ) {
+    return false;
+  }
+  // Do not replace only the base of a decomposed canonical cluster. Doing so
+  // would leave its combining mark behind as orphaned transcript text.
+  return !isCombiningMark(normalized.originalChars[normalizedIndex] ?? '');
+}
+
+function mapSafeBoundary(normalized: NormalizedInput, normalizedIndex: number): number {
+  if (normalized.originalPrefixLengths === null) {
+    return (
+      normalized.originalBoundaries[Math.min(normalized.originalChars.length, normalizedIndex)] ?? 0
+    );
+  }
+  const scalarIndex = normalized.originalPrefixLengths.indexOf(normalizedIndex);
+  return normalized.originalBoundaries[Math.max(0, scalarIndex)] ?? 0;
 }
 
 function wordEdge(chars: readonly string[], start: number, direction: 1 | -1): string | undefined {
@@ -445,33 +505,80 @@ function nfdPrefixLengths(chars: readonly string[]): number[] {
   return lengths;
 }
 
-function mapNormalizedBoundary(
-  originalChars: readonly string[],
-  originalBoundaries: readonly number[],
-  normalizedIndex: number,
-  normalizedLength: number,
-  originalPrefixLengths: number[] | null,
-): number {
-  if (normalizedLength === originalChars.length) {
-    return originalBoundaries[Math.min(originalChars.length, normalizedIndex)] ?? 0;
+function validateTextField(
+  value: string,
+  field: 'find' | 'replace',
+  blankCode: 'blank_find' | 'blank_replace',
+  oversizedCode: 'oversized_find' | 'oversized_replace',
+  index: number,
+  errors: PersonalCorrectionRuleValidationError[],
+): void {
+  if (value.trim().length === 0) {
+    errors.push(
+      validationError(
+        blankCode,
+        field,
+        t(
+          blankCode === 'blank_find'
+            ? 'settings.corrections.validation.blankFind'
+            : 'settings.corrections.validation.blankReplace',
+        ),
+        index,
+      ),
+    );
+  } else if (unicodeLength(value) > PERSONAL_CORRECTION_RULE_MAX_CHARS) {
+    errors.push(
+      validationError(
+        oversizedCode,
+        field,
+        t('settings.corrections.validation.oversized', {
+          field: correctionFieldLabel(field),
+          max: PERSONAL_CORRECTION_RULE_MAX_CHARS,
+        }),
+        index,
+      ),
+    );
   }
-  if (originalPrefixLengths !== null) {
-    const exactIndex = originalPrefixLengths.indexOf(normalizedIndex);
-    if (exactIndex >= 0) return originalBoundaries[exactIndex] ?? 0;
+  if (hasLoneUtf16Surrogate(value)) {
+    errors.push(
+      validationError(
+        'lone_surrogate',
+        field,
+        t('settings.corrections.validation.loneSurrogate'),
+        index,
+      ),
+    );
   }
-  const approximate = Math.min(originalChars.length, Math.max(0, normalizedIndex));
-  const start = Math.max(0, approximate - 8);
-  const end = Math.min(originalChars.length, approximate + 9);
-  let fallback = originalBoundaries[approximate] ?? 0;
-  for (let candidate = start; candidate <= end; candidate += 1) {
-    const prefix = originalChars.slice(0, candidate).join('').normalize('NFD');
-    const prefixLength = Array.from(prefix).length;
-    if (prefixLength === normalizedIndex) {
-      fallback = originalBoundaries[candidate] ?? fallback;
-      if (candidate === approximate) return fallback;
-    }
+}
+
+function withRuleContext(
+  error: PersonalCorrectionRuleValidationError,
+  index: number,
+): PersonalCorrectionRuleValidationError {
+  return {
+    ...error,
+    index,
+    message: t('settings.corrections.validation.context', {
+      field: correctionFieldLabel(error.field),
+      index: index + 1,
+      reason: error.message,
+    }),
+  };
+}
+
+function correctionFieldLabel(field: PersonalCorrectionRuleValidationError['field']): string {
+  switch (field) {
+    case 'enabled':
+      return t('settings.corrections.field.enabled');
+    case 'find':
+      return t('settings.corrections.field.find');
+    case 'id':
+      return t('settings.corrections.field.id');
+    case 'replace':
+      return t('settings.corrections.field.replace');
+    case 'rules':
+      return t('settings.corrections.field.rules');
   }
-  return fallback;
 }
 
 function validationError(
@@ -481,6 +588,24 @@ function validationError(
   index?: number,
 ): PersonalCorrectionRuleValidationError {
   return index === undefined ? { code, field, message } : { code, field, index, message };
+}
+
+function hasLoneUtf16Surrogate(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!Number.isInteger(next) || next < 0xdc00 || next > 0xdfff) return true;
+      index += 1;
+    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function unicodeLength(value: string): number {

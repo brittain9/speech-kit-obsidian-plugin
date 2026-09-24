@@ -54,7 +54,7 @@ describe('LLM Secret Storage integration', () => {
     expect(result.shouldPersist).toBe(true);
   });
 
-  it('requests one normalized rewrite for settings schemas before version 10', () => {
+  it('requests one normalized rewrite for settings schemas before version 11', () => {
     const result = loadPluginSettings(
       { schemaVersion: 6 },
       { getSecret: () => null, setSecret: vi.fn() },
@@ -64,7 +64,20 @@ describe('LLM Secret Storage integration', () => {
     expect(result.shouldPersist).toBe(true);
   });
 
-  it('does not rewrite already-normalized schema 10 settings', () => {
+  it('does not downgrade newer schema data or rewrite it unnecessarily', () => {
+    const result = loadPluginSettings(
+      { schemaVersion: 12, futureSetting: { keep: true } },
+      { getSecret: () => null, setSecret: vi.fn() },
+    );
+
+    expect(result.settings.schemaVersion).toBe(12);
+    expect((result.settings as unknown as Record<string, unknown>).futureSetting).toEqual({
+      keep: true,
+    });
+    expect(result.shouldPersist).toBe(false);
+  });
+
+  it('does not rewrite already-normalized schema 11 settings', () => {
     const result = loadPluginSettings(DEFAULT_PLUGIN_SETTINGS, {
       getSecret: () => null,
       setSecret: vi.fn(),

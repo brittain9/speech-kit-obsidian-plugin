@@ -23,7 +23,7 @@ const JSON_FRAME_KIND: u8 = 0x01;
 const AUDIO_FRAME_KIND: u8 = 0x02;
 const SYNTHESIS_AUDIO_FRAME_KIND: u8 = 0x03;
 const FRAME_HEADER_LENGTH: usize = 5;
-const MAX_FRAME_PAYLOAD: usize = 16 * 1024 * 1024;
+pub const MAX_FRAME_PAYLOAD: usize = 16 * 1024 * 1024;
 const SESSION_ID_BYTES: usize = 16;
 const SYNTHESIS_AUDIO_HEADER_BYTES: usize = 8;
 
@@ -192,14 +192,14 @@ pub struct TranscriptWord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonalCorrectionRule {
-    #[serde(default = "default_enabled")]
-    pub enabled: bool,
+    /// `enabled` is represented as an option only so a missing value can be
+    /// rejected by the typed start-session protocol error instead of being
+    /// silently defaulted on the wire.
+    pub enabled: Option<bool>,
     pub find: String,
+    #[serde(default)]
+    pub id: String,
     pub replace: String,
-}
-
-fn default_enabled() -> bool {
-    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -644,12 +644,6 @@ impl CommandEnvelope {
 }
 
 fn validate_command(command: Command) -> Result<Command> {
-    if let Command::StartSession {
-        correction_rules, ..
-    } = &command
-    {
-        validate_correction_rules(correction_rules)?;
-    }
     if let Command::StartTranslation {
         style_instruction: Some(style_instruction),
         ..
@@ -665,6 +659,7 @@ fn validate_command(command: Command) -> Result<Command> {
 
 pub const MAX_CORRECTION_RULE_COUNT: usize = 100;
 pub const MAX_CORRECTION_RULE_CHARS: usize = 256;
+pub const MAX_CORRECTION_RULE_ID_CHARS: usize = 256;
 
 pub fn validate_correction_rules(rules: &[PersonalCorrectionRule]) -> Result<()> {
     ensure!(
@@ -672,8 +667,25 @@ pub fn validate_correction_rules(rules: &[PersonalCorrectionRule]) -> Result<()>
         "too many personal correction rules"
     );
 
+    let mut ids = HashSet::new();
     let mut finds = HashSet::new();
-    for rule in rules {
+    for (index, rule) in rules.iter().enumerate() {
+        ensure!(
+            rule.enabled.is_some(),
+            "personal correction rule {index} is missing a boolean enabled field"
+        );
+        ensure!(
+            !rule.id.trim().is_empty(),
+            "personal correction rule {index} is missing a non-empty id"
+        );
+        ensure!(
+            rule.id.chars().count() <= MAX_CORRECTION_RULE_ID_CHARS,
+            "personal correction rule {index} id is too long"
+        );
+        ensure!(
+            ids.insert(rule.id.trim()),
+            "personal correction rule id is duplicated"
+        );
         ensure!(
             !rule.find.trim().is_empty(),
             "personal correction find text cannot be blank"
@@ -782,6 +794,12 @@ pub fn write_event_frame<W: Write>(writer: &mut W, event: &Event) -> Result<()> 
     );
     let payload = serde_json::to_vec(&EventEnvelope::new(event.clone()))
         .context("failed to serialize event envelope")?;
+    ensure!(
+        payload.len() <= MAX_FRAME_PAYLOAD,
+        "event frame payload exceeds maximum supported size: {} > {}",
+        payload.len(),
+        MAX_FRAME_PAYLOAD
+    );
     write_frame(writer, JSON_FRAME_KIND, &payload)
 }
 
@@ -803,6 +821,12 @@ pub fn write_synthesis_audio_frame<W: Write>(
 }
 
 fn write_frame<W: Write>(writer: &mut W, frame_kind: u8, payload: &[u8]) -> Result<()> {
+    ensure!(
+        payload.len() <= MAX_FRAME_PAYLOAD,
+        "frame payload exceeds maximum supported size: {} > {}",
+        payload.len(),
+        MAX_FRAME_PAYLOAD
+    );
     let payload_length = u32::try_from(payload.len())
         .map_err(|_| anyhow!("payload exceeds maximum frame length"))?;
     let mut header = [0_u8; FRAME_HEADER_LENGTH];
@@ -1034,8 +1058,8 @@ mod tests {
             "language": "en",
             "sessionStartUnixMs": 1_700_000_000_000_u64,
             "correctionRules": [
-                { "enabled": true, "find": "speech kit", "replace": "Speech Kit" },
-                { "enabled": false, "find": "old", "replace": "new" }
+                { "enabled": true, "id": "rule-1", "find": "speech kit", "replace": "Speech Kit" },
+                { "enabled": false, "id": "rule-2", "find": "old", "replace": "new" }
             ]
         }))
         .expect("payload should serialize");
@@ -1054,7 +1078,7 @@ mod tests {
 
         assert_eq!(correction_rules.len(), 2);
         assert_eq!(correction_rules[0].find, "speech kit");
-        assert!(!correction_rules[1].enabled);
+        assert_eq!(correction_rules[1].enabled, Some(false));
     }
 
     #[test]
@@ -1409,6 +1433,21 @@ mod tests {
                 .to_string()
                 .contains("frame payload exceeds maximum supported size")
         );
+    }
+
+    #[test]
+    fn oversized_event_is_rejected_symmetrically_before_writing() {
+        let code = "oversized".to_string();
+        let event = Event::Error {
+            code,
+            details: None,
+            message: "x".repeat(MAX_FRAME_PAYLOAD),
+            session_id: None,
+        };
+        let mut output = Vec::new();
+        let error = write_event_frame(&mut output, &event).expect_err("event should be rejected");
+        assert!(error.to_string().contains("event frame payload exceeds"));
+        assert!(output.is_empty());
     }
 
     // The TypeScript side declares these fields as `T | null` (non-optional) /

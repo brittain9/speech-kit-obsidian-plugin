@@ -182,8 +182,8 @@ describe('DictationSessionController', () => {
     expect(sidecarConnection.startSession).toHaveBeenCalledWith(
       expect.objectContaining({
         correctionRules: [
-          { enabled: true, find: 'speech kit', replace: 'Speech Kit' },
-          { enabled: false, find: 'old', replace: 'new' },
+          { enabled: true, find: 'speech kit', id: 'rule-1', replace: 'Speech Kit' },
+          { enabled: false, find: 'old', id: 'rule-2', replace: 'new' },
         ],
       }),
     );
@@ -195,6 +195,30 @@ describe('DictationSessionController', () => {
     );
 
     await controller.stopDictation();
+  });
+
+  it('reports malformed persisted correction settings before sending a session frame', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const feedback = { show: vi.fn() };
+    const settings = createSettings({
+      personalCorrectionRules: [{ enabled: true, find: ' ', id: 'blank', replace: 'value' }],
+      selectedModel: createExternalModelSelection(),
+    });
+    const controller = createController({
+      feedback,
+      getSettings: () => settings,
+      sidecarConnection,
+    });
+
+    await controller.startDictation();
+
+    expect(sidecarConnection.startSession).not.toHaveBeenCalled();
+    expect(feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: 'personal-correction-rules-invalid',
+        message: expect.stringContaining('Personal correction settings are invalid'),
+      }),
+    );
   });
 
   it('refuses a start synchronously while sidecar maintenance is active', async () => {
@@ -283,6 +307,37 @@ describe('DictationSessionController', () => {
     sidecarConnection.emit(transcriptReady(sessionId, 'raw transcript'));
     await vi.waitFor(() => expect(sessions[0]?.acceptedTexts).toEqual(['raw transcript']));
     expect(cleanup).not.toHaveBeenCalled();
+  });
+
+  it('feeds the corrected native transcript text into the LLM input', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const sessions: FakeSession[] = [];
+    const cleanup = vi.fn(async (options) => ({
+      model: 'model',
+      providerId: 'ollama' as const,
+      text: `clean: ${options.userMessage}`,
+    }));
+    const controller = createController({
+      createSession: (session) => sessions.push(session),
+      getSettings: () =>
+        createSettings({
+          llmFeaturesEnabled: true,
+          llmPostprocessMode: 'per_utterance',
+          llmPostprocessSkipMinWords: 0,
+          selectedModel: createExternalModelSelection(),
+        }),
+      llmRouter: createFakeLlmRouter({ cleanup }),
+      sidecarConnection,
+    });
+
+    await controller.startDictation();
+    const sessionId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId ?? '';
+    sidecarConnection.emit(transcriptReady(sessionId, 'Speech Kit'));
+    await vi.waitFor(() =>
+      expect(cleanup).toHaveBeenCalledWith(
+        expect.objectContaining({ userMessage: expect.stringContaining('Speech Kit') }),
+      ),
+    );
   });
 
   it('holds speech through dictation drain and releases it on terminal cleanup', async () => {

@@ -684,6 +684,10 @@ export const pt = {
   'models.current.unavailable': 'Indisponível',
   'models.current.validateBeforeDictating': 'Valide o ficheiro externo do modelo antes de ditar.',
   'sidecarError.audio_too_long': 'O clipe de áudio excede a duração máxima deste motor.',
+  'sidecarError.event_frame_too_large':
+    'O motor de voz produziu um evento que excede o limite seguro do fotograma.',
+  'sidecarError.invalid_correction_rules':
+    'As regras de correção pessoal são inválidas. Corrija-as antes de iniciar a ditagem.',
   'sidecarError.engine_inference_failed': 'A transcrição local falhou.',
   'sidecarError.internal_error': 'O motor de voz encontrou um erro interno.',
   'sidecarError.invalid_audio_buffer':
@@ -853,6 +857,9 @@ export const pt = {
     'Traduz o texto das notas localmente com o mecanismo compacto Bergamot e modelos do Firefox.',
   'notice.personalCorrectionRulesSnapshot':
     'Esta sessão usa {enabled} de {total} regras de correção pessoal. As alterações aplicam-se à próxima sessão.',
+  'notice.personalCorrectionRulesInvalid':
+    'As definições de correção pessoal são inválidas: {reason} Corrija-as antes de iniciar a ditagem.',
+
   'settings.corrections.name': 'Regras de correção pessoal',
   'settings.corrections.desc':
     'Aplica correções literais locais e ordenadas após a transcrição. As regras aplicam-se a segmentos finais na próxima sessão; não são vocabulário de ASR nem palavras-chave.',
@@ -865,24 +872,40 @@ export const pt = {
   'settings.corrections.modal.previewOutput': 'Transcrição corrigida',
   'settings.corrections.modal.add': 'Adicionar regra',
   'settings.corrections.modal.empty': 'Ainda não existem regras de correção.',
-  'settings.corrections.modal.counts': '{enabled} ativadas · {total} no total',
-  'settings.corrections.modal.previewSummary':
-    '{replacements} substituição(ões) de {rules} regra(s).',
+  'settings.corrections.modal.countsOne': '{enabled} ativadas · {total} regra',
+  'settings.corrections.modal.countsOther': '{enabled} ativadas · {total} regras',
+  'settings.corrections.modal.previewSummaryOne': '{replacements} substituição de {rules} regra',
+  'settings.corrections.modal.previewSummaryOther':
+    '{replacements} substituições de {rules} regras',
   'settings.corrections.modal.find': 'Localizar',
   'settings.corrections.modal.replace': 'Substituir por',
   'settings.corrections.modal.enabled': 'Ativada',
   'settings.corrections.modal.moveUp': 'Mover para cima',
   'settings.corrections.modal.moveDown': 'Mover para baixo',
   'settings.corrections.modal.delete': 'Eliminar regra',
+  'settings.corrections.modal.saving': 'A guardar…',
+  'settings.corrections.modal.saved': 'Guardado',
+  'settings.corrections.modal.failed': 'Não foi guardado. Corrija as regras e tente novamente.',
   'settings.corrections.modal.invalid':
     'Corrija a regra indicada antes de guardar ou pré-visualizar.',
   'settings.corrections.field.find': 'Localizar',
+  'settings.corrections.field.enabled': 'Ativada',
+  'settings.corrections.field.id': 'ID da regra',
   'settings.corrections.field.replace': 'Substituir por',
+  'settings.corrections.field.rules': 'Regras',
   'settings.corrections.validation.tooMany': 'Adicione no máximo {max} regras.',
   'settings.corrections.validation.blankId': 'Cada regra precisa de um ID.',
+  'settings.corrections.validation.invalidId': 'O ID da regra deve ser texto.',
+  'settings.corrections.validation.oversizedId': 'O ID da regra não pode exceder {max} caracteres.',
+  'settings.corrections.validation.invalidEnabled': 'Ativada deve ser ativada ou desativada.',
+  'settings.corrections.validation.invalidFind': 'O texto a localizar deve ser texto.',
   'settings.corrections.validation.duplicateId': 'Os IDs das regras devem ser únicos.',
   'settings.corrections.validation.blankFind': 'O texto a localizar não pode estar vazio.',
   'settings.corrections.validation.blankReplace': 'O texto de substituição não pode estar vazio.',
+  'settings.corrections.validation.invalidReplace': 'O texto de substituição deve ser texto.',
+  'settings.corrections.validation.loneSurrogate':
+    'O texto contém um substituto Unicode inválido e não pode ser guardado.',
+  'settings.corrections.validation.context': 'Regra {index}, {field}: {reason}',
   'settings.corrections.validation.oversized': '{field} não pode exceder {max} caracteres.',
   'settings.corrections.validation.duplicateFind':
     'O texto a localizar deve ser único; regras posteriores não podem visar o mesmo texto.',

@@ -679,6 +679,10 @@ export const ja = {
   'models.current.validateBeforeDictating':
     'ディクテーションを行う前に、外部モデル ファイルを検証してください。',
   'sidecarError.audio_too_long': 'オーディオ クリップがこのエンジンの最大継続時間を超えています。',
+  'sidecarError.event_frame_too_large':
+    '音声エンジンが安全なフレーム上限を超えるイベントを生成しました。',
+  'sidecarError.invalid_correction_rules':
+    '個人訂正ルールが無効です。音声入力を開始する前に修正してください。',
   'sidecarError.engine_inference_failed': 'ローカルでの転写に失敗しました。',
   'sidecarError.internal_error': '音声エンジンで内部エラーが発生しました。',
   'sidecarError.invalid_audio_buffer':
@@ -848,6 +852,9 @@ export const ja = {
     'コンパクトな Bergamot エンジンと Firefox モデルでノートのテキストをローカル翻訳します。',
   'notice.personalCorrectionRulesSnapshot':
     'このセッションでは、{total} 件中 {enabled} 件の個人訂正ルールを使用します。変更は次のセッションから適用されます。',
+  'notice.personalCorrectionRulesInvalid':
+    '個人訂正の設定が無効です: {reason} 音声入力を開始する前に修正してください。',
+
   'settings.corrections.name': '個人訂正ルール',
   'settings.corrections.desc':
     '文字起こし後に、ローカルの順序付きリテラル置換を適用します。ルールは次のセッションの最終セグメントに適用され、ASR の語彙やホットワードではありません。',
@@ -860,23 +867,41 @@ export const ja = {
   'settings.corrections.modal.previewOutput': '訂正後の文字起こし',
   'settings.corrections.modal.add': 'ルールを追加',
   'settings.corrections.modal.empty': '訂正ルールはまだありません。',
-  'settings.corrections.modal.counts': '{enabled} 件有効 · 合計 {total} 件',
-  'settings.corrections.modal.previewSummary': '{rules} 件のルールから {replacements} 件の置換。',
+  'settings.corrections.modal.countsOne': '{enabled} 件有効 · {total} 件のルール',
+  'settings.corrections.modal.countsOther': '{enabled} 件有効 · {total} 件のルール',
+  'settings.corrections.modal.previewSummaryOne':
+    '{rules} 件のルールから {replacements} 件の置換。',
+  'settings.corrections.modal.previewSummaryOther':
+    '{rules} 件のルールから {replacements} 件の置換。',
   'settings.corrections.modal.find': '検索文字列',
   'settings.corrections.modal.replace': '置換文字列',
   'settings.corrections.modal.enabled': '有効',
   'settings.corrections.modal.moveUp': '上へ移動',
   'settings.corrections.modal.moveDown': '下へ移動',
   'settings.corrections.modal.delete': 'ルールを削除',
+  'settings.corrections.modal.saving': '保存中…',
+  'settings.corrections.modal.saved': '保存しました',
+  'settings.corrections.modal.failed': '保存できませんでした。ルールを修正して再試行してください。',
   'settings.corrections.modal.invalid':
     '保存またはプレビューする前に、強調表示されたルールを修正してください。',
   'settings.corrections.field.find': '検索文字列',
+  'settings.corrections.field.enabled': '有効',
+  'settings.corrections.field.id': 'ルール ID',
   'settings.corrections.field.replace': '置換文字列',
+  'settings.corrections.field.rules': 'ルール',
   'settings.corrections.validation.tooMany': 'ルールは最大 {max} 件まで追加できます。',
   'settings.corrections.validation.blankId': '各ルールには ID が必要です。',
+  'settings.corrections.validation.invalidId': 'ルール ID はテキストである必要があります。',
+  'settings.corrections.validation.oversizedId': 'ルール ID は {max} 文字以内で入力してください。',
+  'settings.corrections.validation.invalidEnabled': '有効はオンまたはオフである必要があります。',
+  'settings.corrections.validation.invalidFind': '検索文字列はテキストである必要があります。',
   'settings.corrections.validation.duplicateId': 'ルール ID は一意である必要があります。',
   'settings.corrections.validation.blankFind': '検索文字列を空にすることはできません。',
   'settings.corrections.validation.blankReplace': '置換文字列を空にすることはできません。',
+  'settings.corrections.validation.invalidReplace': '置換文字列はテキストである必要があります。',
+  'settings.corrections.validation.loneSurrogate':
+    'テキストに無効な Unicode サロゲートが含まれているため保存できません。',
+  'settings.corrections.validation.context': 'ルール {index}、{field}: {reason}',
   'settings.corrections.validation.oversized': '{field} は {max} 文字以内で入力してください。',
   'settings.corrections.validation.duplicateFind':
     '検索文字列は一意である必要があります。後のルールで同じ文字列を指定できません。',

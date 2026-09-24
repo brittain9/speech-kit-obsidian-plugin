@@ -1,17 +1,49 @@
+use std::collections::{HashMap, HashSet};
+
 use serde::Serialize;
 use unicode_general_category::{GeneralCategory, get_general_category};
 use unicode_normalization::UnicodeNormalization;
 
-use crate::protocol::{
-    PersonalCorrectionRule, StageId, TranscriptSegment, validate_correction_rules,
-};
+use crate::protocol::{MAX_FRAME_PAYLOAD, PersonalCorrectionRule, StageId, TranscriptSegment};
 use crate::stages::{StageContext, StageProcess, StageProcessor};
 use crate::transcription::Transcript;
 
 pub const MAX_CORRECTION_OUTPUT_CHARS: usize = 1_000_000;
 pub const MAX_CORRECTION_AMPLIFICATION: usize = 8;
+pub const MAX_CORRECTION_INPUT_CHARS: usize = 1_000_000;
+pub const MAX_CORRECTION_NORMALIZED_SCAN_CHARS: usize = 2_000_000;
+pub const MAX_CORRECTION_SEARCH_STEPS: usize = 4_000_000;
 
 const VERSION: u32 = 2;
+const ABSOLUTE_AMPLIFICATION_CODE: &str = "absolute_amplification";
+const RELATIVE_AMPLIFICATION_CODE: &str = "relative_amplification";
+const WORK_BUDGET_CODE: &str = "work_budget";
+
+#[derive(Debug, Clone)]
+pub struct CompiledPersonalCorrectionRule {
+    enabled: bool,
+    first_scalar: Option<char>,
+    normalized_find: Vec<char>,
+    replace: String,
+    replace_chars: usize,
+}
+
+pub type CompiledPersonalCorrectionRules = Vec<CompiledPersonalCorrectionRule>;
+
+pub fn compile_correction_rules(
+    rules: &[PersonalCorrectionRule],
+) -> CompiledPersonalCorrectionRules {
+    rules
+        .iter()
+        .map(|rule| CompiledPersonalCorrectionRule {
+            enabled: rule.enabled.unwrap_or(false),
+            first_scalar: rule.find.nfd().next(),
+            normalized_find: rule.find.nfd().collect(),
+            replace: rule.replace.clone(),
+            replace_chars: rule.replace.chars().count(),
+        })
+        .collect()
+}
 
 pub struct UserRulesStage;
 
@@ -27,14 +59,11 @@ impl StageProcessor for UserRulesStage {
                 payload: None,
             };
         }
-        if let Err(error) = validate_correction_rules(ctx.correction_rules) {
-            return failed_process("invalid_rule", &error.to_string());
-        }
 
         let enabled_rule_count = ctx
             .correction_rules
             .iter()
-            .filter(|rule| rule.enabled)
+            .filter(|rule| rule.enabled.unwrap_or(false))
             .count();
         if enabled_rule_count == 0 {
             return StageProcess::Skipped {
@@ -50,18 +79,30 @@ impl StageProcessor for UserRulesStage {
             };
         }
 
-        let mut changed_segment_count = 0;
-        let mut applied_rule_count = 0;
-        let mut replacement_count = 0;
+        let compiled = ctx.compiled_correction_rules.map_or_else(
+            || compile_correction_rules(ctx.correction_rules),
+            <[CompiledPersonalCorrectionRule]>::to_vec,
+        );
+        let original_total = transcript
+            .segments
+            .iter()
+            .try_fold(0_usize, |total, segment| {
+                total.checked_add(segment.text.chars().count())
+            })
+            .unwrap_or(usize::MAX);
+        let mut budget = UtteranceBudget::new(original_total);
         let mut corrected_segments = Vec::with_capacity(transcript.segments.len());
+        let mut applied_rule_indices = HashSet::new();
+        let mut replacement_count = 0_usize;
+        let mut changed_segment_count = 0_usize;
 
         for segment in &transcript.segments {
-            match apply_rules_to_segment(segment, ctx.correction_rules) {
+            match apply_rules_to_segment(segment, &compiled, &mut budget) {
                 Ok(result) => {
                     if result.changed {
                         changed_segment_count += 1;
                     }
-                    applied_rule_count += result.applied_rule_count;
+                    applied_rule_indices.extend(result.applied_rule_indices);
                     replacement_count += result.replacement_count;
                     corrected_segments.push(result.segment);
                 }
@@ -69,11 +110,20 @@ impl StageProcessor for UserRulesStage {
             }
         }
 
+        if estimate_transcript_event_bytes(&corrected_segments, &transcript.stage_history)
+            > MAX_FRAME_PAYLOAD
+        {
+            return failed_process(
+                "frame_budget",
+                "the corrected transcript event exceeds the sidecar frame payload limit",
+            );
+        }
+
         let payload = payload(UserRulesPayload {
             version: VERSION,
             rule_count: ctx.correction_rules.len(),
             enabled_rule_count,
-            applied_rule_count,
+            applied_rule_count: applied_rule_indices.len(),
             replacement_count,
             changed_segment_count,
         });
@@ -93,7 +143,7 @@ impl StageProcessor for UserRulesStage {
 
 #[derive(Debug)]
 struct SegmentApplication {
-    applied_rule_count: usize,
+    applied_rule_indices: Vec<usize>,
     changed: bool,
     replacement_count: usize,
     segment: TranscriptSegment,
@@ -113,7 +163,7 @@ struct RuleApplicationError {
 impl RuleApplicationError {
     fn absolute() -> Self {
         Self {
-            code: "absolute_amplification",
+            code: ABSOLUTE_AMPLIFICATION_CODE,
             message: format!(
                 "personal correction output exceeds {MAX_CORRECTION_OUTPUT_CHARS} characters"
             ),
@@ -122,15 +172,22 @@ impl RuleApplicationError {
 
     fn relative() -> Self {
         Self {
-            code: "relative_amplification",
+            code: RELATIVE_AMPLIFICATION_CODE,
             message: format!(
                 "personal correction output exceeds {MAX_CORRECTION_AMPLIFICATION}x amplification"
             ),
         }
     }
+
+    fn work(message: impl Into<String>) -> Self {
+        Self {
+            code: WORK_BUDGET_CODE,
+            message: message.into(),
+        }
+    }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct UserRulesPayload {
     version: u32,
@@ -141,34 +198,110 @@ struct UserRulesPayload {
     changed_segment_count: usize,
 }
 
+#[derive(Debug)]
+struct UtteranceBudget {
+    current_chars: usize,
+    normalized_chars: usize,
+    original_chars: usize,
+    search_steps: usize,
+}
+
+impl UtteranceBudget {
+    fn new(original_chars: usize) -> Self {
+        Self {
+            current_chars: original_chars,
+            normalized_chars: 0,
+            original_chars,
+            search_steps: 0,
+        }
+    }
+
+    fn add_normalized(&mut self, count: usize) -> Result<(), RuleApplicationError> {
+        self.normalized_chars = self
+            .normalized_chars
+            .checked_add(count)
+            .ok_or_else(|| RuleApplicationError::work("normalized correction input overflows"))?;
+        if self.normalized_chars > MAX_CORRECTION_NORMALIZED_SCAN_CHARS {
+            return Err(RuleApplicationError::work(
+                "normalized correction input exceeds the safety budget",
+            ));
+        }
+        Ok(())
+    }
+
+    fn add_search_steps(&mut self, count: usize) -> Result<(), RuleApplicationError> {
+        self.search_steps = self
+            .search_steps
+            .checked_add(count)
+            .ok_or_else(|| RuleApplicationError::work("correction search work overflows"))?;
+        if self.search_steps > MAX_CORRECTION_SEARCH_STEPS {
+            return Err(RuleApplicationError::work(
+                "correction search exceeds the safety budget",
+            ));
+        }
+        Ok(())
+    }
+
+    fn check_output(
+        &mut self,
+        current_segment_chars: usize,
+        output_chars: usize,
+    ) -> Result<(), RuleApplicationError> {
+        let other_chars = self.current_chars.saturating_sub(current_segment_chars);
+        let total = other_chars
+            .checked_add(output_chars)
+            .ok_or_else(RuleApplicationError::absolute)?;
+        if total > MAX_CORRECTION_OUTPUT_CHARS {
+            return Err(RuleApplicationError::absolute());
+        }
+        let relative_limit = self
+            .original_chars
+            .checked_mul(MAX_CORRECTION_AMPLIFICATION)
+            .ok_or_else(RuleApplicationError::relative)?;
+        if self.original_chars > 0 && total > relative_limit {
+            return Err(RuleApplicationError::relative());
+        }
+        self.current_chars = total;
+        Ok(())
+    }
+}
+
 fn apply_rules_to_segment(
     segment: &TranscriptSegment,
-    rules: &[PersonalCorrectionRule],
+    rules: &[CompiledPersonalCorrectionRule],
+    budget: &mut UtteranceBudget,
 ) -> Result<SegmentApplication, RuleApplicationError> {
     let original_text = segment.text.as_str();
-    let original_length = original_text.chars().count();
+    if original_text.chars().count() > MAX_CORRECTION_INPUT_CHARS {
+        return Err(RuleApplicationError::work(
+            "correction input exceeds the safety budget",
+        ));
+    }
+    let mut normalized = NormalizedInput::new(original_text, budget)?;
     let mut text: Option<String> = None;
-    let mut applied_rule_count = 0;
+    let mut applied_rule_indices = Vec::new();
     let mut replacement_count = 0;
 
-    for rule in rules.iter().filter(|rule| rule.enabled) {
+    for (index, rule) in rules.iter().enumerate() {
+        if !rule.enabled {
+            continue;
+        }
         let current = text.as_deref().unwrap_or(original_text);
-        let application = preflight_rule(current, rule, original_length)?;
+        let current_chars = current.chars().count();
+        let application = preflight_rule(&normalized, rule, current_chars, budget)?;
         if application.matches.is_empty() {
             continue;
         }
-        let next = match text.take() {
-            Some(current) => materialize_rule(&current, rule, &application.matches),
-            None => materialize_rule(original_text, rule, &application.matches),
-        };
+        let next = materialize_rule(current, &rule.replace, &application.matches);
         text = Some(next);
-        applied_rule_count += 1;
+        applied_rule_indices.push(index);
         replacement_count += application.matches.len();
+        normalized = NormalizedInput::new(text.as_deref().unwrap_or(original_text), budget)?;
     }
 
     let Some(text) = text else {
         return Ok(SegmentApplication {
-            applied_rule_count,
+            applied_rule_indices,
             changed: false,
             replacement_count,
             segment: segment.clone(),
@@ -176,7 +309,7 @@ fn apply_rules_to_segment(
     };
 
     Ok(SegmentApplication {
-        applied_rule_count,
+        applied_rule_indices,
         changed: text != original_text,
         replacement_count,
         segment: TranscriptSegment {
@@ -187,109 +320,159 @@ fn apply_rules_to_segment(
 }
 
 fn preflight_rule(
-    input: &str,
-    rule: &PersonalCorrectionRule,
-    original_length: usize,
+    normalized: &NormalizedInput<'_>,
+    rule: &CompiledPersonalCorrectionRule,
+    current_segment_chars: usize,
+    budget: &mut UtteranceBudget,
 ) -> Result<RuleApplication, RuleApplicationError> {
-    let matches = find_matches(input, &rule.find);
-    let input_length = input.chars().count();
-    let replace_length = rule.replace.chars().count();
-    let removed = matches
-        .iter()
-        .try_fold(0_usize, |total, &(start, end)| {
-            total.checked_add(input[start..end].chars().count())
-        })
-        .ok_or_else(|| RuleApplicationError {
-            code: "absolute_amplification",
-            message: "personal correction length overflow".to_string(),
-        })?;
+    let candidate_count = rule
+        .first_scalar
+        .and_then(|scalar| normalized.first_scalar_indices.get(&scalar))
+        .map_or(0, Vec::len);
+    budget.add_search_steps(candidate_count)?;
+    let matches = find_matches(normalized, rule);
+    let replace_length = rule.replace_chars;
+    let removed = matches.iter().try_fold(0_usize, |total, &(start, end)| {
+        total.checked_add(normalized.input[start..end].chars().count())
+    });
+    let removed = removed.ok_or_else(RuleApplicationError::absolute)?;
     let added = replace_length
         .checked_mul(matches.len())
-        .ok_or_else(|| RuleApplicationError {
-            code: "absolute_amplification",
-            message: "personal correction length overflow".to_string(),
-        })?;
-    let output_length = input_length
+        .ok_or_else(RuleApplicationError::absolute)?;
+    let output_length = current_segment_chars
         .checked_sub(removed)
         .and_then(|length| length.checked_add(added))
         .ok_or_else(RuleApplicationError::absolute)?;
-
-    if output_length > MAX_CORRECTION_OUTPUT_CHARS {
-        return Err(RuleApplicationError::absolute());
-    }
-    let relative_limit = original_length
-        .checked_mul(MAX_CORRECTION_AMPLIFICATION)
-        .ok_or_else(RuleApplicationError::relative)?;
-    if original_length > 0 && output_length > relative_limit {
-        return Err(RuleApplicationError::relative());
-    }
-
+    budget.check_output(current_segment_chars, output_length)?;
     Ok(RuleApplication { matches })
 }
 
-fn materialize_rule(
-    input: &str,
-    rule: &PersonalCorrectionRule,
-    matches: &[(usize, usize)],
-) -> String {
+fn materialize_rule(input: &str, replace: &str, matches: &[(usize, usize)]) -> String {
     let mut output = String::with_capacity(input.len());
     let mut cursor = 0;
     for &(start, end) in matches {
         output.push_str(&input[cursor..start]);
-        output.push_str(&rule.replace);
+        output.push_str(replace);
         cursor = end;
     }
     output.push_str(&input[cursor..]);
     output
 }
 
-fn find_matches(input: &str, find: &str) -> Vec<(usize, usize)> {
-    let normalized_input: Vec<char> = input.nfd().collect();
-    let normalized_find: Vec<char> = find.nfd().collect();
-    let original_chars: Vec<char> = input.chars().collect();
-    let original_boundaries = char_boundaries(&original_chars);
-    let original_prefix_lengths = (normalized_input.len() != original_chars.len())
-        .then(|| nfd_prefix_lengths(&original_chars));
-    let mut matches = Vec::new();
-    let mut index = 0;
+struct NormalizedInput<'a> {
+    chars: Vec<char>,
+    first_scalar_indices: HashMap<char, Vec<usize>>,
+    input: &'a str,
+    original_boundaries: Vec<usize>,
+    original_chars: Vec<char>,
+    original_prefix_lengths: Option<Vec<usize>>,
+}
 
-    while index + normalized_find.len() <= normalized_input.len() {
-        if !same_code_points(&normalized_input, index, &normalized_find) {
-            index += 1;
+impl<'a> NormalizedInput<'a> {
+    fn new(input: &'a str, budget: &mut UtteranceBudget) -> Result<Self, RuleApplicationError> {
+        let original_chars = input.chars().collect::<Vec<_>>();
+        let original_prefix_lengths = (original_chars
+            .iter()
+            .any(|character| character.to_string().nfd().count() > 1))
+        .then(|| nfd_prefix_lengths(&original_chars));
+        let normalized_len = input.nfd().count();
+        if normalized_len > MAX_CORRECTION_INPUT_CHARS {
+            return Err(RuleApplicationError::work(
+                "normalized correction input exceeds the safety budget",
+            ));
+        }
+        let normalized = input.nfd().collect::<Vec<_>>();
+        budget.add_normalized(normalized.len())?;
+        let mut first_scalar_indices = HashMap::new();
+        for (index, character) in normalized.iter().copied().enumerate() {
+            first_scalar_indices
+                .entry(character)
+                .or_insert_with(Vec::new)
+                .push(index);
+        }
+        Ok(Self {
+            chars: normalized,
+            first_scalar_indices,
+            input,
+            original_boundaries: char_boundaries(&original_chars),
+            original_chars,
+            original_prefix_lengths,
+        })
+    }
+}
+
+fn find_matches(
+    normalized: &NormalizedInput<'_>,
+    rule: &CompiledPersonalCorrectionRule,
+) -> Vec<(usize, usize)> {
+    let Some(first_scalar) = rule.first_scalar else {
+        return Vec::new();
+    };
+    let mut matches = Vec::new();
+    for &index in normalized
+        .first_scalar_indices
+        .get(&first_scalar)
+        .into_iter()
+        .flatten()
+    {
+        if index + rule.normalized_find.len() > normalized.chars.len() {
+            continue;
+        }
+        if !same_code_points(&normalized.chars, index, &rule.normalized_find) {
+            continue;
+        }
+        if !is_safe_original_boundary(normalized, index)
+            || !is_safe_original_boundary(normalized, index + rule.normalized_find.len())
+        {
             continue;
         }
         let before_index = index.checked_sub(1);
-        let after_index = index + normalized_find.len();
-        let start_edge = word_edge(&normalized_find, 0, 1);
+        let after_index = index + rule.normalized_find.len();
+        let start_edge = word_edge(&rule.normalized_find, 0, 1);
         let end_edge = word_edge(
-            &normalized_find,
-            normalized_find.len().saturating_sub(1),
+            &rule.normalized_find,
+            rule.normalized_find.len().saturating_sub(1),
             -1,
         );
-        if is_boundary(start_edge, &normalized_input, before_index, 1)
-            || is_boundary(end_edge, &normalized_input, Some(after_index), -1)
+        if is_boundary(start_edge, &normalized.chars, before_index, 1)
+            || is_boundary(end_edge, &normalized.chars, Some(after_index), -1)
         {
-            index += 1;
             continue;
         }
-        let start = map_normalized_boundary(
-            &original_chars,
-            &original_boundaries,
-            index,
-            normalized_input.len(),
-            original_prefix_lengths.as_deref(),
-        );
-        let end = map_normalized_boundary(
-            &original_chars,
-            &original_boundaries,
-            after_index,
-            normalized_input.len(),
-            original_prefix_lengths.as_deref(),
-        );
-        matches.push((start, end));
-        index = after_index;
+        matches.push((
+            map_safe_boundary(normalized, index),
+            map_safe_boundary(normalized, after_index),
+        ));
     }
     matches
+}
+
+fn is_safe_original_boundary(normalized: &NormalizedInput<'_>, index: usize) -> bool {
+    if normalized
+        .original_prefix_lengths
+        .as_ref()
+        .is_some_and(|prefixes| !prefixes.contains(&index))
+    {
+        return false;
+    }
+    // A decomposed base scalar followed by its combining mark is also a
+    // partial canonical match: replacing the base alone would strand the
+    // combining mark in the transcript.
+    !normalized
+        .original_chars
+        .get(index)
+        .is_some_and(|character| is_combining_mark(*character))
+}
+
+fn map_safe_boundary(normalized: &NormalizedInput<'_>, index: usize) -> usize {
+    if let Some(prefixes) = &normalized.original_prefix_lengths {
+        let scalar_index = prefixes
+            .iter()
+            .position(|value| *value == index)
+            .unwrap_or(0);
+        return normalized.original_boundaries[scalar_index];
+    }
+    normalized.original_boundaries[index.min(normalized.original_boundaries.len() - 1)]
 }
 
 fn word_edge(chars: &[char], start: usize, direction: isize) -> Option<char> {
@@ -376,37 +559,32 @@ fn nfd_prefix_lengths(chars: &[char]) -> Vec<usize> {
     lengths
 }
 
-fn map_normalized_boundary(
-    original_chars: &[char],
-    original_boundaries: &[usize],
-    normalized_index: usize,
-    normalized_length: usize,
-    original_prefix_lengths: Option<&[usize]>,
+fn estimate_transcript_event_bytes(
+    segments: &[TranscriptSegment],
+    stage_history: &[crate::protocol::StageOutcome],
 ) -> usize {
-    if normalized_length == original_chars.len() {
-        return original_boundaries[normalized_index.min(original_chars.len())];
-    }
-    if let Some(prefix_lengths) = original_prefix_lengths
-        && let Some(exact_index) = prefix_lengths
-            .iter()
-            .position(|length| *length == normalized_index)
-    {
-        return original_boundaries[exact_index];
-    }
-    let approximate = normalized_index.min(original_chars.len());
-    let start = approximate.saturating_sub(8);
-    let end = (approximate + 9).min(original_chars.len());
-    let mut fallback = original_boundaries[approximate];
-    for candidate in start..=end {
-        let prefix: String = original_chars[..candidate].iter().collect();
-        if prefix.nfd().count() == normalized_index {
-            fallback = original_boundaries[candidate];
-            if candidate == approximate {
-                return fallback;
-            }
+    // JSON escaping can consume six bytes for one Unicode scalar. Count both
+    // the segment text and the duplicate joined `text` field conservatively,
+    // plus fixed metadata/frame overhead for words, timings, and stage history.
+    let mut estimate = 2_048usize;
+    for segment in segments {
+        estimate = estimate.saturating_add(256);
+        estimate = estimate.saturating_add(segment.text.chars().count().saturating_mul(6));
+        for word in &segment.words {
+            estimate = estimate.saturating_add(128);
+            estimate = estimate.saturating_add(word.text.chars().count().saturating_mul(6));
         }
     }
-    fallback
+    let joined_chars = segments
+        .iter()
+        .map(|segment| segment.text.chars().count())
+        .sum::<usize>();
+    estimate = estimate.saturating_add(joined_chars.saturating_mul(6));
+    estimate = estimate.saturating_add(segments.len().saturating_mul(8));
+    let history_bytes = serde_json::to_vec(stage_history)
+        .map(|bytes| bytes.len().saturating_mul(2))
+        .unwrap_or(MAX_FRAME_PAYLOAD);
+    estimate.saturating_add(history_bytes)
 }
 
 fn payload(value: UserRulesPayload) -> serde_json::Value {
@@ -481,6 +659,7 @@ mod tests {
             cancel_rx,
             context: None,
             correction_rules: rules,
+            compiled_correction_rules: None,
             family_capabilities: caps,
             is_final,
             language: "en",
@@ -512,8 +691,9 @@ mod tests {
 
     fn rule(find: &str, replace: &str) -> PersonalCorrectionRule {
         PersonalCorrectionRule {
-            enabled: true,
+            enabled: Some(true),
             find: find.to_string(),
+            id: format!("{find}-{replace}"),
             replace: replace.to_string(),
         }
     }
@@ -521,49 +701,100 @@ mod tests {
     #[test]
     fn matches_whole_words_with_unicode_letter_and_number_categories() {
         assert_eq!(
-            find_matches("cat concatenate cat cat_2 2cat", "cat"),
+            find_matches(
+                &NormalizedInput::new(
+                    "cat concatenate cat cat_2 2cat",
+                    &mut UtteranceBudget::new(100)
+                )
+                .unwrap(),
+                &compile_correction_rules(&[rule("cat", "x")])[0]
+            ),
             vec![(0, 3), (16, 19)]
         );
         assert_eq!(
-            find_matches("one １ Ⅻ e\u{301}", "e\u{301}"),
+            find_matches(
+                &NormalizedInput::new("one １ Ⅻ e\u{301}", &mut UtteranceBudget::new(100)).unwrap(),
+                &compile_correction_rules(&[rule("e\u{301}", "x")])[0]
+            ),
             vec![(12, 15)]
         );
-        assert!(find_matches("cafe\u{301}", "cafe").is_empty());
-        assert!(find_matches("cafe\u{301}x", "cafe\u{301}").is_empty());
-        assert_eq!(find_matches("é é", "é"), vec![(0, 2), (3, 5)]);
+        assert!(
+            find_matches(
+                &NormalizedInput::new("cafe\u{301}", &mut UtteranceBudget::new(100)).unwrap(),
+                &compile_correction_rules(&[rule("cafe", "x")])[0]
+            )
+            .is_empty()
+        );
+        assert!(
+            find_matches(
+                &NormalizedInput::new("cafe\u{301}x", &mut UtteranceBudget::new(100)).unwrap(),
+                &compile_correction_rules(&[rule("cafe\u{301}", "x")])[0]
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            find_matches(
+                &NormalizedInput::new("é é", &mut UtteranceBudget::new(100)).unwrap(),
+                &compile_correction_rules(&[rule("é", "x")])[0]
+            ),
+            vec![(0, 2), (3, 5)]
+        );
+    }
+
+    #[test]
+    fn rejects_partial_canonical_scalar_matches() {
+        let normalized = NormalizedInput::new("café", &mut UtteranceBudget::new(100)).unwrap();
+        let compiled = compile_correction_rules(&[rule("cafe", "tea")]);
+        assert!(find_matches(&normalized, &compiled[0]).is_empty());
     }
 
     #[test]
     fn matches_nfd_forms_but_preserves_replacement_text() {
-        let result = apply_rules_to_segment(&segment("cafe\u{301}"), &[rule("café", "coffee")])
-            .expect("NFD match should succeed");
+        let mut budget = UtteranceBudget::new(4);
+        let result = apply_rules_to_segment(
+            &segment("cafe\u{301}"),
+            &compile_correction_rules(&[rule("café", "coffee")]),
+            &mut budget,
+        )
+        .expect("NFD match should succeed");
         assert_eq!(result.segment.text, "coffee");
     }
 
     #[test]
     fn rejects_relative_amplification_before_materializing() {
-        let error = apply_rules_to_segment(&segment("a"), &[rule("a", "aaaaaaaaa")])
-            .expect_err("nine times expansion must be rejected");
+        let mut budget = UtteranceBudget::new(1);
+        let error = apply_rules_to_segment(
+            &segment("a"),
+            &compile_correction_rules(&[rule("a", "aaaaaaaaa")]),
+            &mut budget,
+        )
+        .expect_err("nine times expansion must be rejected");
         assert_eq!(error.code, "relative_amplification");
     }
 
     #[test]
     fn rejects_absolute_amplification_before_materializing() {
         let input = "a ".repeat(MAX_CORRECTION_OUTPUT_CHARS / 2);
-        let error = apply_rules_to_segment(&segment(&input), &[rule("a", "aa")])
-            .expect_err("absolute amplification must be rejected");
+        let mut budget = UtteranceBudget::new(input.chars().count());
+        let error = apply_rules_to_segment(
+            &segment(&input),
+            &compile_correction_rules(&[rule("a", "aa")]),
+            &mut budget,
+        )
+        .expect_err("absolute amplification must be rejected");
         assert_eq!(error.code, "absolute_amplification");
     }
 
     #[test]
     fn rejects_ordered_doubling_cascade_at_the_budget() {
-        let rules = [
+        let rules = compile_correction_rules(&[
             rule("a", "aa"),
             rule("aa", "aaaa"),
             rule("aaaa", "aaaaaaaa"),
             rule("aaaaaaaa", "aaaaaaaaaaaaaaaa"),
-        ];
-        let error = apply_rules_to_segment(&segment("a"), &rules)
+        ]);
+        let mut budget = UtteranceBudget::new(1);
+        let error = apply_rules_to_segment(&segment("a"), &rules, &mut budget)
             .expect_err("ordered doubling must eventually be rejected");
         assert_eq!(error.code, "relative_amplification");
     }
@@ -577,7 +808,6 @@ mod tests {
             &post_engine_processors(),
             &context(&rules, true),
         );
-
         let post_engine = &final_transcript.stage_history[1..];
         assert_eq!(post_engine.len(), 2);
         assert_eq!(post_engine[0].stage_id, StageId::HallucinationFilter);
@@ -588,9 +818,70 @@ mod tests {
 
     #[test]
     fn stage_never_concatenates_across_segment_boundaries() {
-        let result = apply_rules_to_segment(&segment("one"), &[rule("two", "2")])
-            .expect("second segment should not be joined to the first");
+        let mut budget = UtteranceBudget::new(3);
+        let result = apply_rules_to_segment(
+            &segment("one"),
+            &compile_correction_rules(&[rule("two", "2")]),
+            &mut budget,
+        )
+        .expect("second segment should not be joined to the first");
         assert_eq!(result.segment.text, "one");
+    }
+
+    #[test]
+    fn counts_each_applied_rule_once_across_segments() {
+        let rules = [rule("one", "1")];
+        let mut transcript = transcript(vec![segment("one"), segment("one")]);
+        transcript.segments[1].start_ms = 1_000;
+        transcript.segments[1].end_ms = 2_000;
+        let result = UserRulesStage.process(&transcript, &context(&rules, true));
+        let StageProcess::Ok {
+            payload: Some(payload),
+            ..
+        } = result
+        else {
+            panic!("expected correction stage success");
+        };
+        assert_eq!(payload.get("appliedRuleCount"), Some(&serde_json::json!(1)));
+        assert_eq!(payload.get("replacementCount"), Some(&serde_json::json!(2)));
+    }
+
+    #[test]
+    fn work_budget_rejects_many_long_near_matches_without_wall_clock_assumptions() {
+        let rules = (0..100)
+            .map(|_| rule(&format!("a{}", "b".repeat(255)), "x"))
+            .collect::<Vec<_>>();
+        let transcript = transcript(vec![segment(&"a".repeat(100_000))]);
+        let result = UserRulesStage.process(&transcript, &context(&rules, true));
+        let StageProcess::Failed { error, .. } = result else {
+            panic!("expected work budget failure");
+        };
+        assert!(error.contains("work_budget"));
+        assert_eq!(transcript.segments[0].text, "a".repeat(100_000));
+    }
+
+    #[test]
+    fn frame_budget_keeps_original_transcript_and_records_failed_stage() {
+        let mut source = segment("a");
+        source.words = vec![crate::protocol::TranscriptWord {
+            end_ms: 1,
+            start_ms: 0,
+            text: "x".repeat(3_000_000),
+            timestamp_source: TimestampSource::Engine,
+        }];
+        let mut transcript = transcript(vec![source]);
+        let original_text = transcript.segments[0].text.clone();
+        run_post_engine(
+            &mut transcript,
+            &post_engine_processors(),
+            &context(&[rule("z", "y")], true),
+        );
+        assert_eq!(transcript.segments[0].text, original_text);
+        assert_eq!(transcript.stage_history.len(), 3);
+        assert!(matches!(
+            transcript.stage_history.last().map(|stage| &stage.status),
+            Some(StageStatus::Failed { error }) if error.contains("frame_budget")
+        ));
     }
 
     #[test]
@@ -599,7 +890,6 @@ mod tests {
         let partial = transcript(vec![segment("one")]);
         let result = UserRulesStage.process(&partial, &context(&rules, false));
         assert!(matches!(result, StageProcess::Skipped { .. }));
-
         let mut final_transcript = transcript(vec![segment("one"), segment("two")]);
         final_transcript.segments[1].start_ms = 1_000;
         final_transcript.segments[1].end_ms = 2_000;
@@ -619,6 +909,67 @@ mod tests {
                 );
             }
             _ => panic!("expected correction stage success"),
+        }
+    }
+
+    #[test]
+    fn consumes_shared_golden_vectors() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../test/fixtures/personal-correction-golden.json"
+        ))
+        .expect("golden fixture should parse");
+        for case in fixture["cases"]
+            .as_array()
+            .expect("cases should be an array")
+        {
+            let id = case["id"].as_str().expect("case id");
+            let input = case["input"].as_str().expect("case input");
+            let rules: Vec<PersonalCorrectionRule> = serde_json::from_value(case["rules"].clone())
+                .expect("golden rules should deserialize");
+            let compiled_rules = compile_correction_rules(&rules);
+            if let Some(source_segments) = case["segments"].as_array() {
+                let source_segments = source_segments
+                    .iter()
+                    .map(|value| {
+                        serde_json::from_value::<TranscriptSegment>(value.clone())
+                            .expect("segment should deserialize")
+                    })
+                    .collect::<Vec<_>>();
+                let original_total = source_segments
+                    .iter()
+                    .map(|segment| segment.text.chars().count())
+                    .sum();
+                let mut budget = UtteranceBudget::new(original_total);
+                let actual_segments = source_segments
+                    .iter()
+                    .map(|source| {
+                        apply_rules_to_segment(source, &compiled_rules, &mut budget)
+                            .expect("metadata vector should apply")
+                            .segment
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    serde_json::to_value(&actual_segments).expect("segments serialize"),
+                    case["expectedSegments"],
+                    "{id}"
+                );
+                continue;
+            }
+            let source_segment = segment(input);
+            let mut budget = UtteranceBudget::new(source_segment.text.chars().count());
+            let result = apply_rules_to_segment(&source_segment, &compiled_rules, &mut budget);
+            if let Some(error_code) = case["errorCode"].as_str() {
+                assert_eq!(
+                    result.expect_err("cascade vector should fail").code,
+                    error_code,
+                    "{id}"
+                );
+            } else {
+                let result = result.expect("golden vector should apply");
+                if let Some(expected) = case["expected"].as_str() {
+                    assert_eq!(result.segment.text, expected, "{id}");
+                }
+            }
         }
     }
 }

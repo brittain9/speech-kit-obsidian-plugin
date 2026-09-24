@@ -12,6 +12,10 @@ use crate::transcription::{SegmentDiagnostics, Transcript};
 mod hallucination_filter;
 mod user_rules;
 
+pub use user_rules::{
+    CompiledPersonalCorrectionRule, CompiledPersonalCorrectionRules, compile_correction_rules,
+};
+
 /// Boolean opt-out for stages that always have a runtime config to consume.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StageEnablement {
@@ -30,6 +34,7 @@ pub struct StageContext<'a> {
     pub cancel_rx: &'a tokio::sync::watch::Receiver<bool>,
     pub context: Option<&'a crate::protocol::ContextWindow>,
     pub correction_rules: &'a [PersonalCorrectionRule],
+    pub compiled_correction_rules: Option<&'a [CompiledPersonalCorrectionRule]>,
     pub family_capabilities: &'a ModelFamilyCapabilities,
     pub is_final: bool,
     pub language: &'a str,
@@ -376,6 +381,7 @@ mod tests {
             cancel_rx: &cancel_rx,
             context: None,
             correction_rules: &[],
+            compiled_correction_rules: None,
             family_capabilities: &caps,
             is_final: true,
             language: "en",
@@ -402,6 +408,7 @@ mod tests {
             cancel_rx: &cancel_rx,
             context: None,
             correction_rules: &[],
+            compiled_correction_rules: None,
             family_capabilities: &caps,
             is_final: false,
             language: "en",

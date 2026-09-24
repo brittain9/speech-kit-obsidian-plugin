@@ -1,0 +1,100 @@
+{
+  "cases": [
+    {
+      "id": "literal-order",
+      "input": "cat concatenate cat cat_2 2cat",
+      "rules": [
+        { "id": "cat-to-dog", "enabled": true, "find": "cat", "replace": "dog" },
+        { "id": "dog-to-fox", "enabled": true, "find": "dog", "replace": "fox" }
+      ],
+      "expected": "fox concatenate fox cat_2 2cat",
+      "replacements": 4,
+      "rulesApplied": 2
+    },
+    {
+      "id": "whole-word-boundaries",
+      "input": "one １ Ⅻ e\u0301",
+      "rules": [{ "id": "accented", "enabled": true, "find": "e\u0301", "replace": "E" }],
+      "expected": "one １ Ⅻ E",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "nfd-canonical-safety",
+      "input": "café cafe",
+      "rules": [{ "id": "partial-base", "enabled": true, "find": "cafe", "replace": "tea" }],
+      "expected": "café tea",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "nfd-whole-character",
+      "input": "café café",
+      "rules": [{ "id": "whole-character", "enabled": true, "find": "café", "replace": "coffee" }],
+      "expected": "coffee coffee",
+      "replacements": 2,
+      "rulesApplied": 1
+    },
+    {
+      "id": "cascade-budget",
+      "input": "a",
+      "rules": [
+        { "id": "double-1", "enabled": true, "find": "a", "replace": "aa" },
+        { "id": "double-2", "enabled": true, "find": "aa", "replace": "aaaa" },
+        { "id": "double-3", "enabled": true, "find": "aaaa", "replace": "aaaaaaaa" },
+        { "id": "double-4", "enabled": true, "find": "aaaaaaaa", "replace": "aaaaaaaaaaaaaaaa" }
+      ],
+      "expected": null,
+      "errorCode": "relative_amplification"
+    },
+    {
+      "id": "metadata-and-segments",
+      "input": "one two",
+      "segments": [
+        {
+          "startMs": 0,
+          "endMs": 1200,
+          "speaker": 0,
+          "text": "one",
+          "timestampGranularity": "word",
+          "timestampSource": "engine",
+          "words": [{ "startMs": 0, "endMs": 500, "text": "one", "timestampSource": "engine" }]
+        },
+        {
+          "startMs": 1200,
+          "endMs": 2400,
+          "speaker": 1,
+          "text": "two",
+          "timestampGranularity": "segment",
+          "timestampSource": "interpolated",
+          "words": [
+            { "startMs": 1200, "endMs": 2400, "text": "two", "timestampSource": "interpolated" }
+          ]
+        }
+      ],
+      "rules": [{ "id": "one", "enabled": true, "find": "one", "replace": "1" }],
+      "expectedSegments": [
+        {
+          "startMs": 0,
+          "endMs": 1200,
+          "speaker": 0,
+          "text": "1",
+          "timestampGranularity": "word",
+          "timestampSource": "engine",
+          "words": [{ "startMs": 0, "endMs": 500, "text": "one", "timestampSource": "engine" }]
+        },
+        {
+          "startMs": 1200,
+          "endMs": 2400,
+          "speaker": 1,
+          "text": "two",
+          "timestampGranularity": "segment",
+          "timestampSource": "interpolated",
+          "words": [
+            { "startMs": 1200, "endMs": 2400, "text": "two", "timestampSource": "interpolated" }
+          ]
+        }
+      ]
+    }
+  ]
+}

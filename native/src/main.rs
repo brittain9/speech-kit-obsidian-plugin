@@ -164,14 +164,27 @@ fn spawn_system_audio_probe(tx: Sender<InputMessage>) {
 
 fn write_events(writer: &mut impl Write, events: Vec<Event>) -> Result<()> {
     for event in events {
-        match event {
+        let result = match &event {
             Event::SynthesisAudio {
                 synthesis_id,
                 seq,
                 pcm16le,
-            } => write_synthesis_audio_frame(writer, synthesis_id, seq, &pcm16le)
-                .context("failed to write synthesis audio frame")?,
-            event => write_event_frame(writer, &event).context("failed to write event frame")?,
+            } => write_synthesis_audio_frame(writer, *synthesis_id, *seq, pcm16le)
+                .context("failed to write synthesis audio frame"),
+            event => write_event_frame(writer, event).context("failed to write event frame"),
+        };
+        if let Err(error) = result {
+            // A payload-cap failure must not terminate the protocol loop or leave
+            // the renderer waiting for a frame that can never be written. Emit a
+            // small typed error event instead; writer I/O failures are returned.
+            let fallback = Event::Error {
+                code: "event_frame_too_large".to_string(),
+                details: Some(format!("{error:#}")),
+                message: "A sidecar event exceeded the frame payload limit.".to_string(),
+                session_id: None,
+            };
+            write_event_frame(writer, &fallback)
+                .context("failed to write frame-size error event")?;
         }
     }
 
@@ -183,7 +196,8 @@ mod tests {
     use std::io::Cursor;
     use std::sync::mpsc;
 
-    use super::{InputMessage, read_inputs};
+    use super::{InputMessage, read_inputs, write_events};
+    use local_dictation_sidecar::protocol::{Event, MAX_FRAME_PAYLOAD, read_json_frame};
 
     #[test]
     fn oversized_frame_terminates_the_reader_without_parsing_payload_bytes() {
@@ -205,6 +219,26 @@ mod tests {
                 details,
                 fatal: true,
             } if details.contains("frame payload exceeds maximum supported size")
+        ));
+    }
+
+    #[test]
+    fn oversized_events_are_replaced_by_a_typed_error_frame() {
+        let code = "oversized".to_string();
+        let event = Event::Error {
+            code,
+            details: None,
+            message: "x".repeat(MAX_FRAME_PAYLOAD),
+            session_id: None,
+        };
+        let mut output = Vec::new();
+        write_events(&mut output, vec![event]).expect("fallback event should write");
+        let fallback: Event = read_json_frame(&mut output.as_slice())
+            .expect("fallback frame should parse")
+            .expect("fallback frame should exist");
+        assert!(matches!(
+            fallback,
+            Event::Error { ref code, .. } if code == "event_frame_too_large"
         ));
     }
 }

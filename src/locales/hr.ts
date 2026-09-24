@@ -909,6 +909,12 @@ export const hr = {
   'models.current.validateBeforeDictating': 'Provjerite datoteku vanjskog modela prije diktiranja.',
   'sidecarError.audio_too_long':
     'Zvučni isječak premašuje najdulje dopušteno trajanje za ovaj govorni modul.',
+
+  'sidecarError.event_frame_too_large':
+    'Govorni modul stvorio je događaj koji prelazi sigurnosno ograničenje okvira.',
+  'sidecarError.invalid_correction_rules':
+    'Osobna pravila ispravka nisu valjana. Ispravite ih prije početka diktiranja.',
+
   'sidecarError.engine_inference_failed': 'Lokalna transkripcija nije uspjela.',
   'sidecarError.internal_error': 'U govornom modulu došlo je do interne pogreške.',
   'sidecarError.invalid_audio_buffer':
@@ -1009,6 +1015,9 @@ export const hr = {
     'Govorni modul nije moguće instalirati. Pojedinosti potražite u zapisnicima dodatka, a zatim pokušajte ponovno.',
   'notice.personalCorrectionRulesSnapshot':
     'Ova sesija koristi {enabled} od {total} osobnih pravila ispravka. Promjene se primjenjuju u sljedećoj sesiji.',
+  'notice.personalCorrectionRulesInvalid':
+    'Postavke osobnih ispravaka nisu valjane: {reason} Ispravite ih prije početka diktiranja.',
+
   'settings.corrections.name': 'Osobna pravila ispravka',
   'settings.corrections.desc':
     'Primjenjuje lokalne, uređene doslovne ispravke nakon transkripcije. Pravila se primjenjuju na završne segmente u sljedećoj sesiji; nisu ASR rječnik ni hotwords.',
@@ -1021,23 +1030,39 @@ export const hr = {
   'settings.corrections.modal.previewOutput': 'Ispravljena transkripcija',
   'settings.corrections.modal.add': 'Dodaj pravilo',
   'settings.corrections.modal.empty': 'Još nema pravila ispravka.',
-  'settings.corrections.modal.counts': '{enabled} omogućeno · ukupno {total}',
-  'settings.corrections.modal.previewSummary': '{replacements} zamjena iz {rules} pravila.',
+  'settings.corrections.modal.countsOne': '{enabled} omogućeno · ukupno {total} pravilo',
+  'settings.corrections.modal.countsOther': '{enabled} omogućeno · ukupno {total} pravila',
+  'settings.corrections.modal.previewSummaryOne': '{replacements} zamjena iz {rules} pravila',
+  'settings.corrections.modal.previewSummaryOther': '{replacements} zamjena iz {rules} pravila',
   'settings.corrections.modal.find': 'Pronaći',
   'settings.corrections.modal.replace': 'Zamijeni s',
   'settings.corrections.modal.enabled': 'Omogućeno',
   'settings.corrections.modal.moveUp': 'Pomakni gore',
   'settings.corrections.modal.moveDown': 'Pomakni dolje',
   'settings.corrections.modal.delete': 'Izbriši pravilo',
+  'settings.corrections.modal.saving': 'Spremanje…',
+  'settings.corrections.modal.saved': 'Spremljeno',
+  'settings.corrections.modal.failed': 'Nije spremljeno. Ispravite pravila i pokušajte ponovno.',
   'settings.corrections.modal.invalid':
     'Ispravite označeno pravilo prije spremanja ili pretpregleda.',
   'settings.corrections.field.find': 'Pronaći',
+  'settings.corrections.field.enabled': 'Omogućeno',
+  'settings.corrections.field.id': 'ID pravila',
   'settings.corrections.field.replace': 'Zamijeni s',
+  'settings.corrections.field.rules': 'Pravila',
   'settings.corrections.validation.tooMany': 'Dodajte najviše {max} pravila.',
   'settings.corrections.validation.blankId': 'Svako pravilo potrebuje ID.',
+  'settings.corrections.validation.invalidId': 'ID pravila mora biti tekst.',
+  'settings.corrections.validation.oversizedId': 'ID pravila ne može premašiti {max} znakova.',
+  'settings.corrections.validation.invalidEnabled': 'Omogućeno mora biti uključeno ili isključeno.',
+  'settings.corrections.validation.invalidFind': 'Tekst za pronalazak mora biti tekst.',
   'settings.corrections.validation.duplicateId': 'ID-ovi pravila moraju biti jedinstveni.',
   'settings.corrections.validation.blankFind': 'Tekst za pronalazak ne može biti prazan.',
   'settings.corrections.validation.blankReplace': 'Zamjenski tekst ne može biti prazan.',
+  'settings.corrections.validation.invalidReplace': 'Zamjenski tekst mora biti tekst.',
+  'settings.corrections.validation.loneSurrogate':
+    'Tekst sadrži nevažeći Unicode nadreplak i ne može se spremiti.',
+  'settings.corrections.validation.context': 'Pravilo {index}, {field}: {reason}',
   'settings.corrections.validation.oversized': '{field} ne može premašiti {max} znakova.',
   'settings.corrections.validation.duplicateFind':
     'Tekst za pronalazak mora biti jedinstven; kasnija pravila ne mogu tražiti isti tekst.',

@@ -25,7 +25,12 @@ export function loadPluginSettings(
   const raw = isRecord(data) ? data : {};
   let settings = resolvePluginSettings(data);
   const needsSchemaMigration =
-    data !== null && data !== undefined && (!isRecord(data) || data.schemaVersion !== 11);
+    data !== null &&
+    data !== undefined &&
+    (!isRecord(data) ||
+      typeof data.schemaVersion !== 'number' ||
+      !Number.isInteger(data.schemaVersion) ||
+      data.schemaVersion < 11);
 
   if (!Object.hasOwn(raw, LEGACY_OPENROUTER_API_KEY)) {
     return { settings, shouldPersist: needsSchemaMigration };

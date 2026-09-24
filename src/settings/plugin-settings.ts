@@ -195,7 +195,7 @@ export interface PluginSettings {
   personalCorrectionRules: PersonalCorrectionRule[];
   readAloudLanguage: DictationLanguage;
   retainLastUtterance: boolean;
-  schemaVersion: 11;
+  schemaVersion: number;
   selectedModel: SelectedModel | null;
   // Last-known-good capabilities for `selectedModel`, captured on a successful
   // probe. Lets startup skip re-probing the sidecar (which forces a full
@@ -300,6 +300,11 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
 
 export function resolvePluginSettings(data: unknown): PluginSettings {
   const raw = isRecord(data) ? data : {};
+  const {
+    llmOpenRouterApiKey: _legacySecret,
+    llmPostprocessPrompt: _legacyPrompt,
+    ...preservedRaw
+  } = raw;
   const isFreshInstall = data === null || data === undefined;
   const smartParagraphPauses = normalizeSmartParagraphPauseSettings({
     lineBreakPauseMs: raw.smartParagraphLineBreakPauseMs,
@@ -315,6 +320,9 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
   const llmProviderConfigurations = readLlmProviderConfigurations(raw, legacyModel);
 
   return {
+    // Preserve fields introduced by a newer plugin/schema. Known fields below
+    // are normalized, while unknown fields survive subsequent save cycles.
+    ...preservedRaw,
     accelerationPreference: readAccelerationPreference(raw.accelerationPreference),
     audioInputDevice: readAudioInputDevice(raw.audioInputDevice),
     includeSystemAudio: readIncludeSystemAudio(raw),
@@ -404,7 +412,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       DEFAULT_PLUGIN_SETTINGS.retainLastUtterance,
     ),
     // Bump `schemaVersion` and add a migration step when renaming a key or changing default semantics.
-    schemaVersion: 11,
+    schemaVersion: readSchemaVersion(raw.schemaVersion),
     selectedModel: readSelectedModel(raw.selectedModel),
     // Automatic detection became a capability separate from language tags in
     // schema 4. Older snapshots cannot prove that exact-model behavior, so
@@ -585,6 +593,12 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 
 function readString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value.trim() : fallback;
+}
+
+function readSchemaVersion(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 11
+    ? value
+    : DEFAULT_PLUGIN_SETTINGS.schemaVersion;
 }
 
 export function normalizeTranslationStyleInstruction(value: unknown): string {

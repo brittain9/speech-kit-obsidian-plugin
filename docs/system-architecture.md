@@ -399,10 +399,36 @@ utterance-level VAD evidence. If nothing is dropped it records
 
 The **personal correction stage** applies the ordered, session-start rule
 snapshot independently within each final transcript segment. It preserves all
-segment boundaries, timing, IDs, speakers, and word timing, and rejects unsafe
-absolute or cascading relative amplification before materializing output. The
-full contract is in
-[`docs/specs/personal-corrections-v2.md`](specs/personal-corrections-v2.md).
+segment boundaries, timing, IDs, speakers, and word timing. Matching is literal,
+case-sensitive, ordered, and whole-word: Unicode `L`/`N` characters and `_` are
+word characters, NFD is used for comparison, and a candidate that starts or ends
+inside an original scalar's canonical expansion (or before a combining mark) is
+rejected rather than dropping the mark. The stage does not concatenate segments,
+run on partials, or cross the later diarization/LLM stages.
+
+The `start_session` command carries the complete `{ id, enabled, find, replace }`
+rule array. IDs are required and unique, `enabled` is required, finds are
+NFD-unique, and scalar limits are checked before a session is created. Invalid
+rules produce a typed `invalid_correction_rules` protocol error before any
+session or worker exists; there is no unreachable `invalid_rule` transcript-stage
+path. The settings boundary also validates the final immutable snapshot
+immediately before serialization, reporting a localized correction-settings error
+instead of sending a malformed frame. Persisted schema 11 data remains additive:
+unknown top-level fields and newer schema fields are retained, while malformed
+correction rules remain visible to validation rather than being silently dropped.
+
+The stage enforces utterance-wide absolute output (`1,000,000` characters),
+relative amplification (`8x`), normalized-input, indexed-search, and frame
+budgets. It precompiles and NFD-normalizes each rule once per session, reuses the
+normalized segment while a rule makes no change, and uses a first-scalar index
+plus a work budget so many long near-matches cannot monopolize the worker. The
+budget includes segment text, the duplicate joined transcript field, word
+metadata, stage history, and conservative JSON/frame overhead. A budget failure
+records `UserRules: Failed`, leaves the original transcript untouched, and keeps
+the complete ordered stage history. `write_event_frame` applies the symmetric
+`MAX_FRAME_PAYLOAD` cap; the main loop emits a small typed frame-size error event
+rather than terminating or desynchronizing the stream. A successful correction
+is reflected in both `transcript_ready.text` and the LLM input.
 
 ---
 
@@ -574,6 +600,7 @@ A representative slice of user-facing settings (full list and defaults in
 | `diarizationMaxSpeakers` | `null` | Optional positive cap on session-stable speaker labels; `null` detects automatically |
 | `dictationAnchor` | `at_cursor` | Where transcript text lands (`at_cursor` / `end_of_note`) |
 | `transcriptFormatting` | `smart` | How utterance boundaries render |
+| `personalCorrectionRules` | `[]` | Ordered local literal find/replace rules applied to final segments in the next session |
 | `timestampsEnabled` | `false` | Render timestamps in the note |
 | `timestampClock` | `elapsed` | `elapsed` session time vs `wallclock` |
 | `timestampDensity` | `sparse` | `sparse` (interval), `every_utterance`, or `paragraph` |

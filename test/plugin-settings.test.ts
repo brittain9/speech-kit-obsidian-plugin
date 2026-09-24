@@ -53,8 +53,14 @@ describe('resolvePluginSettings', () => {
     ).toBeNull();
   });
 
-  it('defaults missing schemaVersion to the current settings schema', () => {
-    expect(resolvePluginSettings({}).schemaVersion).toBe(11);
+  it('migrates every supported prior schema to schema 11', () => {
+    for (let schemaVersion = 1; schemaVersion < 11; schemaVersion += 1) {
+      const settings = resolvePluginSettings({ schemaVersion });
+      expect(settings.schemaVersion).toBe(11);
+      expect(settings.personalCorrectionRules).toEqual([]);
+    }
+    expect(resolvePluginSettings({ schemaVersion: 11 }).schemaVersion).toBe(11);
+    expect(resolvePluginSettings({ schemaVersion: 12 }).schemaVersion).toBe(12);
   });
 
   it('defaults and normalizes HY-MT2 translation styles', () => {
@@ -207,16 +213,38 @@ describe('resolvePluginSettings', () => {
     });
   });
 
-  it('drops invalid persisted correction rules while preserving valid rules', () => {
+  it('preserves unknown top-level and rule fields while migrating supported schemas', () => {
+    const settings = resolvePluginSettings({
+      schemaVersion: 4,
+      futureTopLevel: { keep: true },
+      personalCorrectionRules: [
+        {
+          enabled: true,
+          find: 'cat',
+          futureRuleField: 'keep',
+          id: 'rule-1',
+          replace: 'dog',
+        },
+      ],
+    });
+    expect((settings as unknown as Record<string, unknown>).futureTopLevel).toEqual({ keep: true });
     expect(
-      resolvePluginSettings({
-        personalCorrectionRules: [
-          { enabled: true, find: 'ok', id: 'valid', replace: 'yes' },
-          { enabled: true, find: ' ', id: 'blank', replace: 'yes' },
-          { enabled: true, find: 'ok', id: 'duplicate', replace: 'no' },
-        ],
-      }).personalCorrectionRules,
-    ).toEqual([{ enabled: true, find: 'ok', id: 'valid', replace: 'yes' }]);
+      (settings.personalCorrectionRules[0] as unknown as Record<string, unknown>).futureRuleField,
+    ).toBe('keep');
+  });
+
+  it('preserves malformed persisted correction rules for session-start validation', () => {
+    const rules = resolvePluginSettings({
+      personalCorrectionRules: [
+        { enabled: true, find: 'ok', id: 'valid', replace: 'yes' },
+        { enabled: true, find: ' ', id: 'blank', replace: 'yes' },
+        { enabled: true, find: 'ok', id: 'duplicate', replace: 'no' },
+      ],
+    }).personalCorrectionRules;
+
+    expect(rules).toHaveLength(3);
+    expect(rules[1]).toMatchObject({ find: ' ', id: 'blank' });
+    expect(rules[2]).toMatchObject({ find: 'ok', id: 'duplicate' });
   });
   it('migrates legacy speaker label setting to diarization', () => {
     expect(resolvePluginSettings({ speakerLabelsEnabled: true }).diarizationEnabled).toBe(true);
@@ -385,8 +413,13 @@ describe('resolvePluginSettings', () => {
         transcriptFormatting: 'tab',
         useNoteAsContext: 'yes',
       }),
-    ).toEqual({
+    ).toMatchObject({
       ...DEFAULT_PLUGIN_SETTINGS,
+      llmOpenRouterSecretId: 'Invalid secret ID',
+      llmProviderModels: 'llama3',
+      llmRemoteFeaturesEnabled: 'yes',
+      llmRemoteThresholdChars: 'soon',
+      llmRouting: 'claude',
       llmRoutingPolicy: { kind: 'fixed', providerId: 'ollama' },
     });
   });
