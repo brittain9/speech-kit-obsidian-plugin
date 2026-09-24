@@ -18,8 +18,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { AcquisitionEvent } from '../src/media/media-source';
 import {
+  claimJobRoot,
   createPathBackedMediaLease,
   openValidatedMediaFile,
+  removeMediaJob,
 } from '../src/media/path-backed-media-lease';
 import {
   discoverYtDlpCandidates,
@@ -279,6 +281,10 @@ describe('YouTube path-backed MediaLease', () => {
       }),
     ).rejects.toMatchObject({ code: 'integrity_failed' });
 
+    await expect(removeMediaJob(jobRoot as never)).rejects.toMatchObject({
+      code: 'integrity_failed',
+    });
+
     const lease = await createLease(jobRoot, mediaPath);
     const movedRoot = join(root, 'job-original');
     await rename(jobRoot, movedRoot);
@@ -287,6 +293,30 @@ describe('YouTube path-backed MediaLease', () => {
     await writeFile(replacementMarker, 'keep');
     await lease.release();
     await expect(readFile(replacementMarker)).resolves.toEqual(Buffer.from('keep'));
+  });
+
+  it('does not delete a replacement after the final cleanup capability is claimed', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-final-race-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    await writeFile(
+      join(jobRoot, 'owner.json'),
+      JSON.stringify({
+        heartbeatAt: Date.now(),
+        instanceId: 'test-instance',
+        pid: process.pid,
+        speechKitJob: true,
+      }),
+    );
+    const capability = await claimJobRoot(jobRoot);
+    const movedRoot = join(root, 'job-original');
+    await rename(jobRoot, movedRoot);
+    await (await import('node:fs/promises')).mkdir(jobRoot);
+    const marker = join(jobRoot, 'replacement.txt');
+    await writeFile(marker, 'keep');
+    await removeMediaJob(capability);
+    await expect(readFile(marker)).resolves.toEqual(Buffer.from('keep'));
   });
 
   it('settles a pending outer read when the lease is released', async () => {
@@ -397,12 +427,24 @@ describe('YouTubeMediaSource with a local fake helper', () => {
       code: 'extractor_changed',
     });
 
+    const staleHelperVersion = {
+      ...youtubeRequest(new AbortController().signal),
+      provider: {
+        ...youtubeRequest(new AbortController().signal).provider,
+        helperVersion: '2025.01.01',
+      },
+    };
+    await expect(collect(source.acquire(staleHelperVersion))).rejects.toMatchObject({
+      code: 'helper_version_unsupported',
+    });
+
     const missingConsent = {
       ...youtubeRequest(new AbortController().signal),
       provider: {
+        helperVersion: '2026.08.19',
         ref: parseYouTubeVideoUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ'),
       },
-    };
+    } as unknown as YouTubeMediaAcquireRequest;
     await expect(collect(source.acquire(missingConsent))).rejects.toMatchObject({
       code: 'rights_not_established',
     });
@@ -424,8 +466,22 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     await mkdir(current);
     await writeFile(join(current, 'owner.json'), JSON.stringify({ pid: process.pid }));
     await utimes(current, new Date(0), new Date(0));
+    const activeOld = join(root, 'speech-kit-youtube-active-old');
+    await mkdir(activeOld);
+    await writeFile(
+      join(activeOld, 'owner.json'),
+      JSON.stringify({ heartbeatAt: 20_000, pid: process.pid, speechKitJob: true }),
+    );
+    await utimes(activeOld, new Date(0), new Date(0));
+    const corrupt = join(root, 'speech-kit-youtube-corrupt');
+    await mkdir(corrupt);
+    await writeFile(join(corrupt, 'owner.json'), '{not-json');
+    await utimes(corrupt, new Date(0), new Date(0));
     await sweepAbandonedYouTubeJobs(root, { minAgeMs: 10, now: () => 20_000 });
-    await expect(readdir(root)).resolves.toEqual(['speech-kit-youtube-recent']);
+    await expect(readdir(root)).resolves.toEqual([
+      'speech-kit-youtube-active-old',
+      'speech-kit-youtube-recent',
+    ]);
   });
   it('cleans a partial private job root when directory setup fails', async () => {
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-partial-'));
@@ -546,6 +602,7 @@ function youtubeRequest(signal: AbortSignal): YouTubeMediaAcquireRequest {
     maxDurationMs: 30_000,
     provider: {
       consent: explicitYouTubeRightsConfirmation(),
+      helperVersion: '2026.08.19',
       ref: parseYouTubeVideoUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ'),
     },
     signal,

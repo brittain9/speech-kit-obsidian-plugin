@@ -1,15 +1,18 @@
+import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { type FileHandle, lstat, open, realpath, rm } from 'node:fs/promises';
-import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
+import { type FileHandle, lstat, open, readFile, realpath, rmdir } from 'node:fs/promises';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 
 import type { MediaLease, MediaProvenance, MediaReadStream } from './media-source';
 
 declare const validatedMediaFileBrand: unique symbol;
 declare const validatedRootBrand: unique symbol;
+declare const jobRootCapabilityBrand: unique symbol;
 
 const validatedMediaFiles = new WeakSet<object>();
+const jobRootCapabilities = new WeakSet<object>();
 
 export class PathMediaLeaseError extends Error {
   constructor(
@@ -34,6 +37,16 @@ export interface ValidatedRoot {
   readonly ino: number;
   readonly path: string;
   readonly realPath: string;
+}
+
+export interface JobRootCapability {
+  readonly [jobRootCapabilityBrand]: true;
+  readonly path: string;
+  readonly root: ValidatedRoot;
+}
+
+export interface JobRootClaimOptions {
+  readonly allowCorruptOwnerMarker?: boolean;
 }
 
 export interface ValidatedMediaFile {
@@ -230,27 +243,62 @@ export async function openValidatedMediaFile(
   }
 }
 
-export async function assertSafeMediaFile(
+export async function claimJobRoot(
   jobRoot: string,
-  mediaPath: string,
-  maxBytes: number,
-): Promise<void> {
-  const validated = await openValidatedMediaFile(jobRoot, mediaPath, maxBytes);
-  await validated.handle.close().catch(() => {});
-  await validated.root.handle.close().catch(() => {});
+  options: JobRootClaimOptions = {},
+): Promise<JobRootCapability> {
+  const root = await openValidatedRoot(resolve(jobRoot));
+  try {
+    if (options.allowCorruptOwnerMarker !== true) await assertOwnerMarker(root.path);
+    const capability = { path: root.path, root } as JobRootCapability;
+    jobRootCapabilities.add(capability);
+    return capability;
+  } catch (error) {
+    await root.handle.close().catch(() => {});
+    throw error;
+  }
 }
 
-export async function removeMediaJob(jobRoot: string): Promise<void> {
-  const validatedRoot = await openValidatedRoot(resolve(jobRoot));
+export async function removeMediaJob(capability: JobRootCapability): Promise<void> {
+  if (!jobRootCapabilities.has(capability)) {
+    throw new PathMediaLeaseError(
+      'integrity_failed',
+      'A validated job-root capability is required.',
+    );
+  }
   try {
-    await removeValidatedRoot(validatedRoot);
+    await removeValidatedRoot(capability.root);
   } finally {
-    await validatedRoot.handle.close().catch(() => {});
+    await capability.root.handle.close().catch(() => {});
   }
 }
 
 function isValidatedMediaFile(value: unknown): value is ValidatedMediaFile {
   return typeof value === 'object' && value !== null && validatedMediaFiles.has(value);
+}
+
+async function assertOwnerMarker(jobRoot: string): Promise<void> {
+  try {
+    const marker = JSON.parse(await readFile(join(jobRoot, 'owner.json'), 'utf8')) as {
+      instanceId?: unknown;
+      pid?: unknown;
+      speechKitJob?: unknown;
+    };
+    if (
+      marker.speechKitJob !== true ||
+      typeof marker.instanceId !== 'string' ||
+      marker.instanceId.length === 0 ||
+      typeof marker.pid !== 'number' ||
+      !Number.isInteger(marker.pid) ||
+      marker.pid <= 0
+    ) {
+      throw new Error('invalid owner marker');
+    }
+  } catch (error) {
+    throw new PathMediaLeaseError('integrity_failed', 'The job-root owner marker is invalid.', {
+      cause: error,
+    });
+  }
 }
 
 async function openValidatedRoot(jobRoot: string): Promise<ValidatedRoot> {
@@ -301,14 +349,50 @@ async function openValidatedRoot(jobRoot: string): Promise<ValidatedRoot> {
 
 async function removeValidatedRoot(root: ValidatedRoot): Promise<void> {
   try {
-    const current = await safeLstat(root.path);
-    assertDirectoryIdentity(current, root);
-    const currentReal = await realpath(root.path);
-    if (currentReal !== root.realPath) return;
-    await rm(root.path, { force: true, recursive: true });
+    await assertCurrentRoot(root);
+    await removeRootContentsFromHeldRoot(root);
+    await assertCurrentRoot(root);
+    await rmdir(root.path);
   } catch {
     // A missing or replaced root is intentionally left untouched.
   }
+}
+
+async function assertCurrentRoot(root: ValidatedRoot): Promise<void> {
+  const current = await safeLstat(root.path);
+  assertDirectoryIdentity(current, root);
+  const currentReal = await realpath(root.path);
+  if (currentReal !== root.realPath) {
+    throw new PathMediaLeaseError('integrity_failed', 'The media job root was replaced.');
+  }
+}
+
+async function removeRootContentsFromHeldRoot(root: ValidatedRoot): Promise<void> {
+  const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
+  const command =
+    process.platform === 'win32' ? `${systemRoot}\\System32\\rmdir.exe` : '/usr/bin/find';
+  const args =
+    process.platform === 'win32'
+      ? ['/s', '/q', root.path]
+      : ['.', '-mindepth', '1', '-maxdepth', '1', '-exec', '/bin/rm', '-rf', '--', '{}', '+'];
+  const cwd = root.path;
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      env: {
+        PATH: '',
+        SystemRoot: systemRoot,
+      },
+      shell: false,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    child.once('error', reject);
+    child.once('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error('job cleanup command failed'));
+    });
+  });
 }
 
 function assertDirectoryIdentity(
@@ -374,8 +458,4 @@ function safeNoFollowFlag(): number {
 
 function safeDirectoryFlag(): number {
   return typeof fsConstants.O_DIRECTORY === 'number' ? fsConstants.O_DIRECTORY : 0;
-}
-
-export function isFixedYouTubeMediaName(name: string): boolean {
-  return basename(name).startsWith('source.') && !name.includes('/') && !name.includes('\\');
 }

@@ -31,7 +31,8 @@ clears process-tree and forced-kill timers on settlement. It never starts
 synchronous process scans; POSIX cleanup uses the detached process group, and
 normal descendant cleanup starts at the child `exit` event before `close` so
 PID reuse cannot receive a post-close kill. Windows `taskkill` uses an absolute
-system executable and a sanitized environment rather than inherited `PATH`. The command ignores
+system executable and a sanitized environment rather than inherited `PATH`, and
+falls back to the direct child while cleanup is still before `close`. The command ignores
 user configuration, caches, plugins, remote components, cookies, playlists,
 mark-watched/live behavior, metadata sidecars, thumbnails, archives,
 postprocessors, and external downloaders. It uses one audio-only stream, one
@@ -47,18 +48,23 @@ allowlisted title/channel/channel ID/duration/container/public URL metadata,
 or live metadata fails before media is accepted. A successful acquisition
 returns a provider-neutral `MediaLease` over a validated regular, single-link,
 non-symlink file beneath the private job root. The lease constructor accepts
-only an opaque validator-created descriptor bundle; the validated file and
-job-root descriptors are retained and fchmod'd, so later path replacements
-cannot change the bytes read by the lease or authorize deletion of a replaced
-root. Its stream is pull-driven, pending outer reads are errored on release,
-and release is an idempotent, best-effort shared promise. Startup cleanup is
-age/mtime based and does not trust a PID-only owner marker; recent jobs are
-preserved and stale jobs remain sweepable even when their recorded PID has
-been reused. The command modal returns the selected helper and consent only after
-a non-canceled submit; closing it invalidates probes and persists neither
-value. Disabling the source closes an open modal, rechecks the kill switch
-before provider acquisition, and cancels active provider work. The existing
-controller then runs the exact local decode → VAD → batch ASR →
+only an opaque validator-created descriptor bundle; recursive cleanup accepts
+only an opaque job-root capability created from the owner marker and held root
+descriptor. The validated file and job-root descriptors are retained and
+fchmod'd, so later path replacements cannot change the bytes read by the lease
+or authorize deletion of a replaced root. Its stream is pull-driven, pending
+outer reads are errored on release, and release is an idempotent, best-effort
+shared promise. Startup cleanup is age/mtime based, uses a stable owner marker
+with process-start metadata and a heartbeat, and does not trust a PID-only
+owner marker; recent or actively heartbeated jobs are preserved while stale
+jobs remain sweepable even when their recorded PID has been reused. The
+command modal returns the selected helper, probed version, and consent only
+after a non-canceled submit; closing it invalidates probes and persists neither
+value. A tracked modal registry prevents repeated concurrent command probes
+and closes every session on disable. Disabling the source rechecks the kill
+switch before provider acquisition and cancels active provider work through
+the provider-specific controller signal, including post-ready decode, ASR,
+formatting, and optional LLM work. The existing controller then runs the exact local decode → VAD → batch ASR →
 timestamps/diarization → smart formatting → optional text-only LLM path. The
 LLM never receives the URL, title, channel, helper, path, provenance, or media
 bytes. Cleanup runs on success, failure, cancellation, and disposal.

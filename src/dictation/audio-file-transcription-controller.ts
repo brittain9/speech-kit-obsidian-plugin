@@ -103,6 +103,11 @@ interface PendingAudioFileStart {
   readonly speechLease: SidecarLifecycleLease;
 }
 
+interface ActiveMediaProvider {
+  readonly abortController: AbortController;
+  readonly id: string;
+}
+
 interface QuarantinedAudioFileSession {
   readonly lease: SidecarLifecycleLease;
   readonly sessionId: string;
@@ -126,7 +131,6 @@ export interface AudioFileTranscriptionControllerDependencies {
   readonly onSidecarMissing?: () => void;
   readonly mediaSource: MediaSource;
   readonly mediaFailureAdapters?: readonly MediaFailureAdapter[];
-  readonly mediaTranscriptionEntry?: MediaTranscriptionEntry;
   readonly mediaLlmCoordinator?: MediaLlmCoordinator;
   readonly onMediaProgress?: (progress: MediaTranscriptionProgress | null) => void;
   readonly sessionStopTimeoutMs: number;
@@ -153,6 +157,7 @@ export class AudioFileTranscriptionController {
   private readonly releaseSidecarSubscription: () => void;
   private readonly mediaLlmCoordinator: MediaLlmCoordinator;
   private activeTranscribeCompletion: Promise<void> | null = null;
+  private activeMediaProvider: ActiveMediaProvider | null = null;
   private state: AudioFileTranscriptionState = 'idle';
 
   constructor(private readonly dependencies: AudioFileTranscriptionControllerDependencies) {
@@ -213,21 +218,40 @@ export class AudioFileTranscriptionController {
     await this.startTranscription(this.dependencies.mediaSource);
   }
 
-  async transcribeProvider(context: unknown): Promise<void> {
-    const entry = this.dependencies.mediaTranscriptionEntry;
-    if (entry === undefined) {
-      throw new Error('The media transcription provider is unavailable.');
+  async transcribeProvider<TContext>(
+    entry: MediaTranscriptionEntry<TContext>,
+    context: TContext,
+  ): Promise<void> {
+    if (!entry.isEnabled()) return;
+    await this.startTranscription(entry.source, entry.createRequest(context), entry.id);
+  }
+
+  async cancelProvider(providerId: string): Promise<void> {
+    const active = this.activeMediaProvider;
+    if (active === null || active.id !== providerId) return;
+    active.abortController.abort(createAudioFileCancellationError());
+    this.mediaLlmCoordinator.cancel();
+    const pending = this.pendingStart;
+    if (pending?.abortController === active.abortController) {
+      pending.speechLease.release();
+      await this.activeTranscribeCompletion;
+      return;
     }
-    if (!this.dependencies.getSettings().youtubeMediaSourceEnabled) return;
-    await this.startTranscription(entry.source, entry.createRequest(context));
+    const session = this.activeSession;
+    if (session !== null) {
+      this.userCancelledSessions.add(session);
+      await this.cancelManagedSession(session);
+    }
+    await this.activeTranscribeCompletion;
   }
 
   private async startTranscription(
     source: MediaSource,
     request?: MediaAcquireOverrides,
+    providerId?: string,
   ): Promise<void> {
     if (this.activeTranscribeCompletion !== null) return;
-    const operation = this.runTranscribe(source, request);
+    const operation = this.runTranscribe(source, request, providerId);
     this.activeTranscribeCompletion = operation;
     try {
       await operation;
@@ -240,7 +264,11 @@ export class AudioFileTranscriptionController {
     this.mediaLlmCoordinator.settingsChanged();
   }
 
-  private async runTranscribe(source: MediaSource, request?: MediaAcquireOverrides): Promise<void> {
+  private async runTranscribe(
+    source: MediaSource,
+    request?: MediaAcquireOverrides,
+    providerId?: string,
+  ): Promise<void> {
     // Keep this guard before the busy check: mobile callers must not mutate a
     // running desktop workflow or open a native-only picker accidentally.
     if (!Platform.isDesktopApp) {
@@ -254,6 +282,9 @@ export class AudioFileTranscriptionController {
 
     this.applyState('selecting');
     const abortController = new AbortController();
+    if (providerId !== undefined) {
+      this.activeMediaProvider = { abortController, id: providerId };
+    }
     let decodedAudio: DecodedAudioFile | null = null;
     let mediaLease: MediaLease | null = null;
     let pending: PendingAudioFileStart | null = null;
@@ -447,6 +478,9 @@ export class AudioFileTranscriptionController {
       if (this.pendingStart === pending && pending !== null) this.pendingStart = null;
       if (managed === null) speechLease?.release();
       releaseStartOperation?.();
+      if (this.activeMediaProvider?.abortController === abortController) {
+        this.activeMediaProvider = null;
+      }
       if (this.activeSession === null && this.pendingStart === null) {
         this.applyState('idle');
       }

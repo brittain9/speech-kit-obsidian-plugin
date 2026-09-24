@@ -86,6 +86,26 @@ describe('managed process runner', () => {
     expect(kill).not.toHaveBeenCalled();
     kill.mockRestore();
   });
+  it('falls back to the direct child when Windows taskkill fails before close', async () => {
+    const child = new FakeChild();
+    child.pid = 2468;
+    const taskkill = new FakeChild();
+    const spawnProcess = vi.fn((command: string) =>
+      command.endsWith('taskkill.exe') ? taskkill : child,
+    ) as unknown as typeof spawn;
+    const resultPromise = runManagedProcess(
+      'C:\\helper.exe',
+      [],
+      { platform: 'win32', shell: false, spawnProcess },
+      { maxOutputBytes: 100, timeoutMs: 1_000 },
+    );
+    child.emit('exit', 0);
+    taskkill.emit('error', new Error('taskkill failed'));
+    child.emit('close', 0);
+    await resultPromise;
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+  });
+
   it('uses fixed taskkill argv without a shell on Windows', async () => {
     const child = new FakeChild();
     child.pid = 1234;

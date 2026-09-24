@@ -39,6 +39,7 @@ export type FileWorkflowTranslationKey =
 export interface MediaFailureAdapter {
   readonly isCancellation: (error: unknown) => boolean;
   readonly map: (error: unknown) => FileWorkflowTranslationKey | null;
+  readonly sanitize?: (error: unknown) => unknown;
 }
 
 export class AudioFileWorkflowError extends Error {
@@ -70,7 +71,7 @@ export class AudioFileFailureMapper {
     for (const adapter of this.dependencies.mediaFailureAdapters ?? []) {
       const translationKey = adapter.map(error);
       if (translationKey !== null) {
-        this.report(translationKey, error, claim);
+        this.report(translationKey, adapter.sanitize?.(error) ?? error, claim);
         return;
       }
     }

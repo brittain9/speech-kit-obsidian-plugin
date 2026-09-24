@@ -20,16 +20,15 @@ const VERSION_PATTERN = /(?:^|\s)yt-dlp\s+(\d{4}\.\d{2}\.\d{2})(?:\s|$)/iu;
 const BARE_VERSION_PATTERN = /^(\d{4}\.\d{2}\.\d{2})$/u;
 
 export class YouTubeHelperError extends Error {
-  override readonly cause?: unknown;
+  override readonly cause?: undefined;
 
   constructor(
     readonly code: YouTubeHelperFailureCode,
     message: string,
-    options?: { cause?: unknown },
   ) {
-    super(message, options);
+    super(message);
     this.name = 'YouTubeHelperError';
-    this.cause = options?.cause;
+    this.cause = undefined;
   }
 }
 

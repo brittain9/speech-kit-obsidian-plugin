@@ -37,6 +37,22 @@ describe('YouTube media failure adapter', () => {
     );
   });
 
+  it('sanitizes filesystem causes before feedback or logging', () => {
+    const feedback = { show: vi.fn() };
+    const mapper = new AudioFileFailureMapper({
+      feedback,
+      mediaFailureAdapters: [youtubeMediaFailureAdapter],
+    });
+    const error = new YouTubeAcquisitionError('tool_failed', 'safe diagnostic');
+    Object.defineProperty(error, 'cause', { value: new Error('/private/tmp/secret-job') });
+
+    mapper.reportFailure(error);
+
+    const output = JSON.stringify(feedback.show.mock.calls[0]?.[0]);
+    expect(output).toContain('youtube:tool_failed');
+    expect(output).not.toContain('/private/tmp/secret-job');
+  });
+
   it('recognizes provider cancellation', () => {
     const mapper = new AudioFileFailureMapper({
       feedback: { show: vi.fn() },

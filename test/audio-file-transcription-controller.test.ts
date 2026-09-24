@@ -346,14 +346,68 @@ describe('AudioFileTranscriptionController', () => {
   it('rechecks the provider kill switch before acquiring provider media', async () => {
     const acquire = vi.fn();
     const source = { acquire, adapterVersion: '1', id: 'provider' } as unknown as MediaSource;
-    const harness = createHarness({
-      getSettings: () => createSettings({ youtubeMediaSourceEnabled: false }),
-      mediaTranscriptionEntry: { createRequest: () => ({}), source },
-    });
+    const harness = createHarness();
+    const entry = {
+      createRequest: () => ({}),
+      id: 'provider',
+      isEnabled: () => false,
+      source,
+    };
 
-    await harness.controller.transcribeProvider({});
+    await harness.controller.transcribeProvider(entry, {});
 
     expect(acquire).not.toHaveBeenCalled();
+  });
+
+  it('cancels a provider operation after media is ready without cancelling local work', async () => {
+    let resolveStarted: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      resolveStarted = resolve;
+    });
+    const release = vi.fn(async () => {});
+    const lease: MediaLease = {
+      encodedBytes: 1,
+      mediaId: 'provider-ready',
+      openReadStream: vi.fn(async () => new ReadableStream<Uint8Array>()),
+      provenance: {
+        acquiredAt: new Date(0).toISOString(),
+        adapterVersion: 'test',
+        sourceId: 'provider',
+        temporaryMedia: true,
+      },
+      release,
+    };
+    const source: MediaSource = {
+      acquire: async function* () {
+        yield { plan: { displayName: 'Provider', sourceId: 'provider' }, type: 'plan' };
+        yield { lease, type: 'ready' };
+      },
+      adapterVersion: 'test',
+      id: 'provider',
+    };
+    const decoder = {
+      decode: vi.fn(async () => createAudio()),
+      decodeMedia: vi.fn(async (_lease: MediaLease, signal: AbortSignal) => {
+        resolveStarted();
+        await new Promise<void>((resolve) =>
+          signal.addEventListener('abort', () => resolve(), { once: true }),
+        );
+        return createAudio();
+      }),
+    };
+    const harness = createHarness({ decoder, mediaSource: source });
+    const entry = {
+      createRequest: () => ({}),
+      id: 'youtube_yt_dlp',
+      isEnabled: () => true,
+      source,
+    };
+    const operation = harness.controller.transcribeProvider(entry, {});
+    await started;
+    await harness.controller.cancelProvider('youtube_yt_dlp');
+    await operation;
+    expect(release).toHaveBeenCalledOnce();
+    expect(harness.sidecarConnection.startSessionWithControl).not.toHaveBeenCalled();
   });
 
   it('guards mobile before busy state, picker, and decoder work', async () => {

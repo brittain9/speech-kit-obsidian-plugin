@@ -53,11 +53,39 @@ export function openYouTubeMediaSourceModalSession(
   return { close: () => modal.close(), result };
 }
 
+export class YouTubeMediaSourceModalRegistry {
+  private readonly sessions = new Set<YouTubeMediaSourceModalSession>();
+
+  get size(): number {
+    return this.sessions.size;
+  }
+
+  open(
+    app: App,
+    dependencies: YouTubeMediaSourceModalDependencies,
+  ): YouTubeMediaSourceModalSession | null {
+    if (this.sessions.size > 0) return null;
+    const session = openYouTubeMediaSourceModalSession(app, dependencies);
+    this.sessions.add(session);
+    return session;
+  }
+
+  remove(session: YouTubeMediaSourceModalSession): void {
+    this.sessions.delete(session);
+  }
+
+  closeAll(): void {
+    for (const session of [...this.sessions]) session.close();
+    this.sessions.clear();
+  }
+}
+
 class YouTubeMediaSourceModal extends Modal {
   private readonly lifecycle = new AbortController();
   private probeController: AbortController | null = null;
   private generation = 0;
   private settled = false;
+  private previousFocus: HTMLElement | null = null;
   private helperPath: string;
   private helperVersion = '';
   private url = '';
@@ -79,6 +107,10 @@ class YouTubeMediaSourceModal extends Modal {
   }
 
   override onOpen(): void {
+    this.previousFocus =
+      typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     this.setTitle(`${t('commands.transcribeYouTube')} · ${t('youtube.modal.experimentalBadge')}`);
     this.contentEl.empty();
     this.contentEl.createEl('p', { text: t('youtube.modal.disclosure') });
@@ -145,12 +177,19 @@ class YouTubeMediaSourceModal extends Modal {
           });
       });
     this.updateSummary();
+    queueMicrotask(() => {
+      const focusTarget = this.contentEl.querySelector<HTMLElement>(
+        'input, button, textarea, [tabindex]',
+      );
+      (focusTarget ?? this.contentEl).focus();
+    });
     if (this.helperPath.length > 0) void this.probeSelectedHelper();
   }
 
   override onClose(): void {
     if (this.settled) {
       this.contentEl.empty();
+      this.restoreFocus();
       return;
     }
     this.settled = true;
@@ -164,6 +203,12 @@ class YouTubeMediaSourceModal extends Modal {
     this.confirmButton = null;
     this.resolveRequest?.(null);
     this.resolveRequest = null;
+    this.restoreFocus();
+  }
+
+  private restoreFocus(): void {
+    this.previousFocus?.focus();
+    this.previousFocus = null;
   }
 
   private isCurrent(generation: number, signal: AbortSignal): boolean {

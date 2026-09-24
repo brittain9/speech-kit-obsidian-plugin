@@ -48,8 +48,10 @@ export type MediaAcquireOverrides = Partial<Omit<MediaAcquireRequest, 'kind' | '
   readonly provider?: unknown;
 };
 
-export interface MediaTranscriptionEntry {
-  readonly createRequest: (context: unknown) => MediaAcquireOverrides;
+export interface MediaTranscriptionEntry<TContext> {
+  readonly createRequest: (context: TContext) => MediaAcquireOverrides;
+  readonly id: string;
+  readonly isEnabled: () => boolean;
   readonly source: MediaSource;
 }
 

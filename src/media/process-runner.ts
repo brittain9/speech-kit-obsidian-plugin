@@ -183,7 +183,7 @@ async function collectProcessOutput(
     exitObserved = true;
     observedExitCode = code;
     exitCleanupPromise = killProcessTree({
-      allowDirectChild: false,
+      allowDirectChild: true,
       child,
       childPid,
       platform,

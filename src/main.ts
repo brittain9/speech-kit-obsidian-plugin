@@ -31,6 +31,7 @@ import { youtubeMediaFailureAdapter } from './media/youtube-failure-mapper';
 import {
   sweepAbandonedYouTubeJobs,
   YOUTUBE_POLICY_VERSION,
+  type YouTubeAcquisitionContext,
   YouTubeMediaSource,
 } from './media/youtube-media-source';
 import { ManageModelsModal, type ModelPickerOptions } from './models/manage-models-modal';
@@ -102,8 +103,7 @@ import { LOCAL_DICTATION_VIEW_TYPE, LocalDictationView } from './ui/local-dictat
 import { confirmMediaLlmPreview } from './ui/media-llm-preview-modal';
 import { renderMediaProgressStatus } from './ui/media-progress-presenter';
 import {
-  openYouTubeMediaSourceModalSession,
-  type YouTubeMediaSourceModalSession,
+  YouTubeMediaSourceModalRegistry,
   type YouTubeMediaSourceRequest,
 } from './ui/youtube-media-source-modal';
 
@@ -111,7 +111,7 @@ export default class LocalSttPlugin extends Plugin {
   private audioCaptureStream: AudioCaptureStream | null = null;
   private audioFileTranscriptionController: AudioFileTranscriptionController | null = null;
   private youtubeMediaSource: YouTubeMediaSource | null = null;
-  private openYouTubeModal: YouTubeMediaSourceModalSession | null = null;
+  private readonly youtubeModalSessions = new YouTubeMediaSourceModalRegistry();
   private audioLevelMeter: SidecarAudioLevelMeter | null = null;
   private dictationController: DictationSessionController | null = null;
   /**
@@ -354,11 +354,12 @@ export default class LocalSttPlugin extends Plugin {
     });
     this.youtubeMediaSource = new YouTubeMediaSource({
       getHelperPath: () => this.settings.youtubeHelperPath,
-      isEnabled: () => this.settings.youtubeMediaSourceEnabled,
     });
     const youtubeMediaSource = this.youtubeMediaSource;
-    const youtubeMediaEntry: MediaTranscriptionEntry = {
+    const youtubeMediaEntry: MediaTranscriptionEntry<YouTubeAcquisitionContext> = {
       createRequest: (context) => youtubeMediaSource.createRequest(context),
+      id: youtubeMediaSource.id,
+      isEnabled: () => this.settings.youtubeMediaSourceEnabled,
       source: youtubeMediaSource,
     };
     this.audioFileTranscriptionController = new AudioFileTranscriptionController({
@@ -368,7 +369,6 @@ export default class LocalSttPlugin extends Plugin {
         createConfiguredLlmRouter(settings, (secretId) => this.getSecret(secretId)),
       mediaSource: localMediaSource,
       mediaFailureAdapters: [youtubeMediaFailureAdapter],
-      mediaTranscriptionEntry: youtubeMediaEntry,
       createSession: ({ callbacks, placement, rendererOptions, sessionId, target }) =>
         Session.createFromTarget(this.app, target, {
           callbacks,
@@ -498,16 +498,16 @@ export default class LocalSttPlugin extends Plugin {
       transcribeAudioFile: async () => this.requireAudioFileTranscriptionController().transcribe(),
       transcribeYouTube: async () => {
         if (!this.settings.youtubeMediaSourceEnabled) return;
-        const modal = openYouTubeMediaSourceModalSession(this.app, {
+        const modal = this.youtubeModalSessions.open(this.app, {
           getHelperPath: () => this.settings.youtubeHelperPath,
           getPolicyVersion: () => this.settings.youtubePolicyVersion,
         });
-        this.openYouTubeModal = modal;
+        if (modal === null) return;
         let request: YouTubeMediaSourceRequest | null;
         try {
           request = await modal.result;
         } finally {
-          if (this.openYouTubeModal === modal) this.openYouTubeModal = null;
+          this.youtubeModalSessions.remove(modal);
         }
         if (request === null || !this.settings.youtubeMediaSourceEnabled) return;
         await this.updateSettings({
@@ -516,8 +516,9 @@ export default class LocalSttPlugin extends Plugin {
           youtubePolicyVersion: YOUTUBE_POLICY_VERSION,
         });
         if (!this.settings.youtubeMediaSourceEnabled) return;
-        await this.requireAudioFileTranscriptionController().transcribeProvider({
+        await this.requireAudioFileTranscriptionController().transcribeProvider(youtubeMediaEntry, {
           consent: request.consent,
+          helperVersion: request.helperVersion,
           ref: request.ref,
         });
       },
@@ -717,8 +718,7 @@ export default class LocalSttPlugin extends Plugin {
   }
 
   private async disposeAll(): Promise<void> {
-    this.openYouTubeModal?.close();
-    this.openYouTubeModal = null;
+    this.youtubeModalSessions.closeAll();
     this.youtubeMediaSource?.cancel();
     this.finalizedUtteranceAutoCopy.dispose();
     this.lastUtteranceRecovery.clear();
@@ -875,8 +875,9 @@ export default class LocalSttPlugin extends Plugin {
     const youtubeWasDisabled =
       previousSettings.youtubeMediaSourceEnabled && !this.settings.youtubeMediaSourceEnabled;
     if (youtubeWasDisabled) {
-      this.openYouTubeModal?.close();
+      this.youtubeModalSessions.closeAll();
       this.youtubeMediaSource?.cancel();
+      void this.audioFileTranscriptionController?.cancelProvider('youtube_yt_dlp');
     }
     const llmWasDisabled = previousSettings.llmFeaturesEnabled && !this.settings.llmFeaturesEnabled;
     if (llmWasDisabled) {

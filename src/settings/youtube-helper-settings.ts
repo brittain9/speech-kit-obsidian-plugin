@@ -44,6 +44,7 @@ export function renderYouTubeHelperSettings(
       ? t('youtube.settings.policyAccepted', { policy: YOUTUBE_POLICY_VERSION })
       : t('youtube.settings.policyRequired'),
   });
+  const probeStatus = status.createDiv();
 
   const currentPath = dependencies.getSettings().youtubeHelperPath;
   let selectedPath = currentPath;
@@ -58,7 +59,7 @@ export function renderYouTubeHelperSettings(
     const requestedPath = selectedPath;
     const normalized = normalizeYouTubeHelperPath(requestedPath);
     if (normalized === null) {
-      status.setText(t('youtube.settings.pathRequired'));
+      probeStatus.setText(t('youtube.settings.pathRequired'));
       probeController = null;
       return;
     }
@@ -71,7 +72,7 @@ export function renderYouTubeHelperSettings(
       ) {
         return;
       }
-      status.setText(
+      probeStatus.setText(
         t('youtube.settings.helperReady', { version: result.version, path: result.path }),
       );
     } catch {
@@ -80,7 +81,7 @@ export function renderYouTubeHelperSettings(
         generation === probeGeneration &&
         selectedPath === requestedPath
       ) {
-        status.setText(t('youtube.settings.helperError'));
+        probeStatus.setText(t('youtube.settings.helperError'));
       }
     } finally {
       if (probeController === controller) probeController = null;
@@ -96,7 +97,7 @@ export function renderYouTubeHelperSettings(
       const generation = probeGeneration;
       const normalized = normalizeYouTubeHelperPath(value);
       if (normalized === null) {
-        status.setText(t('youtube.settings.pathRequired'));
+        probeStatus.setText(t('youtube.settings.pathRequired'));
         text.setValue(selectedPath);
         return;
       }
@@ -106,7 +107,7 @@ export function renderYouTubeHelperSettings(
         .then(async () => {
           if (generation !== probeGeneration) return;
           await dependencies.access.persistOne('youtubeHelperPath', normalized);
-          if (generation === probeGeneration) status.setText(t('youtube.settings.pathSaved'));
+          if (generation === probeGeneration) probeStatus.setText(t('youtube.settings.pathSaved'));
         });
     });
   });

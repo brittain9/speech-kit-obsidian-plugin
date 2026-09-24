@@ -44,4 +44,11 @@ export const youtubeMediaFailureAdapter: MediaFailureAdapter = {
     if (error instanceof YouTubeHelperError) return HELPER_ERROR_KEYS[error.code];
     return null;
   },
+  sanitize: (error) => {
+    const code =
+      error instanceof YouTubeAcquisitionError || error instanceof YouTubeHelperError
+        ? error.code
+        : 'unknown';
+    return { code: `youtube:${code}`, name: 'YouTubeMediaFailure' };
+  },
 };

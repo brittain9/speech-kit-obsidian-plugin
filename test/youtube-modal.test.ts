@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   openYouTubeMediaSourceModal,
   openYouTubeMediaSourceModalSession,
+  YouTubeMediaSourceModalRegistry,
 } from '../src/ui/youtube-media-source-modal';
 
 const temporaryPaths: string[] = [];
@@ -30,15 +31,28 @@ function settingInstances(): SettingFixture[] {
   return (Setting as unknown as { instances: SettingFixture[] }).instances;
 }
 
+interface ModalElement {
+  readonly attributes: Map<string, string>;
+  readonly ownerDocument: { activeElement: ModalElement | null };
+}
+
 function modalInstances(): Array<{
   close(): void;
-  contentEl: { children: Array<{ attributes: Map<string, string> }> };
+  contentEl: {
+    children: ModalElement[];
+    ownerDocument: { activeElement: ModalElement | null };
+    querySelector(selector: string): ModalElement | null;
+  };
 }> {
   return (
     Modal as unknown as {
       instances: Array<{
         close(): void;
-        contentEl: { children: Array<{ attributes: Map<string, string> }> };
+        contentEl: {
+          children: ModalElement[];
+          ownerDocument: { activeElement: ModalElement | null };
+          querySelector(selector: string): ModalElement | null;
+        };
       }>;
     }
   ).instances;
@@ -77,6 +91,20 @@ describe('YouTube source modal lifecycle', () => {
     await expect(session.result).resolves.toMatchObject({ helperPath: helperB });
   });
 
+  it('guards repeated commands and closes every tracked session on disable', async () => {
+    const registry = new YouTubeMediaSourceModalRegistry();
+    const dependencies = {
+      getHelperPath: () => '',
+      getPolicyVersion: () => null,
+    };
+    const first = registry.open({} as never, dependencies);
+    expect(first).not.toBeNull();
+    expect(registry.open({} as never, dependencies)).toBeNull();
+    registry.closeAll();
+    await expect(first?.result).resolves.toBeNull();
+    expect(registry.size).toBe(0);
+  });
+
   it('invalidates an in-flight helper probe and does not persist after close', async () => {
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-modal-'));
     temporaryPaths.push(root);
@@ -92,6 +120,10 @@ describe('YouTube source modal lifecycle', () => {
     expect(modal.contentEl.children.some((child) => child.attributes.get('role') === 'alert')).toBe(
       true,
     );
+    const firstInput = modal.contentEl.querySelector('input');
+    await Promise.resolve();
+    expect(firstInput === null || firstInput.ownerDocument.activeElement === firstInput).toBe(true);
+    expect(modal.contentEl.ownerDocument.activeElement).toBe(modal.contentEl);
     modal.close();
     await expect(resultPromise).resolves.toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 100));
