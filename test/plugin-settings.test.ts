@@ -342,6 +342,48 @@ describe('resolvePluginSettings', () => {
     ]);
   });
 
+  it('loads huge, unsafe, duplicate, and sparse diagnostic indexes without index-sized recovery', () => {
+    const unsafeIndex = Number.MAX_SAFE_INTEGER + 1;
+    const settings = resolvePluginSettings({
+      personalCorrectionRules: [
+        { enabled: true, find: 'a', id: 'a', replace: 'b' },
+        { enabled: true, find: 'c', id: 'c', replace: 'd' },
+      ],
+      personalCorrectionRuleDiagnostics: [
+        {
+          code: 'invalid_rule',
+          field: 'rules',
+          index: 1_000_000_000,
+          message: 'first sparse diagnostic',
+          raw: null,
+        },
+        {
+          code: 'invalid_rule',
+          field: 'rules',
+          index: unsafeIndex,
+          message: 'unsafe diagnostic',
+          raw: 1,
+        },
+        {
+          code: 'invalid_rule',
+          field: 'rules',
+          index: 1_000_000_000,
+          message: 'duplicate diagnostic',
+          raw: 2,
+        },
+      ],
+    });
+
+    expect(settings.personalCorrectionRuleDiagnostics).toHaveLength(3);
+    expect(settings.personalCorrectionRuleOrder).toEqual([
+      { index: 0, kind: 'active' },
+      { index: 1, kind: 'active' },
+      { index: 1_000_000_000, kind: 'invalid' },
+      { index: 1_000_000_000, kind: 'invalid' },
+      { index: unsafeIndex, kind: 'invalid' },
+    ]);
+  });
+
   it('preserves newer schema fields and diagnoses a non-array rule container', () => {
     const settings = resolvePluginSettings({
       futureCorrectionField: { keep: true },

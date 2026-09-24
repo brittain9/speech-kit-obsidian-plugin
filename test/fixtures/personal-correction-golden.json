@@ -20,6 +20,41 @@
       "rulesApplied": 2
     },
     {
+      "id": "nfd-combining-before-punctuation",
+      "input": "e\u0301,",
+      "rules": [
+        { "id": "accent-before-punctuation", "enabled": true, "find": "e\u0301", "replace": "E" }
+      ],
+      "expected": "E,",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "nfd-adjacent-combining-sequence",
+      "input": "e\u0301\u0323,",
+      "rules": [
+        {
+          "id": "full-combining-sequence",
+          "enabled": true,
+          "find": "e\u0301\u0323",
+          "replace": "E"
+        }
+      ],
+      "expected": "E,",
+      "replacements": 1,
+      "rulesApplied": 1
+    },
+    {
+      "id": "nfd-partial-before-adjacent-combining-mark",
+      "input": "e\u0301\u0323,",
+      "rules": [
+        { "id": "partial-combining-sequence", "enabled": true, "find": "e\u0301", "replace": "E" }
+      ],
+      "expected": "e\u0301\u0323,",
+      "replacements": 0,
+      "rulesApplied": 0
+    },
+    {
       "id": "left-to-right-punctuation-overlap",
       "input": "!!!",
       "rules": [{ "id": "double-bang", "enabled": true, "find": "!!", "replace": "!" }],

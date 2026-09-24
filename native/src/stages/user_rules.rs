@@ -413,7 +413,7 @@ impl NormalizedInput {
         let mut safe_boundaries = vec![false; normalized.len() + 1];
         let mut normalized_index = 0;
         let mut byte_index = 0;
-        for original_char in &original_chars {
+        for (original_index, original_char) in original_chars.iter().enumerate() {
             let expansion = original_char.to_string().nfd().collect::<Vec<_>>();
             let combining = is_combining_mark(*original_char);
             boundary_map[normalized_index] = Some(byte_index);
@@ -422,8 +422,10 @@ impl NormalizedInput {
                 safe_boundaries[normalized_index + offset] = false;
             }
             let end_boundary = normalized_index + expansion.len();
+            let next_original_char = original_chars.get(original_index + 1);
             boundary_map[end_boundary] = Some(byte_index + original_char.len_utf8());
-            safe_boundaries[end_boundary] = !combining;
+            safe_boundaries[end_boundary] =
+                next_original_char.is_none_or(|next_char| !is_combining_mark(*next_char));
             normalized_index += expansion.len();
             byte_index += original_char.len_utf8();
         }
@@ -778,6 +780,44 @@ mod tests {
         )
         .expect("NFD match should succeed");
         assert_eq!(result.segment.text, "coffee");
+    }
+
+    #[test]
+    fn matches_nfd_before_non_word_boundary() {
+        let mut budget = UtteranceBudget::new(3);
+        let result = apply_rules_to_segment(
+            &segment("e\u{301},"),
+            &compile_correction_rules(&[rule("e\u{301}", "E")]),
+            &mut budget,
+        )
+        .expect("NFD match should end safely before punctuation");
+        assert_eq!(result.segment.text, "E,");
+    }
+
+    #[test]
+    fn rejects_nfd_match_before_an_adjacent_combining_mark() {
+        let mut budget = UtteranceBudget::new(4);
+        let result = apply_rules_to_segment(
+            &segment("e\u{301}\u{323},"),
+            &compile_correction_rules(&[rule("e\u{301}", "E")]),
+            &mut budget,
+        )
+        .expect("partial NFD match should be safely skipped");
+        assert_eq!(result.segment.text, "e\u{301}\u{323},");
+        assert_eq!(result.replacement_count, 0);
+    }
+
+    #[test]
+    fn preserves_word_boundaries_for_nfd_matches() {
+        let mut budget = UtteranceBudget::new(5);
+        let result = apply_rules_to_segment(
+            &segment("e\u{301} e\u{301}"),
+            &compile_correction_rules(&[rule("e\u{301}", "E")]),
+            &mut budget,
+        )
+        .expect("whole-word NFD matches should apply");
+        assert_eq!(result.segment.text, "E E");
+        assert_eq!(result.replacement_count, 2);
     }
 
     #[test]

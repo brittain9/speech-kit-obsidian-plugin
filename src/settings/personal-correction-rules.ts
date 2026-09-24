@@ -348,36 +348,37 @@ export function inferPersonalCorrectionRuleOrder(
   activeCount: number,
   diagnostics: readonly PersonalCorrectionRuleDiagnostic[],
 ): PersonalCorrectionRuleOrderEntry[] {
-  const totalLength = diagnostics.reduce(
-    (maximum, diagnostic) => Math.max(maximum, diagnostic.index + 1),
-    activeCount + diagnostics.length,
-  );
-  const slots: Array<PersonalCorrectionRuleOrderEntry | null> = Array.from(
-    { length: totalLength },
-    () => null,
-  );
-  const unplacedDiagnostics: PersonalCorrectionRuleDiagnostic[] = [];
-  for (const diagnostic of diagnostics) {
-    if (slots[diagnostic.index] === null) {
-      slots[diagnostic.index] = { index: diagnostic.index, kind: 'invalid' };
-    } else {
-      unplacedDiagnostics.push(diagnostic);
-    }
-  }
+  const sortedDiagnostics = [...diagnostics].sort((left, right) => left.index - right.index);
+  const order: PersonalCorrectionRuleOrderEntry[] = [];
+  let nextSlot = 0;
   let activeIndex = 0;
-  for (let index = 0; index < slots.length && activeIndex < activeCount; index += 1) {
-    if (slots[index] === null) {
-      slots[index] = { index, kind: 'active' };
+  let diagnosticIndex = 0;
+
+  while (diagnosticIndex < sortedDiagnostics.length || activeIndex < activeCount) {
+    const diagnostic = sortedDiagnostics[diagnosticIndex];
+    if (diagnostic === undefined) {
+      order.push({ index: nextSlot, kind: 'active' });
+      nextSlot += 1;
+      activeIndex += 1;
+      continue;
+    }
+
+    while (activeIndex < activeCount && nextSlot < diagnostic.index) {
+      order.push({ index: nextSlot, kind: 'active' });
+      nextSlot += 1;
       activeIndex += 1;
     }
+    while (
+      diagnosticIndex < sortedDiagnostics.length &&
+      sortedDiagnostics[diagnosticIndex]?.index === diagnostic.index
+    ) {
+      order.push({ index: diagnostic.index, kind: 'invalid' });
+      diagnosticIndex += 1;
+    }
+    if (diagnostic.index >= nextSlot) nextSlot = diagnostic.index + 1;
   }
-  return [
-    ...slots.filter((entry): entry is PersonalCorrectionRuleOrderEntry => entry !== null),
-    ...unplacedDiagnostics.map((diagnostic) => ({
-      index: diagnostic.index,
-      kind: 'invalid' as const,
-    })),
-  ];
+
+  return order;
 }
 
 export function buildPersonalCorrectionRuleDrafts(
@@ -774,7 +775,7 @@ function normalizeInput(input: string, budget: CorrectionWorkBudget): Normalized
   const nextWordBoundary = Array.from({ length: chars.length + 1 }, () => false);
   let normalizedIndex = 0;
   let byteIndex = 0;
-  for (const originalChar of originalChars) {
+  for (const [originalIndex, originalChar] of originalChars.entries()) {
     const expansion = Array.from(originalChar.normalize('NFD'));
     const isCombining = isCombiningMark(originalChar);
     boundaryMap[normalizedIndex] = byteIndex;
@@ -783,8 +784,10 @@ function normalizeInput(input: string, budget: CorrectionWorkBudget): Normalized
       safeBoundaries[normalizedIndex + offset] = false;
     }
     const endBoundary = normalizedIndex + expansion.length;
+    const nextOriginalChar = originalChars[originalIndex + 1];
     boundaryMap[endBoundary] = byteIndex + originalChar.length;
-    safeBoundaries[endBoundary] = !isCombining;
+    safeBoundaries[endBoundary] =
+      nextOriginalChar === undefined || !isCombiningMark(nextOriginalChar);
     normalizedIndex += expansion.length;
     byteIndex += originalChar.length;
     for (let offset = 0; offset < expansion.length; offset += 1) {
