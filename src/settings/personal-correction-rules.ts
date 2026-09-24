@@ -332,18 +332,52 @@ export function readPersonalCorrectionRuleOrder(
   value: unknown,
 ): PersonalCorrectionRuleOrderEntry[] {
   if (!Array.isArray(value)) return [];
-  return value.flatMap((entry) => {
-    if (!isRecord(entry)) return [];
-    if (
-      typeof entry.index !== 'number' ||
-      !Number.isInteger(entry.index) ||
-      entry.index < 0 ||
-      (entry.kind !== 'active' && entry.kind !== 'invalid')
-    ) {
-      return [];
+  return value
+    .flatMap((entry) => {
+      if (!isRecord(entry)) return [];
+      if (typeof entry.index !== 'number' || !Number.isInteger(entry.index) || entry.index < 0) {
+        return [];
+      }
+      if (!isPersonalCorrectionRuleOrderKind(entry.kind)) return [];
+      return [{ index: entry.index, kind: entry.kind }];
+    })
+    .sort((left, right) => left.index - right.index);
+}
+
+export function inferPersonalCorrectionRuleOrder(
+  activeCount: number,
+  diagnostics: readonly PersonalCorrectionRuleDiagnostic[],
+): PersonalCorrectionRuleOrderEntry[] {
+  const totalLength = diagnostics.reduce(
+    (maximum, diagnostic) => Math.max(maximum, diagnostic.index + 1),
+    activeCount + diagnostics.length,
+  );
+  const slots: Array<PersonalCorrectionRuleOrderEntry | null> = Array.from(
+    { length: totalLength },
+    () => null,
+  );
+  const unplacedDiagnostics: PersonalCorrectionRuleDiagnostic[] = [];
+  for (const diagnostic of diagnostics) {
+    if (slots[diagnostic.index] === null) {
+      slots[diagnostic.index] = { index: diagnostic.index, kind: 'invalid' };
+    } else {
+      unplacedDiagnostics.push(diagnostic);
     }
-    return [{ index: entry.index, kind: entry.kind }];
-  });
+  }
+  let activeIndex = 0;
+  for (let index = 0; index < slots.length && activeIndex < activeCount; index += 1) {
+    if (slots[index] === null) {
+      slots[index] = { index, kind: 'active' };
+      activeIndex += 1;
+    }
+  }
+  return [
+    ...slots.filter((entry): entry is PersonalCorrectionRuleOrderEntry => entry !== null),
+    ...unplacedDiagnostics.map((diagnostic) => ({
+      index: diagnostic.index,
+      kind: 'invalid' as const,
+    })),
+  ];
 }
 
 export function buildPersonalCorrectionRuleDrafts(
@@ -352,13 +386,26 @@ export function buildPersonalCorrectionRuleDrafts(
   order: readonly PersonalCorrectionRuleOrderEntry[],
 ): PersonalCorrectionRuleDraft[] {
   const remainingActive = [...activeRules];
-  const remainingInvalid = diagnostics.map((diagnostic) =>
-    InvalidRuleDraft.from(diagnostic, diagnostic.raw),
-  );
-  if (order.length === 0) return [...remainingActive, ...remainingInvalid];
+  const remainingInvalid = [...diagnostics]
+    .sort((left, right) => left.index - right.index)
+    .map((diagnostic) => InvalidRuleDraft.from(diagnostic, diagnostic.raw));
+  if (order.length === 0) {
+    const inferredOrder = inferPersonalCorrectionRuleOrder(activeRules.length, diagnostics);
+    const drafts: PersonalCorrectionRuleDraft[] = [];
+    for (const entry of inferredOrder) {
+      if (entry.kind === 'active') {
+        const rule = remainingActive.shift();
+        if (rule !== undefined) drafts.push(rule);
+      } else {
+        const invalid = remainingInvalid.shift();
+        if (invalid !== undefined) drafts.push(invalid);
+      }
+    }
+    return [...drafts, ...remainingActive, ...remainingInvalid];
+  }
 
   const drafts: PersonalCorrectionRuleDraft[] = [];
-  for (const entry of order) {
+  for (const entry of [...order].sort((left, right) => left.index - right.index)) {
     if (entry.kind === 'active') {
       const rule = remainingActive.shift();
       if (rule !== undefined) drafts.push(rule);
@@ -967,6 +1014,12 @@ function isPersonalCorrectionRuleErrorCode(
   return (
     typeof value === 'string' && PERSONAL_CORRECTION_RULE_ERROR_CODES.some((code) => code === value)
   );
+}
+
+function isPersonalCorrectionRuleOrderKind(
+  value: unknown,
+): value is PersonalCorrectionRuleOrderEntry['kind'] {
+  return value === 'active' || value === 'invalid';
 }
 
 function isPersonalCorrectionRuleField(

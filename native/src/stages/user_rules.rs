@@ -295,17 +295,23 @@ fn apply_rules_to_segment(
         if !rule.enabled {
             continue;
         }
-        let current = text.as_deref().unwrap_or(original_text);
-        let current_chars = current.chars().count();
+        let current_chars = text.as_deref().unwrap_or(original_text).chars().count();
         let application = preflight_rule(&normalized, rule, current_chars, budget)?;
         if application.matches.is_empty() {
             continue;
         }
-        let next = materialize_rule(current, &rule.replace, &application.matches);
+        let next = materialize_rule(
+            text.as_deref().unwrap_or(original_text),
+            &rule.replace,
+            &application.matches,
+        );
+        let changed = next != text.as_deref().unwrap_or(original_text);
         text = Some(next);
         applied_rule_indices.push(index);
         replacement_count += application.matches.len();
-        normalized = NormalizedInput::new(text.as_deref().unwrap_or(original_text), budget)?;
+        if changed {
+            normalized = NormalizedInput::new(text.as_deref().unwrap_or(original_text), budget)?;
+        }
     }
 
     let Some(text) = text else {
@@ -329,7 +335,7 @@ fn apply_rules_to_segment(
 }
 
 fn preflight_rule(
-    normalized: &NormalizedInput<'_>,
+    normalized: &NormalizedInput,
     rule: &CompiledPersonalCorrectionRule,
     current_segment_chars: usize,
     budget: &mut UtteranceBudget,
@@ -375,23 +381,21 @@ fn materialize_rule(input: &str, replace: &str, matches: &[(usize, usize)]) -> S
     output
 }
 
-struct NormalizedInput<'a> {
+struct NormalizedInput {
     boundary_map: Vec<Option<usize>>,
     chars: Vec<char>,
     first_scalar_indices: HashMap<char, Vec<usize>>,
-    input: &'a str,
+    input: String,
     next_word_boundary: Vec<bool>,
     previous_word_boundary: Vec<bool>,
     safe_boundaries: Vec<bool>,
 }
 
-impl<'a> NormalizedInput<'a> {
-    fn new(input: &'a str, budget: &mut UtteranceBudget) -> Result<Self, RuleApplicationError> {
-        let normalized_len = input.chars().try_fold(0_usize, |total, character| {
-            total
-                .checked_add(character.to_string().nfd().count())
-                .ok_or_else(|| RuleApplicationError::work("normalized correction input overflows"))
-        })?;
+impl NormalizedInput {
+    fn new(input: &str, budget: &mut UtteranceBudget) -> Result<Self, RuleApplicationError> {
+        // Count normalization without constructing per-character strings or
+        // vectors so the aggregate budget is checked before any allocation.
+        let normalized_len = input.nfd().count();
         if normalized_len > MAX_CORRECTION_INPUT_CHARS {
             return Err(RuleApplicationError::work(
                 "normalized correction input exceeds the safety budget",
@@ -402,6 +406,7 @@ impl<'a> NormalizedInput<'a> {
         budget.reserve_normalized(normalized_len)?;
         #[cfg(test)]
         NORMALIZED_INPUT_VECTOR_CONSTRUCTIONS.with(|counter| counter.set(counter.get() + 1));
+        let input = input.to_owned();
         let original_chars = input.chars().collect::<Vec<_>>();
         let normalized = input.nfd().collect::<Vec<_>>();
         let mut boundary_map = vec![None; normalized.len() + 1];
@@ -460,7 +465,7 @@ impl<'a> NormalizedInput<'a> {
 }
 
 fn find_matches(
-    normalized: &NormalizedInput<'_>,
+    normalized: &NormalizedInput,
     rule: &CompiledPersonalCorrectionRule,
 ) -> Vec<(usize, usize)> {
     let Some(first_scalar) = rule.first_scalar else {
@@ -890,7 +895,22 @@ mod tests {
     }
 
     #[test]
-    fn normalized_budget_rejects_before_boundary_vector_allocation() {
+    fn identity_replacements_reuse_normalized_input_at_the_budget_limit() {
+        let mut budget = UtteranceBudget::new(2);
+        budget.normalized_chars = MAX_CORRECTION_NORMALIZED_SCAN_CHARS - 2;
+        let result = apply_rules_to_segment(
+            &segment("a "),
+            &compile_correction_rules(&[rule("a", "a"), rule("a ", "a ")]),
+            &mut budget,
+        )
+        .expect("identity replacements should not rebuild normalized input");
+
+        assert_eq!(result.segment.text, "a ");
+        assert_eq!(result.replacement_count, 2);
+    }
+
+    #[test]
+    fn normalized_budget_rejects_before_temporary_strings_and_boundary_vectors() {
         let input = "e\u{301}".repeat(50_000);
         let mut budget = UtteranceBudget::new(input.chars().count());
         budget.normalized_chars = MAX_CORRECTION_NORMALIZED_SCAN_CHARS - 1;

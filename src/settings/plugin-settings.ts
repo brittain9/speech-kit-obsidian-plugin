@@ -38,6 +38,7 @@ import {
 } from '../sidecar/protocol';
 import { normalizeTranslationLanguage, type TranslationLanguage } from '../translation/languages';
 import {
+  inferPersonalCorrectionRuleOrder,
   normalizePersonalCorrectionRules,
   type PersonalCorrectionRule,
   type PersonalCorrectionRuleDiagnostic,
@@ -337,13 +338,10 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       ? personalCorrectionRules.order
       : persistedCorrectionOrder.length > 0
         ? persistedCorrectionOrder
-        : [
-            ...personalCorrectionRules.order,
-            ...personalCorrectionRuleDiagnostics.map((_, index) => ({
-              index: personalCorrectionRules.rules.length + index,
-              kind: 'invalid' as const,
-            })),
-          ];
+        : inferPersonalCorrectionRuleOrder(
+            personalCorrectionRules.rules.length,
+            personalCorrectionRuleDiagnostics,
+          );
 
   return {
     // Preserve fields introduced by a newer plugin/schema. Known fields below

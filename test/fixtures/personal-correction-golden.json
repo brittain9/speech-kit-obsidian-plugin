@@ -9,6 +9,17 @@
       "rulesApplied": 0
     },
     {
+      "id": "identity-replacement",
+      "input": "a ",
+      "rules": [
+        { "id": "identity-a", "enabled": true, "find": "a", "replace": "a" },
+        { "id": "identity-a-space", "enabled": true, "find": "a ", "replace": "a " }
+      ],
+      "expected": "a ",
+      "replacements": 2,
+      "rulesApplied": 2
+    },
+    {
       "id": "left-to-right-punctuation-overlap",
       "input": "!!!",
       "rules": [{ "id": "double-bang", "enabled": true, "find": "!!", "replace": "!" }],

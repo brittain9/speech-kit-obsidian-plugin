@@ -317,6 +317,31 @@ describe('resolvePluginSettings', () => {
     ]);
   });
 
+  it('infers old normalized order from diagnostic indexes when no order is persisted', () => {
+    const settings = resolvePluginSettings({
+      personalCorrectionRuleDiagnostics: [
+        {
+          code: 'blank_find',
+          field: 'find',
+          index: 1,
+          message: 'Find text cannot be blank.',
+          raw: { enabled: true, find: ' ', id: 'repair-b', replace: 'd' },
+        },
+      ],
+      personalCorrectionRules: [
+        { enabled: true, find: 'a', id: 'a', replace: 'b' },
+        { enabled: true, find: 'c', id: 'c', replace: 'd' },
+      ],
+      schemaVersion: 12,
+    });
+
+    expect(settings.personalCorrectionRuleOrder).toEqual([
+      { index: 0, kind: 'active' },
+      { index: 1, kind: 'invalid' },
+      { index: 2, kind: 'active' },
+    ]);
+  });
+
   it('preserves newer schema fields and diagnoses a non-array rule container', () => {
     const settings = resolvePluginSettings({
       futureCorrectionField: { keep: true },

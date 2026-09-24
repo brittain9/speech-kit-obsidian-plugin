@@ -12,6 +12,7 @@ import {
   type PersonalCorrectionPreviewResult,
   type PersonalCorrectionRule,
   type PersonalCorrectionRuleDraft,
+  validatePersonalCorrectionRules,
 } from './personal-correction-rules';
 import type { PluginSettings } from './plugin-settings';
 import type { SettingsMutationFacade } from './settings-mutation';
@@ -203,14 +204,27 @@ export class PersonalCorrectionRulesModal extends Modal {
   }
 
   private updateRule(index: number, update: Partial<PersonalCorrectionRule>): void {
+    let promoted = false;
     this.draft = this.draft.map((rule, ruleIndex) => {
       if (ruleIndex !== index) return rule;
       if (isInvalidDraft(rule)) {
-        return rule.update(update);
+        const updated = rule.update(update);
+        const validation = validatePersonalCorrectionRules([draftInput(updated)]);
+        const validRule = validation.rules[0];
+        if (validation.valid && validRule !== undefined) {
+          promoted = true;
+          return validRule;
+        }
+        return updated;
       }
       return isRecord(rule) ? { ...rule, ...update } : { ...update };
     });
     this.markDirty();
+    if (promoted) {
+      this.render();
+      this.persistIfValid();
+      return;
+    }
     this.updateRuleLabels(index);
     this.updatePreview();
   }

@@ -215,7 +215,6 @@ pub struct TranscriptWord {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PersonalCorrectionRuleValidity {
-    pub enabled: bool,
     pub find: bool,
     pub id: bool,
     pub object: bool,
@@ -225,7 +224,6 @@ pub struct PersonalCorrectionRuleValidity {
 impl Default for PersonalCorrectionRuleValidity {
     fn default() -> Self {
         Self {
-            enabled: false,
             find: false,
             id: false,
             object: true,
@@ -263,7 +261,6 @@ impl<'de> Deserialize<'de> for PersonalCorrectionRule {
                 id: String::new(),
                 replace: String::new(),
                 validity: PersonalCorrectionRuleValidity {
-                    enabled: true,
                     find: true,
                     id: true,
                     object: false,
@@ -289,9 +286,6 @@ impl<'de> Deserialize<'de> for PersonalCorrectionRule {
                 .unwrap_or_default()
                 .to_string(),
             validity: PersonalCorrectionRuleValidity {
-                enabled: object
-                    .get("enabled")
-                    .is_some_and(|value| !value.is_boolean()),
                 find: object.get("find").is_some_and(|value| !value.is_string()),
                 id: object.get("id").is_some_and(|value| !value.is_string()),
                 object: true,

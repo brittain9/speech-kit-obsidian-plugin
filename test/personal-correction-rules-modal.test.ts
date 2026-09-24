@@ -206,6 +206,45 @@ describe('PersonalCorrectionRulesModal', () => {
     expect(settings.personalCorrectionRules).toEqual(persisted.personalCorrectionRules);
   });
 
+  it('reconstructs old normalized active and invalid entries from diagnostic indexes', async () => {
+    let settings: PluginSettings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      personalCorrectionRules: [
+        { enabled: true, find: 'a', id: 'a', replace: 'b' },
+        { enabled: true, find: 'c', id: 'c', replace: 'd' },
+      ],
+      personalCorrectionRuleDiagnostics: [
+        {
+          code: 'blank_find' as const,
+          field: 'find' as const,
+          index: 1,
+          message: 'Find must not be blank.',
+          raw: { enabled: true, find: ' ', id: 'repair-b', replace: 'd' },
+        },
+      ],
+    };
+    const mutateSettings = vi.fn(async (mutation: (current: PluginSettings) => PluginSettings) => {
+      settings = mutation(settings);
+    });
+    new PersonalCorrectionRulesModal({} as never, {
+      getSettings: () => settings,
+      mutateSettings,
+    }).open();
+
+    expect(Setting.named('1. a')).toBeDefined();
+    const repairRow = Setting.instances.find((setting) => setting.name.startsWith('2.'));
+    expect(Setting.named('3. c')).toBeDefined();
+    repairRow?.textComponents[1]?.change('b');
+
+    await vi.waitFor(() => expect(settings.personalCorrectionRules).toHaveLength(3));
+    expect(settings.personalCorrectionRules.map((rule) => rule.id)).toEqual(['a', 'repair-b', 'c']);
+    expect(settings.personalCorrectionRuleOrder.map((entry) => entry.kind)).toEqual([
+      'active',
+      'active',
+      'active',
+    ]);
+  });
+
   it('keeps repaired invalid rules in their original cascade position', async () => {
     let settings = resolvePluginSettings({
       personalCorrectionRules: [
@@ -262,6 +301,46 @@ describe('PersonalCorrectionRulesModal', () => {
     await vi.waitFor(() => expect(settings.personalCorrectionRules).toHaveLength(1));
     expect(settings.personalCorrectionRules[0]).toMatchObject({ id: 'repaired' });
     expect(settings.personalCorrectionRuleDiagnostics).toEqual([]);
+  });
+
+  it('promotes a repaired draft and clears invalid presentation immediately', async () => {
+    let settings: PluginSettings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      personalCorrectionRuleDiagnostics: [
+        {
+          code: 'blank_id' as const,
+          field: 'id' as const,
+          index: 0,
+          message: 'Each rule needs an ID.',
+          raw: { enabled: true, find: ' ', future: 'keep', id: '', replace: 'new' },
+        },
+      ],
+    };
+    const mutateSettings = vi.fn(async (mutation: (current: PluginSettings) => PluginSettings) => {
+      settings = mutation(settings);
+    });
+    const modal = new PersonalCorrectionRulesModal({} as never, {
+      getSettings: () => settings,
+      mutateSettings,
+    });
+    modal.open();
+
+    const invalidRow = Setting.instances.find((setting) => setting.textComponents.length === 3);
+    expect(invalidRow).toBeDefined();
+    invalidRow?.textComponents[0]?.change('repaired');
+    expect(
+      invalidRow?.settingEl.classList.contains('local-stt-corrections-modal__rule--invalid'),
+    ).toBe(true);
+    expect(invalidRow?.settingEl.getAttribute('aria-invalid')).toBe('true');
+
+    invalidRow?.textComponents[1]?.change('old');
+    await vi.waitFor(() => expect(settings.personalCorrectionRules).toHaveLength(1));
+    const promotedRow = Setting.instances.find((setting) => setting.textComponents.length === 2);
+    expect(
+      promotedRow?.settingEl.classList.contains('local-stt-corrections-modal__rule--invalid'),
+    ).toBe(false);
+    expect(promotedRow?.settingEl.getAttribute('aria-invalid')).toBe('false');
+    expect(settings.personalCorrectionRules[0]).toMatchObject({ future: 'keep', id: 'repaired' });
   });
 
   it('validates, previews, and persists a rule while preserving newer settings', async () => {
