@@ -723,24 +723,49 @@ export class ModelInstallManager {
       // The user explicitly (re-)probed this exact selection and it's
       // confirmed broken now — drop any cached "ready" snapshot for it so a
       // future startup doesn't trust stale, now-incorrect capabilities.
-      if (task !== 'translation')
-        await this.applyProbeResultToCapabilities(
+      let retriedAfterStaleInit = false;
+      if (task !== 'translation') {
+        retriedAfterStaleInit = await this.applyProbeResultToCapabilities(
           selection,
           probeResult,
           task,
           expectedInitGeneration,
           expectedSelectionGeneration,
           canCommit,
+          true,
         );
+      }
       if (!canCommit(this.deps.getSettings())) return probeResult;
       if (task !== 'translation') {
-        await this.invalidateCapabilitiesSnapshot(
+        const currentSettings = this.deps.getSettings();
+        const snapshot =
+          task === 'tts'
+            ? currentSettings.selectedTtsModelCapabilitiesSnapshot
+            : currentSettings.selectedModelCapabilitiesSnapshot;
+        const hadMatchingSnapshot =
+          snapshot !== null && selectedModelEquals(snapshot.selection, selection);
+        const invalidated = await this.invalidateCapabilitiesSnapshot(
           selection,
           task,
           expectedInitGeneration,
           expectedSelectionGeneration,
           canCommit,
         );
+        if (
+          !retriedAfterStaleInit &&
+          hadMatchingSnapshot &&
+          !invalidated &&
+          expectedInitGeneration !== this.initGeneration
+        ) {
+          await this.refreshSelectedCapabilities(
+            selection,
+            task,
+            this.initGeneration,
+            this.selectionGenerations[task],
+            false,
+            true,
+          );
+        }
       }
       throw new Error(createProbeFailureMessage(probeResult));
     }
@@ -955,6 +980,7 @@ export class ModelInstallManager {
     expectedInitGeneration: number = this.initGeneration,
     expectedSelectionGeneration: number = this.selectionGenerations[task],
     retryOnStaleInit: boolean = false,
+    invalidateSnapshotOnUnavailable: boolean = false,
   ): Promise<void> {
     try {
       const probeResult = await this.deps.sidecarConnection.probeModelSelection({
@@ -976,6 +1002,17 @@ export class ModelInstallManager {
         undefined,
         retryOnStaleInit,
       );
+      if (
+        invalidateSnapshotOnUnavailable &&
+        (!probeResult.available || probeResult.mergedCapabilities === null)
+      ) {
+        await this.invalidateCapabilitiesSnapshot(
+          selection,
+          task,
+          expectedInitGeneration,
+          expectedSelectionGeneration,
+        );
+      }
     } catch (error) {
       if (
         expectedInitGeneration !== this.initGeneration ||
@@ -998,6 +1035,14 @@ export class ModelInstallManager {
           status: 'unavailable',
         });
         this.notify();
+        if (invalidateSnapshotOnUnavailable) {
+          await this.invalidateCapabilitiesSnapshot(
+            selection,
+            task,
+            expectedInitGeneration,
+            expectedSelectionGeneration,
+          );
+        }
       }
     }
   }
@@ -1010,7 +1055,7 @@ export class ModelInstallManager {
     expectedSelectionGeneration: number = this.selectionGenerations[task],
     canCommit: (settings: Readonly<PluginSettings>) => boolean = () => true,
     retryOnStaleInit: boolean = false,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const canApply = (settings: Readonly<PluginSettings>): boolean => {
       const current = task === 'tts' ? settings.selectedTtsModel : settings.selectedModel;
       return (
@@ -1039,9 +1084,11 @@ export class ModelInstallManager {
           this.initGeneration,
           this.selectionGenerations[task],
           false,
+          true,
         );
+        return true;
       }
-      return;
+      return false;
     }
 
     if (probeResult.status === 'ready' && probeResult.mergedCapabilities !== null) {
@@ -1065,7 +1112,7 @@ export class ModelInstallManager {
               },
             }),
       }));
-      if (!committed || !canApply(this.deps.getSettings())) return;
+      if (!committed || !canApply(this.deps.getSettings())) return false;
       this.setCapabilities(task, {
         capabilities,
         selection,
@@ -1093,6 +1140,7 @@ export class ModelInstallManager {
     }
 
     if (canApply(this.deps.getSettings())) this.notify();
+    return false;
   }
 
   private async invalidateCapabilitiesSnapshot(
@@ -1101,14 +1149,14 @@ export class ModelInstallManager {
     expectedInitGeneration: number = this.initGeneration,
     expectedSelectionGeneration: number = this.selectionGenerations[task],
     canCommit: (settings: Readonly<PluginSettings>) => boolean = () => true,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const settings = this.deps.getSettings();
     const snapshot =
       task === 'tts'
         ? settings.selectedTtsModelCapabilitiesSnapshot
         : settings.selectedModelCapabilitiesSnapshot;
     if (snapshot !== null && selectedModelEquals(snapshot.selection, selection)) {
-      await this.deps.commitSettingsIf(
+      return this.deps.commitSettingsIf(
         (currentSettings) => {
           const current =
             task === 'tts' ? currentSettings.selectedTtsModel : currentSettings.selectedModel;
@@ -1128,6 +1176,7 @@ export class ModelInstallManager {
         }),
       );
     }
+    return false;
   }
 
   private handleSidecarEvent(event: SidecarEvent): void {

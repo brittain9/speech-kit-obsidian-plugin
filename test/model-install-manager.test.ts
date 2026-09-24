@@ -1828,6 +1828,49 @@ describe('ModelInstallManager', () => {
       expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(2);
     });
 
+    it('does not retain a stale ready snapshot when a same-model reselect is unavailable across init', async () => {
+      const selection = sampleSelection();
+      const initialCapabilities = sampleMergedCapabilities();
+      harness = createManagerHarness({
+        selectedModel: selection,
+        selectedModelCapabilitiesSnapshot: {
+          capabilities: initialCapabilities,
+          selection,
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      const unavailableProbe = {
+        ...sampleReadyProbeResult(selection),
+        available: false,
+        installed: false,
+        mergedCapabilities: null,
+        message: 'The model is unavailable.',
+        status: 'missing' as const,
+        type: 'model_probe_result' as const,
+      };
+      const userProbe = deferred<ModelProbeResultEvent>();
+      harness.sidecarConnection.probeModelSelection
+        .mockReturnValueOnce(userProbe.promise)
+        .mockResolvedValueOnce(unavailableProbe);
+
+      const selecting = harness.manager.select(selection);
+      const backgroundInit = harness.manager.init();
+      await backgroundInit;
+      userProbe.resolve(unavailableProbe);
+      await expect(selecting).rejects.toThrow('The model is unavailable.');
+
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+          reason: 'missing',
+          selection,
+          status: 'unavailable',
+        });
+      });
+      expect(harness.getSettings().selectedModel).toEqual(selection);
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(2);
+    });
+
     it('detaches a same-model reselect snapshot and eventually rehydrates after init changes', async () => {
       const selection = sampleSelection();
       const initialCapabilities = sampleMergedCapabilities();
@@ -1995,10 +2038,14 @@ describe('ModelInstallManager', () => {
           await selecting;
         }
 
-        expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
-          capabilities: initialCapabilities,
-          selection,
-        });
+        expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual(
+          resultKind === 'ready'
+            ? {
+                capabilities: initialCapabilities,
+                selection,
+              }
+            : null,
+        );
       },
     );
 
