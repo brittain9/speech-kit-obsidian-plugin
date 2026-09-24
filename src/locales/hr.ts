@@ -133,6 +133,7 @@ export const hr = {
   'translation.modal.sourceNote': 'Izvorna bilješka',
   'translation.modal.previewAria': 'Pregled prijevoda',
   'translation.modal.readAloud': 'Pročitaj prijevod naglas na jeziku {language}',
+  'translation.modal.reopen': 'Ponovno otvori prijevod: {status}',
   'translation.modal.preparing': 'Priprema lokalnog prijevoda…',
   'translation.modal.loading': 'Učitavanje lokalnog modela…',
   'translation.modal.translating': 'Prevođenje…',
@@ -478,6 +479,10 @@ export const hr = {
   'ribbon.listening': 'Speech Kit — slušanje',
   'ribbon.speechDetected': 'Speech Kit — čuje govor',
   'ribbon.error': 'Speech Kit — pogreška',
+  'ribbon.queue.normal': 'Red je normalan',
+  'ribbon.queue.catchingUp': 'Nadoknađuje',
+  'ribbon.queue.fallingBehind': 'Transkripcija zaostaje',
+  'ribbon.queue.saturated': 'Red je pun — pauzirajte diktiranje',
   'validation.wholeNumberRange': 'Unesite cijeli broj od {min} do {max}.',
   'validation.numberRange': 'Unesite broj od {min} do {max}.',
   'llm.managedByPreset':

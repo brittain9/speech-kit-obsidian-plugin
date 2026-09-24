@@ -324,8 +324,12 @@ than a silent failure.
 - Partials carry only the engine stage outcome. Finals run the normal post-engine
   chain and receive a revision greater than every emitted partial.
 - Back-pressure: finalized utterances queue while inference is in flight; queue
-  tiers are reported, and the session stops at a hard cap rather than silently
-  dropping audio.
+  tiers are reported as `normal`, `catching_up`, `falling_behind`, and
+  `saturated`. The ribbon exposes the current tier in its localized tooltip and
+  accessible label without repainting the live SVG or stopping speech-band
+  animation. Falling-behind and saturated states explain the condition; normal
+  and catching-up states remain concise. The session stops at a hard cap rather
+  than silently dropping audio.
 - Panic safety: `catch_unwind` wraps model load and inference; panics become
   `error` events instead of crashing the sidecar.
 
@@ -505,7 +509,12 @@ the selected model runtime and family:
 4. HY-MT loads lazily, handles one inference job, remains warm for five idle
    minutes, and uses the GGUF's embedded chat template exactly once.
 5. Closing the modal detaches it from the job; the translation status item can
-   reopen active progress or a completed preview. Explicit Cancel stops work.
+   reopen active progress or a completed preview. The status item is a native
+   button with a sibling `role="status"`/`aria-live="polite"` region so assistive
+   technology receives progress without the live node being flattened inside
+   the button. Reopening opens the modal before hiding the focused trigger, and
+   the modal close path restores the trigger for keyboard users. Explicit Cancel
+   stops work.
 6. Marker restoration and a Markdown topology signature are validated per
    unit. Unsafe output keeps the original unit in a copyable partial preview;
    Replace and Insert below stay disabled. Note-writing also requires an
@@ -532,7 +541,8 @@ not record source or translated text.
 The ribbon mic reflects the capture state: `idle` (click to start), `starting`,
 `listening`, `speech_detected` (hearing speech), and `error`. Transcription
 happens in the background without blocking capture, so there is no separate
-"transcribing" ribbon state.
+"transcribing" ribbon state. Queue backpressure is layered into the ribbon's
+localized accessible label and tooltip rather than replacing the live icon.
 
 ### Editor Target Ownership
 

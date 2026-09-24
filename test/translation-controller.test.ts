@@ -8,7 +8,8 @@ import type { PluginSettings } from '../src/settings/plugin-settings';
 import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import type { SidecarEvent } from '../src/sidecar/protocol';
 import { TranslationController } from '../src/translation/translation-controller';
-import { Modal, Setting } from './__mocks__/obsidian';
+import { TranslationStatusController } from '../src/translation/translation-status';
+import { Modal, Setting, TestElement } from './__mocks__/obsidian';
 
 describe('TranslationController', () => {
   afterEach(() => {
@@ -159,6 +160,40 @@ describe('TranslationController', () => {
     await vi.waitFor(() => expect(Setting.buttonNamed('Replace')).toBeDefined());
   });
 
+  it('restores the detached status trigger after deferred modal close', async () => {
+    const fixture = await openStatusTriggeredTranslation();
+    expect(fixture.forwardedStatusOptions).toContainEqual({ preserveFocus: true });
+    fixture.reopenedModal.contentEl.focus();
+    const finishClose = deferModalClose(fixture.reopenedModal);
+
+    fixture.reopenedModal.close();
+    expect(fixture.statusEl.style.display).toBe('none');
+    expect(fixture.statusEl.querySelector('button')?.disabled).toBe(true);
+
+    finishClose();
+
+    expect(fixture.statusEl.style.display).not.toBe('none');
+    expect(fixture.statusEl.ownerDocument.activeElement).toBe(fixture.trigger);
+  });
+
+  it.each(['Dismiss', 'Replace', 'Insert below'] as const)(
+    'focuses the original translation editor after %s from a status-triggered reopen',
+    async (action) => {
+      const fixture = await openStatusTriggeredTranslation();
+      fixture.completeTranslation();
+      await vi.waitFor(() => expect(Setting.buttonNamed(action)).toBeDefined());
+      const finishClose = deferModalClose(fixture.reopenedModal);
+
+      await Setting.buttonNamed(action).click();
+      expect(fixture.editor.focus).not.toHaveBeenCalled();
+      expect(fixture.statusEl.style.display).toBe('none');
+
+      finishClose();
+
+      expect(fixture.editor.focus).toHaveBeenCalledOnce();
+    },
+  );
+
   it('starts a fresh translation from the current note after it changed', async () => {
     Modal.instances.length = 0;
     Setting.reset();
@@ -291,6 +326,120 @@ describe('TranslationController', () => {
     expect(modelSetting?.buttonComponents).toHaveLength(0);
   });
 });
+
+interface StatusTriggeredTranslationFixture {
+  completeTranslation: () => void;
+  forwardedStatusOptions: Array<{ preserveFocus?: boolean } | undefined>;
+  editor: {
+    focus: ReturnType<typeof vi.fn>;
+    getValue: () => string;
+    replaceRange: ReturnType<typeof vi.fn>;
+  };
+  reopenedModal: Modal;
+  statusEl: TestElement;
+  trigger: NonNullable<ReturnType<TestElement['querySelector']>>;
+}
+
+async function openStatusTriggeredTranslation(): Promise<StatusTriggeredTranslationFixture> {
+  Modal.instances.length = 0;
+  Setting.reset();
+  const statusEl = new TestElement();
+  const status = new TranslationStatusController(statusEl as unknown as HTMLElement);
+  const listeners: Array<(event: SidecarEvent) => void> = [];
+  const forwardedStatusOptions: Array<{ preserveFocus?: boolean } | undefined> = [];
+  let translationId = '';
+  const startTranslation = vi.fn(async (payload: { translationId: string }) => {
+    translationId = payload.translationId;
+  });
+  const settings = {
+    ...DEFAULT_PLUGIN_SETTINGS,
+    selectedTranslationModel: {
+      familyId: 'tencent_hy_mt' as const,
+      kind: 'catalog_model' as const,
+      modelId: 'hy-mt',
+      runtimeId: 'llama_cpp' as const,
+    },
+  };
+  const model = {
+    familyId: 'tencent_hy_mt',
+    modelId: 'hy-mt',
+    runtimeId: 'llama_cpp',
+    task: 'translation',
+    translationSupport: { kind: 'all_to_all', languages: ['en', 'es'] },
+  };
+  const controller = new TranslationController({
+    app: {} as never,
+    canReadAloud: () => false,
+    feedback: { show: vi.fn() },
+    getSettings: () => settings,
+    logger: { error: vi.fn(), warn: vi.fn() } as never,
+    modelManager: {
+      getState: () => ({
+        catalog: { models: [model] },
+        selectedTranslationModel: settings.selectedTranslationModel,
+        installedModels: [{ familyId: 'tencent_hy_mt', modelId: 'hy-mt', runtimeId: 'llama_cpp' }],
+      }),
+    } as never,
+    onReadAloud: vi.fn(),
+    saveSettings: vi.fn(async () => {}),
+    setDetachedStatus: (state, reopen, options) => {
+      forwardedStatusOptions.push(options);
+      status.update(state, reopen, options);
+    },
+    sidecarConnection: {
+      cancelTranslation: vi.fn(),
+      startTranslation,
+      subscribe: (next: (event: SidecarEvent) => void) => {
+        listeners.push(next);
+        return () => {};
+      },
+    } as never,
+  });
+  const editor = {
+    focus: vi.fn(),
+    getValue: () => 'Translate this note.',
+    replaceRange: vi.fn(),
+  };
+
+  controller.translateNote(editor as never);
+  await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledOnce());
+  Modal.instances.at(-1)?.close();
+  const trigger = statusEl.querySelector('button');
+  if (trigger === null) throw new Error('Expected detached translation trigger.');
+  trigger.focus();
+  await trigger.click();
+  const reopenedModal = Modal.instances.at(-1);
+  if (reopenedModal === undefined) throw new Error('Expected reopened translation modal.');
+
+  return {
+    completeTranslation: () => {
+      const listener = listeners.at(-1);
+      if (listener === undefined) throw new Error('Expected translation event subscription.');
+      listener({
+        type: 'translation_complete',
+        translationId,
+        translations: ['Traduzca esto.'],
+      });
+    },
+    forwardedStatusOptions,
+    editor,
+    reopenedModal,
+    statusEl,
+    trigger,
+  };
+}
+
+function deferModalClose(modal: Modal): () => void {
+  const onClose = modal.onClose.bind(modal);
+  let deferred: (() => void) | null = null;
+  modal.onClose = () => {
+    deferred = onClose;
+  };
+  return () => {
+    if (deferred === null) throw new Error('Expected deferred modal close.');
+    deferred();
+  };
+}
 
 function translationModel(modelId: string, displayName: string) {
   return {

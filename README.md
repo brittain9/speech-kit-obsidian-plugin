@@ -13,7 +13,7 @@ Dictate live. Transcribe meetings. Translate text. Listen to notes. One plugin i
 
 - 🎤 **Speech:** Dictate with live streaming text, or capture higher-accuracy transcripts from meetings, calls, and other audio.
 - 🔊 **Voice:** Listen to your notes with natural voices.
-- 🌍 **Language:** Dictate in ten languages and translate notes locally across eight.
+- 🌍 **Language:** Translate notes locally with Firefox Translations or Tencent HY-MT 2.
 - 🧠 **Models:** Choose from a managed catalog of speech, voice, and translation models, with optional LLM text tools.
 
 <p align="center">
@@ -38,7 +38,8 @@ Speech Kit is not tied to one speech engine or hosted API. It manages a growing 
 | Multilingual live transcription | Nemotron 3.5 ASR |
 | The most accurate transcripts | Whisper Large V3 Turbo, Cohere Transcribe, and other batch models |
 | Natural local voices | Pocket TTS or Supertonic 3 |
-| Fast offline translation | Firefox Translations |
+| Fast offline translation | Firefox Translations — language-direction packs download on demand |
+| Natural, broader translation | Tencent HY-MT 2 — the current catalog records 38 languages with all-to-all support |
 
 The setup wizard installs the native engine and your first speech model. From there, Speech Kit manages the downloads and you choose how you work.
 
@@ -48,9 +49,9 @@ The setup wizard installs the native engine and your first speech model. From th
 
 **Transcribe.** Combine your microphone with system audio to capture meetings, calls, interviews, and videos. Add timestamps and optional on-device speaker labels.
 
-**Translate.** Translate a selection or a whole note between English and seven other languages. Preview the result before replacing your text, inserting it into the note, or copying it. One local model pack covers every supported direction.
+**Translate.** Translate a selection or a whole note with an installed, compatible local model. Firefox Translations downloads small language-direction packs on demand for the released English-anchored directions. Tencent HY-MT 2 is a separate local model whose current catalog records 38 languages with all-to-all support. For HY-MT 2, choose a standard, formal, casual, or custom style and optionally add a custom instruction. The result opens in an editable preview where you can review it before replacing the source, inserting it, or copying it; a compatible result can also be read aloud.
 
-**Listen.** Read any note aloud with natural local voices. Control the voice, speed, and playback without leaving Obsidian.
+**Listen.** Read a compatible note or selection aloud with natural local voices. Control the voice, speed, and playback without leaving Obsidian.
 
 **Refine.** Optional LLM tools can clean up, summarize, restructure, or transform text with your own prompts.
 
@@ -72,7 +73,7 @@ Choose your platform. Choose your models. Keep one workflow inside Obsidian.
 2. Follow the setup wizard to install the native engine and a speech model.
 3. Select **Try dictation now**, or start from the ribbon, command palette, or a hotkey.
 
-Dictation, transcription, translation, and read aloud require no account, API key, usage credits, or cloud service. Once their models are installed, they continue working offline.
+Dictation, transcription, translation, and read aloud require no account, API key, usage credits, or cloud service. Once the selected models and any required language-direction pack are installed, they continue working offline.
 
 Optional LLM text tools are separate. You can connect a local or remote provider when you choose to use them.
 
@@ -80,21 +81,21 @@ Optional LLM text tools are separate. You can connect a local or remote provider
 
 Each feature is served by a different model, so coverage is tracked per feature rather than as a single list.
 
-| Language | Transcription | Live dictation | Read aloud | Translation | Interface |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| English, Spanish, German, French, Portuguese, Italian, Dutch, Japanese | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Croatian | ✅ | ✅ | ✅ | — | ✅ |
-| Serbian | ✅ | — | — | — | — |
+| Language | Transcription | Live dictation | Read aloud | Interface |
+| --- | :-: | :-: | :-: | :-: |
+| English, Spanish, German, French, Portuguese, Italian, Dutch, Japanese | ✅ | ✅ | ✅ | ✅ |
+| Croatian | ✅ | ✅ | ✅ | ✅ |
+| Serbian | ✅ | — | — | — |
 
 ✅ supported · — not yet available
 
-Transcription coverage also depends on the model you select: multilingual models cover the full set above, while some smaller or specialized models are English-only. Translation runs through English in either direction, so every supported pair has English on one side.
+Translation coverage depends on the model and, for Firefox Translations, the selected direction. Firefox Translations provides the released English-anchored directions with small language-direction packs downloaded on demand. Tencent HY-MT 2 provides the broader 38-language all-to-all catalog coverage. Install the model and any required pack before starting a translation; an incompatible pair is not presented as supported.
 
 ## Local-first, private by default
 
 Speech Kit works without accounts, subscriptions, or required cloud services.
 
-* **Your work stays on your machine.** Dictation, transcription, read aloud, and translation run locally and continue working offline once their models are installed.
+* **Your work stays on your machine.** Dictation, transcription, read aloud, and translation run locally once their models and any required language-direction pack are installed, and continue working offline.
 * **No account, telemetry, or metered usage.** No API key, credit card, subscription, or usage credits to monitor.
 * **LLM tools are optional.** Add flexible language processing to your workflow using a local model or a remote provider you choose. Text leaves your device only when you explicitly use a remote provider, and audio is never uploaded.
 * **Choose what works for you.** Install high-quality models suited to your language, hardware, and workflow.

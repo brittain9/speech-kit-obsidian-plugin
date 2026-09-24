@@ -78,11 +78,10 @@ export class DictationRibbonController {
       return;
     }
     this.queueTier = tier;
-    // queueTier is not currently surfaced in the label or icon. Intentionally
-    // do not call render() here — re-running paintIcon while speech_detected is
-    // active would replace the live <svg> element, killing the in-flight
-    // transform/opacity transitions. If a future revision starts reflecting the
-    // tier, route it through renderLabel() (label-only), not render().
+    // Keep this label-only. Re-running paintIcon while speech_detected is active
+    // would replace the live <svg> element and interrupt its in-flight
+    // transform/opacity transitions.
+    this.renderLabel();
   }
 
   setVisualizer(bandReader: AudioBandReader | null): void {
@@ -107,7 +106,7 @@ export class DictationRibbonController {
     // aria-label and title follow this.state, not visualState — a screen reader
     // or tooltip must announce the real controller state, even during the
     // speech-tail visual hold where visualState lags by up to SPEECH_TAIL_HOLD_MS.
-    const label = buildRibbonLabel(this.state);
+    const label = buildRibbonLabel(this.state, this.queueTier);
     this.element.setAttribute('aria-label', label);
     this.element.setAttribute('data-tooltip-position', 'top');
     this.element.title = label;
@@ -240,7 +239,15 @@ function iconForState(state: DictationControllerState): RibbonIcon {
   }
 }
 
-function buildRibbonLabel(state: DictationControllerState): string {
+function buildRibbonLabel(
+  state: DictationControllerState,
+  queueTier: QueueBackpressureTier,
+): string {
+  const stateLabel = ribbonStateLabel(state);
+  return `${stateLabel} · ${queueTierLabel(queueTier)}`;
+}
+
+function ribbonStateLabel(state: DictationControllerState): string {
   switch (state) {
     case 'idle':
       return t('ribbon.idle');
@@ -254,6 +261,21 @@ function buildRibbonLabel(state: DictationControllerState): string {
       return t('ribbon.error');
     default:
       return assertNever(state);
+  }
+}
+
+function queueTierLabel(tier: QueueBackpressureTier): string {
+  switch (tier) {
+    case 'normal':
+      return t('ribbon.queue.normal');
+    case 'catching_up':
+      return t('ribbon.queue.catchingUp');
+    case 'falling_behind':
+      return t('ribbon.queue.fallingBehind');
+    case 'saturated':
+      return t('ribbon.queue.saturated');
+    default:
+      return assertNever(tier);
   }
 }
 
