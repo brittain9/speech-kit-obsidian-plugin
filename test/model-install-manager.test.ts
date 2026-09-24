@@ -1560,6 +1560,14 @@ describe('ModelInstallManager', () => {
 
       await vi.waitFor(() => {
         expect(harness.getSettings().selectedModel).toEqual(sampleSelection());
+        expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+          selection: sampleSelection(),
+          status: 'ready',
+        });
+        expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+          capabilities: sampleMergedCapabilities(),
+          selection: sampleSelection(),
+        });
       });
     });
 
@@ -1757,7 +1765,10 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness();
       configureSidecarForInit(harness.sidecarConnection);
       const deferredProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
-      harness.sidecarConnection.probeModelSelection.mockReturnValueOnce(deferredProbe.promise);
+      const freshProbeResult = sampleReadyProbeResult(selection);
+      harness.sidecarConnection.probeModelSelection
+        .mockReturnValueOnce(deferredProbe.promise)
+        .mockResolvedValueOnce(freshProbeResult);
 
       const selecting = harness.manager.select(selection);
       const backgroundInit = harness.manager.init();
@@ -1765,9 +1776,102 @@ describe('ModelInstallManager', () => {
       deferredProbe.resolve(sampleReadyProbeResult(selection));
       await selecting;
 
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+          capabilities: freshProbeResult.mergedCapabilities,
+          selection,
+          status: 'ready',
+        });
+      });
+      expect(harness.getSettings().selectedModel).toEqual(selection);
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        capabilities: freshProbeResult.mergedCapabilities,
+        selection,
+      });
+    });
+
+    it('keeps the selection and exposes unavailable when the post-init retry probe fails', async () => {
+      const selection = sampleSelection();
+      harness = createManagerHarness();
+      configureSidecarForInit(harness.sidecarConnection);
+      const deferredProbe = deferred<ModelProbeResultEvent>();
+      const unavailableProbe: ModelProbeResultEvent = {
+        ...sampleReadyProbeResult(selection),
+        available: false,
+        installed: false,
+        mergedCapabilities: null,
+        message: 'The retry probe is unavailable.',
+        status: 'missing',
+        type: 'model_probe_result',
+      };
+      harness.sidecarConnection.probeModelSelection
+        .mockReturnValueOnce(deferredProbe.promise)
+        .mockResolvedValueOnce(unavailableProbe);
+
+      const selecting = harness.manager.select(selection);
+      const backgroundInit = harness.manager.init();
+      await backgroundInit;
+      deferredProbe.resolve({
+        ...sampleReadyProbeResult(selection),
+        mergedCapabilities: sampleMergedCapabilities(),
+        type: 'model_probe_result',
+      });
+      await selecting;
+
       expect(harness.getSettings().selectedModel).toEqual(selection);
       expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
-      expect(harness.manager.getState().selectedModelCapabilities).toEqual({ status: 'none' });
+      expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+        reason: 'missing',
+        selection,
+        status: 'unavailable',
+      });
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(2);
+    });
+
+    it('detaches a same-model reselect snapshot and eventually rehydrates after init changes', async () => {
+      const selection = sampleSelection();
+      const initialCapabilities = sampleMergedCapabilities();
+      harness = createManagerHarness({
+        selectedModel: selection,
+        selectedModelCapabilitiesSnapshot: {
+          capabilities: initialCapabilities,
+          selection,
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      const userProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
+      const refreshedCapabilities = {
+        ...initialCapabilities,
+        family: {
+          ...initialCapabilities.family,
+          supportsWordTimestamps: !initialCapabilities.family.supportsWordTimestamps,
+        },
+      };
+      const freshProbeResult = {
+        ...sampleReadyProbeResult(selection),
+        mergedCapabilities: refreshedCapabilities,
+      };
+      harness.sidecarConnection.probeModelSelection
+        .mockReturnValueOnce(userProbe.promise)
+        .mockResolvedValueOnce(freshProbeResult);
+
+      const selecting = harness.manager.select(selection);
+      const backgroundInit = harness.manager.init();
+      await backgroundInit;
+      userProbe.resolve(sampleReadyProbeResult(selection));
+      await selecting;
+
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+          capabilities: refreshedCapabilities,
+          selection,
+          status: 'ready',
+        });
+      });
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        capabilities: refreshedCapabilities,
+        selection,
+      });
     });
 
     it.each(['ready', 'unavailable'] as const)(
@@ -1877,6 +1981,13 @@ describe('ModelInstallManager', () => {
                 status: 'missing',
                 type: 'model_probe_result' as const,
               };
+        if (resultKind === 'ready') {
+          harness.sidecarConnection.probeModelSelection.mockResolvedValueOnce({
+            ...sampleReadyProbeResult(selection),
+            mergedCapabilities: initialCapabilities,
+            type: 'model_probe_result' as const,
+          });
+        }
         deferredProbe.resolve(probeResult);
         if (resultKind === 'unavailable') {
           await expect(selecting).rejects.toThrow('Model is no longer available.');

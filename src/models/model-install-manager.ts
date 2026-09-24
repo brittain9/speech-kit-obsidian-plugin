@@ -711,6 +711,7 @@ export class ModelInstallManager {
     expectedInitGeneration: number,
     expectedSelectionGeneration: number,
     canCommit: (settings: Readonly<PluginSettings>) => boolean,
+    canApplyCapabilities: (settings: Readonly<PluginSettings>) => boolean = canCommit,
   ): Promise<ModelProbeResultEvent> {
     const probeResult = await this.deps.sidecarConnection.probeModelSelection({
       modelSelection: selection,
@@ -777,6 +778,7 @@ export class ModelInstallManager {
         return {
           ...currentSettings,
           selectedTtsModel: selection,
+          selectedTtsModelCapabilitiesSnapshot: null,
           selectedTtsVoice:
             selection.kind === 'catalog_model'
               ? (this.catalog.models.find((model) =>
@@ -790,19 +792,28 @@ export class ModelInstallManager {
               : null,
         };
       }
-      return { ...currentSettings, selectedModel: selection };
+      return {
+        ...currentSettings,
+        selectedModel: selection,
+        selectedModelCapabilitiesSnapshot: null,
+      };
     });
-    if (!committed || !canCommit(this.deps.getSettings())) return probeResult;
+    if (!committed) return probeResult;
     if (task === 'translation') {
       this.notify();
     } else {
+      if (this.selectionGenerations[task] === expectedSelectionGeneration) {
+        this.setCapabilities(task, { selection, status: 'pending' });
+        this.notify();
+      }
       await this.applyProbeResultToCapabilities(
         selection,
         probeResult,
         task,
         expectedInitGeneration,
         expectedSelectionGeneration,
-        canCommit,
+        canApplyCapabilities,
+        true,
       );
     }
     return probeResult;
@@ -943,6 +954,7 @@ export class ModelInstallManager {
     task: CapabilityTask = 'stt',
     expectedInitGeneration: number = this.initGeneration,
     expectedSelectionGeneration: number = this.selectionGenerations[task],
+    retryOnStaleInit: boolean = false,
   ): Promise<void> {
     try {
       const probeResult = await this.deps.sidecarConnection.probeModelSelection({
@@ -961,6 +973,8 @@ export class ModelInstallManager {
         task,
         expectedInitGeneration,
         expectedSelectionGeneration,
+        undefined,
+        retryOnStaleInit,
       );
     } catch (error) {
       if (
@@ -995,6 +1009,7 @@ export class ModelInstallManager {
     expectedInitGeneration: number = this.initGeneration,
     expectedSelectionGeneration: number = this.selectionGenerations[task],
     canCommit: (settings: Readonly<PluginSettings>) => boolean = () => true,
+    retryOnStaleInit: boolean = false,
   ): Promise<void> {
     const canApply = (settings: Readonly<PluginSettings>): boolean => {
       const current = task === 'tts' ? settings.selectedTtsModel : settings.selectedModel;
@@ -1007,7 +1022,27 @@ export class ModelInstallManager {
       );
     };
 
-    if (!canApply(this.deps.getSettings())) return;
+    const settings = this.deps.getSettings();
+    if (!canApply(settings)) {
+      const current = task === 'tts' ? settings.selectedTtsModel : settings.selectedModel;
+      if (
+        retryOnStaleInit &&
+        expectedInitGeneration !== this.initGeneration &&
+        expectedSelectionGeneration === this.selectionGenerations[task] &&
+        canCommit(settings) &&
+        current !== null &&
+        selectedModelEquals(current, selection)
+      ) {
+        await this.refreshSelectedCapabilities(
+          selection,
+          task,
+          this.initGeneration,
+          this.selectionGenerations[task],
+          false,
+        );
+      }
+      return;
+    }
 
     if (probeResult.status === 'ready' && probeResult.mergedCapabilities !== null) {
       const capabilities = probeResult.mergedCapabilities;
@@ -1241,6 +1276,18 @@ export class ModelInstallManager {
           selectedForTask === null
         );
       };
+      const canApplyAutoSelection = (settings: Readonly<PluginSettings>): boolean => {
+        const selectedForTask = selectedModelForTask(settings, completedTask);
+        return (
+          this.lifecycleGeneration === refresh.expectedLifecycleGeneration &&
+          this.installGeneration === refresh.expectedInstallGeneration &&
+          this.selectionGenerations[completedTask] === expectedSelectionGeneration &&
+          this.activeSelectionCounts[completedTask] === 0 &&
+          this.currentInstallRequest === null &&
+          selectedForTask !== null &&
+          selectedModelEquals(selectedForTask, completed)
+        );
+      };
       try {
         if (canCommitAutoSelection(this.deps.getSettings())) {
           await this.selectWithGuard(
@@ -1249,6 +1296,7 @@ export class ModelInstallManager {
             expectedInitGeneration,
             expectedSelectionGeneration,
             canCommitAutoSelection,
+            canApplyAutoSelection,
           );
         }
       } catch (error) {
