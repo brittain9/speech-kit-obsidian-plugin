@@ -2,6 +2,52 @@ import type { TranslationCatalog } from '.';
 
 export const ja = {
   'notice.dictationNotActive': 'ディクテーションは現在有効ではありません。',
+  'commands.transcribeAudioFile': 'ローカルの音声ファイルを文字起こし',
+  'audio-file-model-required':
+    'モデルを管理でローカルの音声認識モデルを選択して検証してから、もう一度お試しください。',
+  'audio-file-model-changed':
+    'ファイル選択中に音声認識モデルが変更されました。「ローカルの音声ファイルを文字起こし」をもう一度実行してください。',
+  'audio-file-model-not-batch':
+    '音声ファイルにはバッチ音声認識モデルが必要です。ストリーミングではないモデルを選択して再試行してください。',
+  'audio-file-language-unsupported':
+    '選択したモデルは設定済みのディクテーション言語（{language}）に対応していません。対応モデルを選ぶか言語を変更してください。',
+  'audio-file-target-required':
+    '文字起こしを挿入する Markdown ノートを編集モードで開いてから、もう一度お試しください。',
+  'audio-file-target-changed':
+    '音声ファイルを準備中に書き先が変わりました。元のノートに戻ってコマンドを再実行してください。',
+  'audio-file-busy':
+    'マイクのディクテーションまたは別の音声ファイルの文字起こしが実行中です。完了またはキャンセルしてから再試行してください。',
+  'audio-file-maintenance':
+    'ローカル音声エンジンをインストール、 再起動、または更新しています。完了までお待ちください。',
+  'audio-file-read-failed':
+    '選択したファイルを読み取れませんでした。ファイルが存在し、アクセス可能か確認して再試行してください。',
+  'audio-file-decode-failed':
+    'Obsidian がこの音声をデコードできませんでした。Obsidian が再生できる形式（通常は WAV）に変換してください。',
+  'audio-file-encoded-size':
+    'エンコード済みファイルが大きすぎます。より短いファイルか低ビットレートのファイル（最大 64 MiB）を選んでください。',
+  'audio-file-duration': '音声が 30 分の安全上限を超えています。短いファイルに分割してください。',
+  'audio-file-model-duration':
+    '選択したモデルが処理できる長さを超えています。分割するか、より長い音声に対応するモデルを選んでください。',
+  'audio-file-decoded-memory':
+    'デコードには大量のメモリを使用します。より短いファイル、低ビットレート、またはチャンネル数の少ないファイルを選んでください。',
+  'audio-file-empty':
+    '選択したファイルに文字起こしできる音声がありません。別の音声ファイルを選んでください。',
+  'audio-file-start-failed':
+    'ローカル音声エンジンを開始できませんでした。選択したモデルを確認して再試行してください。',
+  'audio-file-sidecar-missing':
+    'ローカル音声エンジンをインストールし、音声認識モデルを選択して再試行してください。',
+  'audio-file-sidecar-failed':
+    'ローカル音声エンジンのエラーにより文字起こしを停止しました。モデルを確認して再試行してください。',
+  'audio-file-queue-overload':
+    'ローカル音声エンジンが処理に追いつけなかったため、音声の読み取りを停止しました。録音を分割するか、より高速なモデルを選んでください。',
+  'audio-file-transcript-write-failed':
+    'ノートへ安全に書き込めなかったため、文字起こしを停止しました。ノートを復元して再試行してください。',
+  'audio-file-target-closed':
+    '書き先のノートが閉じられたか置き換えられました。ノートを開き、コマンドを再実行してください。',
+  'audio-file-target-deleted':
+    '書き先のノートが削除されました。復元または再作成してからコマンドを実行してください。',
+  'audio-file-surface-changed':
+    'ノートが Speech Kit で安全に追跡できない形で変更されました。復元してコマンドを再実行してください。',
   'notice.dictationStartFailed': 'ディクテーションを開始できませんでした。',
   'notice.dictationStopFailed': 'ディクテーションを停止できませんでした。',
   'notice.lastUtteranceCleared': '最後に残された発話をクリアしました。',

@@ -2,6 +2,53 @@ import type { TranslationCatalog } from '.';
 
 export const nl = {
   'notice.dictationNotActive': 'Dicteren is momenteel niet actief.',
+  'commands.transcribeAudioFile': 'Lokaal audiobestand transcriberen',
+  'audio-file-model-required':
+    'Selecteer en valideer een lokaal spraak-naar-tekstmodel bij Modellen beheren en probeer het opnieuw.',
+  'audio-file-model-changed':
+    'Het transcriptiemodel is gewijzigd terwijl de bestandskiezer open was. Voer Lokaal audiobestand transcriberen opnieuw uit.',
+  'audio-file-model-not-batch':
+    'Audiobestanden vereisen een batchspraakmodel. Kies een model zonder streaming en probeer het opnieuw.',
+  'audio-file-language-unsupported':
+    'Het model ondersteunt de ingestelde dicteertaal ({language}) niet. Kies een compatibel model of wijzig de dicteertaal.',
+  'audio-file-target-required':
+    'Open de Markdown-notitie die het transcript moet ontvangen in bewerkingsmodus en probeer het opnieuw.',
+  'audio-file-target-changed':
+    'Het doel is gewijzigd tijdens de voorbereiding. Keer terug naar de oorspronkelijke notitie en voer de opdracht opnieuw uit.',
+  'audio-file-busy':
+    'Dicteren of een andere audiobestandtranscriptie is al actief. Voltooi of annuleer die bewerking eerst.',
+  'audio-file-maintenance':
+    'De lokale spraakengine wordt geïnstalleerd, herstart of bijgewerkt. Wacht tot dit klaar is en probeer het opnieuw.',
+  'audio-file-read-failed':
+    'Kan het geselecteerde bestand niet lezen. Controleer of het bestaat en toegankelijk is.',
+  'audio-file-decode-failed':
+    'Obsidian kon de audio niet decoderen. Converteer het naar een formaat dat je Obsidian-versie kan afspelen, vaak WAV.',
+  'audio-file-encoded-size':
+    'Het gecodeerde bestand is te groot. Kies een korter bestand of een lagere bitrate (maximaal 64 MiB).',
+  'audio-file-duration':
+    'De audio overschrijdt de veiligheidslimiet van 30 minuten. Splits het in kortere bestanden.',
+  'audio-file-model-duration':
+    'De audio is langer dan het geselecteerde model aankan. Splits het of kies een model met een hogere limiet.',
+  'audio-file-decoded-memory':
+    'Decodering gebruikt te veel geheugen. Kies een korter bestand, een lagere bitrate of minder kanalen.',
+  'audio-file-empty':
+    'Het geselecteerde bestand bevat geen transcriptieaudio. Kies een ander audiobestand.',
+  'audio-file-start-failed':
+    'De lokale spraakengine kon de transcriptie niet starten. Controleer het geselecteerde model en probeer het opnieuw.',
+  'audio-file-sidecar-missing':
+    'Installeer de lokale spraakengine, selecteer een spraak-naar-tekstmodel en probeer het opnieuw.',
+  'audio-file-sidecar-failed':
+    'De transcriptie stopte omdat de lokale spraakengine mislukte. Controleer het model en probeer het opnieuw.',
+  'audio-file-queue-overload':
+    'De spraakengine kon niet bijhouden. Splits de opname of kies een sneller model.',
+  'audio-file-transcript-write-failed':
+    'De transcriptie stopte omdat Speech Kit niet veilig in de notitie kon schrijven. Herstel de notitie en probeer het opnieuw.',
+  'audio-file-target-closed':
+    'De doelnotitie is gesloten of vervangen. Open die opnieuw en voer de opdracht opnieuw uit.',
+  'audio-file-target-deleted':
+    'De doelnotitie is verwijderd. Herstel of maak die opnieuw en voer de opdracht opnieuw uit.',
+  'audio-file-surface-changed':
+    'De notitie is zo veranderd dat Speech Kit die niet veilig kon volgen. Herstel de notitie en voer de opdracht opnieuw uit.',
   'notice.dictationStartFailed': 'Kan het dicteren niet starten.',
   'notice.dictationStopFailed': 'Kan het dicteren niet stoppen.',
   'notice.lastUtteranceCleared': 'De laatst bewaarde uiting gewist.',

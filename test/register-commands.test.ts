@@ -36,6 +36,7 @@ describe('registerCommands', () => {
       startDictation: vi.fn(async () => {}),
       stopReadAloud: vi.fn(),
       stopDictation: vi.fn(async () => {}),
+      transcribeAudioFile: vi.fn(async () => {}),
       translateNote: vi.fn(),
       translateSelection: vi.fn(),
       toggleDictation: vi.fn(async () => {}),
@@ -107,6 +108,7 @@ describe('registerCommands', () => {
       startDictation: vi.fn(async () => {}),
       stopReadAloud: vi.fn(),
       stopDictation: vi.fn(async () => {}),
+      transcribeAudioFile: vi.fn(async () => {}),
       translateNote: vi.fn(),
       translateSelection: vi.fn(),
       toggleDictation: vi.fn(async () => {}),
@@ -140,6 +142,47 @@ describe('registerCommands', () => {
     expect(restoreCommand?.checkCallback?.(true)).toBe(false);
   });
 
+  it('registers the local audio-file transcription command', async () => {
+    const commands: Command[] = [];
+    const plugin = {
+      addCommand: vi.fn((command: Command) => {
+        commands.push(command);
+      }),
+    } as unknown as Plugin;
+    const transcribeAudioFile = vi.fn(async () => {});
+
+    registerCommands({
+      cancelDictation: vi.fn(async () => {}),
+      clearLastUtterance: vi.fn(),
+      clearRawTranscriptRecovery: vi.fn(),
+      checkSidecarHealth: vi.fn(async () => {}),
+      copyLastUtterance: vi.fn(),
+      copyRawTranscript: vi.fn(),
+      hasLastUtterance: () => false,
+      hasRawTranscriptRecovery: () => false,
+      isReadAloudActive: () => false,
+      plugin,
+      readAloud: vi.fn(async () => {}),
+      readAloudFromCursor: vi.fn(async () => {}),
+      reinsertLastUtterance: vi.fn(),
+      restoreRawTranscript: vi.fn(),
+      restartSidecar: vi.fn(async () => {}),
+      startDictation: vi.fn(async () => {}),
+      stopReadAloud: vi.fn(),
+      stopDictation: vi.fn(async () => {}),
+      transcribeAudioFile,
+      translateNote: vi.fn(),
+      translateSelection: vi.fn(),
+      toggleDictation: vi.fn(async () => {}),
+      toggleReadAloudPaused: vi.fn(async () => {}),
+    });
+
+    const command = commands.find(({ id }) => id === 'transcribe-local-audio-file');
+    expect(command?.name).toBe('Transcribe local audio file');
+    await command?.callback?.();
+    expect(transcribeAudioFile).toHaveBeenCalledOnce();
+  });
+
   it('registers both read-aloud start commands', async () => {
     const commands: Command[] = [];
     const plugin = {
@@ -169,6 +212,7 @@ describe('registerCommands', () => {
       startDictation: vi.fn(async () => {}),
       stopReadAloud: vi.fn(),
       stopDictation: vi.fn(async () => {}),
+      transcribeAudioFile: vi.fn(async () => {}),
       translateNote: vi.fn(),
       translateSelection: vi.fn(),
       toggleDictation: vi.fn(async () => {}),

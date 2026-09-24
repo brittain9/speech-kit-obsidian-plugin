@@ -69,6 +69,7 @@ interface ReadAloudControllerDependencies {
   getCatalog: () => ModelCatalogRecord;
   getInstalledModels: () => readonly InstalledModelRecord[];
   getSettings: () => PluginSettings;
+  isAudioFileTranscriptionActive: () => boolean;
   isDictationBusy: () => boolean;
   logger?: PluginLogger;
   onModelMissing: () => Promise<void> | void;
@@ -200,6 +201,14 @@ export class ReadAloudController {
     this.activeLanguageOrigin = languageOrigin;
     const startRevision = ++this.pendingStartRevision;
     try {
+      if (this.deps.isAudioFileTranscriptionActive()) {
+        this.deps.feedback.show({
+          intent: 'warning',
+          key: 'audio-file-busy',
+          message: t('audio-file-busy'),
+        });
+        return;
+      }
       if (this.deps.isDictationBusy()) await this.deps.stopDictation();
       if (startRevision !== this.pendingStartRevision) return;
       this.followAlongReading = this.deps.followAlong.begin(editor, source);

@@ -28,6 +28,7 @@ interface CommandDependencies {
   readAloud: (editor: Editor) => Promise<void>;
   readAloudFromCursor: (editor: Editor) => Promise<void>;
   stopReadAloud: () => void;
+  transcribeAudioFile: () => Promise<void>;
   translateNote: (editor: Editor) => void;
   translateSelection: (editor: Editor) => void;
   toggleReadAloudPaused: () => Promise<void>;
@@ -82,6 +83,14 @@ export function registerCommands(dependencies: CommandDependencies): void {
       if (!dependencies.isReadAloudActive()) return false;
       if (!checking) dependencies.stopReadAloud();
       return true;
+    },
+  });
+
+  dependencies.plugin.addCommand({
+    id: 'transcribe-local-audio-file',
+    name: t('commands.transcribeAudioFile'),
+    callback: async () => {
+      await dependencies.transcribeAudioFile();
     },
   });
 

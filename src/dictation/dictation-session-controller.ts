@@ -148,6 +148,7 @@ interface DictationSessionControllerDependencies {
   feedback: Pick<UserFeedback, 'show'>;
   getSettings: () => PluginSettings;
   hasDictationTarget: () => boolean;
+  isAudioFileTranscriptionActive: () => boolean;
   logger?: PluginLogger;
   onBatchTranscriptReplacementAccepted?: (text: string) => void;
   onLlmCleanupFailure?: (failure: LlmCleanupFailure) => void;
@@ -312,6 +313,14 @@ export class DictationSessionController {
 
   async startDictation(): Promise<void> {
     if (this.isCaptureActive() || this.sessions.size >= MAX_CONTROLLER_SESSIONS) {
+      return;
+    }
+    if (this.dependencies.isAudioFileTranscriptionActive()) {
+      this.dependencies.feedback.show({
+        intent: 'warning',
+        key: 'audio-file-busy',
+        message: t('audio-file-busy'),
+      });
       return;
     }
 

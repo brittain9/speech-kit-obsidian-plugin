@@ -4,8 +4,11 @@ import { shell } from 'electron';
 import { FileSystemAdapter, getLanguage, Menu, Platform, Plugin, setIcon } from 'obsidian';
 
 import { AudioCaptureStream } from './audio/audio-capture-stream';
+import { WebAudioAudioFileDecoder } from './audio/audio-file-decoder';
+import { pickLocalAudioFile } from './audio/local-audio-file-picker';
 import { SidecarAudioLevelMeter } from './audio/sidecar-audio-level-meter';
 import { registerCommands } from './commands/register-commands';
+import { AudioFileTranscriptionController } from './dictation/audio-file-transcription-controller';
 import { DictationSessionController } from './dictation/dictation-session-controller';
 import { FinalizedUtteranceAutoCopy } from './dictation/finalized-utterance-auto-copy';
 import { LastUtteranceRecovery } from './dictation/last-utterance-recovery';
@@ -33,7 +36,7 @@ import {
   openModelPickerWithSetup,
   READ_ALOUD_MODEL_PICKER_OPTIONS,
 } from './models/model-picker-routing';
-import { Session } from './session/session';
+import { Session, type SessionTarget } from './session/session';
 import { logAccelerationFallbacks } from './settings/acceleration-info';
 import { LlmPresetStateStore } from './settings/llm-preset-state';
 import { restoreLlmTransformationDefaults } from './settings/llm-transformation-reset';
@@ -91,6 +94,7 @@ import { LOCAL_DICTATION_VIEW_TYPE, LocalDictationView } from './ui/local-dictat
 
 export default class LocalSttPlugin extends Plugin {
   private audioCaptureStream: AudioCaptureStream | null = null;
+  private audioFileTranscriptionController: AudioFileTranscriptionController | null = null;
   private audioLevelMeter: SidecarAudioLevelMeter | null = null;
   private dictationController: DictationSessionController | null = null;
   /**
@@ -261,6 +265,8 @@ export default class LocalSttPlugin extends Plugin {
         createConfiguredLlmRouter(settings, (secretId) => this.getSecret(secretId)),
       getSettings: () => this.settings,
       hasDictationTarget: () => Session.hasDictationTarget(this.app),
+      isAudioFileTranscriptionActive: () =>
+        this.audioFileTranscriptionController?.isCaptureActive() ?? false,
       feedback: this.feedback,
       logger: this.logger,
       onBatchTranscriptReplacementAccepted: (text) => {
@@ -310,6 +316,8 @@ export default class LocalSttPlugin extends Plugin {
       getCatalog: () => this.requireModelInstallManager().getState().catalog,
       getInstalledModels: () => this.requireModelInstallManager().getState().installedModels,
       getSettings: () => this.settings,
+      isAudioFileTranscriptionActive: () =>
+        this.audioFileTranscriptionController?.isCaptureActive() ?? false,
       isDictationBusy: () => this.requireDictationController().isCaptureActive(),
       logger: this.logger,
       onModelMissing: () => this.openModelPicker(READ_ALOUD_MODEL_PICKER_OPTIONS),
@@ -319,6 +327,45 @@ export default class LocalSttPlugin extends Plugin {
       stopDictation: () => this.requireDictationController().stopDictation(),
     });
     this.renderReadAloudStatus('idle');
+    this.audioFileTranscriptionController = new AudioFileTranscriptionController({
+      backpressureTimeoutMs: 30_000,
+      createSession: ({ callbacks, placement, rendererOptions, sessionId, target }) => {
+        if (!isSessionTarget(target)) {
+          throw new Error('The audio-file transcript target is no longer available.');
+        }
+        return Session.createFromTarget(this.app, target, {
+          callbacks,
+          leafPinManager: this.temporaryLeafPinLeaseManager,
+          logger: this.logger,
+          placement,
+          rendererOptions,
+          sessionId,
+        });
+      },
+      decoder: new WebAudioAudioFileDecoder({ logger: this.logger }),
+      feedback: this.feedback,
+      getModelCapabilities: () =>
+        this.requireModelInstallManager().getState().selectedModelCapabilities,
+      getSettings: () => this.settings,
+      getTarget: () => Session.getDictationTarget(this.app),
+      isDictationBusy: () => this.requireDictationController().isCaptureActive(),
+      isSameTarget: (left, right) =>
+        isSessionTarget(left) && isSessionTarget(right) && Session.targetsEqual(left, right),
+      logger: this.logger,
+      onModelMissing: () => {
+        void this.openModelPicker();
+      },
+      onSidecarMissing: () => {
+        void this.openSetupWizard();
+      },
+      pickAudioFile: (signal) => pickLocalAudioFile(signal),
+      sessionStopTimeoutMs: this.settings.sidecarRequestTimeoutSeconds * 1_000,
+      sidecarConnection: this.requireSidecarConnection(),
+      sidecarLifecycleGate: this.sidecarLifecycleGate,
+      stopConflictingSpeech: () => {
+        this.readAloudController?.stop();
+      },
+    });
     this.releaseReadAloudModelSubscription = this.requireModelInstallManager().subscribe(() => {
       this.renderReadAloudStatus(this.readAloudController?.getState() ?? 'idle');
     });
@@ -340,7 +387,9 @@ export default class LocalSttPlugin extends Plugin {
       new LocalSttSettingTab(this.app, this, {
         feedback: this.feedback,
         getSettings: () => this.settings,
-        isDictationBusy: () => this.dictationController?.isBusy() ?? false,
+        isDictationBusy: () =>
+          (this.dictationController?.isBusy() ?? false) ||
+          (this.audioFileTranscriptionController?.isBusy() ?? false),
         logger: this.logger,
         modelInstallManager: this.requireModelInstallManager(),
         openModelPicker: (options) => this.openModelPicker(options),
@@ -400,6 +449,7 @@ export default class LocalSttPlugin extends Plugin {
       startDictation: async () => this.requireDictationController().startDictation(),
       stopReadAloud: () => this.requireReadAloudController().stop(),
       stopDictation: async () => this.requireDictationController().stopDictation(),
+      transcribeAudioFile: async () => this.requireAudioFileTranscriptionController().transcribe(),
       translateNote: (editor) => this.requireTranslationController().translateNote(editor),
       translateSelection: (editor) =>
         this.requireTranslationController().translateSelection(editor),
@@ -520,7 +570,9 @@ export default class LocalSttPlugin extends Plugin {
       feedback: this.feedback,
       hasDictationTarget: () => Session.hasDictationTarget(this.app),
       hasSelectedModel: () => this.settings.selectedModel !== null,
-      isDictationBusy: () => this.requireDictationController().isBusy(),
+      isDictationBusy: () =>
+        this.requireDictationController().isBusy() ||
+        this.requireAudioFileTranscriptionController().isBusy(),
       isSidecarInstalled: () => this.isSidecarInstalled(),
       logger: this.logger,
       modelInstallManager: this.requireModelInstallManager(),
@@ -629,6 +681,12 @@ export default class LocalSttPlugin extends Plugin {
       this.translationController?.dispose();
     } catch (error) {
       this.logger.error('translation', 'failed to dispose translation controller cleanly', error);
+    }
+
+    try {
+      await this.audioFileTranscriptionController?.dispose();
+    } catch (error) {
+      this.logger.error('audio', 'failed to dispose audio-file transcription cleanly', error);
     }
 
     try {
@@ -782,6 +840,14 @@ export default class LocalSttPlugin extends Plugin {
     }
 
     return this.dictationController;
+  }
+
+  private requireAudioFileTranscriptionController(): AudioFileTranscriptionController {
+    if (this.audioFileTranscriptionController === null) {
+      throw new Error('Audio-file transcription controller has not been initialized.');
+    }
+
+    return this.audioFileTranscriptionController;
   }
 
   private requireReadAloudController(): ReadAloudController {
@@ -1190,6 +1256,16 @@ export default class LocalSttPlugin extends Plugin {
 
     return join(vaultAdapter.getBasePath(), this.app.vault.configDir, 'plugins', this.manifest.id);
   }
+}
+
+function isSessionTarget(value: unknown): value is SessionTarget {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'file' in value &&
+    'kind' in value &&
+    'view' in value
+  );
 }
 
 function getSidecarExecutableName(): string {

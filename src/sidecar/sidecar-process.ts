@@ -130,10 +130,54 @@ export class SidecarProcess {
     child.stdin.write(frameBytes);
   }
 
+  async writeAudioFrame(frameBytes: Uint8Array, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) {
+      throw abortReason(signal);
+    }
+
+    const child = this.child;
+    if (child === null || this.stdinDead || !child.stdin.writable) {
+      throw new Error('Sidecar process is not running.');
+    }
+
+    if (child.stdin.write(frameBytes)) {
+      signal.throwIfAborted();
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = (): void => {
+        child.stdin.off('drain', onDrain);
+        child.stdin.off('error', onError);
+        signal.removeEventListener('abort', onAbort);
+      };
+      const onDrain = (): void => {
+        cleanup();
+        resolve();
+      };
+      const onError = (error: Error): void => {
+        cleanup();
+        reject(error);
+      };
+      const onAbort = (): void => {
+        cleanup();
+        reject(abortReason(signal));
+      };
+
+      child.stdin.once('drain', onDrain);
+      child.stdin.once('error', onError);
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+  }
+
   private disposeReaders(): void {
     this.stderrReader?.close();
     this.stderrReader = null;
   }
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : new Error('Audio frame write aborted.');
 }
 
 function assertDesktopRuntime(): void {

@@ -2,6 +2,53 @@ import type { TranslationCatalog } from '.';
 
 export const hr = {
   'notice.dictationNotActive': 'Diktiranje trenutačno nije aktivno.',
+  'commands.transcribeAudioFile': 'Transkribiraj lokalnu audio-datoteku',
+  'audio-file-model-required':
+    'Odaberite i provjerite lokalni model govora u tekstu u Upravljanju modelima pa pokušajte ponovno.',
+  'audio-file-model-changed':
+    'Model transkripcije promijenjen je dok je otvoren odabir datoteke. Ponovno pokrenite Transkribiraj lokalnu audio-datoteku.',
+  'audio-file-model-not-batch':
+    'Audio-datoteke zahtijevaju batch model. Odaberite model bez streaminga i pokušajte ponovno.',
+  'audio-file-language-unsupported':
+    'Odabrani model ne podržava konfigurirani jezik diktiranja ({language}). Odaberite kompatibilan model ili promijenite jezik diktiranja.',
+  'audio-file-target-required':
+    'Otvorite Markdown bilješku koja treba primiti transkript u načinu uređivanja pa pokušajte ponovno.',
+  'audio-file-target-changed':
+    'Odredište se promijenilo tijekom pripreme. Vratite se na izvornu bilješku i ponovno pokrenite naredbu.',
+  'audio-file-busy':
+    'Diktiranje ili druga transkripcija audio-datoteke je aktivna. Završite ili otkažite tu radnju pa pokušajte ponovno.',
+  'audio-file-maintenance':
+    'Lokalni govorni motor se instalira, ponovno pokreće ili ažurira. Pričekajte završetak pa pokušajte ponovno.',
+  'audio-file-read-failed':
+    'Odabrana datoteka nije se mogla pročitati. Provjerite postoji li i ima li pristup pa pokušajte ponovno.',
+  'audio-file-decode-failed':
+    'Obsidian nije mogao dekodirati audio. Pretvorite ga u format koji vaša verzija Obsidiana može reproducir, često WAV.',
+  'audio-file-encoded-size':
+    'Kodirana audio-datoteka je prevelika. Odaberite kraću datoteku ili manju brzinu bitova (najviše 64 MiB).',
+  'audio-file-duration':
+    'Audio je dulji od sigurnosnog ograničenja od 30 minuta. Podijelite ga u kraće datoteke.',
+  'audio-file-model-duration':
+    'Audio je dulji nego što odabrani model može obraditi. Podijelite ga ili odaberite model s većim ograničenjem.',
+  'audio-file-decoded-memory':
+    'Dekodiranje bi potrošilo previše memorije. Odaberite kraću datoteku, manju brzinu bitova ili manje kanala.',
+  'audio-file-empty':
+    'Odabrana datoteka ne sadrži zvuk koji se može transkribirati. Odaberite drugu audio-datoteku.',
+  'audio-file-start-failed':
+    'Lokalni govorni motor nije mogao pokrenuti transkripciju. Provjerite odabrani model pa pokušajte ponovno.',
+  'audio-file-sidecar-missing':
+    'Instalirajte lokalni govorni motor, odaberite model govora u tekst pa pokušajte ponovno.',
+  'audio-file-sidecar-failed':
+    'Transkripcija se zaustavila jer lokalni govorni motor nije uspio. Provjerite model pa pokušajte ponovno.',
+  'audio-file-queue-overload':
+    'Lokalni govorni motor nije mogao pratiti obradu. Podijelite snimak ili odaberite brži model.',
+  'audio-file-transcript-write-failed':
+    'Transkripcija se zaustavila jer Speech Kit nije mogao sigurno pisati u bilješku. Vratite bilješku pa pokušajte ponovno.',
+  'audio-file-target-closed':
+    'Ciljna bilješka je zatvorena ili zamijenjena. Ponovno je otvorite i pokrenite naredbu.',
+  'audio-file-target-deleted':
+    'Ciljna bilješka je izbrisana. Vratite je ili stvorite novu pa ponovno pokrenite naredbu.',
+  'audio-file-surface-changed':
+    'Bilješka se promijenila na način koji Speech Kit nije mogao sigurno pratiti. Vratite je i ponovno pokrenite naredbu.',
   'notice.dictationStartFailed': 'Nije moguće pokrenuti diktiranje.',
   'notice.dictationStopFailed': 'Nije moguće zaustaviti diktiranje.',
   'notice.finalizedUtteranceAutoCopyFailed': 'Nije moguće automatski kopirati dovršeni iskaz.',

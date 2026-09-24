@@ -2,6 +2,52 @@ import type { TranslationCatalog } from '.';
 
 export const es = {
   'notice.dictationNotActive': 'El dictado no está activo actualmente.',
+  'commands.transcribeAudioFile': 'Transcribir archivo de audio local',
+  'audio-file-model-required':
+    'Seleccione y valide un modelo local de voz a texto en Gestionar modelos y vuelva a intentarlo.',
+  'audio-file-model-changed':
+    'El modelo de transcripción cambió mientras estaba abierto el selector. Vuelva a ejecutar Transcribir archivo de audio local.',
+  'audio-file-model-not-batch':
+    'Los archivos de audio requieren un modelo por lotes. Seleccione un modelo sin streaming e inténtelo de nuevo.',
+  'audio-file-language-unsupported':
+    'El modelo no admite el idioma de dictado configurado ({language}). Elija otro modelo o cambie el idioma de dictado.',
+  'audio-file-target-required':
+    'Abra en modo de edición la nota Markdown que debe recibir la transcripción y vuelva a intentarlo.',
+  'audio-file-target-changed':
+    'El destino cambió al preparar el audio. Vuelva a la nota original y ejecute de nuevo Transcribir archivo de audio local.',
+  'audio-file-busy':
+    'Ya hay dictado o una transcripción de archivo activa. Termine o cancele esa operación antes de continuar.',
+  'audio-file-maintenance':
+    'El motor local se está instalando, reiniciando o actualizando. Espere a que termine e inténtelo de nuevo.',
+  'audio-file-read-failed':
+    'No se pudo leer el archivo seleccionado. Compruebe que existe y sea accesible.',
+  'audio-file-decode-failed':
+    'Obsidian no pudo decodificar el audio. Conviértalo a un formato reproducible por su versión de Obsidian, normalmente WAV.',
+  'audio-file-encoded-size':
+    'El archivo codificado es demasiado grande. Elija uno más corto o con menor tasa de bits (máximo 64 MiB).',
+  'audio-file-duration':
+    'El audio supera el límite de seguridad de 30 minutos. Divídalo en archivos más cortos.',
+  'audio-file-model-duration':
+    'El audio supera la duración máxima del modelo. Divídalo en partes o elija un modelo con un límite mayor.',
+  'audio-file-decoded-memory':
+    'La decodificación usaría demasiada memoria. Elija un archivo más corto, con menor tasa de bits o menos canales.',
+  'audio-file-empty': 'El archivo no contiene audio transcribible. Elija otro archivo.',
+  'audio-file-start-failed':
+    'El motor local no pudo iniciar la transcripción. Compruebe el modelo seleccionado e inténtelo de nuevo.',
+  'audio-file-sidecar-missing':
+    'Instale el motor local, seleccione un modelo de voz a texto e inténtelo de nuevo.',
+  'audio-file-sidecar-failed':
+    'La transcripción se detuvo porque falló el motor local. Compruebe el modelo e inténtelo de nuevo.',
+  'audio-file-queue-overload':
+    'El motor no pudo seguir el ritmo. Divida la grabación o elija un modelo más rápido.',
+  'audio-file-transcript-write-failed':
+    'La transcripción se detuvo porque Speech Kit no pudo escribir de forma segura en la nota. Restáurela e inténtelo de nuevo.',
+  'audio-file-target-closed':
+    'La nota de destino se cerró o se sustituyó. Vuelva a abrirla y ejecute el comando de nuevo.',
+  'audio-file-target-deleted':
+    'La nota de destino se eliminó. Restáurela o vuelva a crearla y ejecute el comando.',
+  'audio-file-surface-changed':
+    'La nota cambió de una forma que Speech Kit no pudo seguir. Restáurela y ejecute el comando de nuevo.',
   'notice.dictationStartFailed': 'No se pudo iniciar el dictado.',
   'notice.dictationStopFailed': 'No se pudo detener el dictado.',
   'notice.lastUtteranceCleared': 'Se borró la última frase retenida.',

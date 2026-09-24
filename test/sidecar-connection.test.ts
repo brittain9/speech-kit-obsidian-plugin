@@ -22,6 +22,12 @@ interface SidecarProcessHandlers {
 
 class FakeSidecarProcess {
   readonly writtenFrames: Uint8Array[] = [];
+  readonly writeAudioFrame = vi.fn(
+    async (frameBytes: Uint8Array, signal?: AbortSignal): Promise<void> => {
+      signal?.throwIfAborted();
+      this.write(frameBytes);
+    },
+  );
   startCalls = 0;
   stopCalls = 0;
   private handlers: SidecarProcessHandlers | null = null;
@@ -367,6 +373,26 @@ describe('SidecarConnection', () => {
 
     expect(process.startCalls).toBe(0);
     expect(process.writtenFrames).toHaveLength(0);
+  });
+
+  it('uses the abort-aware bounded audio writer for file-frame backpressure', async () => {
+    const { connection, process } = createHarness();
+    await connection.ensureStarted();
+    const abortController = new AbortController();
+    const frame = new Uint8Array(640);
+
+    await connection.sendAudioFrameWithBackpressure(
+      '123e4567-e89b-42d3-a456-426614174000',
+      frame,
+      abortController.signal,
+    );
+
+    expect(process.writeAudioFrame).toHaveBeenCalledWith(
+      expect.any(Uint8Array),
+      abortController.signal,
+    );
+    expect(process.writeAudioFrame.mock.calls[0]?.[0].byteLength).toBe(661);
+    expect(process.writeAudioFrame).toHaveBeenCalledOnce();
   });
 
   it('does not mirror routine session lifecycle or transcript events into protocol logs', () => {

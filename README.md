@@ -46,7 +46,9 @@ The setup wizard installs the native engine and your first speech model. From th
 
 **Dictate.** Streaming words appear and revise in place while you speak. Finished text lands as Markdown at your cursor. Switch to a batch model when accuracy after each pause matters more than immediacy.
 
-**Transcribe.** Combine your microphone with system audio to capture meetings, calls, interviews, and videos. Add timestamps and optional on-device speaker labels.
+**Transcribe.** Run **Transcribe local audio file** to decode a local recording with your selected batch speech model and insert its transcript into the current note. Or combine your microphone with system audio to capture meetings, calls, interviews, and videos. Add timestamps and optional on-device speaker labels.
+
+Audio-file input is accepted only when the running Obsidian desktop runtime can decode its actual container and codec; this is not a fixed extension promise. To keep whole-buffer Web Audio decoding safe, encoded files are limited to 64 MiB, decoded audio to 192 MiB and 30 minutes (or the selected model's shorter limit). See [the feature specification](docs/specs/audio-file-transcription-v2.md). Audio files are read locally and sent only to the local speech sidecar; they are never uploaded.
 
 **Translate.** Translate a selection or a whole note between English and seven other languages. Preview the result before replacing your text, inserting it into the note, or copying it. One local model pack covers every supported direction.
 

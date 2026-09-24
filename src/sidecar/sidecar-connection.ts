@@ -84,6 +84,7 @@ interface SidecarProcessLike {
   start(): Promise<void>;
   stop(): Promise<void>;
   write(frameBytes: Uint8Array): void;
+  writeAudioFrame?(frameBytes: Uint8Array, signal: AbortSignal): Promise<void>;
 }
 
 interface SidecarConnectionOptions {
@@ -367,6 +368,25 @@ export class SidecarConnection {
 
   sendAudioFrame(sessionId: string, frameBytes: Uint8Array): void {
     this.process.write(encodeAudioFrame(sessionId, frameBytes));
+  }
+
+  async sendAudioFrameWithBackpressure(
+    sessionId: string,
+    frameBytes: Uint8Array,
+    signal: AbortSignal,
+  ): Promise<void> {
+    signal.throwIfAborted();
+    const encodedFrame = encodeAudioFrame(sessionId, frameBytes);
+    if (this.process.writeAudioFrame !== undefined) {
+      await this.process.writeAudioFrame(encodedFrame, signal);
+      return;
+    }
+
+    // Test and compatibility process implementations may expose only the
+    // existing synchronous writer. The signal is still honored at the boundary;
+    // the real SidecarProcess always provides drain-aware writing.
+    this.process.write(encodedFrame);
+    signal.throwIfAborted();
   }
 
   sendContextResponse(correlationId: string, context: ContextWindow | null): void {

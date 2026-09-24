@@ -72,6 +72,15 @@ it into fixed 640-byte frames at 50 fps.
   `AudioWorklet` runs on a dedicated real-time thread; `PcmFrameProcessor` does
   linear-interpolation resampling from the browser's native rate (44.1/48 kHz)
   down to 16 kHz.
+- **Local audio files** are selected through a renderer-local file input,
+  encoded-size checked before reading, and decoded by the running Obsidian
+  Web Audio implementation. A conservative 192 MiB / 30-minute decoded budget
+  (plus the selected model's own duration limit) is enforced before the sidecar
+  session starts. Decoded channels are sliced, mixed, resampled, and written
+  with sidecar-queue backpressure; the bytes never leave the local stdin pipe.
+  The accepted-format contract is successful decode by the active desktop
+  runtime, not a promised extension-to-codec mapping. See
+  [`specs/audio-file-transcription-v2.md`](specs/audio-file-transcription-v2.md).
 - **System audio** (this computer's output) is captured natively by the sidecar
   on Windows (WASAPI loopback), Linux (the default PulseAudio/PipeWire monitor),
   and macOS 14.2+ (CoreAudio process taps attached to a private aggregate
