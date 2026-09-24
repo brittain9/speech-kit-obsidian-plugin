@@ -56,6 +56,10 @@ export interface FailedInstallInfo {
   selection: CatalogModelSelection;
 }
 
+export type ModelSelectionResult = ModelProbeResultEvent & {
+  committed: boolean;
+};
+
 export class ModelInstallCancelledError extends Error {
   constructor() {
     super('The model download was cancelled.');
@@ -72,6 +76,7 @@ export interface ModelManagerState {
   compiledRuntimes: CompiledRuntimeInfo[];
   failedInstall: FailedInstallInfo | null;
   installedModels: InstalledModelRecord[];
+  installRequestPending: boolean;
   loadError: string | null;
   loadStatus: LoadStatus;
   modelStore: ModelStoreRecord;
@@ -412,6 +417,7 @@ export class ModelInstallManager {
       compiledRuntimes: this.compiledRuntimes,
       failedInstall: this.failedInstall === null ? null : copyFailedInstall(this.failedInstall),
       installedModels: this.installedModels,
+      installRequestPending: this.currentInstallRequest !== null,
       loadError: this.loadError,
       loadStatus: this.loadStatus,
       modelStore: this.modelStore,
@@ -474,13 +480,10 @@ export class ModelInstallManager {
       throw incompatibleLanguageError(model.displayName, language);
     }
 
-    const clearedFailure = this.failedInstall !== null;
     this.installGeneration += 1;
     this.currentInstallRequest = request;
     this.failedInstall = null;
-    if (clearedFailure) {
-      this.notify();
-    }
+    this.notify();
 
     this.deps.logger?.debug(
       'model',
@@ -619,7 +622,7 @@ export class ModelInstallManager {
   // Selection operations (independent of install state)
   // -----------------------------------------------------------------------
 
-  async select(selection: SelectedModel): Promise<ModelProbeResultEvent> {
+  async select(selection: SelectedModel): Promise<ModelSelectionResult> {
     const expectedLifecycleGeneration = this.lifecycleGeneration;
     const expectedSelectionGeneration = ++this.selectionGeneration;
     this.activeSelectionCount += 1;
@@ -638,13 +641,13 @@ export class ModelInstallManager {
   private async selectWithGuard(
     selection: SelectedModel,
     canCommit: (settings: Readonly<PluginSettings>) => boolean,
-  ): Promise<ModelProbeResultEvent> {
+  ): Promise<ModelSelectionResult> {
     const task = this.selectionTask(selection);
     const probeResult = await this.deps.sidecarConnection.probeModelSelection({
       modelSelection: selection,
       ...createModelStoreOverridePayload(this.deps.getSettings().modelStorePathOverride),
     });
-    if (!canCommit(this.deps.getSettings())) return probeResult;
+    if (!canCommit(this.deps.getSettings())) return { ...probeResult, committed: false };
 
     if (!probeResult.available) {
       // The user explicitly (re-)probed this exact selection and it's
@@ -652,7 +655,7 @@ export class ModelInstallManager {
       // future startup doesn't trust stale, now-incorrect capabilities.
       if (task !== 'translation')
         await this.applyProbeResultToCapabilities(selection, probeResult, task);
-      if (!canCommit(this.deps.getSettings())) return probeResult;
+      if (!canCommit(this.deps.getSettings())) return { ...probeResult, committed: false };
       if (task !== 'translation') await this.invalidateCapabilitiesSnapshot(selection, task);
       throw new Error(createProbeFailureMessage(probeResult));
     }
@@ -682,7 +685,7 @@ export class ModelInstallManager {
         (selection.kind === 'catalog_model' ? selection.modelId : selection.filePath);
       throw incompatibleLanguageError(displayName, currentLanguage);
     }
-    if (!canCommit(this.deps.getSettings())) return probeResult;
+    if (!canCommit(this.deps.getSettings())) return { ...probeResult, committed: false };
     const committed = await this.deps.commitSettingsIf(canCommit, (currentSettings) => {
       if (task === 'translation')
         return { ...currentSettings, selectedTranslationModel: selection };
@@ -705,13 +708,13 @@ export class ModelInstallManager {
       }
       return { ...currentSettings, selectedModel: selection };
     });
-    if (!committed || !canCommit(this.deps.getSettings())) return probeResult;
+    if (!committed) return { ...probeResult, committed: false };
     if (task === 'translation') {
       this.notify();
     } else {
       await this.applyProbeResultToCapabilities(selection, probeResult, task);
     }
-    return probeResult;
+    return { ...probeResult, committed: true };
   }
 
   async remove(selection: CatalogModelSelection): Promise<void> {
@@ -823,7 +826,7 @@ export class ModelInstallManager {
       familyId: 'whisper',
       runtimeId: 'whisper_cpp',
     },
-  ): Promise<ModelProbeResultEvent> {
+  ): Promise<ModelSelectionResult> {
     const validatedPath = await validateExternalModelFilePath(filePath, engine);
     const selection: SelectedModel = {
       familyId: engine.familyId,

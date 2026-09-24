@@ -31,6 +31,7 @@ import {
   type ModelFamilyId,
   matchesModelTriple,
   type RuntimeId,
+  translationSupportLanguages,
 } from './model-management-types';
 import { resolveModelPresentationPolicy } from './model-presentation-policy';
 import { deriveModelFamilyTabs, deriveModelRowStates, type ModelRowState } from './model-row-state';
@@ -115,11 +116,7 @@ export function modelMatchesLanguageFilter(
 }
 
 function modelLanguageTags(model: ModelLanguageCapability): readonly string[] {
-  if (model.task !== 'translation') return model.languageTags;
-  const support = model.translationSupport;
-  if (support === undefined) return [];
-  if (support.kind === 'all_to_all') return support.languages;
-  return [...new Set(support.pairs.flatMap((pair) => [pair.source, pair.target]))];
+  return model.task === 'translation' ? translationSupportLanguages(model) : model.languageTags;
 }
 
 interface ManageModelsModalDependencies {

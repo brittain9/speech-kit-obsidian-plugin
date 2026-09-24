@@ -1,4 +1,8 @@
-import type { CatalogModelRecord, LanguageSupport } from '../models/model-management-types';
+import {
+  type CatalogModelRecord,
+  type LanguageSupport,
+  translationSupportLanguages,
+} from '../models/model-management-types';
 import { t } from '../shared/i18n';
 
 export const DICTATION_LANGUAGE_OPTIONS = [
@@ -97,12 +101,7 @@ export function languageFeatureCoverage(
     ),
     translation: models.some(
       (model) =>
-        model.task === 'translation' &&
-        (model.translationSupport?.kind === 'all_to_all'
-          ? model.translationSupport.languages.includes(language)
-          : (model.translationSupport?.pairs ?? []).some(
-              (pair) => pair.source === language || pair.target === language,
-            )),
+        model.task === 'translation' && translationSupportLanguages(model).includes(language),
     ),
   };
 }
