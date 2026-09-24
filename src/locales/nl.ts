@@ -520,6 +520,79 @@ export const nl = {
   'setup.ready.openMarkdownNote':
     'Open een Markdown-notitie in de bewerkingsmodus en probeer opnieuw te dicteren.',
   'setup.ready.completionFailed': 'Kan het instellen niet voltooien. Probeer het opnieuw.',
+  'setup.ready.targetPreparationFailed':
+    'Kan geen veilige dictaatnotitie openen. Probeer het opnieuw.',
+  'setup.ready.scratchNoteContent': '# Speech Kit-schetsnotitie\n\nBegin hier met dicteren.',
+  'setup.microphone.title': 'Microfoon controleren',
+  'setup.microphone.intro':
+    'Controleer de toegang vóór de eerste dicteersessie. Speech Kit opent de microfoon kort en geeft deze daarna vrij, zonder op te nemen of de spraakengine te starten.',
+  'setup.microphone.check': 'Microfoon controleren',
+  'setup.microphone.checkAgain': 'Opnieuw controleren',
+  'setup.microphone.checking': 'Controleren…',
+  'setup.microphone.readyTitle': 'Microfoon gereed',
+  'setup.microphone.readyDesc':
+    'De toegang is beschikbaar. De volgende stap start één gewone dicteersessie; u kunt deze stoppen via de lint of uw sneltoets.',
+  'setup.microphone.recheck':
+    'Nadat u de toegang hebt gewijzigd, kiest u Opnieuw controleren. Deze wizard vraagt niet opnieuw om toestemming tenzij u Setup opnieuw opent.',
+  'setup.microphone.reopenSetup':
+    'Deze runtime kan wijzigingen in toestemming niet melden. Open Setup opnieuw nadat u de toegang hebt gewijzigd; opnieuw controleren vraagt hier niet opnieuw om toestemming.',
+  'setup.microphone.retryDevice':
+    'Sluit een microfoon aan of schakel deze in en kies daarna Opnieuw controleren. Als een andere app deze gebruikt, geef deze eerst vrij. Deze wizard vraagt niet opnieuw om toestemming.',
+  'setup.wizard.recommendation.title': 'Aanbevolen voor uw installatie',
+  'setup.wizard.recommendation.task': 'Starttaak: Diktatie',
+  'setup.wizard.recommendation.reason.liveEnglish':
+    'Dit Engelse live-model combineert snelle feedback met normaal resourcegebruik.',
+  'setup.wizard.recommendation.reason.multilingual':
+    'Dit live-model ondersteunt de geselecteerde taal zonder een grotere download die vooral op kwaliteit is gericht.',
+  'setup.wizard.recommendation.reason.automatic':
+    'Dit live-model ondersteunt automatische taalherkenning en is een praktische eerste download.',
+  'setup.wizard.recommendation.reason.finalOnly':
+    'Dit is het kleinste compatibele model, maar woorden worden na een pauze definitief gemaakt in plaats van live getoond.',
+  'setup.wizard.recommendation.reason.hardware.constrained':
+    'Dit is de kleinste compatibele keuze op basis van de beschikbare hardwarehints.',
+  'setup.wizard.recommendation.reason.hardware.constrainedLive':
+    'Dit is de kleinste compatibele live-keuze voor de geselecteerde taal.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFallback':
+    'Dit is de kleinste compatibele live-keuze voor de geselecteerde taal, maar de download en het lokale resourcegebruik zijn hoger.',
+  'setup.wizard.recommendation.reason.hardware.constrainedOnlyLive':
+    'Dit is de enige live-keuze voor de geselecteerde taal en de download en het lokale resourcegebruik zijn hoger.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFinalFallback':
+    'Dit is de kleinste compatibele keuze, maar de download en het lokale resourcegebruik zijn hoger.',
+  'setup.wizard.recommendation.reason.hardware.standard':
+    'Dit is een evenwichtige startkeuze op basis van de beschikbare hardwarehints.',
+  'setup.wizard.recommendation.reason.hardware.unknown':
+    'Hardwaregegevens zijn niet beschikbaar, dus dit is een startkeuze en geen gemeten afstemming.',
+  'setup.wizard.recommendation.mode.live':
+    'Woorden verschijnen terwijl u spreekt; voltooide zinnen kunnen nog worden herzien.',
+  'setup.wizard.recommendation.mode.final':
+    'Definitieve woorden verschijnen na een pauze. Er zijn geen live gedeeltelijke woorden.',
+  'setup.wizard.recommendation.languages': 'Ondersteunde talen voor dictatie: {languages}',
+  'setup.wizard.recommendation.cost': '{size} download · Draait lokaal op de CPU',
+  'setup.wizard.recommendation.cudaOptional':
+    'CUDA is optioneel en kan later in Instellingen worden toegevoegd.',
+  'setup.wizard.recommendation.installAndUse': 'Installeren en gebruiken',
+  'setup.wizard.recommendation.use': 'Dit model gebruiken',
+  'setup.wizard.recommendation.installing': 'Installeren…',
+  'setup.wizard.recommendation.selecting': 'Selecteren…',
+  'setup.wizard.recommendation.anotherInstallActive': 'Een ander model wordt geïnstalleerd',
+  'setup.wizard.recommendation.retry': 'Installatie opnieuw proberen',
+  'setup.wizard.recommendation.retryCapabilities': 'Modelmogelijkheden opnieuw controleren',
+  'setup.wizard.recommendation.capabilitiesUnavailableTitle': 'Modelmogelijkheden niet beschikbaar',
+  'setup.wizard.recommendation.capabilitiesUnavailableDesc':
+    'De modelcatalogus is geladen, maar Speech Kit kon de mogelijkheden van de geïnstalleerde spraakengine niet lezen. Probeer het hier opnieuw of open Setup opnieuw nadat u de engine hebt gecontroleerd.',
+  'setup.wizard.recommendation.failed':
+    'Kan het aanbevolen model niet installeren en gebruiken. Probeer het opnieuw.',
+  'setup.wizard.recommendation.selectFailed':
+    'Kan het aanbevolen model niet selecteren. Probeer het opnieuw.',
+  'setup.wizard.recommendation.unavailableTitle': 'Geen startmodel voor deze taal',
+  'setup.wizard.recommendation.unavailableDesc':
+    'De huidige catalogus bevat geen downloadbaar of geïnstalleerd dictatiemodel voor deze taal. Wijzig de taal voor dictatie in Instellingen of gebruik Modelkiezer openen om alle modellen te bekijken.',
+  'setup.wizard.recommendation.catalogLoading': 'Modelcatalogus laden…',
+  'models.manage.capabilitiesUnavailableTitle': 'Modelmogelijkheden niet beschikbaar',
+  'models.manage.capabilitiesUnavailableDesc':
+    'De modelcatalogus is geladen, maar Speech Kit kon de mogelijkheden van de spraakengine niet lezen. Probeer het hier opnieuw of open Setup opnieuw nadat u de engine hebt gecontroleerd.',
+  'models.manage.capabilitiesRetry': 'Modelmogelijkheden opnieuw controleren',
+  'models.manage.capabilitiesChecking': 'Modelmogelijkheden controleren…',
   'setup.wizard.welcomeTitle': 'Welkom bij Speech Kit',
   'setup.wizard.title': 'Stel Speech Kit in',
   'setup.wizard.engineReadyTitle': 'Spraakengine gereed',

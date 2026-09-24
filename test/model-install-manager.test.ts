@@ -1656,6 +1656,37 @@ describe('ModelInstallManager', () => {
       });
     });
 
+    it('does not let an older capability probe overwrite a newer selection', async () => {
+      const olderSelection = sampleSelection('whisper_small_en_q5_1');
+      const newerSelection = sampleSelection();
+      harness = createManagerHarness({ selectedModel: olderSelection });
+      configureSidecarForInit(harness.sidecarConnection);
+      const olderProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
+      harness.sidecarConnection.probeModelSelection.mockReturnValueOnce(olderProbe.promise);
+
+      await harness.manager.init();
+      expect(harness.manager.getState().selectedModelCapabilities).toEqual({
+        selection: olderSelection,
+        status: 'pending',
+      });
+
+      harness.sidecarConnection.probeModelSelection.mockResolvedValueOnce(
+        sampleReadyProbeResult(newerSelection),
+      );
+      await harness.manager.select(newerSelection);
+      olderProbe.resolve(sampleReadyProbeResult(olderSelection));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(harness.getSettings().selectedModel).toEqual(newerSelection);
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot?.selection).toEqual(
+        newerSelection,
+      );
+      expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+        selection: newerSelection,
+        status: 'ready',
+      });
+    });
+
     it('maps a non-throwing probe failure to `unavailable` with the message', async () => {
       harness = createManagerHarness({ selectedModel: sampleSelection() });
       configureSidecarForInit(harness.sidecarConnection);
@@ -1936,10 +1967,6 @@ function createManagerHarness(settingsOverride?: Partial<PluginSettings>): Manag
       }),
     getSettings: () => settings,
     logger,
-    saveSettings: (next) =>
-      enqueueSettingsOperation(async () => {
-        settings = next;
-      }),
     sidecarConnection,
     sidecarLifecycleGate,
   });

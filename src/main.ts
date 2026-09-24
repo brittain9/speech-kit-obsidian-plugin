@@ -203,9 +203,6 @@ export default class LocalSttPlugin extends Plugin {
         this.requirePresetStateStore().commitPreservingPresetStateIf(condition, createNextSettings),
       getSettings: () => this.settings,
       logger: this.logger,
-      saveSettings: async (nextSettings) => {
-        await this.updateSettings(nextSettings);
-      },
       sidecarConnection: this.sidecarConnection,
       sidecarLifecycleGate: this.sidecarLifecycleGate,
     });

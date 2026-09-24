@@ -488,7 +488,9 @@ export class SetupWizardModal extends Modal {
         text: t(
           this.microphoneResult.recovery === 'reopen'
             ? 'setup.microphone.reopenSetup'
-            : 'setup.microphone.recheck',
+            : this.microphoneResult.recovery === 'retryDevice'
+              ? 'setup.microphone.retryDevice'
+              : 'setup.microphone.recheck',
         ),
       });
     }

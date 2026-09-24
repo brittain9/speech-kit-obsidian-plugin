@@ -732,6 +732,37 @@ describe('SetupWizardModal first-run guidance', () => {
     expect(stop).toHaveBeenCalledOnce();
   });
 
+  it('keeps device recovery in the wizard when permission state is prompt', async () => {
+    const notFound = Object.assign(new Error('device not found'), { name: 'NotFoundError' });
+    const getUserMedia = vi.fn().mockRejectedValue(notFound);
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia },
+      permissions: { query: vi.fn().mockResolvedValue({ state: 'prompt' }) },
+    });
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => modelManagerState(),
+      subscribe: () => () => {},
+    } as unknown as ModelInstallManager;
+    const modal = new SetupWizardModal(
+      modalDependencies(manager, { hasSelectedModel: () => true }),
+    );
+
+    modal.open();
+    await vi.waitFor(() => expect(button(modal, 'Check microphone')).toBeDefined());
+    await button(modal, 'Check microphone').click();
+
+    await vi.waitFor(() => {
+      expect(textContent(modal.contentEl as unknown as TestElement)).toContain(
+        'Connect or enable a microphone',
+      );
+      expect(button(modal, 'Check again')).toBeDefined();
+    });
+    await button(modal, 'Check again').click();
+    await vi.waitFor(() => expect(button(modal, 'Check again')).toBeDefined());
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+  });
+
   it('localizes the model guidance and microphone recovery', () => {
     expect(de['setup.wizard.recommendation.title']).toBe('Empfehlung für Ihre Einrichtung');
     expect(de['setup.wizard.recommendation.installAndUse']).toBe('Installieren und verwenden');

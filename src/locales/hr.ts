@@ -730,6 +730,79 @@ export const hr = {
   'setup.ready.openMarkdownNote':
     'Otvorite Markdown bilješku u načinu uređivanja, zatim ponovno pokušajte diktirati.',
   'setup.ready.completionFailed': 'Postavljanje nije moguće dovršiti. Pokušajte ponovno.',
+  'setup.ready.targetPreparationFailed':
+    'Nije moguće otvoriti sigurnu bilješku za diktiranje. Pokušajte ponovno.',
+  'setup.ready.scratchNoteContent': '# Skica bilješke Speech Kit\n\nOvdje započnite diktiranje.',
+  'setup.microphone.title': 'Provjerite mikrofon',
+  'setup.microphone.intro':
+    'Provjerite pristup prije prve sesije diktiranja. Speech Kit nakratko otvara mikrofon i zatim ga oslobađa bez snimanja ili pokretanja govornog modula.',
+  'setup.microphone.check': 'Provjeri mikrofon',
+  'setup.microphone.checkAgain': 'Provjeri ponovno',
+  'setup.microphone.checking': 'Provjera…',
+  'setup.microphone.readyTitle': 'Mikrofon je spreman',
+  'setup.microphone.readyDesc':
+    'Pristup je dostupan. Sljedeći korak pokreće jednu uobičajenu sesiju diktiranja; možete je zaustaviti na vrpci ili tipkovnim prečacem.',
+  'setup.microphone.recheck':
+    'Nakon promjene pristupa odaberite Provjeri ponovno. Ovaj čarobnjak neće ponovno prikazati zahtjev za dopuštenje osim ako ponovno otvorite postavljanje.',
+  'setup.microphone.reopenSetup':
+    'Ovo okruženje ne može prijaviti promjene dopuštenja. Nakon promjene pristupa ponovno otvorite postavljanje; nova provjera ovdje neće ponovno tražiti dopuštenje.',
+  'setup.microphone.retryDevice':
+    'Priključite ili omogućite mikrofon, a zatim odaberite Provjeri ponovno. Ako ga koristi druga aplikacija, prvo ga oslobodite. Ovaj čarobnjak neće ponovno prikazati zahtjev za dopuštenje.',
+  'setup.wizard.recommendation.title': 'Preporučeno za vaše postavljanje',
+  'setup.wizard.recommendation.task': 'Početni zadatak: Diktiranje',
+  'setup.wizard.recommendation.reason.liveEnglish':
+    'Ovaj engleski model uživo balansira brzu povratnu informaciju i uobičajenu potrošnju resursa.',
+  'setup.wizard.recommendation.reason.multilingual':
+    'Ovaj model uživo podržava odabrani jezik bez većeg preuzimanja usmjerenog na kvalitetu.',
+  'setup.wizard.recommendation.reason.automatic':
+    'Ovaj model uživo podržava automatsko prepoznavanje jezika i praktičan je prvi model za preuzimanje.',
+  'setup.wizard.recommendation.reason.finalOnly':
+    'Ovo je najmanji kompatibilni model, ali se riječi potvrđuju nakon pauze umjesto prikazivanja uživo.',
+  'setup.wizard.recommendation.reason.hardware.constrained':
+    'Ovo je najmanji kompatibilni izbor prema dostupnim hardverskim pokazateljima.',
+  'setup.wizard.recommendation.reason.hardware.constrainedLive':
+    'Ovo je najmanji kompatibilni izbor uživo za odabrani jezik.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFallback':
+    'Ovo je najmanji kompatibilni izbor uživo za odabrani jezik, ali su preuzimanje i lokalna potrošnja resursa veći.',
+  'setup.wizard.recommendation.reason.hardware.constrainedOnlyLive':
+    'Ovo je jedini izbor uživo za odabrani jezik, a preuzimanje i lokalna potrošnja resursa veći su.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFinalFallback':
+    'Ovo je najmanji kompatibilni izbor, ali su preuzimanje i lokalna potrošnja resursa veći.',
+  'setup.wizard.recommendation.reason.hardware.standard':
+    'Ovo je uravnotežen početni izbor prema dostupnim hardverskim pokazateljima.',
+  'setup.wizard.recommendation.reason.hardware.unknown':
+    'Detalji hardvera nisu dostupni, pa je ovo početni izbor, a ne izmjereno prilagođavanje.',
+  'setup.wizard.recommendation.mode.live':
+    'Riječi se prikazuju uživo dok govorite; dovršene rečenice još se mogu promijeniti.',
+  'setup.wizard.recommendation.mode.final':
+    'Završne riječi pojavljuju se nakon pauze. Nema djelomičnih riječi prikazanih uživo.',
+  'setup.wizard.recommendation.languages': 'Podržani jezici diktiranja: {languages}',
+  'setup.wizard.recommendation.cost': '{size} preuzimanja · Radi lokalno na CPU-u',
+  'setup.wizard.recommendation.cudaOptional':
+    'CUDA je neobavezna i može se dodati kasnije u postavkama.',
+  'setup.wizard.recommendation.installAndUse': 'Instaliraj i koristi',
+  'setup.wizard.recommendation.use': 'Koristi ovaj model',
+  'setup.wizard.recommendation.installing': 'Instalira se…',
+  'setup.wizard.recommendation.selecting': 'Bira se…',
+  'setup.wizard.recommendation.anotherInstallActive': 'Instalira se drugi model',
+  'setup.wizard.recommendation.retry': 'Pokušaj instalaciju ponovno',
+  'setup.wizard.recommendation.retryCapabilities': 'Pokušaj ponovno provjeriti mogućnosti',
+  'setup.wizard.recommendation.capabilitiesUnavailableTitle': 'Mogućnosti modela nisu dostupne',
+  'setup.wizard.recommendation.capabilitiesUnavailableDesc':
+    'Katalog modela je učitan, ali Speech Kit nije mogao pročitati mogućnosti instaliranog govornog modula. Pokušajte ponovno ili ponovno otvorite postavljanje nakon provjere modula.',
+  'setup.wizard.recommendation.failed':
+    'Preporučeni model nije moguće instalirati i koristiti. Pokušajte ponovno.',
+  'setup.wizard.recommendation.selectFailed':
+    'Preporučeni model nije moguće odabrati. Pokušajte ponovno.',
+  'setup.wizard.recommendation.unavailableTitle': 'Nema početnog modela za ovaj jezik',
+  'setup.wizard.recommendation.unavailableDesc':
+    'Trenutačni katalog ne sadrži model za diktiranje za ovaj jezik koji je dostupan za preuzimanje ili instaliran. Promijenite Jezik diktiranja u postavkama ili koristite Otvori odabir modela da biste pregledali sve modele.',
+  'setup.wizard.recommendation.catalogLoading': 'Učitavanje kataloga modela…',
+  'models.manage.capabilitiesUnavailableTitle': 'Mogućnosti modela nisu dostupne',
+  'models.manage.capabilitiesUnavailableDesc':
+    'Katalog modela je učitan, ali Speech Kit nije mogao pročitati mogućnosti govornog modula. Pokušajte ponovno ili ponovno otvorite postavljanje nakon provjere modula.',
+  'models.manage.capabilitiesRetry': 'Pokušaj ponovno provjeriti mogućnosti',
+  'models.manage.capabilitiesChecking': 'Provjera mogućnosti…',
   'setup.wizard.welcomeTitle': 'Dobro došli u Speech Kit',
   'setup.wizard.title': 'Postavljanje Speech Kita',
   'setup.wizard.engineReadyTitle': 'Govorni modul je spreman',

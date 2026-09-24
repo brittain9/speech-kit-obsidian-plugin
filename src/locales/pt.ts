@@ -520,6 +520,79 @@ export const pt = {
   'setup.ready.openMarkdownNote':
     'Abra uma nota Markdown no modo de edição e tente novamente o ditado.',
   'setup.ready.completionFailed': 'Não foi possível concluir a configuração. Tente novamente.',
+  'setup.ready.targetPreparationFailed':
+    'Não foi possível abrir uma nota de ditado segura. Tente novamente.',
+  'setup.ready.scratchNoteContent': '# Nota de rascunho do Speech Kit\n\nComece a ditar aqui.',
+  'setup.microphone.title': 'Verificar o microfone',
+  'setup.microphone.intro':
+    'Verifique o acesso antes da primeira sessão de ditado. O Speech Kit abre o microfone por pouco tempo e libera-o em seguida, sem gravar nem iniciar o motor de voz.',
+  'setup.microphone.check': 'Verificar o microfone',
+  'setup.microphone.checkAgain': 'Verificar novamente',
+  'setup.microphone.checking': 'A verificar…',
+  'setup.microphone.readyTitle': 'Microfone pronto',
+  'setup.microphone.readyDesc':
+    'O acesso está disponível. O passo seguinte inicia uma sessão de ditado normal; pode pará-la a partir do friso ou da sua tecla de atalho.',
+  'setup.microphone.recheck':
+    'Depois de alterar o acesso, escolha Verificar novamente. Este assistente não voltará a mostrar um pedido de autorização a menos que reabra a configuração.',
+  'setup.microphone.reopenSetup':
+    'Este ambiente não consegue comunicar alterações de autorização. Reabra a configuração depois de alterar o acesso; verificar novamente aqui não volta a pedir autorização.',
+  'setup.microphone.retryDevice':
+    'Ligue ou ative um microfone e depois escolha Verificar novamente. Se outra aplicação o estiver a utilizar, liberte-o primeiro. Este assistente não voltará a mostrar um pedido de autorização.',
+  'setup.wizard.recommendation.title': 'Recomendado para a sua configuração',
+  'setup.wizard.recommendation.task': 'Tarefa inicial: Ditado',
+  'setup.wizard.recommendation.reason.liveEnglish':
+    'Este modelo inglês em direto equilibra uma resposta rápida com o uso diário de recursos.',
+  'setup.wizard.recommendation.reason.multilingual':
+    'Este modelo em direto suporta o idioma selecionado sem exigir uma transferência maior focada na qualidade.',
+  'setup.wizard.recommendation.reason.automatic':
+    'Este modelo em direto suporta a deteção automática do idioma e é uma primeira transferência prática.',
+  'setup.wizard.recommendation.reason.finalOnly':
+    'Este é o modelo compatível mais pequeno, mas as palavras são finalizadas após uma pausa em vez de aparecerem em direto.',
+  'setup.wizard.recommendation.reason.hardware.constrained':
+    'Esta é a escolha compatível mais pequena com base nas informações de hardware disponíveis.',
+  'setup.wizard.recommendation.reason.hardware.constrainedLive':
+    'Esta é a escolha em direto compatível mais pequena para o idioma selecionado.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFallback':
+    'Esta é a escolha em direto compatível mais pequena para o idioma selecionado, mas a transferência e o uso local de recursos são maiores.',
+  'setup.wizard.recommendation.reason.hardware.constrainedOnlyLive':
+    'Esta é a única escolha em direto para o idioma selecionado, e a transferência e o uso local de recursos são maiores.',
+  'setup.wizard.recommendation.reason.hardware.constrainedFinalFallback':
+    'Esta é a escolha compatível mais pequena, mas a transferência e o uso local de recursos são maiores.',
+  'setup.wizard.recommendation.reason.hardware.standard':
+    'Esta é uma escolha inicial equilibrada com base nas informações de hardware disponíveis.',
+  'setup.wizard.recommendation.reason.hardware.unknown':
+    'Os detalhes do hardware não estão disponíveis, portanto esta é uma escolha inicial e não uma adaptação medida.',
+  'setup.wizard.recommendation.mode.live':
+    'As palavras aparecem em direto enquanto fala; as frases concluídas ainda podem ser revistas.',
+  'setup.wizard.recommendation.mode.final':
+    'As palavras finais aparecem após uma pausa. Não há palavras parciais em direto.',
+  'setup.wizard.recommendation.languages': 'Idiomas de ditado suportados: {languages}',
+  'setup.wizard.recommendation.cost': '{size} de transferência · Executa localmente na CPU',
+  'setup.wizard.recommendation.cudaOptional':
+    'CUDA é opcional e pode ser adicionado mais tarde nas Definições.',
+  'setup.wizard.recommendation.installAndUse': 'Instalar e utilizar',
+  'setup.wizard.recommendation.use': 'Utilizar este modelo',
+  'setup.wizard.recommendation.installing': 'A instalar…',
+  'setup.wizard.recommendation.selecting': 'A selecionar…',
+  'setup.wizard.recommendation.anotherInstallActive': 'Está a instalar outro modelo',
+  'setup.wizard.recommendation.retry': 'Tentar novamente a instalação',
+  'setup.wizard.recommendation.retryCapabilities': 'Voltar a verificar as capacidades',
+  'setup.wizard.recommendation.capabilitiesUnavailableTitle': 'Capacidades do modelo indisponíveis',
+  'setup.wizard.recommendation.capabilitiesUnavailableDesc':
+    'O catálogo de modelos foi carregado, mas o Speech Kit não conseguiu ler as capacidades do motor de voz instalado. Tente novamente aqui ou reabra a configuração depois de verificar o motor.',
+  'setup.wizard.recommendation.failed':
+    'Não foi possível instalar e utilizar o modelo recomendado. Tente novamente.',
+  'setup.wizard.recommendation.selectFailed':
+    'Não foi possível selecionar o modelo recomendado. Tente novamente.',
+  'setup.wizard.recommendation.unavailableTitle': 'Não existe um modelo inicial para este idioma',
+  'setup.wizard.recommendation.unavailableDesc':
+    'O catálogo atual não contém um modelo de ditado transferível ou instalado para este idioma. Altere o idioma de ditado nas Definições ou utilize Abrir seletor de modelos para examinar todos os modelos.',
+  'setup.wizard.recommendation.catalogLoading': 'A carregar o catálogo de modelos…',
+  'models.manage.capabilitiesUnavailableTitle': 'Capacidades do modelo indisponíveis',
+  'models.manage.capabilitiesUnavailableDesc':
+    'O catálogo de modelos foi carregado, mas o Speech Kit não conseguiu ler as capacidades do motor de voz. Tente novamente aqui ou reabra a configuração depois de verificar o motor.',
+  'models.manage.capabilitiesRetry': 'Voltar a verificar as capacidades',
+  'models.manage.capabilitiesChecking': 'A verificar as capacidades…',
   'setup.wizard.welcomeTitle': 'Bem-vindo ao Speech Kit',
   'setup.wizard.title': 'Configurar o Speech Kit',
   'setup.wizard.engineReadyTitle': 'Motor de voz pronto',

@@ -90,7 +90,6 @@ interface ModelInstallManagerDependencies {
   ) => Promise<boolean>;
   getSettings: () => PluginSettings;
   logger?: PluginLogger;
-  saveSettings: (settings: PluginSettings) => Promise<void>;
   sidecarConnection: Pick<
     SidecarConnection,
     | 'cancelModelInstall'
@@ -683,9 +682,17 @@ export class ModelInstallManager {
       // confirmed broken now — drop any cached "ready" snapshot for it so a
       // future startup doesn't trust stale, now-incorrect capabilities.
       if (task !== 'translation')
-        await this.applyProbeResultToCapabilities(selection, probeResult, task);
+        await this.applyProbeResultToCapabilities(
+          selection,
+          probeResult,
+          task,
+          this.initGeneration,
+          canCommit,
+        );
       if (!canCommit(this.deps.getSettings())) return probeResult;
-      if (task !== 'translation') await this.invalidateCapabilitiesSnapshot(selection, task);
+      if (task !== 'translation') {
+        await this.invalidateCapabilitiesSnapshot(selection, task, canCommit);
+      }
       throw new Error(createProbeFailureMessage(probeResult));
     }
 
@@ -741,7 +748,13 @@ export class ModelInstallManager {
     if (task === 'translation') {
       this.notify();
     } else {
-      await this.applyProbeResultToCapabilities(selection, probeResult, task);
+      await this.applyProbeResultToCapabilities(
+        selection,
+        probeResult,
+        task,
+        this.initGeneration,
+        canCommit,
+      );
     }
     return probeResult;
   }
@@ -919,46 +932,44 @@ export class ModelInstallManager {
     probeResult: ModelProbeResultEvent,
     task: 'stt' | 'tts' = 'stt',
     expectedInitGeneration: number = this.initGeneration,
+    canCommit: (settings: Readonly<PluginSettings>) => boolean = () => true,
   ): Promise<void> {
-    if (expectedInitGeneration !== this.initGeneration) return;
-    const current =
-      task === 'tts'
-        ? this.deps.getSettings().selectedTtsModel
-        : this.deps.getSettings().selectedModel;
-    if (current === null || !selectedModelEquals(current, selection)) {
-      return;
-    }
+    const canApply = (settings: Readonly<PluginSettings>): boolean => {
+      const current = task === 'tts' ? settings.selectedTtsModel : settings.selectedModel;
+      return (
+        expectedInitGeneration === this.initGeneration &&
+        canCommit(settings) &&
+        current !== null &&
+        selectedModelEquals(current, selection)
+      );
+    };
+
+    if (!canApply(this.deps.getSettings())) return;
 
     if (probeResult.status === 'ready' && probeResult.mergedCapabilities !== null) {
-      // Cache the result so a future plugin startup can trust it instead of
-      // re-probing the sidecar, which would force a full model load just to
-      // populate UI badges (issue #195). Do not publish the result until the
-      // write completes: a newer init generation may have superseded this probe.
-      await this.updateSettings({
+      const capabilities = probeResult.mergedCapabilities;
+      // Cache the result with a conditional mutation of the latest serialized
+      // settings. Never enqueue a complete settings object captured by an older
+      // probe: a newer selection or init generation must win this write.
+      const committed = await this.deps.commitSettingsIf(canApply, (currentSettings) => ({
+        ...currentSettings,
         ...(task === 'tts'
           ? {
               selectedTtsModelCapabilitiesSnapshot: {
-                capabilities: probeResult.mergedCapabilities,
+                capabilities,
                 selection,
               },
             }
           : {
               selectedModelCapabilitiesSnapshot: {
-                capabilities: probeResult.mergedCapabilities,
+                capabilities,
                 selection,
               },
             }),
-      });
-      if (expectedInitGeneration !== this.initGeneration) return;
-      const currentAfterWrite =
-        task === 'tts'
-          ? this.deps.getSettings().selectedTtsModel
-          : this.deps.getSettings().selectedModel;
-      if (currentAfterWrite === null || !selectedModelEquals(currentAfterWrite, selection)) {
-        return;
-      }
+      }));
+      if (!committed || !canApply(this.deps.getSettings())) return;
       this.setCapabilities(task, {
-        capabilities: probeResult.mergedCapabilities,
+        capabilities,
         selection,
         status: 'ready',
       });
@@ -983,22 +994,36 @@ export class ModelInstallManager {
       });
     }
 
-    if (expectedInitGeneration === this.initGeneration) this.notify();
+    if (canApply(this.deps.getSettings())) this.notify();
   }
 
   private async invalidateCapabilitiesSnapshot(
     selection: SelectedModel,
     task: 'stt' | 'tts' = 'stt',
+    canCommit: (settings: Readonly<PluginSettings>) => boolean = () => true,
   ): Promise<void> {
+    const settings = this.deps.getSettings();
     const snapshot =
       task === 'tts'
-        ? this.deps.getSettings().selectedTtsModelCapabilitiesSnapshot
-        : this.deps.getSettings().selectedModelCapabilitiesSnapshot;
+        ? settings.selectedTtsModelCapabilitiesSnapshot
+        : settings.selectedModelCapabilitiesSnapshot;
     if (snapshot !== null && selectedModelEquals(snapshot.selection, selection)) {
-      await this.updateSettings(
-        task === 'tts'
-          ? { selectedTtsModelCapabilitiesSnapshot: null }
-          : { selectedModelCapabilitiesSnapshot: null },
+      await this.deps.commitSettingsIf(
+        (currentSettings) => {
+          const current =
+            task === 'tts' ? currentSettings.selectedTtsModel : currentSettings.selectedModel;
+          return (
+            canCommit(currentSettings) &&
+            current !== null &&
+            selectedModelEquals(current, selection)
+          );
+        },
+        (currentSettings) => ({
+          ...currentSettings,
+          ...(task === 'tts'
+            ? { selectedTtsModelCapabilitiesSnapshot: null }
+            : { selectedModelCapabilitiesSnapshot: null }),
+        }),
       );
     }
   }
@@ -1283,13 +1308,6 @@ export class ModelInstallManager {
         systemInfo: null,
       };
     }
-  }
-
-  private async updateSettings(patch: Partial<PluginSettings>): Promise<void> {
-    await this.deps.saveSettings({
-      ...this.deps.getSettings(),
-      ...patch,
-    });
   }
 
   private notify(): void {

@@ -781,6 +781,8 @@ export const en = {
     'After changing access, choose Check again. This wizard will not show another permission prompt unless you reopen setup.',
   'setup.microphone.reopenSetup':
     'This runtime cannot report permission changes. Reopen setup after changing access; checking again here will not ask for permission again.',
+  'setup.microphone.retryDevice':
+    'Connect or enable a microphone, then choose Check again. If another app is using it, release it first. This wizard will not show another permission prompt.',
   'setup.wizard.welcomeTitle': 'Welcome to Speech Kit',
   'setup.wizard.title': 'Set up Speech Kit',
   'setup.wizard.engineReadyTitle': 'Speech engine ready',

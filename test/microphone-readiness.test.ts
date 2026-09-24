@@ -45,15 +45,33 @@ describe('MicrophoneReadiness', () => {
   });
 
   it.each(['NotFoundError', 'NotReadableError'] as const)(
-    'directs %s capture failures to reopen setup instead of promising another check',
+    'keeps a retryable device path in the wizard when the permission state is prompt (%s)',
     async (name) => {
       const getUserMedia = vi
         .fn()
-        .mockRejectedValue(Object.assign(new Error('device is unavailable'), { name }));
+        .mockRejectedValueOnce(Object.assign(new Error('device is unavailable'), { name }))
+        .mockResolvedValueOnce(streamWithTrack());
       const readiness = new MicrophoneReadiness({
         mediaDevices: { getUserMedia },
         permissions: { query: vi.fn().mockResolvedValue({ state: 'prompt' }) },
       });
+
+      await expect(readiness.check()).resolves.toMatchObject({
+        recovery: 'retryDevice',
+        status: 'unavailable',
+      });
+      await expect(readiness.check()).resolves.toEqual({ recovery: 'recheck', status: 'ready' });
+      expect(getUserMedia).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each(['NotFoundError', 'NotReadableError'] as const)(
+    'uses reopen recovery for an unobservable device failure (%s)',
+    async (name) => {
+      const getUserMedia = vi
+        .fn()
+        .mockRejectedValue(Object.assign(new Error('device is unavailable'), { name }));
+      const readiness = new MicrophoneReadiness({ mediaDevices: { getUserMedia } });
 
       await expect(readiness.check()).resolves.toMatchObject({
         recovery: 'reopen',
