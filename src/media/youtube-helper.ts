@@ -142,6 +142,12 @@ export function interpretVersionResult(path: string, result: ManagedProcessResul
       'The yt-dlp version output exceeded its safety limit.',
     );
   }
+  if (result.cleanupFailed) {
+    throw new YouTubeHelperError(
+      'helper_unavailable',
+      'The selected yt-dlp process tree could not be cleaned up safely.',
+    );
+  }
   if (result.failed || result.exitCode !== 0) {
     throw new YouTubeHelperError(
       'helper_unavailable',

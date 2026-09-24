@@ -32,9 +32,10 @@ synchronous process scans; POSIX cleanup uses the detached process group, and
 normal descendant cleanup starts at the child `exit` event before `close` so
 PID reuse cannot receive a post-close kill. Windows `taskkill` uses an absolute
 system executable and a sanitized environment rather than inherited `PATH`. If
-`taskkill /T` itself fails, the runner reports the bounded cleanup limitation
-without falling back to a PID-only child kill that cannot terminate
-grandchildren. The command ignores
+`taskkill /T` itself fails, a live child receives one direct-kill last resort;
+the result is marked cleanup-failed and cannot produce a media handoff. On
+normal child exit, descendant cleanup failure is likewise surfaced rather than
+accepted as success. The command ignores
 user configuration, caches, plugins, remote components, cookies, playlists,
 mark-watched/live behavior, metadata sidecars, thumbnails, archives,
 postprocessors, and external downloaders. It uses one audio-only stream, one
@@ -62,10 +63,15 @@ owner marker; recent or actively heartbeated jobs are preserved while stale
 jobs remain sweepable even when their recorded PID has been reused. Heartbeat
 validation rejects malformed markers, invalid instance/PID/start identities,
 future timestamps beyond a small clock-skew allowance, and stale timestamps.
+Startup sweeping requires the same valid identity-checked marker; corrupt or
+foreign prefix matches are retained for manual recovery rather than deleted.
 On Linux, recursive contents cleanup runs in a bounded, shell-less child
-whose cwd is the held root descriptor through procfs. Platforms without that
-descriptor-relative primitive retain the private root rather than issuing an
-unsafe pathname-recursive delete. The command modal returns the selected helper, probed version, and consent only
+whose cwd is the held root descriptor through procfs. On platforms without
+that descriptor-relative primitive, cleanup first atomically renames the
+identity-validated root to a private tombstone, revalidates the tombstone
+against the held descriptor, and only then runs a fixed shell-less cleanup
+command against that tombstone. The original replaceable pathname is never
+passed to recursive deletion. The command modal returns the selected helper, probed version, and consent only
 after a non-canceled submit; closing it invalidates probes and persists neither
 value. A tracked modal registry prevents repeated concurrent command probes
 and closes every session on disable. Disabling the source rechecks the kill

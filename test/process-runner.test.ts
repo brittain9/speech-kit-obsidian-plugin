@@ -123,6 +123,70 @@ describe('managed process runner', () => {
     expect(child.kill).not.toHaveBeenCalled();
   });
 
+  it('fails closed when taskkill cannot spawn during a live timeout', async () => {
+    const child = new FakeChild();
+    child.pid = 2469;
+    const spawnProcess = vi.fn((command: string) => {
+      if (command.endsWith('taskkill.exe')) throw new Error('taskkill spawn failed');
+      return child;
+    }) as unknown as typeof spawn;
+    const result = await runManagedProcess(
+      'C:\\helper.exe',
+      [],
+      { platform: 'win32', shell: false, spawnProcess },
+      { maxOutputBytes: 100, timeoutMs: 5 },
+    );
+    expect(result.timedOut).toBe(true);
+    expect(result.cleanupFailed).toBe(true);
+    expect(result.failed).toBe(true);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+  });
+
+  it('fails closed and directly kills a live child when taskkill errors', async () => {
+    const child = new FakeChild();
+    child.pid = 2470;
+    const taskkill = new FakeChild();
+    const spawnProcess = vi.fn((command: string) =>
+      command.endsWith('taskkill.exe') ? taskkill : child,
+    ) as unknown as typeof spawn;
+    const controller = new AbortController();
+    const resultPromise = runManagedProcess(
+      'C:\\helper.exe',
+      [],
+      { platform: 'win32', shell: false, spawnProcess },
+      { maxOutputBytes: 100, signal: controller.signal, timeoutMs: 1_000 },
+    );
+    controller.abort();
+    taskkill.emit('error', new Error('taskkill failed'));
+    const result = await resultPromise;
+    expect(result.cleanupFailed).toBe(true);
+    expect(result.failed).toBe(true);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+  });
+
+  it('reports normal Windows descendant cleanup failure instead of success', async () => {
+    const child = new FakeChild();
+    child.pid = 2471;
+    const taskkill = new FakeChild();
+    const spawnProcess = vi.fn((command: string) =>
+      command.endsWith('taskkill.exe') ? taskkill : child,
+    ) as unknown as typeof spawn;
+    const resultPromise = runManagedProcess(
+      'C:\\helper.exe',
+      [],
+      { platform: 'win32', shell: false, spawnProcess },
+      { maxOutputBytes: 100, timeoutMs: 1_000 },
+    );
+    child.emit('exit', 0);
+    taskkill.emit('close', 1);
+    child.emit('close', 0);
+    const result = await resultPromise;
+    expect(result.exitCode).toBe(0);
+    expect(result.cleanupFailed).toBe(true);
+    expect(result.failed).toBe(true);
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+
   it('uses fixed taskkill argv without a shell on Windows', async () => {
     const child = new FakeChild();
     child.pid = 1234;

@@ -266,6 +266,12 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
           'The YouTube acquisition exceeded a safety limit.',
         );
       }
+      if (execution.cleanupFailed) {
+        throw new YouTubeAcquisitionError(
+          'tool_failed',
+          'The YouTube helper process tree could not be cleaned up safely.',
+        );
+      }
       if (execution.exitCode !== 0) throw mapHelperFailure(execution.stderr);
 
       const metadata = validateYouTubeMetadata(execution.metadata, video);
@@ -280,7 +286,6 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
       let baseLease: MediaLease;
       try {
         baseLease = await createLease({
-          cleanup: { signal: activeController.signal },
           provenance: {
             acquiredAt: new Date(this.now()).toISOString(),
             adapterVersion: this.adapterVersion,
@@ -302,7 +307,7 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
             .release()
             .then(async () => {
               await stopOwnerHeartbeat(heartbeat);
-              await removeMediaJob(rootCapability, { signal: activeController.signal });
+              await removeMediaJob(rootCapability);
             })
             .catch(() => {})
             .finally(() => {
@@ -337,7 +342,7 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
         this.jobInUse = false;
         this.activeAbortController = null;
         if (jobRoot !== null) {
-          await removeJobBestEffort(jobRoot, { signal: activeController.signal });
+          await removeJobBestEffort(jobRoot);
         }
       }
     }
@@ -361,7 +366,7 @@ export async function sweepAbandonedYouTubeJobs(
           const jobStat = await stat(jobRoot);
           if (now() - jobStat.mtimeMs < minAgeMs) return;
           if (await hasFreshOwnerHeartbeat(jobRoot, now())) return;
-          const capability = await claimJobRoot(jobRoot, { allowCorruptOwnerMarker: true });
+          const capability = await claimJobRoot(jobRoot);
           await removeMediaJob(capability);
         }),
     );
@@ -689,7 +694,6 @@ export async function createPrivateJobRoot(
   await mkdir(tempRoot, { recursive: true });
   const jobRoot = await mkdtemp(join(tempRoot, YOUTUBE_JOB_PREFIX));
   try {
-    await chmod(jobRoot, 0o700);
     await writeFile(
       join(jobRoot, 'owner.json'),
       JSON.stringify({
@@ -702,13 +706,14 @@ export async function createPrivateJobRoot(
       }),
       { mode: 0o600 },
     );
+    await chmod(jobRoot, 0o700);
     for (const directory of options.subdirectories ?? ['home', 'tmp', 'cache', 'config', 'data']) {
       await mkdir(join(jobRoot, directory), { recursive: true, mode: 0o700 });
     }
     return await claimJobRoot(jobRoot);
   } catch {
     try {
-      const capability = await claimJobRoot(jobRoot, { allowCorruptOwnerMarker: true });
+      const capability = await claimJobRoot(jobRoot);
       await removeMediaJob(capability);
     } catch {
       // Partial-root cleanup remains best effort.
@@ -748,12 +753,9 @@ async function findAcquiredMedia(jobRoot: string): Promise<{ path: string }> {
   return { path: join(jobRoot, candidates[0]?.name ?? '') };
 }
 
-async function removeJobBestEffort(
-  jobRoot: JobRootCapability,
-  cleanup: { readonly signal?: AbortSignal } = {},
-): Promise<void> {
+async function removeJobBestEffort(jobRoot: JobRootCapability): Promise<void> {
   try {
-    await removeMediaJob(jobRoot, cleanup);
+    await removeMediaJob(jobRoot);
   } catch {
     // Cleanup is best effort across supported operating systems.
   }
@@ -846,6 +848,7 @@ function mapHelperFailure(stderr: string): YouTubeAcquisitionError {
 
 interface HelperExecution {
   readonly cancelled: boolean;
+  readonly cleanupFailed: boolean;
   readonly events: AcquisitionEvent<YouTubeMediaLease>[];
   readonly exitCode: number | null;
   readonly metadata: YouTubeHelperMetadata;
@@ -895,6 +898,7 @@ async function runHelper(options: {
   );
   return {
     cancelled: result.cancelled,
+    cleanupFailed: result.cleanupFailed,
     events,
     exitCode: result.exitCode,
     metadata: parseYouTubeHelperMetadata(result.stdout),

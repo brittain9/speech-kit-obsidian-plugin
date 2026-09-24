@@ -26,7 +26,6 @@ import {
   type JobCleanupOptions,
   openValidatedMediaFile,
   removeMediaJob,
-  supportsDescriptorRelativeCleanup,
 } from '../src/media/path-backed-media-lease';
 import {
   discoverYtDlpCandidates,
@@ -61,11 +60,7 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
 
 async function expectSafeCleanupOutcome(root: string): Promise<void> {
   const jobs = (await readdir(root)).filter((entry) => entry.startsWith('speech-kit-youtube-'));
-  if (supportsDescriptorRelativeCleanup()) {
-    expect(jobs).toEqual([]);
-  } else {
-    expect(jobs.length).toBeGreaterThan(0);
-  }
+  expect(jobs).toEqual([]);
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
@@ -158,6 +153,7 @@ describe('yt-dlp helper policy', () => {
   it('rejects missing and unsupported helper versions', () => {
     const base = {
       cancelled: false,
+      cleanupFailed: false,
       exitCode: 0,
       failed: false,
       outputLimitExceeded: false,
@@ -270,11 +266,7 @@ describe('YouTube path-backed MediaLease', () => {
     const firstRelease = lease.release();
     expect(lease.release()).toBe(firstRelease);
     await firstRelease;
-    if (supportsDescriptorRelativeCleanup()) {
-      await expect(readdir(jobRoot)).rejects.toThrow();
-    } else {
-      await expect(readdir(jobRoot)).resolves.toContain('source.webm');
-    }
+    await expect(readdir(jobRoot)).rejects.toThrow();
   });
 
   it('rejects a symlink before exposing bytes', async () => {
@@ -408,6 +400,51 @@ describe('YouTube path-backed MediaLease', () => {
     expect(spawnMock).toHaveBeenCalledOnce();
   });
 
+  it('uses a private tombstone and fixed Windows cleanup argv', async () => {
+    class ImmediateChild extends EventEmitter {
+      pid: number | undefined;
+      stdout = null;
+      stderr = null;
+      kill = vi.fn();
+    }
+
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-win-cleanup-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    await writeFile(join(jobRoot, 'owner.json'), JSON.stringify(validOwnerMarker()));
+    const capability = await claimJobRoot(jobRoot);
+    const calls: Array<{
+      args: readonly string[];
+      command: string;
+      options?: { cwd?: string };
+    }> = [];
+    const spawnMock = vi.fn(
+      (command: string, args: readonly string[], options?: { cwd?: string }): ImmediateChild => {
+        calls.push({ args, command, ...(options === undefined ? {} : { options }) });
+        const child = new ImmediateChild();
+        child.pid = command.endsWith('taskkill.exe') ? undefined : 424_245;
+        queueMicrotask(() => {
+          child.emit('exit', 0);
+          child.emit('close', 0);
+        });
+        return child;
+      },
+    );
+    await removeMediaJob(capability, {
+      platform: 'win32',
+      spawnProcess: spawnMock as unknown as NonNullable<JobCleanupOptions['spawnProcess']>,
+      timeoutMs: 100,
+    });
+    const cleanupCall = calls.find(({ command }) => command.endsWith('rmdir.exe'));
+    expect(cleanupCall?.args[0]).toBe('/s');
+    expect(cleanupCall?.args[1]).toBe('/q');
+    expect(cleanupCall?.args[2]).toContain('.speech-kit-quarantine-');
+    expect(cleanupCall?.args[2]).not.toBe(jobRoot);
+    expect(cleanupCall?.options?.cwd).toBeUndefined();
+    await expect(readdir(jobRoot)).rejects.toThrow();
+  });
+
   it('never removes a symlink replacement during cleanup', async () => {
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-symlink-root-'));
     temporaryPaths.push(root);
@@ -456,7 +493,7 @@ describe('YouTube path-backed MediaLease', () => {
     const lease = await createLease(jobRoot, mediaPath);
     await expect(lease.release()).resolves.toBeUndefined();
   });
-  it('bounds and aborts a hanging descriptor cleanup child', async () => {
+  it('bounds a hanging descriptor cleanup child with a fresh signal', async () => {
     class HangingChild extends EventEmitter {
       pid = 424242;
       stdout = null;
@@ -478,15 +515,15 @@ describe('YouTube path-backed MediaLease', () => {
       (_command: string, _args: readonly string[], _options?: unknown) => child,
     );
     const spawnProcess = spawnMock as unknown as NonNullable<JobCleanupOptions['spawnProcess']>;
-    const controller = new AbortController();
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('group unavailable'), { code: 'EACCES' });
+    });
     const lease = await createLease(jobRoot, mediaPath, 10, {
       platform: 'linux',
-      signal: controller.signal,
       spawnProcess,
       timeoutMs: 20,
     });
     const release = lease.release();
-    controller.abort();
     await expect(withTimeout(release, 500)).resolves.toBeUndefined();
     expect(spawnMock).toHaveBeenCalledWith(
       '/usr/bin/find',
@@ -495,6 +532,7 @@ describe('YouTube path-backed MediaLease', () => {
     );
     expect(spawnMock.mock.calls[0]?.[2]).not.toHaveProperty('cwd', root);
     expect(child.kill).toHaveBeenCalled();
+    kill.mockRestore();
   });
 
   it('removes active reader registrations at EOF and on cancel', async () => {
@@ -625,23 +663,36 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     await writeFile(join(recent, 'owner.json'), JSON.stringify({ pid: process.pid }));
     await utimes(recent, new Date(20_000), new Date(20_000));
     await utimes(old, new Date(0), new Date(0));
-    await sweepAbandonedYouTubeJobs(root, { minAgeMs: 10, now: () => 20_000 });
-    if (supportsDescriptorRelativeCleanup()) {
-      await expect(readdir(root)).resolves.toEqual(['speech-kit-youtube-recent']);
-    } else {
-      expect(await readdir(root)).toHaveLength(2);
-    }
+    await sweepAbandonedYouTubeJobs(root, { minAgeMs: 10, now: () => 200_000 });
+    await expect(readdir(root)).resolves.toEqual([
+      'speech-kit-youtube-old',
+      'speech-kit-youtube-recent',
+    ]);
     const current = join(root, 'speech-kit-youtube-current');
     await mkdir(current);
     await writeFile(join(current, 'owner.json'), JSON.stringify({ pid: process.pid }));
     await utimes(current, new Date(0), new Date(0));
+    const validStale = join(root, 'speech-kit-youtube-valid-stale');
+    await mkdir(validStale);
+    await writeFile(
+      join(validStale, 'owner.json'),
+      JSON.stringify({
+        createdAt: 1,
+        heartbeatAt: 1,
+        instanceId: '123e4567-e89b-42d3-a456-426614174003',
+        pid: 424_242,
+        processStartedAt: 1,
+        speechKitJob: true,
+      }),
+    );
+    await utimes(validStale, new Date(0), new Date(0));
     const activeOld = join(root, 'speech-kit-youtube-active-old');
     await mkdir(activeOld);
     await writeFile(
       join(activeOld, 'owner.json'),
       JSON.stringify({
         createdAt: 1,
-        heartbeatAt: 20_000,
+        heartbeatAt: 200_000,
         instanceId: '123e4567-e89b-42d3-a456-426614174000',
         pid: 424_242,
         processStartedAt: 1,
@@ -653,13 +704,20 @@ describe('YouTubeMediaSource with a local fake helper', () => {
     await mkdir(corrupt);
     await writeFile(join(corrupt, 'owner.json'), '{not-json');
     await utimes(corrupt, new Date(0), new Date(0));
+    const foreign = join(root, 'speech-kit-youtube-foreign');
+    await mkdir(foreign);
+    await writeFile(
+      join(foreign, 'owner.json'),
+      JSON.stringify({ instanceId: 'foreign-instance', pid: process.pid, speechKitJob: false }),
+    );
+    await utimes(foreign, new Date(0), new Date(0));
     const future = join(root, 'speech-kit-youtube-future');
     await mkdir(future);
     await writeFile(
       join(future, 'owner.json'),
       JSON.stringify({
         createdAt: 1,
-        heartbeatAt: 20_000_000,
+        heartbeatAt: Date.now() + 10_000_000,
         instanceId: '123e4567-e89b-42d3-a456-426614174001',
         pid: 424_243,
         processStartedAt: 1,
@@ -673,7 +731,7 @@ describe('YouTubeMediaSource with a local fake helper', () => {
       join(unrelatedLive, 'owner.json'),
       JSON.stringify({
         createdAt: 1,
-        heartbeatAt: 20_000,
+        heartbeatAt: 200_000,
         instanceId: '123e4567-e89b-42d3-a456-426614174002',
         pid: process.pid,
         processStartedAt: 1,
@@ -681,13 +739,18 @@ describe('YouTubeMediaSource with a local fake helper', () => {
       }),
     );
     await utimes(unrelatedLive, new Date(0), new Date(0));
-    await sweepAbandonedYouTubeJobs(root, { minAgeMs: 10, now: () => 20_000 });
+    await sweepAbandonedYouTubeJobs(root, { minAgeMs: 10, now: () => 200_000 });
     const remaining = await readdir(root);
-    if (supportsDescriptorRelativeCleanup()) {
-      expect(remaining).toEqual(['speech-kit-youtube-active-old', 'speech-kit-youtube-recent']);
-    } else {
-      expect(remaining).toHaveLength(7);
-    }
+    expect(remaining).toEqual([
+      'speech-kit-youtube-active-old',
+      'speech-kit-youtube-corrupt',
+      'speech-kit-youtube-current',
+      'speech-kit-youtube-foreign',
+      'speech-kit-youtube-future',
+      'speech-kit-youtube-old',
+      'speech-kit-youtube-recent',
+      'speech-kit-youtube-unrelated',
+    ]);
   });
   it('retains a partial private job root safely when directory setup fails', async () => {
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-partial-'));

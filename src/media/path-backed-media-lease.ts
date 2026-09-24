@@ -1,8 +1,8 @@
 import type { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { type FileHandle, lstat, open, readFile, realpath, rmdir } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { type FileHandle, lstat, open, readFile, realpath, rename, rmdir } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 
 import type { MediaLease, MediaProvenance, MediaReadStream } from './media-source';
@@ -20,7 +20,6 @@ const OWNER_CLOCK_SKEW_MS = 5_000;
 
 export interface JobCleanupOptions {
   readonly platform?: NodeJS.Platform;
-  readonly signal?: AbortSignal;
   readonly spawnProcess?: typeof spawn;
   readonly timeoutMs?: number;
 }
@@ -65,10 +64,6 @@ export interface JobRootCapability {
   readonly root: ValidatedRoot;
 }
 
-export interface JobRootClaimOptions {
-  readonly allowCorruptOwnerMarker?: boolean;
-}
-
 export interface ValidatedMediaFile {
   readonly [validatedMediaFileBrand]: true;
   readonly handle: FileHandle;
@@ -105,8 +100,11 @@ export async function createPathBackedMediaLease(
     releasePromise = (async () => {
       released = true;
       await Promise.allSettled([...activeReaders].map((close) => close()));
-      await closeHandles();
-      await removeValidatedRoot(validated.root, options.cleanup);
+      try {
+        await removeValidatedRoot(validated.root, options.cleanup);
+      } finally {
+        await closeHandles();
+      }
     })().catch(() => {
       // Media cleanup is best effort. The lease must still settle so the
       // owning transcription session cannot remain wedged.
@@ -263,13 +261,10 @@ export async function openValidatedMediaFile(
   }
 }
 
-export async function claimJobRoot(
-  jobRoot: string,
-  options: JobRootClaimOptions = {},
-): Promise<JobRootCapability> {
+export async function claimJobRoot(jobRoot: string): Promise<JobRootCapability> {
   const root = await openValidatedRoot(resolve(jobRoot));
   try {
-    if (options.allowCorruptOwnerMarker !== true) await assertOwnerMarker(root.path);
+    await assertOwnerMarker(root.path);
     const capability = { path: root.path, root } as JobRootCapability;
     jobRootCapabilities.add(capability);
     return capability;
@@ -399,12 +394,16 @@ async function removeValidatedRoot(
 ): Promise<void> {
   try {
     await assertCurrentRoot(root);
-    const cleaned = await removeRootContentsFromHeldRoot(root, cleanup);
-    if (!cleaned) return;
-    await assertCurrentRoot(root);
-    await rmdir(root.path);
+    const platform = cleanup.platform ?? process.platform;
+    if (supportsDescriptorRelativeCleanup(platform)) {
+      await removeRootContentsFromHeldRoot(root, cleanup, platform);
+      await assertCurrentRoot(root);
+      await rmdir(root.path);
+      return;
+    }
+    await removeViaPrivateTombstone(root, cleanup, platform);
   } catch {
-    // A missing, replaced, or unsupported root is intentionally left untouched.
+    // A missing, replaced, or failed-cleanup root is intentionally quarantined.
   }
 }
 
@@ -420,16 +419,71 @@ async function assertCurrentRoot(root: ValidatedRoot): Promise<void> {
 async function removeRootContentsFromHeldRoot(
   root: ValidatedRoot,
   cleanup: JobCleanupOptions,
-): Promise<boolean> {
-  const platform = cleanup.platform ?? process.platform;
-  if (!supportsDescriptorRelativeCleanup(platform)) return false;
+  platform: NodeJS.Platform,
+): Promise<void> {
+  await runCleanupProcess(
+    '/usr/bin/find',
+    ['.', '-mindepth', '1', '-maxdepth', '1', '-exec', '/bin/rm', '-rf', '--', '{}', '+'],
+    cleanup,
+    platform,
+    `/proc/${process.pid}/fd/${root.handle.fd}`,
+  );
+}
 
+async function removeViaPrivateTombstone(
+  root: ValidatedRoot,
+  cleanup: JobCleanupOptions,
+  platform: NodeJS.Platform,
+): Promise<void> {
+  const tombstonePath = join(
+    dirname(root.path),
+    `.speech-kit-quarantine-${basename(root.path)}-${randomUUID()}`,
+  );
+  await assertCurrentRoot(root);
+  await rename(root.path, tombstonePath);
+
+  let tombstoneRoot: ValidatedRoot | null = null;
+  try {
+    tombstoneRoot = await openValidatedRoot(tombstonePath);
+    if (tombstoneRoot.dev !== root.dev || tombstoneRoot.ino !== root.ino) {
+      throw new PathMediaLeaseError(
+        'integrity_failed',
+        'The quarantined job root no longer matches the held descriptor.',
+      );
+    }
+    await assertCurrentRoot(tombstoneRoot);
+    const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
+    const command = platform === 'win32' ? `${systemRoot}\\System32\\rmdir.exe` : '/bin/rm';
+    const args = platform === 'win32' ? ['/s', '/q', tombstonePath] : ['-rf', '--', tombstonePath];
+    await runCleanupProcess(command, args, cleanup, platform);
+    await assertCurrentRoot(tombstoneRoot);
+    await rmdir(tombstonePath);
+  } finally {
+    await tombstoneRoot?.handle.close().catch(() => {});
+  }
+}
+
+async function runCleanupProcess(
+  command: string,
+  args: readonly string[],
+  cleanup: JobCleanupOptions,
+  platform: NodeJS.Platform,
+  cwd?: string,
+): Promise<void> {
+  const controller = new AbortController();
+  const timeoutMs = Math.min(
+    JOB_CLEANUP_TIMEOUT_MS,
+    Math.max(1, cleanup.timeoutMs ?? JOB_CLEANUP_TIMEOUT_MS),
+  );
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
   const spawnOptions = {
-    cwd: `/proc/${process.pid}/fd/${root.handle.fd}`,
+    ...(cwd === undefined ? {} : { cwd }),
     env: {
       LANG: 'C',
       LC_ALL: 'C',
       PATH: '',
+      ...(platform === 'win32' ? { SystemRoot: systemRoot } : {}),
     },
     platform,
     shell: false,
@@ -437,29 +491,25 @@ async function removeRootContentsFromHeldRoot(
     windowsHide: true,
     ...(cleanup.spawnProcess === undefined ? {} : { spawnProcess: cleanup.spawnProcess }),
   };
-  const result = await runManagedProcess(
-    '/usr/bin/find',
-    ['.', '-mindepth', '1', '-maxdepth', '1', '-exec', '/bin/rm', '-rf', '--', '{}', '+'],
-    spawnOptions,
-    {
+  try {
+    const result = await runManagedProcess(command, args, spawnOptions, {
       maxOutputBytes: 1,
-      ...(cleanup.signal === undefined ? {} : { signal: cleanup.signal }),
-      timeoutMs: Math.min(
-        JOB_CLEANUP_TIMEOUT_MS,
-        Math.max(1, cleanup.timeoutMs ?? JOB_CLEANUP_TIMEOUT_MS),
-      ),
-    },
-  );
-  if (
-    result.cancelled ||
-    result.failed ||
-    result.outputLimitExceeded ||
-    result.timedOut ||
-    result.exitCode !== 0
-  ) {
-    throw new Error('descriptor-relative job cleanup failed');
+      signal: controller.signal,
+      timeoutMs,
+    });
+    if (
+      result.cancelled ||
+      result.cleanupFailed ||
+      result.failed ||
+      result.outputLimitExceeded ||
+      result.timedOut ||
+      result.exitCode !== 0
+    ) {
+      throw new Error('job cleanup command failed');
+    }
+  } finally {
+    window.clearTimeout(timer);
   }
-  return true;
 }
 
 function assertDirectoryIdentity(

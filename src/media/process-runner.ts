@@ -4,6 +4,7 @@ export type ProcessSignal = 'SIGTERM' | 'SIGKILL';
 
 export interface ManagedProcessResult {
   readonly cancelled: boolean;
+  readonly cleanupFailed: boolean;
   readonly exitCode: number | null;
   readonly failed: boolean;
   readonly outputLimitExceeded: boolean;
@@ -71,13 +72,14 @@ async function collectProcessOutput(
   let outputLimitExceeded = false;
   let timedOut = false;
   let cancelled = false;
+  let cleanupFailed = false;
   let settled = false;
   let exitObserved = false;
   let observedExitCode: number | null = null;
   let forceTimer: number | undefined;
   let timeoutTimer: number | undefined;
-  let terminationPromise: Promise<void> | null = null;
-  let exitCleanupPromise: Promise<void> | null = null;
+  let terminationPromise: Promise<boolean> | null = null;
+  let exitCleanupPromise: Promise<boolean> | null = null;
   let resolveResult!: (result: ManagedProcessResult) => void;
   const resultPromise = new Promise<ManagedProcessResult>((resolve) => {
     resolveResult = resolve;
@@ -99,15 +101,11 @@ async function collectProcessOutput(
       signal,
       spawnProcess,
       taskkill,
+    }).then((succeeded) => {
+      cleanupFailed ||= !succeeded;
+      if (!settled) finish(null, true);
+      return succeeded;
     });
-    void terminationPromise.then(
-      () => {
-        if (!settled) finish(null, true);
-      },
-      () => {
-        if (!settled) finish(null, true);
-      },
-    );
     if (scheduleForce && forceTimer === undefined) {
       forceTimer = window.setTimeout(() => {
         forceTimer = undefined;
@@ -120,6 +118,8 @@ async function collectProcessOutput(
           signal: 'SIGKILL',
           spawnProcess,
           taskkill,
+        }).then((succeeded) => {
+          cleanupFailed ||= !succeeded;
         });
       }, 1_000);
     }
@@ -144,8 +144,9 @@ async function collectProcessOutput(
     void cleanup.finally(() => {
       resolveResult({
         cancelled,
+        cleanupFailed,
         exitCode,
-        failed,
+        failed: failed || cleanupFailed,
         outputLimitExceeded,
         stderr,
         stdout,
@@ -191,13 +192,16 @@ async function collectProcessOutput(
     exitObserved = true;
     observedExitCode = code;
     exitCleanupPromise = killProcessTree({
-      allowDirectChild: true,
+      allowDirectChild: false,
       child,
       childPid,
       platform,
       signal: 'SIGKILL',
       spawnProcess,
       taskkill,
+    }).then((succeeded) => {
+      cleanupFailed ||= !succeeded;
+      return succeeded;
     });
   };
   const onClose = (code: number | null): void =>
@@ -228,12 +232,24 @@ async function killProcessTree(options: {
   readonly signal: ProcessSignal;
   readonly spawnProcess: typeof spawn;
   readonly taskkill: TaskkillOptions;
-}): Promise<void> {
+}): Promise<boolean> {
   const { allowDirectChild, child, childPid, platform, signal, spawnProcess, taskkill } = options;
   if (platform === 'win32') {
-    if (childPid === undefined) return;
-    await new Promise<void>((resolve) => {
+    if (childPid === undefined) return !allowDirectChild;
+    return await new Promise<boolean>((resolve) => {
       let taskkillProcess: ChildProcess;
+      let timer: number | undefined;
+      const fail = (): void => {
+        if (allowDirectChild) child.kill(signal);
+        finish(false);
+      };
+      const finish = (succeeded: boolean): void => {
+        if (settled) return;
+        settled = true;
+        if (timer !== undefined) window.clearTimeout(timer);
+        resolve(succeeded);
+      };
+      let settled = false;
       try {
         taskkillProcess = spawnProcess(taskkill.command, ['/pid', String(childPid), '/T', '/F'], {
           env: taskkill.environment,
@@ -242,40 +258,42 @@ async function killProcessTree(options: {
           windowsHide: true,
         });
       } catch {
-        // A direct child kill cannot terminate Windows grandchildren. Keep the
-        // limitation explicit instead of issuing a PID-only fallback.
-        resolve();
+        fail();
         return;
       }
-      let settled = false;
-      const finish = (): void => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timer);
-        resolve();
-      };
-      const timer = window.setTimeout(() => {
+      timer = window.setTimeout(() => {
         taskkillProcess.kill('SIGKILL');
-        // Do not fall back to child.kill(): it cannot terminate the tree.
-        finish();
+        if (allowDirectChild) child.kill(signal);
+        finish(false);
       }, 1_000);
-      taskkillProcess.once('error', () => {
-        // The tree-capable taskkill operation failed; leave the tree alone.
-        finish();
+      taskkillProcess.once('error', fail);
+      taskkillProcess.once('close', (code) => {
+        if (code === 0) finish(true);
+        else fail();
       });
-      taskkillProcess.once('close', finish);
     });
-    return;
   }
   if (childPid === undefined) {
     if (allowDirectChild) child.kill(signal);
-    return;
+    return !allowDirectChild;
   }
   try {
     process.kill(-childPid, signal);
-  } catch {
+    return true;
+  } catch (error) {
+    if (isProcessGoneError(error)) return true;
     if (allowDirectChild) child.kill(signal);
+    return false;
   }
+}
+
+function isProcessGoneError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'ESRCH'
+  );
 }
 
 function taskkillOptions(
