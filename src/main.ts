@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path';
 import { IS_PRODUCTION_BUILD } from 'virtual:build-mode';
 import { shell } from 'electron';
-import { FileSystemAdapter, getLanguage, Menu, Platform, Plugin, setIcon } from 'obsidian';
+import { FileSystemAdapter, getLanguage, Menu, Platform, Plugin, setIcon, TFile } from 'obsidian';
 
 import { AudioCaptureStream } from './audio/audio-capture-stream';
 import { SidecarAudioLevelMeter } from './audio/sidecar-audio-level-meter';
@@ -531,6 +531,7 @@ export default class LocalSttPlugin extends Plugin {
         });
       },
       pluginDirectory,
+      prepareDictationTarget: () => this.prepareFirstRunDictationTarget(),
       sidecarVersion: REQUIRED_SIDECAR_VERSION,
       postSidecarInstalled: async () => {
         await this.restartSidecarConnection();
@@ -544,6 +545,30 @@ export default class LocalSttPlugin extends Plugin {
       startDictation: () => this.requireDictationController().startDictation(),
     });
     modal.open();
+  }
+
+  private async prepareFirstRunDictationTarget(): Promise<boolean> {
+    if (Session.hasDictationTarget(this.app)) return true;
+
+    const scratchPath = 'Speech Kit scratch note.md';
+    const existing = this.app.vault.getAbstractFileByPath(scratchPath);
+    const markdownFiles = this.app.vault.getMarkdownFiles();
+    const onlyKnownScratchNote =
+      existing instanceof TFile &&
+      existing.extension === 'md' &&
+      markdownFiles.every((file) => file.path === scratchPath);
+    if (
+      (existing !== null && !onlyKnownScratchNote) ||
+      (existing === null && markdownFiles.length > 0)
+    ) {
+      return false;
+    }
+
+    if (existing === null) {
+      await this.app.vault.create(scratchPath, t('setup.ready.scratchNoteContent'));
+    }
+    await this.app.workspace.openLinkText(scratchPath, '', true);
+    return Session.hasDictationTarget(this.app);
   }
 
   async openModelPicker(options: ModelPickerOptions = {}): Promise<void> {

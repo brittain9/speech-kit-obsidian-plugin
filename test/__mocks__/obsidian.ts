@@ -153,6 +153,10 @@ export class TestElement {
     }
   }
 
+  appendText(text: string): void {
+    this.textContent += text;
+  }
+
   getAttribute(name: string): string | null {
     return this.attributes.get(name) ?? null;
   }

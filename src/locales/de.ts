@@ -515,6 +515,7 @@ export const de = {
   'llm.preset.delete.activeFallback': '„{preset}“ war aktiv – auf „Aufräumen“ umgestellt.',
   'common.back': 'Zurück',
   'common.close': 'Schließen',
+  'common.continue': 'Weiter',
   'common.done': 'Erledigt',
   'common.install': 'Installieren',
   'common.later': 'Später',
@@ -525,8 +526,23 @@ export const de = {
     'Warten Sie, bis das aktuelle Diktat beendet ist, und versuchen Sie es dann erneut.',
   'setup.ready.openMarkdownNote':
     'Öffnen Sie eine Markdown-Notiz im Bearbeitungsmodus und versuchen Sie es dann erneut mit dem Diktieren.',
+  'setup.ready.targetPreparationFailed':
+    'Eine sichere Diktatnotiz konnte nicht geöffnet werden. Versuchen Sie es erneut.',
+  'setup.ready.scratchNoteContent':
+    '# Speech Kit Notizentwurf\n\nBeginnen Sie hier mit dem Diktieren.',
   'setup.ready.completionFailed':
     'Setup konnte nicht abgeschlossen werden. Versuchen Sie es erneut.',
+  'setup.microphone.title': 'Mikrofon prüfen',
+  'setup.microphone.intro':
+    'Prüfen Sie den Zugriff vor der ersten Diktatsitzung. Speech Kit öffnet das Mikrofon nur kurz und gibt es wieder frei, ohne aufzunehmen oder die Sprach-Engine zu starten.',
+  'setup.microphone.check': 'Mikrofon prüfen',
+  'setup.microphone.checkAgain': 'Erneut prüfen',
+  'setup.microphone.checking': 'Wird geprüft…',
+  'setup.microphone.readyTitle': 'Mikrofon ist bereit',
+  'setup.microphone.readyDesc':
+    'Der Zugriff ist verfügbar. Im nächsten Schritt startet eine normale Diktatsitzung, die Sie über die Ribbon oder Ihren Hotkey beenden können.',
+  'setup.microphone.recovery':
+    'Ändern Sie den Zugriff und wählen Sie dann „Erneut prüfen“. Dieser Assistent zeigt erst dann erneut eine Berechtigungsabfrage, wenn Sie Setup erneut öffnen.',
   'setup.wizard.welcomeTitle': 'Willkommen bei Speech Kit',
   'setup.wizard.title': 'Richten Sie Speech Kit ein',
   'setup.wizard.engineReadyTitle': 'Sprachmodul bereit',
@@ -547,7 +563,43 @@ export const de = {
     'Installieren Sie ein Transkriptionsmodell, um das Diktat zu ermöglichen. Sie können später mehr installieren – kleinere Modelle sind schneller, größere Modelle sind genauer.',
   'setup.wizard.modelKinds':
     'Es stehen zwei Arten zur Verfügung: Streaming-Modelle zeigen Wörter live an, während Sie sprechen; Standardmodelle transkribieren nach jeder Pause. Beginnen Sie für freihändiges Diktieren mit dem empfohlenen Modell Moonshine Small. Nemotron 3.5 ASR ist eine Streaming-Option mit höherem Ressourcenbedarf.',
-  'setup.wizard.openModelPicker': 'Modellauswahl öffnen',
+  'setup.wizard.recommendation.title': 'Empfehlung für Ihre Einrichtung',
+  'setup.wizard.recommendation.task': 'Startaufgabe: Diktat',
+  'setup.wizard.recommendation.reason.liveEnglish':
+    'Dieses Live-englische Modell bietet eine ausgewogene Mischung aus schneller Rückmeldung und alltäglichem Ressourcenbedarf.',
+  'setup.wizard.recommendation.reason.multilingual':
+    'Dieses Live-Modell unterstützt die ausgewählte Sprache, ohne einen größeren Download mit Vorrang für Qualität zu benötigen.',
+  'setup.wizard.recommendation.reason.automatic':
+    'Dieses Live-Modell unterstützt die automatische Spracherkennung und ist ein praktischer erster Download.',
+  'setup.wizard.recommendation.reason.finalOnly':
+    'Dies ist das kleinste kompatible Modell, aber Wörter werden nach einer Pause statt live abgeschlossen.',
+  'setup.wizard.recommendation.reason.hardware.constrained':
+    'Auf diesem Computer mit geringeren Ressourcen ist dies die kleinere Auswahl.',
+  'setup.wizard.recommendation.reason.hardware.standard':
+    'Es passt zu der von diesem Computer gemeldeten CPU und Arbeitsspeichermenge.',
+  'setup.wizard.recommendation.reason.hardware.unknown':
+    'Es ist ein pragmatischer CPU-Startpunkt; unter „Modelle anpassen“ finden Sie Modelle mit höherem Ressourcenbedarf.',
+  'setup.wizard.recommendation.mode.live':
+    'Wörter erscheinen während des Sprechens live; abgeschlossene Phrasen können weiterhin korrigiert werden.',
+  'setup.wizard.recommendation.mode.final':
+    'Endgültige Wörter erscheinen nach einer Pause. Es gibt keine live angezeigten Teilwörter.',
+  'setup.wizard.recommendation.languages': 'Unterstützte Diktat-Sprachen: {languages}',
+  'setup.wizard.recommendation.cost': '{size} Download · Läuft lokal auf der CPU',
+  'setup.wizard.recommendation.cudaOptional':
+    'CUDA ist optional und kann später in den Einstellungen hinzugefügt werden.',
+  'setup.wizard.recommendation.installAndUse': 'Installieren und verwenden',
+  'setup.wizard.recommendation.use': 'Dieses Modell verwenden',
+  'setup.wizard.recommendation.installing': 'Wird installiert…',
+  'setup.wizard.recommendation.selecting': 'Wird ausgewählt…',
+  'setup.wizard.recommendation.failed':
+    'Das empfohlene Modell konnte nicht installiert und verwendet werden. Versuchen Sie es erneut.',
+  'setup.wizard.recommendation.selectFailed':
+    'Das empfohlene Modell konnte nicht ausgewählt werden. Versuchen Sie es erneut.',
+  'setup.wizard.recommendation.unavailableTitle': 'Kein Startmodell für diese Sprache',
+  'setup.wizard.recommendation.unavailableDesc':
+    'Der aktuelle Katalog enthält kein herunterladbares oder installiertes Diktatmodell für diese Sprache. Ändern Sie die Diktatsprache in den Einstellungen oder verwenden Sie „Modelle anpassen“, um alle Modelle zu prüfen.',
+  'setup.wizard.recommendation.catalogLoading': 'Modellkatalog wird geladen…',
+  'setup.wizard.openModelPicker': 'Modelle anpassen',
   'setup.wizard.readyTitle': 'Sie sind bereit zu diktieren',
   'setup.wizard.readyDesc':
     'Probieren Sie es in der aktuell geöffneten Markdown-Notiz aus. Sprechen Sie ein paar Worte und stoppen Sie dann über das Mikrofonsymbol in der Ribbon-Leiste oder mit Ihrem Hotkey.',
@@ -790,6 +842,12 @@ export const de = {
   'models.manage.allLanguages': 'Alle Sprachen',
   'models.manage.familiesLabel': 'Modellfamilien',
   'models.manage.noneForLanguage': 'Für diese Aufgabe und Sprache sind keine Modelle verfügbar.',
+  'models.manage.languageAvailabilityTitle': 'Verfügbarkeit für {language}',
+  'models.manage.languageAvailability_none': 'Kein kompatibles Modell',
+  'models.manage.languageAvailability_installed_one': '{count} installiert',
+  'models.manage.languageAvailability_installed_other': '{count} installiert',
+  'models.manage.languageAvailability_downloads_one': '{count} kompatibler Download',
+  'models.manage.languageAvailability_downloads_other': '{count} kompatible Downloads',
   'models.manage.optionalVoice': 'Optionale lokale Stimme',
   'models.manage.voiceInstalled': 'Installiert',
   'tts.status.reading': 'Wird vorgelesen…',

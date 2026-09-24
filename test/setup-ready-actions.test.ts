@@ -29,6 +29,7 @@ function createHarness(
       hasDictationTarget: () => true,
       isDictationBusy: () => false,
       onCompleted,
+      prepareDictationTarget: async () => false,
       startDictation,
       ...overrides,
     }),
@@ -47,6 +48,25 @@ describe('setup ready actions', () => {
     await harness.actions.tryDictationNow();
 
     expect(harness.events).toEqual(['completed', 'closed', 'started']);
+    expect(harness.startDictation).toHaveBeenCalledOnce();
+  });
+
+  it('prepares a safe dictation target before the first attempt when none is open', async () => {
+    const events: string[] = [];
+    const harness = createHarness({
+      hasDictationTarget: () => false,
+      onCompleted: vi.fn(async () => {
+        events.push('completed');
+      }),
+      prepareDictationTarget: vi.fn(async () => {
+        events.push('prepared');
+        return true;
+      }),
+    });
+
+    await harness.actions.tryDictationNow();
+
+    expect(events).toEqual(['prepared', 'completed']);
     expect(harness.startDictation).toHaveBeenCalledOnce();
   });
 
@@ -119,6 +139,7 @@ describe('setup ready actions', () => {
 
     const first = harness.actions.tryDictationNow();
     const second = harness.actions.tryDictationNow();
+    await Promise.resolve();
     completeSetup?.();
     await Promise.all([first, second]);
 

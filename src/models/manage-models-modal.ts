@@ -7,7 +7,7 @@ import {
   formatCatalogLanguageLabel,
 } from '../language/dictation-language';
 import { formatBytes, formatVoiceLabel } from '../shared/format-utils';
-import { t } from '../shared/i18n';
+import { t, tPlural } from '../shared/i18n';
 import type { UserFeedback } from '../shared/user-feedback';
 import { SidecarLifecycleConflictError } from '../sidecar/sidecar-lifecycle-gate';
 import { ConfirmModal } from '../ui/confirm-modal';
@@ -86,7 +86,12 @@ export function deriveModelLanguageOptions(
   models: readonly CatalogModelRecord[],
 ): ModelLanguageOption[] {
   const languageTags = new Set(
-    models.filter((model) => model.task === 'stt').flatMap((model) => model.languageTags),
+    models.flatMap((model) => [
+      ...model.languageTags,
+      ...(model.translationSupport?.kind === 'all_to_all'
+        ? model.translationSupport.languages
+        : (model.translationSupport?.pairs ?? []).flatMap((pair) => [pair.source, pair.target])),
+    ]),
   );
   const knownTags = MODEL_LANGUAGE_ORDER.filter((tag) => languageTags.delete(tag));
   const remainingTags = [...languageTags].sort((left, right) => left.localeCompare(right));
@@ -102,10 +107,50 @@ export function deriveModelLanguageOptions(
 }
 
 export function modelMatchesLanguageFilter(
-  model: Pick<CatalogModelRecord, 'languageTags'>,
+  model: Pick<
+    CatalogModelRecord,
+    'languageTags' | 'supportsAutomaticLanguageDetection' | 'task' | 'translationSupport'
+  >,
   filter: ModelLanguageFilter,
 ): boolean {
-  return filter.kind === 'all' || model.languageTags.includes(filter.tag);
+  if (filter.kind === 'all') return true;
+  if (model.task === 'stt') {
+    return filter.tag === 'auto'
+      ? model.supportsAutomaticLanguageDetection
+      : model.languageTags.includes(filter.tag);
+  }
+  if (model.task === 'translation') {
+    const support = model.translationSupport;
+    if (support?.kind === 'all_to_all') return support.languages.includes(filter.tag);
+    if (support?.kind === 'pairs') {
+      return support.pairs.some((pair) => pair.source === filter.tag || pair.target === filter.tag);
+    }
+  }
+  return model.languageTags.includes(filter.tag);
+}
+
+export interface TaskModelAvailability {
+  compatibleDownloads: number;
+  installed: number;
+  task: ModelPickerTask;
+}
+
+export function deriveTaskModelAvailability(
+  rows: readonly ModelRowState[],
+  languageTag: string,
+): TaskModelAvailability[] {
+  const language = { kind: 'language', tag: languageTag } as const;
+  return MODEL_PICKER_TASKS.map((task) => {
+    const taskRows = rows.filter(
+      (row) => row.model.task === task && modelMatchesLanguageFilter(row.model, language),
+    );
+    const installed = taskRows.filter((row) => row.installed).length;
+    return {
+      compatibleDownloads: taskRows.length - installed,
+      installed,
+      task,
+    };
+  });
 }
 
 interface ManageModelsModalDependencies {
@@ -521,6 +566,24 @@ export class ManageModelsModal extends Modal {
   // Model list
   // -------------------------------------------------------------------------
 
+  private renderLanguageAvailability(): void {
+    if (this.listContainer === null || this.activeLanguage.kind === 'all') return;
+    const panel = this.listContainer.createDiv({ cls: 'local-stt-language-availability' });
+    panel.createEl('h3', {
+      text: t('models.manage.languageAvailabilityTitle', {
+        language: formatCatalogLanguageLabel(this.activeLanguage.tag),
+      }),
+    });
+    for (const availability of deriveTaskModelAvailability(
+      this.getRunnableRows(),
+      this.activeLanguage.tag,
+    )) {
+      panel.createEl('p', {
+        text: `${taskLabel(availability.task)}: ${formatTaskModelAvailability(availability)}`,
+      });
+    }
+  }
+
   private renderModelList(): void {
     if (this.listContainer === null) {
       return;
@@ -543,6 +606,7 @@ export class ManageModelsModal extends Modal {
       return;
     }
 
+    this.renderLanguageAvailability();
     const activeTab = this.getActiveTab();
     if (activeTab === null) {
       this.listContainer.createEl('p', {
@@ -1148,6 +1212,30 @@ export class ManageModelsModal extends Modal {
 
     return frag;
   }
+}
+
+function formatTaskModelAvailability(availability: TaskModelAvailability): string {
+  if (availability.installed + availability.compatibleDownloads === 0) {
+    return t('models.manage.languageAvailability_none');
+  }
+  const installed = tPlural(
+    availability.installed,
+    {
+      one: 'models.manage.languageAvailability_installed_one',
+      other: 'models.manage.languageAvailability_installed_other',
+    },
+    { count: availability.installed },
+  );
+  if (availability.compatibleDownloads === 0) return installed;
+  const downloads = tPlural(
+    availability.compatibleDownloads,
+    {
+      one: 'models.manage.languageAvailability_downloads_one',
+      other: 'models.manage.languageAvailability_downloads_other',
+    },
+    { count: availability.compatibleDownloads },
+  );
+  return `${installed} · ${downloads}`;
 }
 
 export function resolveTabNavigationIndex(
