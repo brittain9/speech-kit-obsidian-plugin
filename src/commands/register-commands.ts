@@ -12,6 +12,7 @@ const COPY_RAW_TRANSCRIPT_COMMAND_ID = 'copy-raw-transcript';
 const CLEAR_RAW_RECOVERY_COMMAND_ID = 'clear-raw-transcript-recovery';
 
 interface CommandDependencies {
+  cancelAudioFile: () => Promise<void>;
   cancelDictation: () => Promise<void>;
   clearLastUtterance: () => void;
   clearRawTranscriptRecovery: () => void;
@@ -19,6 +20,7 @@ interface CommandDependencies {
   copyLastUtterance: () => void;
   copyRawTranscript: () => void;
   hasRawTranscriptRecovery: () => boolean;
+  isAudioFileTranscriptionActive: () => boolean;
   isReadAloudActive: () => boolean;
   plugin: Plugin;
   hasLastUtterance: () => boolean;
@@ -91,6 +93,16 @@ export function registerCommands(dependencies: CommandDependencies): void {
     name: t('commands.transcribeAudioFile'),
     callback: async () => {
       await dependencies.transcribeAudioFile();
+    },
+  });
+
+  dependencies.plugin.addCommand({
+    id: 'cancel-local-audio-file-transcription',
+    name: t('commands.cancelAudioFile'),
+    checkCallback: (checking) => {
+      if (!dependencies.isAudioFileTranscriptionActive()) return false;
+      if (!checking) void dependencies.cancelAudioFile();
+      return true;
     },
   });
 

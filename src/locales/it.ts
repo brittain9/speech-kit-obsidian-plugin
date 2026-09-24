@@ -3,6 +3,7 @@ import type { TranslationCatalog } from './index';
 export const it = {
   'notice.dictationNotActive': 'La dettatura non è attiva.',
   'commands.transcribeAudioFile': 'Trascrivi file audio locale',
+  'commands.cancelAudioFile': 'Annulla trascrizione del file audio locale',
   'audio-file-model-required':
     'Seleziona e convalida un modello locale voce-to-text in Gestisci modelli, quindi riprova.',
   'audio-file-model-changed':

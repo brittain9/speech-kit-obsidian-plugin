@@ -165,6 +165,7 @@ export const en = {
   'commands.checkSidecarHealth': 'Check sidecar health',
   'commands.restartSidecar': 'Restart sidecar',
   'commands.transcribeAudioFile': 'Transcribe local audio file',
+  'commands.cancelAudioFile': 'Cancel local audio-file transcription',
   'commands.readAloud': 'Read aloud from selection or note start',
   'commands.readAloudFromCursor': 'Read aloud from cursor',
   'commands.pauseResumeReadAloud': 'Pause or resume reading',

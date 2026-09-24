@@ -3,6 +3,7 @@ import type { TranslationCatalog } from '.';
 export const es = {
   'notice.dictationNotActive': 'El dictado no está activo actualmente.',
   'commands.transcribeAudioFile': 'Transcribir archivo de audio local',
+  'commands.cancelAudioFile': 'Cancelar transcripción de archivo de audio local',
   'audio-file-model-required':
     'Seleccione y valide un modelo local de voz a texto en Gestionar modelos y vuelva a intentarlo.',
   'audio-file-model-changed':

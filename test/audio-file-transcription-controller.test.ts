@@ -501,7 +501,10 @@ describe('AudioFileTranscriptionController', () => {
         });
       },
     );
-    const harness = createHarness({ decoder: { decode: async () => decoded }, sidecarConnection });
+    const harness = createHarness({
+      decoder: { decode: async () => decoded },
+      sidecarConnection,
+    });
 
     const transcribing = harness.controller.transcribe();
     await vi.waitFor(() => expect(writeSignal).toBeDefined());
@@ -517,6 +520,7 @@ describe('AudioFileTranscriptionController', () => {
     expect(writeSignal?.aborted).toBe(true);
     sidecarConnection.emit({ reason: 'queue_overload', sessionId, type: 'session_stopped' });
     await transcribing;
+    expect(sidecarConnection.cancelSession).not.toHaveBeenCalled();
     expect(harness.feedback.show).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'audio-file-queue-overload' }),
     );

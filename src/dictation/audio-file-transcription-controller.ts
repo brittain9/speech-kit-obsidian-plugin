@@ -635,6 +635,10 @@ export class AudioFileTranscriptionController {
   }
 
   private async handleRunFailure(entry: ManagedAudioFileSession, error: unknown): Promise<void> {
+    if (entry.phase === 'stopped') {
+      await entry.completion;
+      return;
+    }
     if (entry.phase === 'stopping' && isQueueAbort(error)) {
       this.requestGracefulStop(entry);
       await entry.completion;
@@ -726,7 +730,7 @@ export class AudioFileTranscriptionController {
   }
 
   private async handleStopTimeout(entry: ManagedAudioFileSession): Promise<void> {
-    if (entry.phase === 'stopped' || entry.cancellationStarted) {
+    if (this.activeSession !== entry || entry.phase === 'stopped' || entry.cancellationStarted) {
       return;
     }
     this.dependencies.logger?.warn(

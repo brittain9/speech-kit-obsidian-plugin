@@ -413,6 +413,7 @@ export default class LocalSttPlugin extends Plugin {
     );
 
     registerCommands({
+      cancelAudioFile: async () => this.requireAudioFileTranscriptionController().cancel(),
       cancelDictation: async () => this.requireDictationController().cancelDictation(),
       clearLastUtterance: () => {
         this.lastUtteranceRecovery.clear();
@@ -434,6 +435,8 @@ export default class LocalSttPlugin extends Plugin {
       },
       hasLastUtterance: () => this.lastUtteranceRecovery.hasUtterance(),
       hasRawTranscriptRecovery: () => this.rawTranscriptRecovery.hasRecovery(),
+      isAudioFileTranscriptionActive: () =>
+        this.audioFileTranscriptionController?.isCaptureActive() ?? false,
       isReadAloudActive: () => this.requireReadAloudController().isActive(),
       plugin: this,
       readAloud: (editor) => this.requireReadAloudController().read(editor),

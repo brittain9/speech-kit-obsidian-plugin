@@ -3,6 +3,7 @@ import type { TranslationCatalog } from '.';
 export const fr = {
   'notice.dictationNotActive': "La dictée n'est pas active actuellement.",
   'commands.transcribeAudioFile': 'Transcrire un fichier audio local',
+  'commands.cancelAudioFile': 'Annuler la transcription du fichier audio local',
   'audio-file-model-required':
     'Sélectionnez et validez un modèle local de reconnaissance vocale dans Gérer les modèles, puis réessayez.',
   'audio-file-model-changed':

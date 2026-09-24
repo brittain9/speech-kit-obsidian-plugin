@@ -3,6 +3,7 @@ import type { TranslationCatalog } from '.';
 export const hr = {
   'notice.dictationNotActive': 'Diktiranje trenutačno nije aktivno.',
   'commands.transcribeAudioFile': 'Transkribiraj lokalnu audio-datoteku',
+  'commands.cancelAudioFile': 'Otkaži transkripciju lokalne audio-datoteke',
   'audio-file-model-required':
     'Odaberite i provjerite lokalni model govora u tekstu u Upravljanju modelima pa pokušajte ponovno.',
   'audio-file-model-changed':

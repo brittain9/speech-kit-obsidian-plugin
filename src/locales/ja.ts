@@ -3,6 +3,7 @@ import type { TranslationCatalog } from '.';
 export const ja = {
   'notice.dictationNotActive': 'ディクテーションは現在有効ではありません。',
   'commands.transcribeAudioFile': 'ローカルの音声ファイルを文字起こし',
+  'commands.cancelAudioFile': 'ローカル音声ファイルの文字起こしをキャンセル',
   'audio-file-model-required':
     'モデルを管理でローカルの音声認識モデルを選択して検証してから、もう一度お試しください。',
   'audio-file-model-changed':

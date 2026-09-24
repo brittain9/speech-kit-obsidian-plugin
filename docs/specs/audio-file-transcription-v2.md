@@ -10,6 +10,9 @@ Add a local **Transcribe audio file** command that lets a user choose one audio
 file, transcribe it without microphone capture, and insert the completed local
 transcript into the Markdown note that was active when the command began.
 
+A companion **Cancel local audio-file transcription** command is available only
+while selection, preparation, or sidecar work is active.
+
 The workflow is local-only. The selected file bytes and decoded PCM are read by
 the plugin renderer and sent only to the local Rust sidecar over its framed
 stdin pipe. No audio-file path, encoded audio, or decoded audio is sent to an

@@ -3,6 +3,7 @@ import type { TranslationCatalog } from '.';
 export const de = {
   'notice.dictationNotActive': 'Das Diktat ist derzeit nicht aktiv.',
   'commands.transcribeAudioFile': 'Lokale Audiodatei transkribieren',
+  'commands.cancelAudioFile': 'Transkription lokaler Audiodatei abbrechen',
   'audio-file-model-required':
     'Wählen und validieren Sie in „Modelle verwalten“ ein lokales Sprach-zu-Text-Modell und versuchen Sie es erneut.',
   'audio-file-model-changed':

@@ -3,6 +3,7 @@ import type { TranslationCatalog } from '.';
 export const nl = {
   'notice.dictationNotActive': 'Dicteren is momenteel niet actief.',
   'commands.transcribeAudioFile': 'Lokaal audiobestand transcriberen',
+  'commands.cancelAudioFile': 'Transcriptie van lokaal audiobestand annuleren',
   'audio-file-model-required':
     'Selecteer en valideer een lokaal spraak-naar-tekstmodel bij Modellen beheren en probeer het opnieuw.',
   'audio-file-model-changed':
