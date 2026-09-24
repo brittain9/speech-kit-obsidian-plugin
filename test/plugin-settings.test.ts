@@ -54,7 +54,7 @@ describe('resolvePluginSettings', () => {
   });
 
   it('defaults missing schemaVersion to the current settings schema', () => {
-    expect(resolvePluginSettings({}).schemaVersion).toBe(10);
+    expect(resolvePluginSettings({}).schemaVersion).toBe(11);
   });
 
   it('defaults and normalizes HY-MT2 translation styles', () => {
@@ -179,9 +179,45 @@ describe('resolvePluginSettings', () => {
     expect(
       resolvePluginSettings({ autoCopyFinalizedUtterances: 'yes' }).autoCopyFinalizedUtterances,
     ).toBe(false);
-    expect(resolvePluginSettings({ autoCopyFinalizedUtterances: true }).schemaVersion).toBe(10);
+    expect(resolvePluginSettings({ autoCopyFinalizedUtterances: true }).schemaVersion).toBe(11);
   });
 
+  it('migrates personal correction rules without resetting other settings', () => {
+    const rules = [{ enabled: true, find: 'Speech Kit', id: 'rule-1', replace: 'Speech Kit' }];
+    const settings = resolvePluginSettings({
+      autoCopyFinalizedUtterances: true,
+      personalCorrectionRules: rules,
+      schemaVersion: 10,
+      selectedModel: {
+        familyId: 'whisper',
+        filePath: '/tmp/model.bin',
+        kind: 'external_file',
+        runtimeId: 'whisper_cpp',
+      },
+    });
+
+    expect(settings.schemaVersion).toBe(11);
+    expect(settings.personalCorrectionRules).toEqual(rules);
+    expect(settings.autoCopyFinalizedUtterances).toBe(true);
+    expect(settings.selectedModel).toEqual({
+      familyId: 'whisper',
+      filePath: '/tmp/model.bin',
+      kind: 'external_file',
+      runtimeId: 'whisper_cpp',
+    });
+  });
+
+  it('drops invalid persisted correction rules while preserving valid rules', () => {
+    expect(
+      resolvePluginSettings({
+        personalCorrectionRules: [
+          { enabled: true, find: 'ok', id: 'valid', replace: 'yes' },
+          { enabled: true, find: ' ', id: 'blank', replace: 'yes' },
+          { enabled: true, find: 'ok', id: 'duplicate', replace: 'no' },
+        ],
+      }).personalCorrectionRules,
+    ).toEqual([{ enabled: true, find: 'ok', id: 'valid', replace: 'yes' }]);
+  });
   it('migrates legacy speaker label setting to diarization', () => {
     expect(resolvePluginSettings({ speakerLabelsEnabled: true }).diarizationEnabled).toBe(true);
     expect(
@@ -388,7 +424,7 @@ describe('resolvePluginSettings', () => {
       runtimeId: 'whisper_cpp' as const,
     };
 
-    for (const schemaVersion of [4, 5]) {
+    for (const schemaVersion of [4, 5, 11, 12]) {
       expect(
         resolvePluginSettings({
           schemaVersion,

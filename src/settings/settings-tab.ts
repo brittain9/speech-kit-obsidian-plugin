@@ -32,6 +32,7 @@ import { renderHardwareAccelerationSetting } from './hardware-acceleration-setti
 import { renderMicrophonePicker } from './microphone-picker';
 import { renderModelSection } from './model-settings-section';
 import { openFilteredHotkeySettings } from './open-hotkey-settings';
+import { PersonalCorrectionRulesModal } from './personal-correction-rules-modal';
 import {
   PHRASE_FINALIZATION_TOOLTIP,
   phraseFinalizationDescription,
@@ -364,6 +365,21 @@ export class LocalSttSettingTab extends PluginSettingTab {
     renderAutomaticCopyFinalizedUtterancesSetting(outputCard, this.access);
 
     this.renderTranscriptFormattingSetting(outputCard);
+
+    new Setting(outputCard)
+      .setName(t('settings.corrections.name'))
+      .setDesc(t('settings.corrections.desc'))
+      .addButton((button) => {
+        button.setButtonText(t('settings.corrections.manage')).onClick(() => {
+          new PersonalCorrectionRulesModal(this.app, {
+            getSettings: () => this.dependencies.getSettings(),
+            saveSettings: async (nextSettings) => {
+              await this.dependencies.saveSettings(nextSettings);
+              this.refreshSettingsTab();
+            },
+          }).open();
+        });
+      });
 
     const diarizationSetting = addToggleSetting(outputCard, this.access, {
       name: t('settings.speakerLabels.name'),

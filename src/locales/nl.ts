@@ -848,4 +848,43 @@ export const nl = {
     'Snelle lokale vertaling met kleine taaldownloads op aanvraag en modellen die in Firefox zijn uitgebracht.',
   'catalog.family.firefox_translations.summary':
     'Vertaalt notitietekst lokaal met de compacte Bergamot-engine en Firefox-modellen.',
+  'notice.personalCorrectionRulesSnapshot':
+    'Deze sessie gebruikt {enabled} van {total} persoonlijke correctieregels. Wijzigingen gelden voor de volgende sessie.',
+  'settings.corrections.name': 'Persoonlijke correctieregels',
+  'settings.corrections.desc':
+    'Pas lokale, geordende letterlijke correcties toe na de transcriptie. Regels gelden voor finale segmenten in de volgende sessie; dit is geen ASR-vocabulaire en geen hotwoorden.',
+  'settings.corrections.manage': 'Correctieregels beheren',
+  'settings.corrections.modal.title': 'Persoonlijke correctieregels',
+  'settings.corrections.modal.intro':
+    'Dit zijn deterministische lokale correcties na de transcriptie, geen vocabulaire voor spraakherkenning. Regels worden in volgorde op elk final segment toegepast, vóór optionele LLM-opschoning. Wijzigingen gelden voor de volgende dicteersessie.',
+  'settings.corrections.modal.preview': 'Voorbeeld',
+  'settings.corrections.modal.previewInput': 'Voorbeeldtranscriptie',
+  'settings.corrections.modal.previewOutput': 'Gecorrigeerde transcriptie',
+  'settings.corrections.modal.add': 'Regel toevoegen',
+  'settings.corrections.modal.empty': 'Nog geen correctieregels.',
+  'settings.corrections.modal.counts': '{enabled} ingeschakeld · {total} totaal',
+  'settings.corrections.modal.previewSummary':
+    '{replacements} vervanging(en) uit {rules} regel(s).',
+  'settings.corrections.modal.find': 'Zoeken',
+  'settings.corrections.modal.replace': 'Vervangen door',
+  'settings.corrections.modal.enabled': 'Ingeschakeld',
+  'settings.corrections.modal.moveUp': 'Omhoog',
+  'settings.corrections.modal.moveDown': 'Omlaag',
+  'settings.corrections.modal.delete': 'Regel verwijderen',
+  'settings.corrections.modal.invalid':
+    'Corrigeer de gemarkeerde regel voordat je opslaat of het voorbeeld bekijkt.',
+  'settings.corrections.field.find': 'Zoeken',
+  'settings.corrections.field.replace': 'Vervangen door',
+  'settings.corrections.validation.tooMany': 'Voeg hoogstens {max} regels toe.',
+  'settings.corrections.validation.blankId': 'Elke regel heeft een ID nodig.',
+  'settings.corrections.validation.duplicateId': 'Regel-ID’s moeten uniek zijn.',
+  'settings.corrections.validation.blankFind': 'De zoektekst mag niet leeg zijn.',
+  'settings.corrections.validation.blankReplace': 'De vervangende tekst mag niet leeg zijn.',
+  'settings.corrections.validation.oversized': '{field} mag niet meer dan {max} tekens bevatten.',
+  'settings.corrections.validation.duplicateFind':
+    'De zoektekst moet uniek zijn; latere regels mogen niet dezelfde tekst gebruiken.',
+  'settings.corrections.validation.absoluteAmplification':
+    'De correctie zou de limiet van {max} tekens overschrijden en is vóór outputtoewijzing geweigerd.',
+  'settings.corrections.validation.relativeAmplification':
+    'De correctie zou de tekst meer dan {max}× vergroten en is vóór outputtoewijzing geweigerd.',
 } as const satisfies TranslationCatalog;

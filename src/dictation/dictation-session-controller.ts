@@ -31,6 +31,7 @@ import type {
   ContextRequestEvent,
   ContextWindow,
   ContextWindowSource,
+  CorrectionRule,
   QueueBackpressureTier,
   SessionState,
   SidecarEvent,
@@ -79,6 +80,7 @@ interface ActiveSessionSnapshot {
   diarizationEnabled: PluginSettings['diarizationEnabled'];
   diarizationMaxSpeakers: PluginSettings['diarizationMaxSpeakers'];
   dictationLanguage: PluginSettings['dictationLanguage'];
+  correctionRules: CorrectionRule[];
   includeSystemAudio: PluginSettings['includeSystemAudio'];
   dictationAnchor: PluginSettings['dictationAnchor'];
   listeningMode: PluginSettings['listeningMode'];
@@ -407,6 +409,16 @@ export class DictationSessionController {
       settings.selectedModel,
       this.dependencies.createLlmRouter(settings),
     );
+    if (snapshot.correctionRules.length > 0) {
+      this.dependencies.feedback.show({
+        intent: 'information',
+        key: 'personal-correction-rules-snapshot',
+        message: t('notice.personalCorrectionRulesSnapshot', {
+          enabled: snapshot.correctionRules.filter((rule) => rule.enabled).length,
+          total: snapshot.correctionRules.length,
+        }),
+      });
+    }
     let session: ControllerSession;
 
     try {
@@ -468,6 +480,7 @@ export class DictationSessionController {
     try {
       await this.dependencies.sidecarConnection.startSession({
         accelerationPreference: snapshot.accelerationPreference,
+        correctionRules: snapshot.correctionRules,
         // Engine segment timing is always present when the model provides it.
         // This legacy protocol flag only enables dense word alignment, which no
         // supported timestamp frequency renders.
@@ -1711,6 +1724,11 @@ function createSessionSnapshot(
 
   return {
     accelerationPreference: settings.accelerationPreference,
+    correctionRules: settings.personalCorrectionRules.map(({ enabled, find, replace }) => ({
+      enabled,
+      find,
+      replace,
+    })),
     diarizationEnabled: settings.diarizationEnabled,
     diarizationMaxSpeakers: settings.diarizationMaxSpeakers,
     dictationLanguage: settings.dictationLanguage,

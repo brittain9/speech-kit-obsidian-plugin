@@ -2,6 +2,7 @@ import { type TranslationKey, t } from '../shared/i18n';
 import type { ErrorEvent, WarningEvent } from './protocol';
 
 export const SIDECAR_EVENT_TRANSLATION_KEYS = {
+  absolute_amplification: 'sidecarError.absolute_amplification',
   audio_too_long: 'sidecarError.audio_too_long',
   engine_inference_failed: 'sidecarError.engine_inference_failed',
   helper_protocol_error: 'sidecarError.helper_protocol_error',
@@ -23,6 +24,7 @@ export const SIDECAR_EVENT_TRANSLATION_KEYS = {
   missing_voice_file: 'sidecarError.missing_voice_file',
   no_active_install: 'sidecarError.no_active_install',
   no_active_session: 'sidecarError.no_active_session',
+  relative_amplification: 'sidecarError.relative_amplification',
   session_already_exists: 'sidecarError.session_already_exists',
   session_capacity_exceeded: 'sidecarError.session_capacity_exceeded',
   sidecar_exited: 'sidecarError.sidecar_exited',

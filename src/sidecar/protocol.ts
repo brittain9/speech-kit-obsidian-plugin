@@ -121,8 +121,15 @@ export type HealthCommand = EnvelopeBase<'health'>;
 
 export type ProbeSystemAudioCommand = EnvelopeBase<'probe_system_audio'>;
 
+export interface CorrectionRule {
+  enabled: boolean;
+  find: string;
+  replace: string;
+}
+
 export interface StartSessionCommand extends EnvelopeBase<'start_session'> {
   accelerationPreference: AccelerationPreference;
+  correctionRules?: CorrectionRule[];
   /** Opt in to adapter work needed for dense word alignment. */
   detailedTimestampsEnabled: boolean;
   diarizationEnabled: boolean;

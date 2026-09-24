@@ -161,6 +161,42 @@ class FakeAudioLevelMeter {
 }
 
 describe('DictationSessionController', () => {
+  it('snapshots correction rules at session start and announces the snapshot', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const feedback = { show: vi.fn() };
+    const settings = createSettings({
+      personalCorrectionRules: [
+        { enabled: true, find: 'speech kit', id: 'rule-1', replace: 'Speech Kit' },
+        { enabled: false, find: 'old', id: 'rule-2', replace: 'new' },
+      ],
+      selectedModel: createExternalModelSelection(),
+    });
+    const controller = createController({
+      feedback,
+      getSettings: () => settings,
+      sidecarConnection,
+    });
+
+    await controller.startDictation();
+
+    expect(sidecarConnection.startSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        correctionRules: [
+          { enabled: true, find: 'speech kit', replace: 'Speech Kit' },
+          { enabled: false, find: 'old', replace: 'new' },
+        ],
+      }),
+    );
+    expect(feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: 'personal-correction-rules-snapshot',
+        message: expect.stringContaining('1'),
+      }),
+    );
+
+    await controller.stopDictation();
+  });
+
   it('refuses a start synchronously while sidecar maintenance is active', async () => {
     const sidecarLifecycleGate = new SidecarLifecycleGate();
     const mutation = sidecarLifecycleGate.acquireMutation();

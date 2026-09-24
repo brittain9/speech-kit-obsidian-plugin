@@ -813,6 +813,7 @@ impl AppState {
             }
             Command::StartSession {
                 acceleration_preference,
+                correction_rules,
                 detailed_timestamps_enabled,
                 diarization_enabled,
                 diarization_max_speakers,
@@ -931,6 +932,7 @@ impl AppState {
                             .send(WorkerCommand::BeginSession(SessionMetadata {
                                 runtime_id: resolved_model.runtime_id,
                                 family_id: resolved_model.family_id,
+                                correction_rules,
                                 gpu_config: GpuConfig { use_gpu },
                                 detailed_timestamps_enabled,
                                 diarization_enabled,
@@ -4160,6 +4162,7 @@ mod tests {
     ) -> Command {
         Command::StartSession {
             acceleration_preference: AccelerationPreference::Auto,
+            correction_rules: Vec::new(),
             detailed_timestamps_enabled: false,
             diarization_enabled: false,
             diarization_max_speakers: None,

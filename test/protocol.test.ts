@@ -338,6 +338,28 @@ describe('FramedMessageParser fatal stream handling', () => {
 // Commands -------------------------------------------------------------------
 
 describe('command serialization', () => {
+  it('serializes the session-start correction snapshot', () => {
+    const frame = encodeJsonFrame(
+      createStartSessionCommand({
+        accelerationPreference: 'auto',
+        correctionRules: [{ enabled: true, find: 'speech kit', replace: 'Speech Kit' }],
+        detailedTimestampsEnabled: false,
+        diarizationEnabled: false,
+        diarizationMaxSpeakers: null,
+        includeSystemAudio: false,
+        language: 'en',
+        mode: 'always_on',
+        modelSelection: externalModelSelection(),
+        sessionStartUnixMs: 1,
+        sessionId: 'session-rules',
+        speakingStyle: 'balanced',
+      }),
+    );
+
+    expect((readPayload(frame) as Record<string, unknown>).correctionRules).toEqual([
+      { enabled: true, find: 'speech kit', replace: 'Speech Kit' },
+    ]);
+  });
   it('serializes start_session with accelerationPreference, includeSystemAudio, and sessionId', () => {
     const frame = encodeJsonFrame(
       createStartSessionCommand({

@@ -1,8 +1,10 @@
+use std::collections::HashSet;
 use std::fmt;
 use std::io::{ErrorKind, Read, Write};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde::{Deserialize, Serialize};
+use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 
 use crate::audio_metadata::VoiceActivityEvidence;
@@ -187,6 +189,19 @@ pub struct TranscriptWord {
     pub timestamp_source: TimestampSource,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalCorrectionRule {
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    pub find: String,
+    pub replace: String,
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TimestampSource {
@@ -302,6 +317,8 @@ pub enum Command {
     StartSession {
         #[serde(default)]
         acceleration_preference: AccelerationPreference,
+        #[serde(default)]
+        correction_rules: Vec<PersonalCorrectionRule>,
         #[serde(default)]
         detailed_timestamps_enabled: bool,
         #[serde(default)]
@@ -627,6 +644,12 @@ impl CommandEnvelope {
 }
 
 fn validate_command(command: Command) -> Result<Command> {
+    if let Command::StartSession {
+        correction_rules, ..
+    } = &command
+    {
+        validate_correction_rules(correction_rules)?;
+    }
     if let Command::StartTranslation {
         style_instruction: Some(style_instruction),
         ..
@@ -638,6 +661,41 @@ fn validate_command(command: Command) -> Result<Command> {
         );
     }
     Ok(command)
+}
+
+pub const MAX_CORRECTION_RULE_COUNT: usize = 100;
+pub const MAX_CORRECTION_RULE_CHARS: usize = 256;
+
+pub fn validate_correction_rules(rules: &[PersonalCorrectionRule]) -> Result<()> {
+    ensure!(
+        rules.len() <= MAX_CORRECTION_RULE_COUNT,
+        "too many personal correction rules"
+    );
+
+    let mut finds = HashSet::new();
+    for rule in rules {
+        ensure!(
+            !rule.find.trim().is_empty(),
+            "personal correction find text cannot be blank"
+        );
+        ensure!(
+            !rule.replace.trim().is_empty(),
+            "personal correction replacement text cannot be blank"
+        );
+        ensure!(
+            rule.find.chars().count() <= MAX_CORRECTION_RULE_CHARS,
+            "personal correction find text is too long"
+        );
+        ensure!(
+            rule.replace.chars().count() <= MAX_CORRECTION_RULE_CHARS,
+            "personal correction replacement text is too long"
+        );
+        ensure!(
+            finds.insert(rule.find.nfd().collect::<String>()),
+            "personal correction find text is duplicated"
+        );
+    }
+    Ok(())
 }
 
 impl EventEnvelope {
@@ -834,10 +892,11 @@ mod tests {
         AUDIO_FRAME_KIND, AccelerationPreference, AudioFrame, Command, Event, EventEnvelope,
         FRAME_HEADER_LENGTH, IncomingFrame, JSON_FRAME_KIND, ListeningMode, MAX_FRAME_PAYLOAD,
         MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS, ModelInstallState, ModelProbeStatus,
-        PCM_BYTES_PER_FRAME, QueueBackpressureTier, SYNTHESIS_AUDIO_FRAME_KIND, SelectedModel,
-        SessionStopReason, SourceRange, SpeakingStyle, TimestampGranularity, TimestampSource,
-        TranscriptSegment, TranscriptWord, encode_audio_frame_envelope, read_frame,
-        write_event_frame, write_frame, write_synthesis_audio_frame,
+        PCM_BYTES_PER_FRAME, PersonalCorrectionRule, QueueBackpressureTier,
+        SYNTHESIS_AUDIO_FRAME_KIND, SelectedModel, SessionStopReason, SourceRange, SpeakingStyle,
+        TimestampGranularity, TimestampSource, TranscriptSegment, TranscriptWord,
+        encode_audio_frame_envelope, read_frame, write_event_frame, write_frame,
+        write_synthesis_audio_frame,
     };
     use crate::engine::capabilities::{ModelFamilyId, RuntimeId};
     use uuid::Uuid;
@@ -870,6 +929,7 @@ mod tests {
             parsed,
             IncomingFrame::Command(Command::StartSession {
                 acceleration_preference: AccelerationPreference::Auto,
+                correction_rules: Vec::<PersonalCorrectionRule>::new(),
                 detailed_timestamps_enabled: false,
                 diarization_enabled: false,
                 diarization_max_speakers: None,
@@ -957,6 +1017,44 @@ mod tests {
         assert!(detailed_timestamps_enabled);
         assert!(diarization_enabled);
         assert_eq!(diarization_max_speakers, Some(2));
+    }
+
+    #[test]
+    fn start_session_correction_snapshot_round_trips() {
+        let payload = serde_json::to_vec(&serde_json::json!({
+            "type": "start_session",
+            "sessionId": "session-rules",
+            "mode": "always_on",
+            "modelSelection": {
+                "kind": "external_file",
+                "runtimeId": "whisper_cpp",
+                "familyId": "whisper",
+                "filePath": "/tmp/model.bin"
+            },
+            "language": "en",
+            "sessionStartUnixMs": 1_700_000_000_000_u64,
+            "correctionRules": [
+                { "enabled": true, "find": "speech kit", "replace": "Speech Kit" },
+                { "enabled": false, "find": "old", "replace": "new" }
+            ]
+        }))
+        .expect("payload should serialize");
+        let mut framed = Vec::new();
+        write_frame(&mut framed, JSON_FRAME_KIND, &payload).expect("frame should write");
+
+        let parsed = read_frame(&mut framed.as_slice())
+            .expect("frame should parse")
+            .expect("frame should exist");
+        let IncomingFrame::Command(Command::StartSession {
+            correction_rules, ..
+        }) = parsed
+        else {
+            panic!("expected start session command");
+        };
+
+        assert_eq!(correction_rules.len(), 2);
+        assert_eq!(correction_rules[0].find, "speech kit");
+        assert!(!correction_rules[1].enabled);
     }
 
     #[test]

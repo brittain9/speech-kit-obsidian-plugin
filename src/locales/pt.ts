@@ -851,4 +851,43 @@ export const pt = {
     'Tradução local rápida com pequenos pacotes de idiomas sob demanda usando modelos lançados no Firefox.',
   'catalog.family.firefox_translations.summary':
     'Traduz o texto das notas localmente com o mecanismo compacto Bergamot e modelos do Firefox.',
+  'notice.personalCorrectionRulesSnapshot':
+    'Esta sessão usa {enabled} de {total} regras de correção pessoal. As alterações aplicam-se à próxima sessão.',
+  'settings.corrections.name': 'Regras de correção pessoal',
+  'settings.corrections.desc':
+    'Aplica correções literais locais e ordenadas após a transcrição. As regras aplicam-se a segmentos finais na próxima sessão; não são vocabulário de ASR nem palavras-chave.',
+  'settings.corrections.manage': 'Gerir regras de correção',
+  'settings.corrections.modal.title': 'Regras de correção pessoal',
+  'settings.corrections.modal.intro':
+    'São correções locais deterministas posteriores à transcrição, não vocabulário de reconhecimento de fala. As regras são aplicadas por ordem a cada segmento final, antes da limpeza opcional pelo LLM. As alterações aplicam-se à próxima sessão de ditado.',
+  'settings.corrections.modal.preview': 'Pré-visualização',
+  'settings.corrections.modal.previewInput': 'Transcrição de exemplo',
+  'settings.corrections.modal.previewOutput': 'Transcrição corrigida',
+  'settings.corrections.modal.add': 'Adicionar regra',
+  'settings.corrections.modal.empty': 'Ainda não existem regras de correção.',
+  'settings.corrections.modal.counts': '{enabled} ativadas · {total} no total',
+  'settings.corrections.modal.previewSummary':
+    '{replacements} substituição(ões) de {rules} regra(s).',
+  'settings.corrections.modal.find': 'Localizar',
+  'settings.corrections.modal.replace': 'Substituir por',
+  'settings.corrections.modal.enabled': 'Ativada',
+  'settings.corrections.modal.moveUp': 'Mover para cima',
+  'settings.corrections.modal.moveDown': 'Mover para baixo',
+  'settings.corrections.modal.delete': 'Eliminar regra',
+  'settings.corrections.modal.invalid':
+    'Corrija a regra indicada antes de guardar ou pré-visualizar.',
+  'settings.corrections.field.find': 'Localizar',
+  'settings.corrections.field.replace': 'Substituir por',
+  'settings.corrections.validation.tooMany': 'Adicione no máximo {max} regras.',
+  'settings.corrections.validation.blankId': 'Cada regra precisa de um ID.',
+  'settings.corrections.validation.duplicateId': 'Os IDs das regras devem ser únicos.',
+  'settings.corrections.validation.blankFind': 'O texto a localizar não pode estar vazio.',
+  'settings.corrections.validation.blankReplace': 'O texto de substituição não pode estar vazio.',
+  'settings.corrections.validation.oversized': '{field} não pode exceder {max} caracteres.',
+  'settings.corrections.validation.duplicateFind':
+    'O texto a localizar deve ser único; regras posteriores não podem visar o mesmo texto.',
+  'settings.corrections.validation.absoluteAmplification':
+    'A correção excederia o limite de {max} caracteres e foi rejeitada antes de alocar a saída.',
+  'settings.corrections.validation.relativeAmplification':
+    'A correção ampliaria o texto em mais de {max}× e foi rejeitada antes de alocar a saída.',
 } satisfies TranslationCatalog;

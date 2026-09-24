@@ -29,7 +29,7 @@ flowchart LR
     subgraph Sidecar ["Native sidecar (Rust)"]
         VAD["VAD · speech boundaries"]
         INF["Inference · engine registry"]
-        STAGE["Post-engine stages<br/>(hallucination filter)"]
+        STAGE["Post-engine stages<br/>(hallucination filter → personal corrections)"]
         DIA["Diarization<br/>(optional)"]
         SYNTH["Pocket TTS / Supertonic synthesis<br/>+ time stretch"]
         HYMT["HY-MT helper supervisor<br/>(framed stdio)"]
@@ -132,7 +132,7 @@ reassemble frames across chunk boundaries.
 |---------|---------|
 | `health` | Liveness ping |
 | `get_system_info` | Enumerate compiled runtimes and family adapters with static capabilities |
-| `start_session` | Begin transcription (model, mode, sessionId, options) |
+| `start_session` | Begin transcription (model, mode, sessionId, options, ordered correction snapshot) |
 | `stop_session` | Graceful stop (drain pending transcriptions) |
 | `cancel_session` | Immediate cancel (discard pending) |
 | `context_response` | Reply to a `context_request` with the plugin-assembled context window |
@@ -374,9 +374,14 @@ silence window hides most of the latency.
 
 ### Stage 5: Post-Engine Stages
 
-After final inference, a chain of post-engine processors runs in canonical order
-on the finalized transcript. Streaming partials bypass this chain entirely.
-Each final stage may rewrite or drop segments but is validated against the prior
+The post-engine chain runs in canonical order. The hallucination filter runs
+on streaming partials with its hard-only subset and on final revisions with the
+full evidence-aware rules. The personal correction stage is final-only and runs
+immediately after hallucination filtering. It is a local, deterministic literal
+find/replace stage, not ASR vocabulary or a model prompt; the optional LLM
+cleanup receives its corrected output later in the plugin.
+
+Each text stage may rewrite or drop segments but is validated against the prior
 revision: it must not move timing boundaries, overlap segments, or run past the
 utterance duration. A panicking stage is caught and recorded as
 `Failed`; the chain continues. Every stage records a `StageOutcome`
@@ -392,8 +397,12 @@ combines Whisper/Cohere decoder diagnostics with per-segment voiced fraction and
 utterance-level VAD evidence. If nothing is dropped it records
 `Skipped { reason: "no_hallucinations" }`.
 
-`StageId::Punctuation` and `StageId::UserRules` exist as reserved identifiers but
-have no registered processor yet.
+The **personal correction stage** applies the ordered, session-start rule
+snapshot independently within each final transcript segment. It preserves all
+segment boundaries, timing, IDs, speakers, and word timing, and rejects unsafe
+absolute or cascading relative amplification before materializing output. The
+full contract is in
+[`docs/specs/personal-corrections-v2.md`](specs/personal-corrections-v2.md).
 
 ---
 

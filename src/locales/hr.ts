@@ -1007,4 +1007,42 @@ export const hr = {
     'Ovo izdanje govornog modula nije dostupno za vašu platformu ili arhitekturu.',
   'setup.sidecar.modal.genericInstallError':
     'Govorni modul nije moguće instalirati. Pojedinosti potražite u zapisnicima dodatka, a zatim pokušajte ponovno.',
+  'notice.personalCorrectionRulesSnapshot':
+    'Ova sesija koristi {enabled} od {total} osobnih pravila ispravka. Promjene se primjenjuju u sljedećoj sesiji.',
+  'settings.corrections.name': 'Osobna pravila ispravka',
+  'settings.corrections.desc':
+    'Primjenjuje lokalne, uređene doslovne ispravke nakon transkripcije. Pravila se primjenjuju na završne segmente u sljedećoj sesiji; nisu ASR rječnik ni hotwords.',
+  'settings.corrections.manage': 'Upravljaj pravilima ispravka',
+  'settings.corrections.modal.title': 'Osobna pravila ispravka',
+  'settings.corrections.modal.intro':
+    'To su determinističke lokalne ispravke nakon transkripcije, a ne rječnik za prepoznavanje govora. Pravila se redom primjenjuju na svaki završni segment prije opcionalnog čišćenja putem LLM-a. Promjene se primjenjuju u sljedećoj sesiji diktiranja.',
+  'settings.corrections.modal.preview': 'Pretpregled',
+  'settings.corrections.modal.previewInput': 'Primjer transkripcije',
+  'settings.corrections.modal.previewOutput': 'Ispravljena transkripcija',
+  'settings.corrections.modal.add': 'Dodaj pravilo',
+  'settings.corrections.modal.empty': 'Još nema pravila ispravka.',
+  'settings.corrections.modal.counts': '{enabled} omogućeno · ukupno {total}',
+  'settings.corrections.modal.previewSummary': '{replacements} zamjena iz {rules} pravila.',
+  'settings.corrections.modal.find': 'Pronaći',
+  'settings.corrections.modal.replace': 'Zamijeni s',
+  'settings.corrections.modal.enabled': 'Omogućeno',
+  'settings.corrections.modal.moveUp': 'Pomakni gore',
+  'settings.corrections.modal.moveDown': 'Pomakni dolje',
+  'settings.corrections.modal.delete': 'Izbriši pravilo',
+  'settings.corrections.modal.invalid':
+    'Ispravite označeno pravilo prije spremanja ili pretpregleda.',
+  'settings.corrections.field.find': 'Pronaći',
+  'settings.corrections.field.replace': 'Zamijeni s',
+  'settings.corrections.validation.tooMany': 'Dodajte najviše {max} pravila.',
+  'settings.corrections.validation.blankId': 'Svako pravilo potrebuje ID.',
+  'settings.corrections.validation.duplicateId': 'ID-ovi pravila moraju biti jedinstveni.',
+  'settings.corrections.validation.blankFind': 'Tekst za pronalazak ne može biti prazan.',
+  'settings.corrections.validation.blankReplace': 'Zamjenski tekst ne može biti prazan.',
+  'settings.corrections.validation.oversized': '{field} ne može premašiti {max} znakova.',
+  'settings.corrections.validation.duplicateFind':
+    'Tekst za pronalazak mora biti jedinstven; kasnija pravila ne mogu tražiti isti tekst.',
+  'settings.corrections.validation.absoluteAmplification':
+    'Ispravka bi premašila ograničenje od {max} znakova i odbijena je prije dodjele izlaza.',
+  'settings.corrections.validation.relativeAmplification':
+    'Ispravka bi povećala tekst više od {max}× i odbijena je prije dodjele izlaza.',
 } as const satisfies TranslationCatalog;

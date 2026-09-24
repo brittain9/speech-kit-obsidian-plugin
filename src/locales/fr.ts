@@ -855,4 +855,43 @@ export const fr = {
     'Traduction locale rapide avec de petits packs de langues à la demande et les modèles publiés dans Firefox.',
   'catalog.family.firefox_translations.summary':
     'Traduit localement le texte des notes avec le moteur compact Bergamot et les modèles Firefox.',
+  'notice.personalCorrectionRulesSnapshot':
+    'Cette session utilise {enabled} règles de correction personnelle sur {total}. Les changements s’appliquent à la prochaine session.',
+  'settings.corrections.name': 'Règles de correction personnelle',
+  'settings.corrections.desc':
+    'Applique des corrections littérales locales et ordonnées après la transcription. Les règles s’appliquent aux segments finaux de la prochaine session ; ce ne sont ni du vocabulaire ASR ni des mots-clés.',
+  'settings.corrections.manage': 'Gérer les règles de correction',
+  'settings.corrections.modal.title': 'Règles de correction personnelle',
+  'settings.corrections.modal.intro':
+    'Ce sont des corrections locales déterministes après transcription, pas un vocabulaire de reconnaissance vocale. Les règles s’exécutent dans l’ordre sur chaque segment final, avant le nettoyage LLM facultatif. Les changements s’appliquent à la prochaine session de dictée.',
+  'settings.corrections.modal.preview': 'Aperçu',
+  'settings.corrections.modal.previewInput': 'Transcription exemple',
+  'settings.corrections.modal.previewOutput': 'Transcription corrigée',
+  'settings.corrections.modal.add': 'Ajouter une règle',
+  'settings.corrections.modal.empty': 'Aucune règle de correction pour le moment.',
+  'settings.corrections.modal.counts': '{enabled} activées · {total} au total',
+  'settings.corrections.modal.previewSummary':
+    '{replacements} remplacement(s) provenant de {rules} règle(s).',
+  'settings.corrections.modal.find': 'Rechercher',
+  'settings.corrections.modal.replace': 'Remplacer par',
+  'settings.corrections.modal.enabled': 'Activée',
+  'settings.corrections.modal.moveUp': 'Monter',
+  'settings.corrections.modal.moveDown': 'Descendre',
+  'settings.corrections.modal.delete': 'Supprimer la règle',
+  'settings.corrections.modal.invalid':
+    'Corrigez la règle indiquée avant d’enregistrer ou d’afficher l’aperçu.',
+  'settings.corrections.field.find': 'Rechercher',
+  'settings.corrections.field.replace': 'Remplacer par',
+  'settings.corrections.validation.tooMany': 'Ajoutez au maximum {max} règles.',
+  'settings.corrections.validation.blankId': 'Chaque règle doit avoir un ID.',
+  'settings.corrections.validation.duplicateId': 'Les ID de règles doivent être uniques.',
+  'settings.corrections.validation.blankFind': 'Le texte à rechercher ne peut pas être vide.',
+  'settings.corrections.validation.blankReplace': 'Le texte de remplacement ne peut pas être vide.',
+  'settings.corrections.validation.oversized': '{field} ne peut pas dépasser {max} caractères.',
+  'settings.corrections.validation.duplicateFind':
+    'Le texte à rechercher doit être unique ; les règles suivantes ne peuvent pas cibler le même texte.',
+  'settings.corrections.validation.absoluteAmplification':
+    'La correction dépasserait la limite de {max} caractères et a été rejetée avant l’allocation de la sortie.',
+  'settings.corrections.validation.relativeAmplification':
+    'La correction agrandirait le texte de plus de {max}× et a été rejetée avant l’allocation de la sortie.',
 } as const satisfies TranslationCatalog;

@@ -862,4 +862,42 @@ export const de = {
     'Schnelle lokale Übersetzung mit kleinen Sprachpaketen auf Abruf und in Firefox veröffentlichten Modellen.',
   'catalog.family.firefox_translations.summary':
     'Übersetzt Notiztext lokal mit der kompakten Bergamot-Engine und Firefox-Modellen.',
+  'notice.personalCorrectionRulesSnapshot':
+    'Diese Sitzung verwendet {enabled} von {total} persönlichen Korrekturregeln. Änderungen gelten ab der nächsten Sitzung.',
+  'settings.corrections.name': 'Persönliche Korrekturregeln',
+  'settings.corrections.desc':
+    'Lokale, geordnete Korrekturen nach der Transkription. Regeln gelten für endgültige Segmente in der nächsten Sitzung; sie sind kein ASR-Vokabular und keine Hotwords.',
+  'settings.corrections.manage': 'Korrekturregeln verwalten',
+  'settings.corrections.modal.title': 'Persönliche Korrekturregeln',
+  'settings.corrections.modal.intro':
+    'Dies sind deterministische lokale Korrekturen nach der Transkription, kein Vokabular der Spracherkennung. Regeln laufen in Reihenfolge auf jedes endgültige Transkriptsegment, vor der optionalen LLM-Bereinigung. Änderungen gelten ab der nächsten Diktiersitzung.',
+  'settings.corrections.modal.preview': 'Vorschau',
+  'settings.corrections.modal.previewInput': 'Beispieltranskript',
+  'settings.corrections.modal.previewOutput': 'Korrigiertes Transkript',
+  'settings.corrections.modal.add': 'Regel hinzufügen',
+  'settings.corrections.modal.empty': 'Noch keine Korrekturregeln.',
+  'settings.corrections.modal.counts': '{enabled} aktiviert · {total} insgesamt',
+  'settings.corrections.modal.previewSummary': '{replacements} Ersetzung(en) aus {rules} Regel(n).',
+  'settings.corrections.modal.find': 'Suchen',
+  'settings.corrections.modal.replace': 'Ersetzen mit',
+  'settings.corrections.modal.enabled': 'Aktiviert',
+  'settings.corrections.modal.moveUp': 'Nach oben',
+  'settings.corrections.modal.moveDown': 'Nach unten',
+  'settings.corrections.modal.delete': 'Regel löschen',
+  'settings.corrections.modal.invalid':
+    'Korrigiere die markierte Regel vor dem Speichern oder Anzeigen der Vorschau.',
+  'settings.corrections.field.find': 'Suchen',
+  'settings.corrections.field.replace': 'Ersetzen mit',
+  'settings.corrections.validation.tooMany': 'Füge höchstens {max} Regeln hinzu.',
+  'settings.corrections.validation.blankId': 'Jede Regel benötigt eine ID.',
+  'settings.corrections.validation.duplicateId': 'Regel-IDs müssen eindeutig sein.',
+  'settings.corrections.validation.blankFind': 'Der Suchtext darf nicht leer sein.',
+  'settings.corrections.validation.blankReplace': 'Der Ersatztext darf nicht leer sein.',
+  'settings.corrections.validation.oversized': '{field} darf höchstens {max} Zeichen lang sein.',
+  'settings.corrections.validation.duplicateFind':
+    'Der Suchtext muss eindeutig sein; spätere Regeln dürfen nicht denselben Text verwenden.',
+  'settings.corrections.validation.absoluteAmplification':
+    'Die Korrektur würde das Limit von {max} Zeichen überschreiten und wurde vor der Ausgabeallokation abgelehnt.',
+  'settings.corrections.validation.relativeAmplification':
+    'Die Korrektur würde den Text um mehr als {max}× vergrößern und wurde vor der Ausgabeallokation abgelehnt.',
 } as const satisfies TranslationCatalog;

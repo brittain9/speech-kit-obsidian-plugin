@@ -753,6 +753,7 @@ mod tests {
         StageContext {
             cancel_rx,
             context,
+            correction_rules: &[],
             family_capabilities: &CAPS,
             is_final,
             language,
@@ -1340,6 +1341,7 @@ mod tests {
         let ctx = StageContext {
             cancel_rx: Box::leak(Box::new(tokio::sync::watch::channel(false).1)),
             context: None,
+            correction_rules: &[],
             family_capabilities: &CAPS,
             is_final: true,
             language: "en",

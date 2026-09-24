@@ -60,7 +60,7 @@ describe('LLM Secret Storage integration', () => {
       { getSecret: () => null, setSecret: vi.fn() },
     );
 
-    expect(result.settings.schemaVersion).toBe(10);
+    expect(result.settings.schemaVersion).toBe(11);
     expect(result.shouldPersist).toBe(true);
   });
 

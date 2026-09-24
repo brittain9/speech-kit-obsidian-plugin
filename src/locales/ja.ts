@@ -846,4 +846,42 @@ export const ja = {
     'Firefox で公開されたモデルを使う、必要な言語だけをダウンロードする高速なローカル翻訳です。',
   'catalog.family.firefox_translations.summary':
     'コンパクトな Bergamot エンジンと Firefox モデルでノートのテキストをローカル翻訳します。',
+  'notice.personalCorrectionRulesSnapshot':
+    'このセッションでは、{total} 件中 {enabled} 件の個人訂正ルールを使用します。変更は次のセッションから適用されます。',
+  'settings.corrections.name': '個人訂正ルール',
+  'settings.corrections.desc':
+    '文字起こし後に、ローカルの順序付きリテラル置換を適用します。ルールは次のセッションの最終セグメントに適用され、ASR の語彙やホットワードではありません。',
+  'settings.corrections.manage': '訂正ルールを管理',
+  'settings.corrections.modal.title': '個人訂正ルール',
+  'settings.corrections.modal.intro':
+    'これは音声認識の語彙ではなく、文字起こし後の決定的なローカル訂正です。ルールは任意の LLM クリーンアップより前に、各最終文字起こしセグメントへ順番に適用されます。変更は次の文字起こしセッションから適用されます。',
+  'settings.corrections.modal.preview': 'プレビュー',
+  'settings.corrections.modal.previewInput': '文字起こしの例',
+  'settings.corrections.modal.previewOutput': '訂正後の文字起こし',
+  'settings.corrections.modal.add': 'ルールを追加',
+  'settings.corrections.modal.empty': '訂正ルールはまだありません。',
+  'settings.corrections.modal.counts': '{enabled} 件有効 · 合計 {total} 件',
+  'settings.corrections.modal.previewSummary': '{rules} 件のルールから {replacements} 件の置換。',
+  'settings.corrections.modal.find': '検索文字列',
+  'settings.corrections.modal.replace': '置換文字列',
+  'settings.corrections.modal.enabled': '有効',
+  'settings.corrections.modal.moveUp': '上へ移動',
+  'settings.corrections.modal.moveDown': '下へ移動',
+  'settings.corrections.modal.delete': 'ルールを削除',
+  'settings.corrections.modal.invalid':
+    '保存またはプレビューする前に、強調表示されたルールを修正してください。',
+  'settings.corrections.field.find': '検索文字列',
+  'settings.corrections.field.replace': '置換文字列',
+  'settings.corrections.validation.tooMany': 'ルールは最大 {max} 件まで追加できます。',
+  'settings.corrections.validation.blankId': '各ルールには ID が必要です。',
+  'settings.corrections.validation.duplicateId': 'ルール ID は一意である必要があります。',
+  'settings.corrections.validation.blankFind': '検索文字列を空にすることはできません。',
+  'settings.corrections.validation.blankReplace': '置換文字列を空にすることはできません。',
+  'settings.corrections.validation.oversized': '{field} は {max} 文字以内で入力してください。',
+  'settings.corrections.validation.duplicateFind':
+    '検索文字列は一意である必要があります。後のルールで同じ文字列を指定できません。',
+  'settings.corrections.validation.absoluteAmplification':
+    '修正結果が {max} 文字の制限を超えるため、出力を確保する前に拒否されました。',
+  'settings.corrections.validation.relativeAmplification':
+    '修正によりテキストが {max} 倍超に拡大するため、出力を確保する前に拒否されました。',
 } as const satisfies TranslationCatalog;
