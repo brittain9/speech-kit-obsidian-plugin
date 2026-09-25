@@ -9,11 +9,13 @@ source_sha256=8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
 source_name="ffmpeg-${version}.tar.xz"
 source_url="https://ffmpeg.org/releases/${source_name}"
 output_dir="${1:-dist/media-ffmpeg}"
-build_dir="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/speech-kit-ffmpeg-${version}-$$"
+# RUNNER_TEMP is a Windows drive path under MSYS2, which GNU tar interprets as
+# a remote archive. Use the shell's POSIX temporary directory on every host.
 case "$(uname -s)" in
-  MINGW*|MSYS*) executable_suffix=.exe ;;
-  *) executable_suffix= ;;
+  MINGW*|MSYS*) executable_suffix=.exe; temporary_root=/tmp ;;
+  *) executable_suffix=; temporary_root="${TMPDIR:-/tmp}" ;;
 esac
+build_dir="$temporary_root/speech-kit-ffmpeg-${version}-$$"
 
 mkdir -p "$build_dir" "$output_dir"
 trap 'rm -rf "$build_dir"' EXIT

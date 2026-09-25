@@ -26,6 +26,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Install Linux assembler
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y nasm
+
       - name: Set up Windows native build tools
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -34,6 +38,7 @@ jobs:
           update: true
           install: >-
             mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-nasm
             make
             perl
             curl
