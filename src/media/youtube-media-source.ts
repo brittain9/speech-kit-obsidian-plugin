@@ -23,6 +23,7 @@ import {
   readOwnerMarker,
   releaseJobRootCapability,
   removeMediaJob,
+  writeOwnerMarkerAtomically,
 } from './path-backed-media-lease';
 import { runManagedProcess } from './process-runner';
 import {
@@ -382,7 +383,12 @@ export async function sweepAbandonedYouTubeJobs(
           const jobStat = await stat(jobRoot);
           const sweepNow = now();
           if (sweepNow - jobStat.mtimeMs < minAgeMs) return;
-          const capability = await claimJobRoot(jobRoot);
+          const capability = await claimJobRoot(jobRoot, {
+            ...(options.cleanupSpawnProcess === undefined
+              ? {}
+              : { spawnProcess: options.cleanupSpawnProcess }),
+            ...(options.platform === undefined ? {} : { platform: options.platform }),
+          });
           if (capability.root.dev !== jobStat.dev || capability.root.ino !== jobStat.ino) {
             await releaseJobRootCapability(capability);
             return;
@@ -709,12 +715,10 @@ async function writeOwnerHeartbeat(
   capability: JobRootCapability,
   identity: OwnerIdentity,
 ): Promise<void> {
-  const serialized = Buffer.from(
+  await writeOwnerMarkerAtomically(
+    capability,
     JSON.stringify({ ...identity, heartbeatAt: Date.now(), speechKitJob: true }),
-    'utf8',
   );
-  await capability.owner.handle.truncate(0);
-  await capability.owner.handle.write(serialized, 0, serialized.length, 0);
 }
 
 export async function createPrivateJobRoot(
@@ -727,6 +731,12 @@ export async function createPrivateJobRoot(
 ): Promise<JobRootCapability> {
   await mkdir(tempRoot, { recursive: true });
   const jobRoot = await mkdtemp(join(tempRoot, YOUTUBE_JOB_PREFIX));
+  const cleanup = {
+    ...(options.cleanupPlatform === undefined ? {} : { platform: options.cleanupPlatform }),
+    ...(options.cleanupSpawnProcess === undefined
+      ? {}
+      : { spawnProcess: options.cleanupSpawnProcess }),
+  };
   try {
     const ownerMarker = Buffer.from(
       JSON.stringify({
@@ -749,6 +759,7 @@ export async function createPrivateJobRoot(
     );
     try {
       await ownerHandle.write(ownerMarker, 0, ownerMarker.length, 0);
+      await ownerHandle.sync();
       await ownerHandle.chmod(0o600);
     } finally {
       await ownerHandle.close();
@@ -757,16 +768,11 @@ export async function createPrivateJobRoot(
     for (const directory of options.subdirectories ?? ['home', 'tmp', 'cache', 'config', 'data']) {
       await mkdir(join(jobRoot, directory), { recursive: true, mode: 0o700 });
     }
-    return await claimJobRoot(jobRoot);
+    return await claimJobRoot(jobRoot, cleanup);
   } catch {
     try {
-      const capability = await claimJobRoot(jobRoot);
-      await removeMediaJob(capability, {
-        ...(options.cleanupPlatform === undefined ? {} : { platform: options.cleanupPlatform }),
-        ...(options.cleanupSpawnProcess === undefined
-          ? {}
-          : { spawnProcess: options.cleanupSpawnProcess }),
-      });
+      const capability = await claimJobRoot(jobRoot, cleanup);
+      await removeMediaJob(capability, cleanup);
     } catch {
       // Partial-root cleanup remains best effort.
     }

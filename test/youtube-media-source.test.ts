@@ -27,7 +27,9 @@ import {
   type JobCleanupOptions,
   openValidatedMediaFile,
   readOwnerMarker,
+  releaseJobRootCapability,
   removeMediaJob,
+  writeOwnerMarkerAtomically,
 } from '../src/media/path-backed-media-lease';
 import {
   discoverYtDlpCandidates,
@@ -66,7 +68,7 @@ function successfulCleanupSpawn(
   parentRoot?: string,
   retainedEntryNames?: ReadonlySet<string>,
 ): typeof spawn {
-  return vi.fn(() => {
+  return vi.fn((_command: string, args: readonly string[]) => {
     const child = new EventEmitter() as EventEmitter & {
       kill: ReturnType<typeof vi.fn>;
       pid: number | undefined;
@@ -78,7 +80,7 @@ function successfulCleanupSpawn(
     child.stderr = null;
     child.kill = vi.fn();
     queueMicrotask(() => {
-      if (parentRoot !== undefined) {
+      if (parentRoot !== undefined && String(args[1] ?? '').includes('readdirSync')) {
         for (const entry of readdirSync(parentRoot, { withFileTypes: true })) {
           if (retainedEntryNames?.has(entry.name)) continue;
           const entryPath = join(parentRoot, entry.name);
@@ -119,6 +121,7 @@ function validOwnerMarker(pid = 424_242): Record<string, unknown> {
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(
     temporaryPaths.splice(0).map((path) => rm(path, { force: true, recursive: true })),
   );
@@ -486,10 +489,111 @@ describe('YouTube path-backed MediaLease', () => {
     };
     await writeFile(join(jobRoot, 'owner.json'), JSON.stringify(replacementOwner));
     await expect(readOwnerMarker(capability)).resolves.toEqual(originalOwner);
+    await expect(
+      writeOwnerMarkerAtomically(capability, JSON.stringify({ sequence: 9 })),
+    ).rejects.toThrow();
+    await expect(readFile(join(jobRoot, 'owner.json'))).resolves.toEqual(
+      Buffer.from(JSON.stringify(replacementOwner)),
+    );
     await removeMediaJob(capability, { spawnProcess: successfulCleanupSpawn(root) });
     await expect(readFile(join(jobRoot, 'owner.json'))).resolves.toEqual(
       Buffer.from(JSON.stringify(replacementOwner)),
     );
+  });
+
+  it('serializes atomic owner publications while readers observe complete JSON', async () => {
+    class PublishChild extends EventEmitter {
+      pid: number | undefined;
+      stdout = null;
+      stderr = null;
+      kill = vi.fn();
+    }
+
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-heartbeat-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    const ownerPath = join(jobRoot, 'owner.json');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    await writeFile(ownerPath, JSON.stringify(validOwnerMarker()));
+    const spawnProcess = vi.fn((_command: string, args: readonly string[]): PublishChild => {
+      const child = new PublishChild();
+      child.pid = undefined;
+      setTimeout(() => {
+        const temporaryPath = join(jobRoot, args[2] ?? '');
+        writeFileSync(temporaryPath, args[3] ?? '');
+        renameSync(temporaryPath, ownerPath);
+        child.emit('exit', 0);
+        child.emit('close', 0);
+      }, 3);
+      return child;
+    });
+    const capability = await claimJobRoot(jobRoot, {
+      platform: 'darwin',
+      spawnProcess: spawnProcess as unknown as typeof spawn,
+      timeoutMs: 100,
+    });
+    const writes = [
+      writeOwnerMarkerAtomically(capability, JSON.stringify({ sequence: 1 })),
+      writeOwnerMarkerAtomically(capability, JSON.stringify({ sequence: 2 })),
+    ];
+    const reads = Array.from(
+      { length: 10 },
+      async () => JSON.parse(await readFile(ownerPath, 'utf8')) as { sequence: number },
+    );
+    await Promise.all([...writes, ...reads]);
+    expect(JSON.parse(await readFile(ownerPath, 'utf8'))).toEqual({ sequence: 2 });
+    await releaseJobRootCapability(capability);
+  });
+
+  it('retains the previous owner marker when atomic publication fails', async () => {
+    class FailingPublishChild extends EventEmitter {
+      pid: number | undefined;
+      stdout = null;
+      stderr = null;
+      kill = vi.fn();
+    }
+
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-heartbeat-failure-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    const ownerPath = join(jobRoot, 'owner.json');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    const original = validOwnerMarker();
+    await writeFile(ownerPath, JSON.stringify(original));
+    const spawnProcess = vi.fn((): FailingPublishChild => {
+      const child = new FailingPublishChild();
+      child.pid = undefined;
+      queueMicrotask(() => {
+        child.emit('exit', 1);
+        child.emit('close', 1);
+      });
+      return child;
+    });
+    const capability = await claimJobRoot(jobRoot, {
+      platform: 'darwin',
+      spawnProcess: spawnProcess as unknown as typeof spawn,
+      timeoutMs: 100,
+    });
+    await expect(
+      writeOwnerMarkerAtomically(capability, JSON.stringify({ sequence: 3 })),
+    ).rejects.toThrow();
+    await expect(readFile(ownerPath, 'utf8')).resolves.toBe(JSON.stringify(original));
+    await releaseJobRootCapability(capability);
+  });
+
+  it('rejects an oversized owner marker before allocating a read buffer', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-marker-growth-'));
+    temporaryPaths.push(root);
+    const jobRoot = join(root, 'job');
+    const ownerPath = join(jobRoot, 'owner.json');
+    await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
+    await writeFile(ownerPath, JSON.stringify(validOwnerMarker()));
+    const capability = await claimJobRoot(jobRoot);
+    await writeFile(ownerPath, 'x'.repeat(20_000));
+    await expect(readOwnerMarker(capability)).rejects.toMatchObject({
+      code: 'integrity_failed',
+    });
+    await releaseJobRootCapability(capability);
   });
 
   it('fails closed on an injected macOS child identity mismatch', async () => {

@@ -28,11 +28,13 @@ version, and uses the shared bounded process runner with `shell: false` and
 fixed argument arrays. The runner uses detached POSIX process groups, bounds
 cumulative output, and clears process-tree and forced-kill timers on
 settlement. Cancellation and timeout wait for the child's `close` event (or a
-bounded close deadline) after signalling; a child that cannot close is
-cleanup-failed and cannot produce a media handoff. It never starts synchronous
-process scans; POSIX cleanup uses the detached process group, and normal
-descendant cleanup starts at the child `exit` event before `close` so PID reuse
-cannot receive a post-close kill. The experimental YouTube source is disabled
+bounded close deadline) after signalling; normal exit also has a close
+deadline and bounded POSIX group escalation while inherited pipes or
+descendants are still pending. A child that cannot close is cleanup-failed and
+cannot produce a media handoff. It never starts synchronous process scans;
+POSIX cleanup uses the detached process group, and normal descendant cleanup
+starts at the child `exit` event before `close` so PID reuse cannot receive a
+post-close kill. The experimental YouTube source is disabled
 on Windows: the command is hidden, settings show a localized unsupported
 message, and neither `yt-dlp` nor cleanup children are spawned. The command ignores
 user configuration, caches, plugins, remote components, cookies, playlists,
@@ -60,8 +62,12 @@ shared promise. Startup cleanup is age/mtime based, uses a stable owner marker
 with process-start metadata and a heartbeat, and does not trust a PID-only
 owner marker; recent or actively heartbeated jobs are preserved while stale
 jobs remain sweepable even when their recorded PID has been reused. Heartbeat
-validation rejects malformed markers, invalid instance/PID/start identities,
-future timestamps beyond a small clock-skew allowance, and stale timestamps.
+publication is serialized and atomic: a bounded complete JSON payload is
+written to a private temporary file, flushed, and atomically renamed relative
+to the held root descriptor, so readers and sweeps never observe an empty or
+partial marker. Heartbeat validation rejects malformed markers, oversized
+same-user growth, invalid instance/PID/start identities, future timestamps
+beyond a small clock-skew allowance, and stale timestamps.
 Startup sweeping requires the same valid identity-checked marker; corrupt or
 foreign prefix matches are retained for manual recovery rather than deleted.
 On supported macOS and Linux runtimes, recursive contents cleanup runs in a

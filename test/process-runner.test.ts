@@ -13,6 +13,7 @@ class FakeChild extends EventEmitter {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -86,6 +87,32 @@ describe('managed process runner', () => {
     expect(kill).not.toHaveBeenCalled();
     kill.mockRestore();
   });
+  it('escalates a POSIX group and fails bounded when exit leaves close pending', async () => {
+    const child = new FakeChild();
+    child.pid = 4322;
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const spawnProcess = vi.fn(() => child) as unknown as typeof spawn;
+    const resultPromise = runManagedProcess(
+      '/private/helper',
+      [],
+      { platform: 'linux', shell: false, spawnProcess },
+      {
+        closeTimeoutMs: 20,
+        forceDelayMs: 5,
+        maxOutputBytes: 100,
+        timeoutMs: 1_000,
+      },
+    );
+    child.emit('exit', 0);
+    const result = await resultPromise;
+    expect(result.exitCode).toBeNull();
+    expect(result.cleanupFailed).toBe(true);
+    expect(result.failed).toBe(true);
+    expect(kill).toHaveBeenCalledWith(-4322, 'SIGKILL');
+    expect(kill).toHaveBeenCalledTimes(2);
+    kill.mockRestore();
+  });
+
   it('settles after a bounded timeout when a child never closes', async () => {
     const child = new FakeChild();
     child.pid = 7654;
@@ -99,6 +126,24 @@ describe('managed process runner', () => {
     );
     expect(result.timedOut).toBe(true);
     expect(kill).toHaveBeenCalledWith(-7654, 'SIGTERM');
+    kill.mockRestore();
+  });
+
+  it('rejects a SIGTERM-ignoring child that never closes', async () => {
+    const child = new FakeChild();
+    child.pid = 7655;
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const spawnProcess = vi.fn(() => child) as unknown as typeof spawn;
+    const result = await runManagedProcess(
+      '/private/helper',
+      [],
+      { platform: 'linux', shell: false, spawnProcess },
+      { closeTimeoutMs: 20, maxOutputBytes: 100, timeoutMs: 5 },
+    );
+    expect(result.timedOut).toBe(true);
+    expect(result.cleanupFailed).toBe(true);
+    expect(result.failed).toBe(true);
+    expect(kill).toHaveBeenCalledWith(-7655, 'SIGTERM');
     kill.mockRestore();
   });
 
