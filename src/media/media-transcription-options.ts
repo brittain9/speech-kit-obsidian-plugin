@@ -1,5 +1,6 @@
 import type { DictationLanguage } from '../language/dictation-language';
 import { languageSupportIncludes } from '../language/dictation-language';
+import type { LlmTransformSnapshot } from '../llm/transform-policy';
 import { resolveEngineCapabilities } from '../models/capability-view';
 import type { ModelManagerState } from '../models/model-install-manager';
 import type { EngineCapabilitiesRecord, SelectedModel } from '../models/model-management-types';
@@ -19,6 +20,8 @@ export interface MediaTranscriptionJobOptions {
   readonly timestampDensity: TimestampDensity;
   readonly timestampsEnabled: boolean;
   readonly transcriptFormatting: TranscriptFormattingMode;
+  /** null means transcript only; undefined preserves legacy non-modal callers. */
+  readonly mediaLlmSnapshot?: LlmTransformSnapshot | null;
 }
 
 export type MediaTranscriptionModelOptions = (

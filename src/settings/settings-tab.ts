@@ -8,7 +8,6 @@ import {
   isDictationLanguage,
   languageFeatureCoverage,
 } from '../language/dictation-language';
-import { describeMediaLlmConfiguration } from '../llm/media-llm-policy';
 import { isYouTubeSupportedPlatform } from '../media/youtube-helper';
 import { installPinnedYouTubeHelper } from '../media/youtube-helper-installer';
 import type { ModelPickerOptions } from '../models/manage-models-modal';
@@ -486,18 +485,6 @@ export class LocalSttSettingTab extends PluginSettingTab {
         this.refreshSettingsTab();
       });
     });
-
-    new Setting(llmCard)
-      .setName(t('settings.llm.mediaProcessing.name'))
-      .setDesc(
-        `${t('settings.llm.mediaProcessing.desc')} ${describeMediaLlmConfiguration(settings)}`,
-      )
-      .addToggle((toggle) => {
-        toggle.setValue(settings.mediaLlmProcessing);
-        toggle.onChange(async (value) => {
-          await this.access.persistOne('mediaLlmProcessing', value);
-        });
-      });
 
     new Setting(llmCard)
       .setName(t('settings.llm.restoreDefaults.name'))

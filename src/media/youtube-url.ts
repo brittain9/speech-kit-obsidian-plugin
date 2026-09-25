@@ -26,7 +26,7 @@ export interface YouTubeVideoRef {
 
 export function parseYouTubeVideoUrl(input: string): YouTubeVideoRef {
   const trimmed = input.trim();
-  if (trimmed.length === 0) throw new InvalidYouTubeUrlError();
+  if (trimmed.length === 0 || trimmed.length > 4096) throw new InvalidYouTubeUrlError();
 
   let parsed: URL;
   try {
@@ -46,9 +46,6 @@ export function parseYouTubeVideoUrl(input: string): YouTubeVideoRef {
 
   const host = parsed.hostname.toLowerCase();
   if (host === 'youtu.be' || host === 'www.youtu.be') {
-    if (parsed.search.length > 0 || parsed.hash.length > 0) {
-      throw new InvalidYouTubeUrlError();
-    }
     return createRef(host, decodeSinglePathSegment(parsed.pathname));
   }
 
@@ -57,18 +54,12 @@ export function parseYouTubeVideoUrl(input: string): YouTubeVideoRef {
   }
 
   if (parsed.pathname === '/watch') {
-    if (parsed.hash.length > 0 || hasDisallowedWatchQuery(parsed.searchParams)) {
-      throw new InvalidYouTubeUrlError();
-    }
     const values = parsed.searchParams.getAll(VIDEO_ID_PARAMETER);
     if (values.length !== 1) throw new InvalidYouTubeUrlError();
     return createRef(host, values[0]);
   }
 
   if (parsed.pathname.startsWith(SHORT_PATH_PREFIX)) {
-    if (parsed.search.length > 0 || parsed.hash.length > 0) {
-      throw new InvalidYouTubeUrlError();
-    }
     return createRef(
       host,
       decodeSinglePathSegment(`/${parsed.pathname.slice(SHORT_PATH_PREFIX.length)}`),
@@ -120,11 +111,4 @@ function decodeSinglePathSegment(value: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function hasDisallowedWatchQuery(searchParams: URLSearchParams): boolean {
-  for (const key of searchParams.keys()) {
-    if (key !== VIDEO_ID_PARAMETER) return true;
-  }
-  return false;
 }

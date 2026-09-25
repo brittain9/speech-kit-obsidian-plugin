@@ -1,6 +1,9 @@
 import { type App, type ButtonComponent, Modal, Setting } from 'obsidian';
 
 import { DICTATION_LANGUAGE_OPTIONS, type DictationLanguage } from '../language/dictation-language';
+import { describeMediaLlmConfiguration } from '../llm/media-llm-policy';
+import { listPresetEntries, resolvePresetEntry } from '../llm/presets';
+import { resolveLlmTransformSnapshot } from '../llm/transform-policy';
 import type { MediaTranscriptionProgress } from '../media/media-source';
 import {
   chooseDefaultMediaTranscriptionModel,
@@ -10,7 +13,6 @@ import {
 import {
   explicitYouTubeRightsConfirmation,
   hasYouTubeRightsConfirmation,
-  YOUTUBE_POLICY_VERSION,
 } from '../media/youtube-media-source';
 import { parseYouTubeVideoUrl } from '../media/youtube-url';
 import type {
@@ -79,11 +81,13 @@ class MediaTranscriptionModal extends Modal {
   private diarizationEnabled: boolean;
   private language: DictationLanguage;
   private modelSelectionKey = '';
+  private mediaPresetRef: string | null;
   private transcriptFormatting: TranscriptFormattingMode;
   private busy = false;
   private cancelRequested = false;
   private progressEl: HTMLElement | null = null;
   private errorEl: HTMLElement | null = null;
+  private requirementEl: HTMLElement | null = null;
   private fileNameEl: HTMLElement | null = null;
   private primaryButton: ButtonComponent | null = null;
 
@@ -105,12 +109,16 @@ class MediaTranscriptionModal extends Modal {
     this.diarizationEnabled = settings.diarizationEnabled;
     this.language = settings.dictationLanguage;
     this.transcriptFormatting = settings.transcriptFormatting;
+    this.mediaPresetRef = settings.mediaLlmProcessing
+      ? settings.llmPostprocessActivePresetRef
+      : null;
     this.releaseProgress = dependencies.subscribeProgress((progress) =>
       this.renderProgress(progress),
     );
   }
 
   override onOpen(): void {
+    this.modalEl.addClass('local-stt-media-modal');
     this.setTitle(t('media.modal.title'));
     this.render();
   }
@@ -125,6 +133,7 @@ class MediaTranscriptionModal extends Modal {
 
   private render(): void {
     this.contentEl.empty();
+    this.primaryButton = null;
     const tabs = this.contentEl.createDiv({ cls: 'local-stt-media-source-tabs' });
     tabs.setAttribute('role', 'tablist');
     this.addTab(tabs, 'file', t('media.modal.fileTab'));
@@ -132,9 +141,15 @@ class MediaTranscriptionModal extends Modal {
       this.addTab(tabs, 'youtube', t('media.modal.youtubeTab'));
     }
 
-    if (this.tab === 'file') this.renderFileSource();
-    else this.renderYouTubeSource();
+    const source = this.contentEl.createDiv({ cls: 'local-stt-media-source' });
+    if (this.tab === 'file') this.renderFileSource(source);
+    else this.renderYouTubeSource(source);
     this.renderJobOptions();
+
+    this.requirementEl = this.contentEl.createDiv({
+      cls: 'local-stt-media-requirement',
+      attr: { role: 'status', 'aria-live': 'polite' },
+    });
 
     this.progressEl = this.contentEl.createDiv({
       cls: 'local-stt-media-progress',
@@ -146,7 +161,8 @@ class MediaTranscriptionModal extends Modal {
     });
     this.renderProgress(this.dependencies.getProgress());
 
-    const actions = new Setting(this.contentEl);
+    const footer = this.contentEl.createDiv({ cls: 'local-stt-media-footer' });
+    const actions = new Setting(footer);
     actions.addButton((button) =>
       button.setButtonText(t('common.cancel')).onClick(() => this.close()),
     );
@@ -174,8 +190,8 @@ class MediaTranscriptionModal extends Modal {
     });
   }
 
-  private renderFileSource(): void {
-    const dropZone = this.contentEl.createDiv({
+  private renderFileSource(parent: HTMLElement): void {
+    const dropZone = parent.createDiv({
       cls: 'local-stt-media-drop-zone',
       attr: { role: 'group', tabindex: '0', 'aria-label': t('media.modal.dropLabel') },
     });
@@ -209,42 +225,42 @@ class MediaTranscriptionModal extends Modal {
     this.updateFileName();
   }
 
-  private renderYouTubeSource(): void {
-    this.contentEl.createEl('p', { text: t('youtube.modal.disclosure') });
-    this.contentEl.createEl('p', { text: t('media.modal.youtubeFreshTranscript') });
-    if (this.dependencies.getYouTubeHelperPath().length === 0) {
-      this.contentEl.createEl('p', { text: t('media.modal.configureYouTubeHelper') });
-    }
-    if (!this.rightsConfirmed) {
-      new Setting(this.contentEl).setName(t('youtube.modal.rightsLabel')).addToggle((toggle) => {
-        toggle.setValue(false).onChange((value) => {
-          this.rightsConfirmed = value;
-          this.updatePrimaryButton();
-        });
-      });
-    } else {
-      this.contentEl.createEl('p', {
-        text: t('youtube.modal.policyAccepted', { policy: YOUTUBE_POLICY_VERSION }),
-      });
-    }
-    new Setting(this.contentEl).setName(t('youtube.modal.urlName')).addText((text) => {
+  private renderYouTubeSource(parent: HTMLElement): void {
+    parent.createEl('p', {
+      text: t('media.modal.youtubeFreshTranscript'),
+      cls: 'local-stt-media-source-hint',
+    });
+    new Setting(parent).setName(t('youtube.modal.urlName')).addText((text) => {
       text.setPlaceholder(t('youtube.modal.urlPlaceholder')).setValue(this.url);
       text.onChange((value) => {
         this.url = value;
         this.updatePrimaryButton();
       });
     });
+    if (!this.rightsConfirmed) {
+      new Setting(parent)
+        .setName(t('youtube.modal.rightsLabel'))
+        .setDesc(t('youtube.modal.policyRequired'))
+        .addToggle((toggle) => {
+          toggle.setValue(false).onChange((value) => {
+            this.rightsConfirmed = value;
+            this.updatePrimaryButton();
+          });
+        });
+    }
   }
 
   private renderJobOptions(): void {
-    this.contentEl.createEl('h3', { text: t('media.modal.optionsTitle') });
+    const section = this.contentEl.createDiv({ cls: 'local-stt-media-options' });
+    section.createEl('h3', { text: t('media.modal.optionsTitle') });
+    const grid = section.createDiv({ cls: 'local-stt-media-options-grid' });
     const models = this.dependencies.getModels(this.language);
     const settings = this.dependencies.getSettings();
     const defaultModel = chooseDefaultMediaTranscriptionModel(models, settings.selectedModel);
     if (!models.some((option) => modelKey(option) === this.modelSelectionKey)) {
       this.modelSelectionKey = modelKey(defaultModel ?? models[0]);
     }
-    new Setting(this.contentEl).setName(t('media.modal.language')).addDropdown((dropdown) => {
+    new Setting(grid).setName(t('media.modal.language')).addDropdown((dropdown) => {
       for (const option of DICTATION_LANGUAGE_OPTIONS)
         dropdown.addOption(option.value, option.label);
       dropdown.setValue(this.language);
@@ -254,8 +270,8 @@ class MediaTranscriptionModal extends Modal {
       });
     });
     if (models.length === 0) {
-      this.contentEl.createEl('p', { text: t('media.modal.noBatchModel') });
-      new Setting(this.contentEl).addButton((button) =>
+      section.createEl('p', { text: t('media.modal.noBatchModel') });
+      new Setting(section).addButton((button) =>
         button.setButtonText(t('media.modal.manageModels')).onClick(() => {
           this.close();
           this.dependencies.onManageModels();
@@ -263,7 +279,7 @@ class MediaTranscriptionModal extends Modal {
       );
       return;
     }
-    new Setting(this.contentEl).setName(t('media.modal.model')).addDropdown((dropdown) => {
+    new Setting(grid).setName(t('media.modal.model')).addDropdown((dropdown) => {
       models.forEach((option) => {
         dropdown.addOption(modelKey(option), option.label);
       });
@@ -273,16 +289,14 @@ class MediaTranscriptionModal extends Modal {
         this.updatePrimaryButton();
       });
     });
-    new Setting(this.contentEl)
-      .setName(t('settings.timestamps.enable.name'))
-      .addToggle((toggle) => {
-        toggle.setValue(this.timestampEnabled).onChange((value) => {
-          this.timestampEnabled = value;
-        });
+    new Setting(grid).setName(t('settings.timestamps.enable.name')).addToggle((toggle) => {
+      toggle.setValue(this.timestampEnabled).onChange((value) => {
+        this.timestampEnabled = value;
+        this.render();
       });
-    new Setting(this.contentEl)
-      .setName(t('settings.timestamps.frequency.name'))
-      .addDropdown((dropdown) => {
+    });
+    if (this.timestampEnabled) {
+      new Setting(grid).setName(t('settings.timestamps.frequency.name')).addDropdown((dropdown) => {
         dropdown.addOption('sparse', t('settings.timestamps.frequency.atIntervals'));
         dropdown.addOption('every_utterance', t('settings.timestamps.frequency.everyPhrase'));
         if (this.transcriptFormatting === 'smart') {
@@ -293,24 +307,50 @@ class MediaTranscriptionModal extends Modal {
           this.timestampDensity = value as TimestampDensity;
         });
       });
-    new Setting(this.contentEl).setName(t('settings.speakerLabels.name')).addToggle((toggle) => {
+    }
+    new Setting(grid).setName(t('settings.speakerLabels.name')).addToggle((toggle) => {
       toggle.setValue(this.diarizationEnabled).onChange((value) => {
         this.diarizationEnabled = value;
       });
     });
-    new Setting(this.contentEl)
-      .setName(t('settings.transcriptFormatting.name'))
+    new Setting(grid).setName(t('settings.transcriptFormatting.name')).addDropdown((dropdown) => {
+      dropdown.addOption('smart', t('settings.transcriptFormatting.smartParagraphs'));
+      dropdown.addOption('space', t('settings.transcriptFormatting.space'));
+      dropdown.addOption('new_line', t('settings.transcriptFormatting.newLine'));
+      dropdown.addOption('new_paragraph', t('settings.transcriptFormatting.newParagraph'));
+      dropdown.setValue(this.transcriptFormatting);
+      dropdown.onChange((value) => {
+        this.transcriptFormatting = value as TranscriptFormattingMode;
+        if (this.transcriptFormatting !== 'smart' && this.timestampDensity === 'paragraph') {
+          this.timestampDensity = 'sparse';
+        }
+        this.render();
+      });
+    });
+
+    const presets = listPresetEntries(settings.llmPostprocessUserPresets);
+    if (
+      this.mediaPresetRef !== null &&
+      !presets.some((entry) => entry.ref === this.mediaPresetRef)
+    ) {
+      this.mediaPresetRef = null;
+    }
+    new Setting(section)
+      .setName(t('media.modal.aiPreset'))
+      .setDesc(
+        this.mediaPresetRef === null
+          ? t('media.modal.aiPresetDesc')
+          : `${t('media.modal.aiPresetDesc')} ${describeMediaLlmConfiguration({
+              ...settings,
+              llmPostprocessActivePresetRef: this.mediaPresetRef,
+            })}`,
+      )
       .addDropdown((dropdown) => {
-        dropdown.addOption('smart', t('settings.transcriptFormatting.smartParagraphs'));
-        dropdown.addOption('space', t('settings.transcriptFormatting.space'));
-        dropdown.addOption('new_line', t('settings.transcriptFormatting.newLine'));
-        dropdown.addOption('new_paragraph', t('settings.transcriptFormatting.newParagraph'));
-        dropdown.setValue(this.transcriptFormatting);
+        dropdown.addOption('', t('media.modal.aiPresetNone'));
+        for (const entry of presets) dropdown.addOption(entry.ref, entry.preset.label);
+        dropdown.setValue(this.mediaPresetRef ?? '');
         dropdown.onChange((value) => {
-          this.transcriptFormatting = value as TranscriptFormattingMode;
-          if (this.transcriptFormatting !== 'smart' && this.timestampDensity === 'paragraph') {
-            this.timestampDensity = 'sparse';
-          }
+          this.mediaPresetRef = value || null;
           this.render();
         });
       });
@@ -335,13 +375,32 @@ class MediaTranscriptionModal extends Modal {
   }
 
   private updatePrimaryButton(): void {
-    this.primaryButton?.setDisabled(
-      this.busy ||
-        this.dependencies.isTranscribing() ||
-        this.dependencies.getModels(this.language).length === 0 ||
-        (this.tab === 'file' && this.file === null) ||
-        (this.tab === 'youtube' && (!this.rightsConfirmed || !isValidYouTubeUrl(this.url))),
+    const blocker = this.busy ? null : this.startBlocker();
+    this.primaryButton?.setButtonText(
+      this.busy ? t('media.modal.cancelJob') : t('media.modal.start'),
     );
+    this.primaryButton?.setDisabled(blocker !== null);
+    this.requirementEl?.setText(blocker ?? '');
+  }
+
+  private startBlocker(): string | null {
+    if (this.dependencies.isTranscribing()) return t('media.modal.alreadyRunning');
+    if (this.dependencies.getModels(this.language).length === 0)
+      return t('media.modal.noBatchModel');
+    if (this.tab === 'file') {
+      if (this.file === null) return t('media.modal.selectFile');
+    } else {
+      if (this.url.trim().length === 0) return t('media.modal.enterYouTubeUrl');
+      if (!isValidYouTubeUrl(this.url)) return t('media.modal.invalidYouTubeUrl');
+      if (this.dependencies.getYouTubeHelperPath().trim().length === 0) {
+        return t('media.modal.configureYouTubeHelper');
+      }
+      if (!this.rightsConfirmed) return t('media.modal.confirmRights');
+    }
+    if (this.mediaPresetRef !== null && this.dependencies.getSettings().llmRoutingPolicy === null) {
+      return t('media.modal.aiProviderRequired');
+    }
+    return null;
   }
 
   private renderProgress(progress: MediaTranscriptionProgress | null): void {
@@ -361,8 +420,9 @@ class MediaTranscriptionModal extends Modal {
 
   private async startJob(): Promise<void> {
     if (this.busy) return;
-    if (this.dependencies.isTranscribing()) {
-      this.errorEl?.setText(t('media.modal.alreadyRunning'));
+    const blocker = this.startBlocker();
+    if (blocker !== null) {
+      this.errorEl?.setText(blocker);
       this.updatePrimaryButton();
       return;
     }
@@ -372,6 +432,12 @@ class MediaTranscriptionModal extends Modal {
     if (model === undefined) return;
     if (this.tab === 'file' && this.file === null) return;
     if (this.tab === 'youtube' && (!this.rightsConfirmed || !isValidYouTubeUrl(this.url))) return;
+    const settings = this.dependencies.getSettings();
+    const preset = resolvePresetEntry(this.mediaPresetRef, settings.llmPostprocessUserPresets);
+    if (this.mediaPresetRef !== null && preset === null) {
+      this.errorEl?.setText(t('media.modal.aiPresetMissing'));
+      return;
+    }
     const options: MediaTranscriptionJobOptions = {
       diarizationEnabled: this.diarizationEnabled,
       language: this.language,
@@ -379,6 +445,13 @@ class MediaTranscriptionModal extends Modal {
       timestampDensity: this.timestampDensity,
       timestampsEnabled: this.timestampEnabled,
       transcriptFormatting: this.transcriptFormatting,
+      mediaLlmSnapshot:
+        preset === null
+          ? null
+          : resolveLlmTransformSnapshot({
+              ...settings,
+              llmPostprocessActivePresetRef: preset.ref,
+            }),
     };
     this.busy = true;
     this.cancelRequested = false;

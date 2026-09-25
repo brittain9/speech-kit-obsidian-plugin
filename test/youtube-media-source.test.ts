@@ -131,14 +131,18 @@ describe('YouTube URL inspection', () => {
   it('canonicalizes one watch, youtu.be, or Shorts VOD URL', () => {
     for (const input of [
       'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      'https://www.youtube.com/watch?v=8MxG6tOkdNY&t=407s',
       'https://m.youtube.com/watch?v=dQw4w9WgXcQ',
       'https://youtu.be/dQw4w9WgXcQ',
       'https://www.youtube.com/shorts/dQw4w9WgXcQ',
+      'https://youtu.be/dQw4w9WgXcQ?si=share-code',
+      'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123&t=50s',
     ]) {
+      const expectedId = input.includes('8MxG6tOkdNY') ? '8MxG6tOkdNY' : 'dQw4w9WgXcQ';
       expect(parseYouTubeVideoUrl(input)).toMatchObject({
-        canonicalUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        canonicalUrl: `https://www.youtube.com/watch?v=${expectedId}`,
         kind: 'youtube_video_id',
-        videoId: 'dQw4w9WgXcQ',
+        videoId: expectedId,
       });
     }
   });
@@ -148,7 +152,7 @@ describe('YouTube URL inspection', () => {
     'https://youtube.com/playlist?list=PL123',
     'https://www.youtube.com/channel/UC123',
     'https://www.youtube.com/live/dQw4w9WgXcQ',
-    'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123',
+    'https://www.youtube.com/watch?v=dQw4w9WgXcQ&v=8MxG6tOkdNY',
     'https://example.com/watch?v=dQw4w9WgXcQ',
     'https://www.youtube.com/watch?v=short',
   ])('rejects %s', (input) => {

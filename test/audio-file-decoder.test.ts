@@ -211,8 +211,23 @@ describe('FfmpegAudioFileDecoder', () => {
     expect(() =>
       assertDecodedAudioWithinBudget(metadata, { maxModelDurationMs: null }),
     ).not.toThrow();
-    expect(AUDIO_FILE_MAX_DURATION_MS).toBe(30 * 60 * 1_000);
+    expect(AUDIO_FILE_MAX_DURATION_MS).toBeGreaterThan(10_237_000);
     expect(AUDIO_FILE_MAX_DECODED_BYTES).toBe(192 * 1024 * 1024);
     expect(AUDIO_FILE_MAX_ENCODED_BYTES).toBe(2 * 1024 * 1024 * 1024);
+  });
+
+  it('allows a long file-backed recording without treating its streamed PCM as heap memory', () => {
+    expect(() =>
+      assertDecodedAudioWithinBudget(
+        {
+          length: 10_237 * 16_000,
+          numberOfChannels: 1,
+          sampleRate: 16_000,
+          dispose: vi.fn(),
+          pumpFrames: async () => {},
+        },
+        { maxModelDurationMs: null },
+      ),
+    ).not.toThrow();
   });
 });

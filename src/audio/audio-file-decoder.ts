@@ -17,7 +17,9 @@ import { mixChannelsToMono, PcmFrameProcessor } from './pcm-frame-processor';
 export const AUDIO_FILE_MAX_ENCODED_BYTES = LOCAL_MEDIA_MAX_ENCODED_BYTES;
 export const AUDIO_FILE_MAX_DECODED_BYTES = MEDIA_MAX_DECODED_BYTES;
 export const AUDIO_FILE_MAX_DURATION_MS = MEDIA_MAX_DURATION_MS;
-export const AUDIO_FILE_DECODE_TIMEOUT_MS = 30 * 60 * 1_000;
+// Frame delivery includes sidecar backpressure, so a long recording may take
+// longer than its audio duration to transcribe on slower machines.
+export const AUDIO_FILE_DECODE_TIMEOUT_MS = 8 * 60 * 60 * 1_000;
 const FFMPEG_STDERR_LIMIT_BYTES = 64 * 1024;
 const FFPROBE_OUTPUT_LIMIT_BYTES = 64 * 1024;
 const DECODE_CHANNEL_SLICE_SAMPLES = 16_384;
@@ -267,7 +269,10 @@ export class FfmpegAudioFileDecoder implements AudioFileDecoder {
         onStdoutChunk: async (chunk) => {
           outputBytes += chunk.byteLength;
           if (outputBytes > maxPcmBytes) {
-            throw new AudioFileError('duration', 'Decoded audio exceeds the 30-minute limit.');
+            throw new AudioFileError(
+              'duration',
+              `Decoded audio exceeds the ${AUDIO_FILE_MAX_DURATION_MS / 3_600_000}-hour limit.`,
+            );
           }
           const joined = joinBytes(pending, chunk);
           let offset = 0;
@@ -294,7 +299,10 @@ export class FfmpegAudioFileDecoder implements AudioFileDecoder {
     }
     assertSuccessfulProcess(result, 'FFmpeg could not decode the selected media.', options.signal);
     if (durationMs > AUDIO_FILE_MAX_DURATION_MS) {
-      throw new AudioFileError('duration', 'Decoded audio exceeds the 30-minute limit.');
+      throw new AudioFileError(
+        'duration',
+        `Decoded audio exceeds the ${AUDIO_FILE_MAX_DURATION_MS / 3_600_000}-hour limit.`,
+      );
     }
     if (frameCount === 0) {
       throw new AudioFileError('empty', 'The decoded audio is shorter than one complete frame.');
@@ -338,7 +346,10 @@ export function assertDecodedAudioWithinBudget(
 
     const decodedBytes =
       decodedAudio.length * decodedAudio.numberOfChannels * Float32Array.BYTES_PER_ELEMENT;
-    if (!Number.isSafeInteger(decodedBytes) || decodedBytes > AUDIO_FILE_MAX_DECODED_BYTES) {
+    if (
+      !Number.isSafeInteger(decodedBytes) ||
+      (decodedAudio.pumpFrames === undefined && decodedBytes > AUDIO_FILE_MAX_DECODED_BYTES)
+    ) {
       throw new AudioFileError(
         'decoded_memory',
         `Decoded audio exceeds the ${AUDIO_FILE_MAX_DECODED_BYTES}-byte safety limit.`,

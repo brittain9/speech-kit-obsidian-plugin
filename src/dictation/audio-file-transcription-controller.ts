@@ -38,6 +38,7 @@ import {
 } from '../models/model-management-types';
 import { Session, type SessionTarget } from '../session/session';
 import type { PluginSettings } from '../settings/plugin-settings';
+import { t } from '../shared/i18n';
 import type { PluginLogger } from '../shared/plugin-logger';
 import type { UserFeedback } from '../shared/user-feedback';
 import type { ContextRequestEvent, SidecarEvent } from '../sidecar/protocol';
@@ -66,7 +67,7 @@ import {
   type AudioFileEditorSession,
   AudioFileTranscriptAdapter,
 } from './audio-file-transcript-adapter';
-import { MediaLlmCoordinator } from './media-llm-coordinator';
+import { MediaLlmCoordinator, type MediaLlmJob } from './media-llm-coordinator';
 import type { MediaLlmPreview } from './media-llm-processor';
 
 export type AudioFileTranscriptionState =
@@ -332,7 +333,17 @@ export class AudioFileTranscriptionController {
         throw new AudioFileWorkflowError('audio-file-busy');
       }
       const initialConfiguration = this.resolveModelConfiguration(options);
-      if (!this.mediaLlmCoordinator.preflight(this.dependencies.getSettings())) return;
+      const mediaSettings = this.dependencies.getSettings();
+      const mediaLlmJob: MediaLlmJob | null | undefined =
+        options?.mediaLlmSnapshot === undefined
+          ? undefined
+          : options.mediaLlmSnapshot === null
+            ? null
+            : { settings: mediaSettings, snapshot: options.mediaLlmSnapshot };
+      if (!this.mediaLlmCoordinator.preflight(mediaSettings, mediaLlmJob)) {
+        this.mediaError = new Error(t('media.modal.aiNotReady'));
+        return;
+      }
 
       try {
         speechLease = this.dependencies.sidecarLifecycleGate.acquireSpeech();
@@ -419,7 +430,9 @@ export class AudioFileTranscriptionController {
       const managedSession = managed;
       managedSession.setPostCompletion(async () => {
         const mediaLlmSession = transcript.getMediaLlmSession();
-        if (mediaLlmSession !== null) await this.mediaLlmCoordinator.run(mediaLlmSession);
+        if (mediaLlmSession !== null) {
+          await this.mediaLlmCoordinator.run(mediaLlmSession, mediaLlmJob);
+        }
       });
       if (this.pendingStart === pending) this.pendingStart = null;
 

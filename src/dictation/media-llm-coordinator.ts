@@ -30,13 +30,21 @@ export interface MediaLlmCoordinatorDependencies {
 
 export type MediaLlmReadinessFailureCode = LlmReadinessIssueCode | 'provider_unavailable';
 
+export interface MediaLlmJob {
+  readonly settings: PluginSettings;
+  readonly snapshot: MediaLlmSnapshot;
+}
+
 export class MediaLlmCoordinator {
   private activeAbortController: AbortController | null = null;
 
   constructor(private readonly dependencies: MediaLlmCoordinatorDependencies) {}
 
-  preflight(settings = this.dependencies.getSettings()): boolean {
-    if (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled) return true;
+  preflight(settings = this.dependencies.getSettings(), job?: MediaLlmJob | null): boolean {
+    if (job === null) return true;
+    if (job === undefined && (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled)) {
+      return true;
+    }
     if (this.dependencies.createRouter === undefined || this.dependencies.confirm === undefined) {
       this.reportReadiness('provider_unavailable');
       return false;
@@ -44,10 +52,11 @@ export class MediaLlmCoordinator {
     return this.readinessIsValid(settings);
   }
 
-  async run(session: MediaLlmEditorSession): Promise<void> {
-    const settings = this.dependencies.getSettings();
-    if (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled) return;
-    if (!this.preflight(settings)) return;
+  async run(session: MediaLlmEditorSession, job?: MediaLlmJob | null): Promise<void> {
+    if (job === null) return;
+    const settings = job?.settings ?? this.dependencies.getSettings();
+    if (job === undefined && (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled)) return;
+    if (!this.preflight(settings, job)) return;
     const router = this.dependencies.createRouter?.(settings) ?? null;
     if (router === null) {
       this.reportReadiness('provider_unavailable');
@@ -58,7 +67,7 @@ export class MediaLlmCoordinator {
       this.feedback('media-llm-empty');
       return;
     }
-    const transform = resolveLlmTransformSnapshot(settings);
+    const transform = job?.snapshot ?? resolveLlmTransformSnapshot(settings);
     const disclosure = resolveMediaLlmDisclosure(settings, router, rawText.length, transform);
     const snapshot: MediaLlmSnapshot = {
       noteContextChars: transform.noteContextChars,
@@ -77,7 +86,10 @@ export class MediaLlmCoordinator {
     try {
       await processMediaLlm(session, {
         confirm,
-        isEnabled: () => this.isCurrentConfiguration(settings),
+        isEnabled: () =>
+          job === undefined
+            ? this.isCurrentConfiguration(settings)
+            : this.isCurrentProviderConfiguration(settings),
         onRawTranscriptRecoveryAvailable: (receipt) =>
           this.dependencies.onRawTranscriptRecoveryAvailable?.(receipt),
         previewMetadata: {
@@ -129,6 +141,15 @@ export class MediaLlmCoordinator {
       current.mediaLlmProcessing &&
       current.llmFeaturesEnabled &&
       llmSettingsFingerprint(current) === llmSettingsFingerprint(settings)
+    );
+  }
+
+  private isCurrentProviderConfiguration(settings: PluginSettings): boolean {
+    const current = this.dependencies.getSettings();
+    return (
+      JSON.stringify(current.llmRoutingPolicy) === JSON.stringify(settings.llmRoutingPolicy) &&
+      JSON.stringify(current.llmProviderConfigurations) ===
+        JSON.stringify(settings.llmProviderConfigurations)
     );
   }
 

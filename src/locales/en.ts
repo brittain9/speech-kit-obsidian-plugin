@@ -25,9 +25,9 @@ export const en = {
   'audio-file-decode-failed':
     'Obsidian could not decode this audio file. Convert it to a format your Obsidian version can play (often WAV), then try again.',
   'audio-file-encoded-size':
-    'This encoded audio file is too large for safe in-app decoding. Choose a shorter or lower-bitrate file (maximum 64 MiB), then try again.',
+    'This media file exceeds the size limit. Choose a smaller file or reduce its bitrate, then try again.',
   'audio-file-duration':
-    'This audio file is longer than the 30-minute safety limit. Split it into shorter files, then transcribe each part.',
+    'This recording is longer than the 4-hour limit. Split it into shorter files, then transcribe each part.',
   'audio-file-model-duration':
     'This audio file is longer than the selected model can transcribe in one file. Split it into shorter files or choose a model with a longer audio limit.',
   'audio-file-decoded-memory':
@@ -102,9 +102,8 @@ export const en = {
     'Existing PATH suggestions (not executed during discovery): {suggestions}',
   'youtube.modal.policyAccepted':
     'Rights confirmation already accepted for policy {policy}; no repeated prompt will be shown.',
-  'youtube.modal.policyRequired':
-    'One-time rights confirmation: I own this video or am authorized to process it. Public visibility is not permission.',
-  'youtube.modal.rightsLabel': 'I own or am authorized to process this video',
+  'youtube.modal.policyRequired': 'Confirm once before downloading video audio.',
+  'youtube.modal.rightsLabel': 'I have permission to transcribe this video',
   'youtube.modal.urlName': 'YouTube VOD URL',
   'youtube.modal.urlPlaceholder': 'https://www.youtube.com/watch?v=…',
   'youtube.modal.summary': 'Canonical video: {canonicalUrl} · Host: {host} · ID: {videoId}',
@@ -312,8 +311,20 @@ export const en = {
   'media.modal.noBatchModel': 'Install a compatible batch transcription model to continue.',
   'media.modal.manageModels': 'Manage models',
   'media.modal.youtubeFreshTranscript':
-    'This creates a fresh local transcript from the video audio. Captions are not imported.',
+    'Create a fresh local transcript from this video’s audio. Captions are not imported.',
   'media.modal.configureYouTubeHelper': 'Configure yt-dlp in Settings before starting.',
+  'media.modal.enterYouTubeUrl': 'Paste a YouTube video link to continue.',
+  'media.modal.invalidYouTubeUrl': 'Enter a link to one YouTube video.',
+  'media.modal.confirmRights': 'Confirm that you have permission to transcribe this video.',
+  'media.modal.selectFile': 'Choose an audio or video file to continue.',
+  'media.modal.aiPreset': 'After transcription',
+  'media.modal.aiPresetNone': 'Transcript only',
+  'media.modal.aiPresetDesc':
+    'Optional: run a preset on the transcript text, then review its result before applying it.',
+  'media.modal.aiProviderRequired': 'Choose an AI provider in Settings or select Transcript only.',
+  'media.modal.aiPresetMissing': 'The selected AI preset is no longer available. Choose another.',
+  'media.modal.aiNotReady':
+    'The selected AI preset could not start. Check your AI provider settings.',
   'media.modal.youtubeDisabled':
     'YouTube transcription is disabled or unsupported on this platform.',
   'media.modal.start': 'Get transcript',
