@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runManagedProcess } from '../src/media/process-runner';
 
 class FakeChild extends EventEmitter {
-  readonly stdout = new EventEmitter();
+  readonly stdout = Object.assign(new EventEmitter(), {
+    pause: vi.fn(),
+    resume: vi.fn(),
+  });
   readonly stderr = new EventEmitter();
   readonly kill = vi.fn();
   pid: number | undefined;
@@ -18,6 +21,80 @@ afterEach(() => {
 });
 
 describe('managed process runner', () => {
+  it('pauses stdout while a chunk consumer applies backpressure', async () => {
+    const child = new FakeChild();
+    child.pid = 4319;
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const spawnProcess = vi.fn(() => child) as unknown as typeof spawn;
+    const consumed: Buffer[] = [];
+    let startConsumer!: () => void;
+    let releaseChunk!: () => void;
+    const consumerStarted = new Promise<void>((resolve) => {
+      startConsumer = resolve;
+    });
+    const waitForRelease = new Promise<void>((resolve) => {
+      releaseChunk = resolve;
+    });
+    const resultPromise = runManagedProcess(
+      '/private/helper',
+      [],
+      { platform: 'linux', shell: false, spawnProcess },
+      {
+        maxOutputBytes: 100,
+        onStdoutChunk: async (chunk) => {
+          consumed.push(chunk);
+          startConsumer();
+          await waitForRelease;
+        },
+        timeoutMs: 1_000,
+      },
+    );
+    child.stdout.emit('data', Buffer.from('pcm-chunk'));
+    expect(child.stdout.pause).toHaveBeenCalledOnce();
+    await consumerStarted;
+    expect(child.stdout.resume).not.toHaveBeenCalled();
+    releaseChunk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(child.stdout.resume).toHaveBeenCalledOnce();
+    child.emit('exit', 0);
+    child.emit('close', 0);
+
+    const result = await resultPromise;
+    expect(result.stdout).toBe('');
+    expect(consumed.map((chunk) => chunk.toString())).toEqual(['pcm-chunk']);
+    kill.mockRestore();
+  });
+
+  it('returns stdout consumer failures after process cleanup settles', async () => {
+    const child = new FakeChild();
+    child.pid = 4318;
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const spawnProcess = vi.fn(() => child) as unknown as typeof spawn;
+    const streamError = new Error('frame consumer failed');
+    const resultPromise = runManagedProcess(
+      '/private/helper',
+      [],
+      { platform: 'linux', shell: false, spawnProcess },
+      {
+        closeTimeoutMs: 100,
+        maxOutputBytes: 100,
+        onStdoutChunk: async () => {
+          throw streamError;
+        },
+        timeoutMs: 1_000,
+      },
+    );
+    child.stdout.emit('data', Buffer.from('pcm-chunk'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    child.emit('close', null);
+
+    const result = await resultPromise;
+    expect(result.streamError).toBe(streamError);
+    expect(result.failed).toBe(true);
+    expect(kill).toHaveBeenCalledWith(-4318, 'SIGTERM');
+    kill.mockRestore();
+  });
+
   it('bounds cumulative stdout and stderr across small chunks', async () => {
     const child = new FakeChild();
     const spawnProcess = vi.fn(() => child) as unknown as typeof spawn;
@@ -51,6 +128,34 @@ describe('managed process runner', () => {
     const callsAtSettlement = child.kill.mock.calls.length;
     vi.advanceTimersByTime(2_000);
     expect(child.kill).toHaveBeenCalledTimes(callsAtSettlement);
+  });
+
+  it('waits for close after a spawned child emits an error', async () => {
+    const child = new FakeChild();
+    child.pid = 4320;
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const spawnProcess = vi.fn(() => child) as unknown as typeof spawn;
+    let settled = false;
+    const resultPromise = runManagedProcess(
+      '/private/helper',
+      [],
+      { platform: 'linux', shell: false, spawnProcess },
+      { closeTimeoutMs: 100, maxOutputBytes: 100, timeoutMs: 1_000 },
+    ).then((result) => {
+      settled = true;
+      return result;
+    });
+
+    child.emit('error', new Error('child process error'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+
+    child.emit('close', null);
+    const result = await resultPromise;
+    expect(result.failed).toBe(true);
+    expect(settled).toBe(true);
+    expect(kill).toHaveBeenCalledWith(-4320, 'SIGKILL');
+    kill.mockRestore();
   });
 
   it('terminates a POSIX process group when the leader closes', async () => {

@@ -17,8 +17,14 @@ export type YouTubeHelperFailureCode =
   | 'resource_limit'
   | 'unsupported_platform';
 
-export function isYouTubeSupportedPlatform(platform: NodeJS.Platform = process.platform): boolean {
-  return platform === 'linux' || platform === 'darwin';
+export function isYouTubeSupportedPlatform(
+  platform: NodeJS.Platform = process.platform,
+  arch: NodeJS.Architecture = process.arch,
+): boolean {
+  return (
+    (platform === 'darwin' && (arch === 'x64' || arch === 'arm64')) ||
+    (platform === 'linux' && arch === 'x64')
+  );
 }
 
 const VERSION_PATTERN = /(?:^|\s)yt-dlp\s+(\d{4}\.\d{2}\.\d{2})(?:\s|$)/iu;

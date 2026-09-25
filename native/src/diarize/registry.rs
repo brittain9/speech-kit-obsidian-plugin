@@ -67,7 +67,13 @@ impl SpeakerRegistry {
                 if sim >= NEW_SPEAKER_THRESHOLD
                     || (voiced_ms < MIN_NEW_SPEAKER_MS && !self.speaker_limit_reached()) =>
             {
-                self.update_centroid(idx, embedding);
+                // Short turns are useful for an immediate label, but their
+                // embeddings are too unstable to teach the speaker registry.
+                // A brief interjection from another voice must not pull the
+                // enrolled centroid away from its original speaker.
+                if voiced_ms >= MIN_NEW_SPEAKER_MS {
+                    self.update_centroid(idx, embedding);
+                }
                 Assignment {
                     speaker_index: idx as u32,
                     similarity: sim,
@@ -183,6 +189,21 @@ mod tests {
         assert_eq!(short.speaker_index, 0);
         assert!(!short.is_new_speaker);
         assert_eq!(short.speaker_count, 1);
+    }
+
+    #[test]
+    fn short_matching_turn_does_not_shift_the_speaker_reference() {
+        let mut registry = SpeakerRegistry::new();
+        registry.assign(&[1.0, 0.0], LONG);
+
+        // This is similar enough to receive speaker 0's label, but is too
+        // short to establish that its voice features are trustworthy.
+        let short = registry.assign(&[0.5, 0.866], 300);
+        let original_voice = registry.assign(&[1.0, 0.0], LONG);
+
+        assert_eq!(short.speaker_index, 0);
+        assert_eq!(registry.speakers[0].count, 2);
+        assert!(original_voice.similarity > 0.99);
     }
 
     #[test]

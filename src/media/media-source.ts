@@ -45,7 +45,9 @@ export interface MediaAcquireRequest<TProvider = never> {
   readonly signal: AbortSignal;
 }
 
-export type LocalMediaAcquireRequest = MediaAcquireRequest<undefined>;
+export type LocalMediaAcquireRequest = MediaAcquireRequest<
+  { readonly file: File | null } | undefined
+>;
 
 export type MediaAcquireRequestBase = Omit<MediaAcquireRequest, 'provider'>;
 export type MediaAcquireRequestLike = MediaAcquireRequestBase & { readonly provider: unknown };

@@ -1,4 +1,4 @@
-import { Setting } from 'obsidian';
+import { Setting, type TextComponent } from 'obsidian';
 
 import {
   discoverYtDlpCandidates,
@@ -18,6 +18,7 @@ import { addToggleSetting } from './setting-helpers';
 export interface YouTubeHelperSettingsDependencies {
   readonly access: SettingAccess;
   readonly getSettings: () => PluginSettings;
+  readonly installPinnedHelper?: () => Promise<string>;
   readonly isPlatformSupported?: () => boolean;
 }
 
@@ -61,6 +62,7 @@ export function renderYouTubeHelperSettings(
   let probeController: AbortController | null = null;
   let probeGeneration = 0;
   let persistenceQueue: Promise<void> = Promise.resolve();
+  let helperPathText: TextComponent | null = null;
   const checkHelper = async (): Promise<void> => {
     probeController?.abort();
     const controller = new AbortController();
@@ -98,6 +100,7 @@ export function renderYouTubeHelperSettings(
     }
   };
   setting.addText((text) => {
+    helperPathText = text;
     text.setPlaceholder(t('youtube.modal.helperPlaceholder'));
     text.setValue(currentPath);
     text.onChange((value) => {
@@ -126,5 +129,25 @@ export function renderYouTubeHelperSettings(
       void checkHelper();
     }),
   );
+  if (dependencies.installPinnedHelper !== undefined) {
+    setting.addButton((button) =>
+      button.setButtonText(t('youtube.settings.installHelper')).onClick(async () => {
+        button.setDisabled(true);
+        probeStatus.setText(t('youtube.settings.installingHelper'));
+        try {
+          const installedPath = await dependencies.installPinnedHelper?.();
+          if (installedPath === undefined) throw new Error('No helper was installed.');
+          selectedPath = normalizeYouTubeHelperPath(installedPath) ?? '';
+          await dependencies.access.persistOne('youtubeHelperPath', selectedPath);
+          helperPathText?.setValue(selectedPath);
+          await checkHelper();
+        } catch {
+          probeStatus.setText(t('youtube.settings.installFailed'));
+        } finally {
+          button.setDisabled(false);
+        }
+      }),
+    );
+  }
   return setting;
 }

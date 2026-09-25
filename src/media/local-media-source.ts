@@ -29,7 +29,7 @@ export class LocalMediaSource implements MediaSource<LocalMediaAcquireRequest> {
 
   async *acquire(request: LocalMediaAcquireRequest): AsyncIterable<AcquisitionEvent> {
     throwIfCancelled(request.signal);
-    const file = await this.dependencies.pickFile(request.signal);
+    const file = request.provider?.file ?? (await this.dependencies.pickFile(request.signal));
     throwIfCancelled(request.signal);
     if (file === null) return;
 

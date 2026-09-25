@@ -9,6 +9,7 @@ export interface ManagedProcessResult {
   readonly failed: boolean;
   readonly outputLimitExceeded: boolean;
   readonly stderr: string;
+  readonly streamError?: unknown;
   readonly stdout: string;
   readonly timedOut: boolean;
 }
@@ -22,6 +23,8 @@ export interface ManagedProcessOptions {
   readonly timeoutMs: number;
   readonly onStderr?: (stderr: string) => void;
   readonly onStdout?: (stdout: string) => void;
+  /** Consume stdout as bounded chunks. The pipe pauses until each chunk is consumed. */
+  readonly onStdoutChunk?: (chunk: Buffer) => Promise<void> | void;
 }
 
 export interface ManagedProcessSpawnOptions extends SpawnOptions {
@@ -86,6 +89,8 @@ async function collectProcessOutput(
   let forceCleanupPromise: Promise<boolean> | null = null;
   let terminationPromise: Promise<boolean> | null = null;
   let exitCleanupPromise: Promise<boolean> | null = null;
+  let stdoutCallbackQueue: Promise<void> = Promise.resolve();
+  let stdoutCallbackError: unknown;
   let resolveResult!: (result: ManagedProcessResult) => void;
   const resultPromise = new Promise<ManagedProcessResult>((resolve) => {
     resolveResult = resolve;
@@ -175,31 +180,50 @@ async function collectProcessOutput(
     ).then((results) => {
       for (const succeeded of results) cleanupFailed ||= !succeeded;
     });
-    void cleanup.finally(() => {
-      resolveResult({
-        cancelled,
-        cleanupFailed,
-        exitCode,
-        failed: failed || cleanupFailed,
-        outputLimitExceeded,
-        stderr,
-        stdout,
-        timedOut,
+    void cleanup
+      .then(async () => await stdoutCallbackQueue.catch(() => {}))
+      .finally(() => {
+        resolveResult({
+          cancelled,
+          cleanupFailed,
+          exitCode,
+          failed: failed || cleanupFailed,
+          outputLimitExceeded,
+          stderr,
+          ...(stdoutCallbackError === undefined ? {} : { streamError: stdoutCallbackError }),
+          stdout,
+          timedOut,
+        });
       });
-    });
   };
   const abort = (): void => {
     cancelled = true;
     terminate('SIGTERM', true);
   };
   const onStdout = (chunk: Buffer | string): void => {
-    const value = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-    stdoutBytes += Buffer.byteLength(value, 'utf8');
+    const bytes = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
+    stdoutBytes += bytes.byteLength;
     if (stdoutBytes > limits.maxOutputBytes) {
       outputLimitExceeded = true;
       terminate('SIGKILL', false);
       return;
     }
+    if (limits.onStdoutChunk !== undefined) {
+      child.stdout?.pause();
+      stdoutCallbackQueue = stdoutCallbackQueue.then(async () => {
+        await limits.onStdoutChunk?.(bytes);
+      });
+      void stdoutCallbackQueue
+        .then(() => {
+          if (!settled) child.stdout?.resume();
+        })
+        .catch((error: unknown) => {
+          stdoutCallbackError = error;
+          terminate('SIGTERM', true);
+        });
+      return;
+    }
+    const value = bytes.toString('utf8');
     stdout += value;
     limits.onStdout?.(stdout);
   };
@@ -216,8 +240,14 @@ async function collectProcessOutput(
     limits.onStderr?.(stderr);
   };
   const onError = (): void => {
+    // A process error can arrive while stdout/stderr pipes are still open.
+    // Keep the close listener and bounded deadline alive so callers never
+    // mistake an error event for completed process-tree cleanup.
+    if (childPid === undefined) {
+      armCloseDeadline();
+      return;
+    }
     terminate('SIGKILL', false);
-    finish(null, true);
   };
   const onExit = (code: number | null): void => {
     if (settled) return;

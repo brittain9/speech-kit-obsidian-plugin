@@ -1,16 +1,25 @@
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, open, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import {
+  LOCAL_MEDIA_MAX_ENCODED_BYTES,
   MEDIA_MAX_DECODED_BYTES,
   MEDIA_MAX_DURATION_MS,
-  MEDIA_MAX_ENCODED_BYTES,
 } from '../media/media-policy';
 import type { MediaLease, MediaReadStream } from '../media/media-source';
-import { PCM_BYTES_PER_FRAME } from '../shared/pcm-format';
+import { type ManagedProcessResult, runManagedProcess } from '../media/process-runner';
+import { PCM_BYTES_PER_FRAME, PCM_SAMPLE_RATE_HZ } from '../shared/pcm-format';
 import type { PluginLogger } from '../shared/plugin-logger';
-import { clearChannels, mixChannelsToMono, PcmFrameProcessor } from './pcm-frame-processor';
+import { mixChannelsToMono, PcmFrameProcessor } from './pcm-frame-processor';
 
-export const AUDIO_FILE_MAX_ENCODED_BYTES = MEDIA_MAX_ENCODED_BYTES;
+export const AUDIO_FILE_MAX_ENCODED_BYTES = LOCAL_MEDIA_MAX_ENCODED_BYTES;
 export const AUDIO_FILE_MAX_DECODED_BYTES = MEDIA_MAX_DECODED_BYTES;
 export const AUDIO_FILE_MAX_DURATION_MS = MEDIA_MAX_DURATION_MS;
+export const AUDIO_FILE_DECODE_TIMEOUT_MS = 30 * 60 * 1_000;
+const FFMPEG_STDERR_LIMIT_BYTES = 64 * 1024;
+const FFPROBE_OUTPUT_LIMIT_BYTES = 64 * 1024;
 const DECODE_CHANNEL_SLICE_SAMPLES = 16_384;
 
 export type AudioFileErrorCode =
@@ -44,120 +53,267 @@ export interface DecodedAudioFile {
   readonly length: number;
   readonly numberOfChannels: number;
   readonly sampleRate: number;
-  dispose(): void;
-  getChannelData(channel: number): Float32Array;
+  dispose(): void | Promise<void>;
+  getChannelData?(channel: number): Float32Array;
+  pumpFrames?(options: PumpDecodedAudioFramesOptions): Promise<void>;
 }
 
-interface WebAudioAudioFileDecoderOptions {
-  readonly getAudioContext?: () => typeof AudioContext;
+export interface AudioFileDecoder {
+  decode(file: File, signal: AbortSignal): Promise<DecodedAudioFile>;
+  decodeMedia(lease: MediaLease, signal: AbortSignal): Promise<DecodedAudioFile>;
+}
+
+export interface FfmpegExecutables {
+  readonly ffmpegPath: string;
+  readonly ffprobePath: string;
+}
+
+export type FfmpegProcessRunner = typeof runManagedProcess;
+
+export interface FfmpegAudioFileDecoderOptions {
+  readonly getExecutables: () => FfmpegExecutables | Promise<FfmpegExecutables>;
   readonly logger?: PluginLogger;
+  readonly runProcess?: FfmpegProcessRunner;
+  readonly temporaryDirectory?: string;
 }
 
 interface DecodedAudioBudgetOptions {
   readonly maxModelDurationMs: number | null;
 }
 
-interface PumpDecodedAudioFramesOptions {
+export interface PumpDecodedAudioFramesOptions {
   readonly signal: AbortSignal;
   readonly waitForBackpressure: (signal: AbortSignal) => Promise<void>;
   readonly writeFrame: (frame: Uint8Array, signal: AbortSignal) => Promise<void>;
 }
 
-export class WebAudioAudioFileDecoder {
-  private readonly getAudioContext: () => typeof AudioContext;
+interface FfprobeOutput {
+  readonly streams?: readonly { readonly codec_type?: unknown; readonly duration?: unknown }[];
+  readonly format?: { readonly duration?: unknown };
+}
 
-  constructor(private readonly options: WebAudioAudioFileDecoderOptions = {}) {
-    this.getAudioContext = options.getAudioContext ?? getWindowAudioContext;
+export class FfmpegAudioFileDecoder implements AudioFileDecoder {
+  private readonly runProcess: FfmpegProcessRunner;
+
+  constructor(private readonly options: FfmpegAudioFileDecoderOptions) {
+    this.runProcess = options.runProcess ?? runManagedProcess;
   }
 
-  async decode(file: File, signal = new AbortController().signal): Promise<DecodedAudioFile> {
+  async decode(file: File, signal: AbortSignal): Promise<DecodedAudioFile> {
     throwIfCancelled(signal);
     assertEncodedFileSize(file.size);
-
-    const encodedBytes = await readEncodedAudioFile(file, signal);
-    return await this.decodeEncodedBytes(encodedBytes, signal);
+    if (typeof file.stream !== 'function') {
+      throw new AudioFileError(
+        'read_failed',
+        'This Obsidian runtime cannot stream the selected file safely.',
+      );
+    }
+    return await this.prepareMedia(file.stream(), file.size, signal);
   }
 
-  async decodeMedia(
-    lease: MediaLease,
-    signal = new AbortController().signal,
-  ): Promise<DecodedAudioFile> {
+  async decodeMedia(lease: MediaLease, signal: AbortSignal): Promise<DecodedAudioFile> {
     throwIfCancelled(signal);
     assertEncodedFileSize(lease.encodedBytes);
-    const stream = await abortable(lease.openReadStream(), signal, () => cancellationError(signal));
-    const encodedBytes = await readMediaStream(stream, lease.encodedBytes, signal);
-    return await this.decodeEncodedBytes(encodedBytes, signal);
+    let stream: MediaReadStream;
+    try {
+      stream = await lease.openReadStream();
+    } catch (error) {
+      throw normalizeReadError(error, signal);
+    }
+    return await this.prepareMedia(stream, lease.encodedBytes, signal);
   }
 
-  private async decodeEncodedBytes(
-    encodedBytes: ArrayBuffer,
+  private async prepareMedia(
+    stream: MediaReadStream,
+    expectedBytes: number,
     signal: AbortSignal,
   ): Promise<DecodedAudioFile> {
-    throwIfCancelled(signal);
-
-    let audioContext: AudioContext;
+    const directory = await mkdtemp(
+      join(this.options.temporaryDirectory ?? tmpdir(), 'speech-kit-media-'),
+    );
+    const inputPath = join(directory, `source-${randomUUID()}.media`);
+    let keepDirectory = false;
+    let cleanupPromise: Promise<void> | null = null;
+    const dispose = (): Promise<void> => {
+      cleanupPromise ??= removeTemporaryMedia(directory, this.options.logger);
+      return cleanupPromise;
+    };
     try {
-      const AudioContextConstructor = this.getAudioContext();
-      audioContext = new AudioContextConstructor();
-    } catch (error) {
-      throw new AudioFileError(
-        'decode_failed',
-        'The local audio decoder is unavailable in this Obsidian runtime.',
-        { cause: error },
-      );
-    }
-
-    let decodedAudio: DecodedAudioFile | null = null;
-    let operationError: AudioFileError | null = null;
-    try {
-      const decodedBuffer = await abortable(
-        audioContext.decodeAudioData(encodedBytes),
-        signal,
-        () => cancellationError(signal),
-      );
+      await writeMediaStream(stream, inputPath, expectedBytes, signal);
       throwIfCancelled(signal);
-      decodedAudio = createDecodedAudioBuffer(decodedBuffer);
+      const audio = await this.options.getExecutables();
+      const durationMs = await this.probeDuration(audio.ffprobePath, inputPath, signal);
+      const metadata: DecodedAudioFile = {
+        length: Math.round((durationMs / 1_000) * PCM_SAMPLE_RATE_HZ),
+        numberOfChannels: 1,
+        sampleRate: PCM_SAMPLE_RATE_HZ,
+        dispose,
+        pumpFrames: async (pumpOptions) =>
+          await this.pumpFfmpegFrames(audio.ffmpegPath, inputPath, durationMs, pumpOptions),
+      };
+      keepDirectory = true;
+      return metadata;
     } catch (error) {
-      operationError = normalizeAudioFileError(error, signal);
+      throw normalizeDecodeError(error, signal);
+    } finally {
+      if (!keepDirectory) await dispose();
     }
+  }
 
-    let closeError: unknown = null;
+  private async probeDuration(
+    ffprobePath: string,
+    inputPath: string,
+    signal: AbortSignal,
+  ): Promise<number> {
+    const result = await this.runProcess(
+      ffprobePath,
+      [
+        '-v',
+        'error',
+        '-show_entries',
+        'format=duration:stream=codec_type,duration',
+        '-of',
+        'json',
+        '-i',
+        inputPath,
+      ],
+      processOptions(),
+      {
+        maxOutputBytes: FFPROBE_OUTPUT_LIMIT_BYTES,
+        signal,
+        stderrLimitBytes: FFMPEG_STDERR_LIMIT_BYTES,
+        timeoutMs: 30_000,
+      },
+    );
+    assertSuccessfulProcess(result, 'The media file could not be inspected.', signal);
+
+    let parsed: FfprobeOutput;
     try {
-      if (audioContext.state !== 'closed') {
-        await audioContext.close();
-      }
+      parsed = JSON.parse(result.stdout) as FfprobeOutput;
     } catch (error) {
-      closeError = error;
-      this.options.logger?.warn('audio', 'failed to close file-decoder AudioContext', error);
-    }
-
-    if (operationError !== null) {
-      throw operationError;
-    }
-    if (closeError !== null) {
-      throw new AudioFileError('decode_failed', 'The local audio decoder did not close cleanly.', {
-        cause: closeError,
+      throw new AudioFileError('decode_failed', 'FFprobe returned invalid media metadata.', {
+        cause: error,
       });
     }
-    if (decodedAudio === null) {
-      throw new AudioFileError('decode_failed', 'The local audio decoder returned no audio.');
+    const streams = parsed.streams ?? [];
+    const audioStreams = streams.filter((stream) => stream.codec_type === 'audio');
+    if (audioStreams.length === 0) {
+      throw new AudioFileError(
+        'decode_failed',
+        'The selected video or audio file has no audio track.',
+      );
     }
-    return decodedAudio;
+    const durationSeconds =
+      parsePositiveSeconds(parsed.format?.duration) ??
+      audioStreams
+        .map((stream) => parsePositiveSeconds(stream.duration))
+        .find((value) => value !== null);
+    if (durationSeconds === undefined || durationSeconds === null) {
+      throw new AudioFileError('decode_failed', 'The media duration could not be determined.');
+    }
+    const durationMs = durationSeconds * 1_000;
+    if (durationMs > AUDIO_FILE_MAX_DURATION_MS) {
+      throw new AudioFileError(
+        'duration',
+        `Audio duration exceeds the ${AUDIO_FILE_MAX_DURATION_MS / 60_000}-minute limit.`,
+      );
+    }
+    return durationMs;
+  }
+
+  private async pumpFfmpegFrames(
+    ffmpegPath: string,
+    inputPath: string,
+    durationMs: number,
+    options: PumpDecodedAudioFramesOptions,
+  ): Promise<void> {
+    throwIfCancelled(options.signal);
+    const maxPcmBytes = Math.ceil((AUDIO_FILE_MAX_DURATION_MS / 1_000) * PCM_SAMPLE_RATE_HZ) * 2;
+    let outputBytes = 0;
+    let pending = new Uint8Array(0);
+    let frameCount = 0;
+    let streamError: unknown;
+    const result = await this.runProcess(
+      ffmpegPath,
+      [
+        '-nostdin',
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-xerror',
+        '-i',
+        inputPath,
+        '-map',
+        '0:a:0',
+        '-vn',
+        '-sn',
+        '-dn',
+        '-ac',
+        '1',
+        '-ar',
+        String(PCM_SAMPLE_RATE_HZ),
+        '-c:a',
+        'pcm_s16le',
+        '-f',
+        's16le',
+        'pipe:1',
+      ],
+      { ...processOptions(), stdio: ['ignore', 'pipe', 'pipe'] },
+      {
+        maxOutputBytes: maxPcmBytes + PCM_BYTES_PER_FRAME,
+        signal: options.signal,
+        stderrLimitBytes: FFMPEG_STDERR_LIMIT_BYTES,
+        timeoutMs: AUDIO_FILE_DECODE_TIMEOUT_MS,
+        onStdoutChunk: async (chunk) => {
+          outputBytes += chunk.byteLength;
+          if (outputBytes > maxPcmBytes) {
+            throw new AudioFileError('duration', 'Decoded audio exceeds the 30-minute limit.');
+          }
+          const joined = joinBytes(pending, chunk);
+          let offset = 0;
+          while (offset + PCM_BYTES_PER_FRAME <= joined.byteLength) {
+            throwIfCancelled(options.signal);
+            await options.waitForBackpressure(options.signal);
+            throwIfCancelled(options.signal);
+            const frame = joined.subarray(offset, offset + PCM_BYTES_PER_FRAME);
+            await options.writeFrame(frame, options.signal);
+            frameCount += 1;
+            offset += PCM_BYTES_PER_FRAME;
+          }
+          pending = joined.slice(offset);
+        },
+      },
+    ).catch((error: unknown) => {
+      streamError = error;
+      throw error;
+    });
+
+    if (streamError !== undefined) throw normalizeDecodeError(streamError, options.signal);
+    if (result.streamError !== undefined) {
+      throw normalizeDecodeError(result.streamError, options.signal);
+    }
+    assertSuccessfulProcess(result, 'FFmpeg could not decode the selected media.', options.signal);
+    if (durationMs > AUDIO_FILE_MAX_DURATION_MS) {
+      throw new AudioFileError('duration', 'Decoded audio exceeds the 30-minute limit.');
+    }
+    if (frameCount === 0) {
+      throw new AudioFileError('empty', 'The decoded audio is shorter than one complete frame.');
+    }
   }
 }
 
 export function assertEncodedFileSize(sizeBytes: number): void {
   if (!Number.isFinite(sizeBytes) || sizeBytes < 0) {
-    throw new AudioFileError('read_failed', 'The selected audio file has an invalid size.');
+    throw new AudioFileError('read_failed', 'The selected media file has an invalid size.');
   }
   if (sizeBytes > AUDIO_FILE_MAX_ENCODED_BYTES) {
     throw new AudioFileError(
       'encoded_size',
-      `The encoded audio file exceeds the ${AUDIO_FILE_MAX_ENCODED_BYTES}-byte safety limit.`,
+      `The encoded media file exceeds the ${AUDIO_FILE_MAX_ENCODED_BYTES}-byte safety limit.`,
     );
   }
   if (sizeBytes === 0) {
-    throw new AudioFileError('empty', 'The selected audio file is empty.');
+    throw new AudioFileError('empty', 'The selected media file is empty.');
   }
 }
 
@@ -185,7 +341,7 @@ export function assertDecodedAudioWithinBudget(
     if (!Number.isSafeInteger(decodedBytes) || decodedBytes > AUDIO_FILE_MAX_DECODED_BYTES) {
       throw new AudioFileError(
         'decoded_memory',
-        `Decoded audio exceeds the ${AUDIO_FILE_MAX_DECODED_BYTES}-byte memory safety limit.`,
+        `Decoded audio exceeds the ${AUDIO_FILE_MAX_DECODED_BYTES}-byte safety limit.`,
       );
     }
 
@@ -203,7 +359,7 @@ export function assertDecodedAudioWithinBudget(
       );
     }
   } catch (error) {
-    decodedAudio.dispose();
+    void decodedAudio.dispose();
     throw error;
   }
 }
@@ -213,9 +369,15 @@ export async function pumpDecodedAudioFrames(
   options: PumpDecodedAudioFramesOptions,
 ): Promise<void> {
   try {
+    if (decodedAudio.pumpFrames !== undefined) {
+      await decodedAudio.pumpFrames(options);
+      return;
+    }
+    if (decodedAudio.getChannelData === undefined) {
+      throw new AudioFileError('invalid_decode', 'Decoded media cannot provide audio frames.');
+    }
     const processor = new PcmFrameProcessor({ sourceSampleRate: decodedAudio.sampleRate });
-    const channelSlices = readChannelSlices(decodedAudio);
-    for (const channels of channelSlices) {
+    for (const channels of readChannelSlices(decodedAudio)) {
       throwIfCancelled(options.signal);
       const monoSlice = mixChannelsToMono(channels);
       for (const frame of processor.push(monoSlice)) {
@@ -233,7 +395,7 @@ export async function pumpDecodedAudioFrames(
       }
     }
   } finally {
-    decodedAudio.dispose();
+    await decodedAudio.dispose();
   }
 }
 
@@ -245,209 +407,170 @@ export function isAudioFileCancellation(error: unknown): boolean {
   return error instanceof AudioFileError && error.code === 'cancelled';
 }
 
-function createDecodedAudioBuffer(audioBuffer: AudioBuffer): DecodedAudioFile {
-  const channels = Array.from({ length: audioBuffer.numberOfChannels }, (_, channel) =>
-    audioBuffer.getChannelData(channel),
-  );
-  return {
-    length: audioBuffer.length,
-    numberOfChannels: audioBuffer.numberOfChannels,
-    sampleRate: audioBuffer.sampleRate,
-    dispose: () => clearChannels(channels),
-    getChannelData: (channel) => {
-      const samples = channels[channel];
-      if (samples === undefined) {
-        throw new RangeError(`Decoded audio channel ${String(channel)} does not exist.`);
-      }
-      return samples;
-    },
-  };
-}
-
 function* readChannelSlices(decodedAudio: DecodedAudioFile): Generator<Float32Array[]> {
   for (let start = 0; start < decodedAudio.length; start += DECODE_CHANNEL_SLICE_SAMPLES) {
     const end = Math.min(decodedAudio.length, start + DECODE_CHANNEL_SLICE_SAMPLES);
-    yield Array.from({ length: decodedAudio.numberOfChannels }, (_, channel) =>
-      decodedAudio.getChannelData(channel).subarray(start, end),
-    );
+    yield Array.from({ length: decodedAudio.numberOfChannels }, (_, channel) => {
+      const data = decodedAudio.getChannelData?.(channel);
+      if (data === undefined) {
+        throw new AudioFileError('invalid_decode', 'Decoded audio channel data is unavailable.');
+      }
+      return data.subarray(start, end);
+    });
   }
 }
 
-async function readMediaStream(
+async function writeMediaStream(
   stream: MediaReadStream,
+  path: string,
   expectedBytes: number,
   signal: AbortSignal,
-): Promise<ArrayBuffer> {
+): Promise<void> {
   const reader = stream.getReader();
-  const bytes = new Uint8Array(expectedBytes);
   let totalBytes = 0;
-  const abortReader = (): void => {
+  let handle: Awaited<ReturnType<typeof open>> | null = null;
+  const cancelReader = (): void => {
     void reader.cancel(createAudioFileCancellationError()).catch(() => {});
   };
-  signal.addEventListener('abort', abortReader, { once: true });
-
+  signal.addEventListener('abort', cancelReader, { once: true });
   try {
+    handle = await open(path, 'wx', 0o600);
     while (true) {
-      const result = await abortable(reader.read(), signal, () => cancellationError(signal));
-      if (result.done) {
-        break;
-      }
-      const chunk = result.value;
-      const nextTotalBytes = totalBytes + chunk.byteLength;
-      assertEncodedFileSize(nextTotalBytes);
-      if (nextTotalBytes > bytes.byteLength) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      throwIfCancelled(signal);
+      totalBytes += value.byteLength;
+      assertEncodedFileSize(totalBytes);
+      if (totalBytes > expectedBytes) {
         throw new AudioFileError('read_failed', 'The media lease changed while it was being read.');
       }
-      bytes.set(chunk, totalBytes);
-      totalBytes = nextTotalBytes;
+      await writeAll(handle, value);
     }
     throwIfCancelled(signal);
-    if (totalBytes !== bytes.byteLength) {
+    if (totalBytes !== expectedBytes) {
       throw new AudioFileError('read_failed', 'The media lease changed while it was being read.');
     }
-    return bytes.buffer;
   } catch (error) {
-    if (signal.aborted) {
-      throw cancellationError(signal);
-    }
-    if (error instanceof AudioFileError) {
-      throw error;
-    }
-    throw new AudioFileError('read_failed', 'The media lease could not be read.', { cause: error });
+    if (signal.aborted) throw cancellationError(signal);
+    if (error instanceof AudioFileError) throw error;
+    throw new AudioFileError('read_failed', 'The selected media file could not be read.', {
+      cause: error,
+    });
   } finally {
-    signal.removeEventListener('abort', abortReader);
+    signal.removeEventListener('abort', cancelReader);
     try {
       reader.releaseLock();
     } catch {
-      // A pending read may still be settling after cancellation.
+      // A cancelled pending read may still be settling.
     }
+    await handle?.close().catch(() => {});
   }
 }
 
-async function readEncodedAudioFile(file: File, signal: AbortSignal): Promise<ArrayBuffer> {
-  if (typeof file.stream === 'function') {
-    return await readFileStream(file, signal);
-  }
-
-  try {
-    return await abortable(file.arrayBuffer(), signal, () => cancellationError(signal));
-  } catch (error) {
-    if (signal.aborted) {
-      throw cancellationError(signal);
-    }
-    throw new AudioFileError('read_failed', 'The selected audio file could not be read.', {
-      cause: error,
-    });
+async function writeAll(
+  handle: Awaited<ReturnType<typeof open>>,
+  value: Uint8Array,
+): Promise<void> {
+  let offset = 0;
+  while (offset < value.byteLength) {
+    const { bytesWritten } = await handle.write(value, offset, value.byteLength - offset);
+    if (bytesWritten <= 0) throw new Error('The temporary media file stopped accepting bytes.');
+    offset += bytesWritten;
   }
 }
 
-async function readFileStream(file: File, signal: AbortSignal): Promise<ArrayBuffer> {
-  const reader = file.stream().getReader();
-  const bytes = new Uint8Array(file.size);
-  let totalBytes = 0;
-  const abortReader = (): void => {
-    void reader.cancel(createAudioFileCancellationError()).catch(() => {});
+function processOptions() {
+  return {
+    cwd: tmpdir(),
+    env: {
+      HOME: tmpdir(),
+      LANG: 'C',
+      LC_ALL: 'C',
+      TEMP: tmpdir(),
+      TMP: tmpdir(),
+      TMPDIR: tmpdir(),
+      USERPROFILE: tmpdir(),
+    },
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'] as ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   };
-  signal.addEventListener('abort', abortReader, { once: true });
-
-  try {
-    while (true) {
-      const result = await abortable(reader.read(), signal, () => cancellationError(signal));
-      if (result.done) {
-        break;
-      }
-      const chunk = result.value;
-      const nextTotalBytes = totalBytes + chunk.byteLength;
-      assertEncodedFileSize(nextTotalBytes);
-      if (nextTotalBytes > bytes.byteLength) {
-        throw new AudioFileError(
-          'read_failed',
-          'The selected audio file changed while it was being read.',
-        );
-      }
-      bytes.set(chunk, totalBytes);
-      totalBytes = nextTotalBytes;
-    }
-    throwIfCancelled(signal);
-    if (totalBytes !== bytes.byteLength) {
-      throw new AudioFileError(
-        'read_failed',
-        'The selected audio file changed while it was being read.',
-      );
-    }
-    return bytes.buffer;
-  } catch (error) {
-    if (signal.aborted) {
-      throw cancellationError(signal);
-    }
-    if (error instanceof AudioFileError) {
-      throw error;
-    }
-    throw new AudioFileError('read_failed', 'The selected audio file could not be read.', {
-      cause: error,
-    });
-  } finally {
-    signal.removeEventListener('abort', abortReader);
-  }
 }
 
-async function abortable<T>(
-  promise: PromiseLike<T>,
+function assertSuccessfulProcess(
+  result: ManagedProcessResult,
+  message: string,
   signal: AbortSignal,
-  createAbortError: () => Error,
-): Promise<T> {
-  if (signal.aborted) {
-    throw createAbortError();
+): void {
+  if (result.cancelled || signal.aborted) throw cancellationError(signal);
+  if (result.streamError !== undefined) {
+    throw normalizeDecodeError(result.streamError, signal);
   }
-
-  return await new Promise<T>((resolve, reject) => {
-    const onAbort = (): void => {
-      reject(createAbortError());
-    };
-    signal.addEventListener('abort', onAbort, { once: true });
-    Promise.resolve(promise).then(
-      (value) => {
-        signal.removeEventListener('abort', onAbort);
-        resolve(value);
-      },
-      (error: unknown) => {
-        signal.removeEventListener('abort', onAbort);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      },
+  if (result.timedOut) {
+    throw new AudioFileError('decode_failed', 'Media decoding exceeded its time limit.');
+  }
+  if (result.cleanupFailed) {
+    throw new AudioFileError('decode_failed', 'The media decoder did not close cleanly.');
+  }
+  if (result.outputLimitExceeded) {
+    throw new AudioFileError('duration', 'Decoded audio exceeded the configured safety limit.');
+  }
+  if (result.failed || result.exitCode !== 0) {
+    const noAudio = /matches no streams|does not contain any stream|no audio stream/iu.test(
+      result.stderr,
     );
-  });
-}
-
-function throwIfCancelled(signal: AbortSignal): void {
-  if (signal.aborted) {
-    throw cancellationError(signal);
+    throw new AudioFileError(
+      'decode_failed',
+      noAudio ? 'The selected video or audio file has no supported audio track.' : message,
+      { cause: result.stderr.length > 0 ? new Error(result.stderr.slice(0, 500)) : undefined },
+    );
   }
 }
 
-function cancellationError(signal: AbortSignal): AudioFileError {
-  if (signal.reason instanceof AudioFileError) {
-    return signal.reason;
-  }
-  return createAudioFileCancellationError();
+function parsePositiveSeconds(value: unknown): number | null {
+  const number =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(number) && number > 0 ? number : null;
 }
 
-function normalizeAudioFileError(error: unknown, signal: AbortSignal): AudioFileError {
-  if (signal.aborted) {
-    return cancellationError(signal);
+function joinBytes(left: Uint8Array, right: Uint8Array): Uint8Array {
+  if (left.byteLength === 0) return right;
+  const result = new Uint8Array(left.byteLength + right.byteLength);
+  result.set(left);
+  result.set(right, left.byteLength);
+  return result;
+}
+
+async function removeTemporaryMedia(directory: string, logger?: PluginLogger): Promise<void> {
+  try {
+    await rm(directory, { force: true, maxRetries: 3, recursive: true, retryDelay: 100 });
+  } catch (error) {
+    logger?.warn('audio', 'failed to remove temporary media files', error);
   }
-  if (error instanceof AudioFileError) {
-    return error;
-  }
-  return new AudioFileError('decode_failed', 'The selected audio file could not be decoded.', {
+}
+
+function normalizeReadError(error: unknown, signal: AbortSignal): AudioFileError {
+  if (signal.aborted) return cancellationError(signal);
+  return error instanceof AudioFileError
+    ? error
+    : new AudioFileError('read_failed', 'The media lease could not be opened.', { cause: error });
+}
+
+function normalizeDecodeError(error: unknown, signal: AbortSignal): AudioFileError {
+  if (signal.aborted) return cancellationError(signal);
+  if (error instanceof AudioFileError) return error;
+  return new AudioFileError('decode_failed', 'The selected media could not be decoded.', {
     cause: error,
   });
 }
 
-function getWindowAudioContext(): typeof AudioContext {
-  if (typeof window !== 'undefined' && window.AudioContext !== undefined) {
-    return window.AudioContext;
-  }
-  throw new Error('AudioContext is not available in this Obsidian runtime.');
+function throwIfCancelled(signal: AbortSignal): void {
+  if (signal.aborted) throw cancellationError(signal);
+}
+
+function cancellationError(signal: AbortSignal): AudioFileError {
+  if (signal.reason instanceof AudioFileError) return signal.reason;
+  return createAudioFileCancellationError();
 }
 
 function formatDurationSeconds(durationMs: number): string {

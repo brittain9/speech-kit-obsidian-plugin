@@ -5,13 +5,15 @@ import type { DecodedAudioFile } from '../src/audio/audio-file-decoder';
 import { AudioFileTranscriptionController } from '../src/dictation/audio-file-transcription-controller';
 import type { NotePlacementOptions, SurfaceDesynchronization } from '../src/editor/note-surface';
 import { LocalMediaSource } from '../src/media/local-media-source';
-import { MEDIA_ACQUISITION_LIMITS } from '../src/media/media-policy';
+import { LOCAL_MEDIA_ACQUISITION_LIMITS } from '../src/media/media-policy';
 import type {
   AcquisitionEvent,
+  LocalMediaAcquireRequest,
   MediaAcquireRequest,
   MediaAcquireRequestBase,
   MediaLease,
   MediaSource,
+  MediaTranscriptionEntry,
 } from '../src/media/media-source';
 import type {
   EngineCapabilitiesRecord,
@@ -258,6 +260,7 @@ type HarnessOverrides = Omit<
 function createHarness(overrides: HarnessOverrides = {}) {
   let target: SessionTarget | null = createTarget();
   const sessions: FakeSession[] = [];
+  const createSessionOptions: CreateSessionOptions[] = [];
   const feedback = { show: vi.fn() };
   const sidecarConnection = new FakeSidecarConnection();
   const sidecarLifecycleGate = new SidecarLifecycleGate();
@@ -316,7 +319,8 @@ function createHarness(overrides: HarnessOverrides = {}) {
   };
   const dependencies: ConstructorParameters<typeof AudioFileTranscriptionController>[0] = {
     backpressureTimeoutMs: 100,
-    createSession: (_options: CreateSessionOptions) => {
+    createSession: (options: CreateSessionOptions) => {
+      createSessionOptions.push(options);
       const session = new FakeSession();
       sessions.push(session);
       return session;
@@ -340,12 +344,14 @@ function createHarness(overrides: HarnessOverrides = {}) {
 
   return {
     controller,
+    createSessionOptions,
     decoder: configuredDecoder,
     feedback,
     pickAudioFile,
     sessions,
     sidecarConnection,
     sidecarLifecycleGate,
+    getSettings: () => settings,
     setCapabilities: (next: SelectedModelCapabilities) => {
       modelCapabilities = next;
     },
@@ -485,7 +491,7 @@ describe('AudioFileTranscriptionController', () => {
 
     expect(payload).toMatchObject({
       includeSystemAudio: false,
-      language: 'ja',
+      language: 'ja' as const,
       mode: 'always_on',
       modelSelection: selectedModel,
     });
@@ -511,6 +517,62 @@ describe('AudioFileTranscriptionController', () => {
       const lease = harness.sidecarLifecycleGate.acquireMutation();
       lease.release();
     }).not.toThrow();
+  });
+
+  it('snapshots media model and formatting options per job without mutating saved settings', async () => {
+    const harness = createHarness({
+      getMediaTranscriptionModels: () => [
+        {
+          capabilities: batchCapabilities,
+          label: 'Whisper batch',
+          selection: selectedModel,
+        },
+      ],
+    });
+    const originalSettings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      ...createSettings(),
+      diarizationEnabled: false,
+      timestampsEnabled: true,
+    };
+    harness.setSettings(originalSettings);
+    const entry: MediaTranscriptionEntry<undefined, LocalMediaAcquireRequest> = {
+      createRequest: (_context, request) => ({ ...request, provider: { file: null } }),
+      id: 'test-media',
+      isEnabled: () => true,
+      source: new LocalMediaSource({ pickFile: harness.pickAudioFile }),
+    };
+    const jobOptions = {
+      diarizationEnabled: true,
+      language: 'ja' as const,
+      modelSelection: selectedModel,
+      timestampDensity: 'paragraph' as const,
+      timestampsEnabled: false,
+      transcriptFormatting: 'space' as const,
+    };
+
+    const operation = harness.controller.transcribeProvider(entry, undefined, jobOptions);
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+    const payload = harness.sidecarConnection.startSessionWithControl.mock.calls[0]?.[0];
+    const sessionId = payload?.sessionId;
+    if (sessionId === undefined) throw new Error('Expected a media session to start.');
+    harness.sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await operation;
+
+    expect(payload).toMatchObject({
+      detailedTimestampsEnabled: false,
+      diarizationEnabled: true,
+      language: 'ja',
+      modelSelection: selectedModel,
+    });
+    expect(harness.createSessionOptions[0]?.rendererOptions).toMatchObject({
+      timestamps: { clock: 'elapsed', density: 'paragraph', enabled: false },
+      transcriptFormatting: 'space',
+    });
+    expect(harness.createSessionOptions[0]?.rendererOptions.timestamps.enabled).toBe(false);
+    expect(harness.getSettings()).toEqual(originalSettings);
   });
 
   it('holds a speech lease across picker and pending decode, then cancellation unwinds it', async () => {
@@ -1364,7 +1426,7 @@ describe('AudioFileTranscriptionController', () => {
 
     expect(acquisitionRequest).toMatchObject({
       kind: 'interactive',
-      ...MEDIA_ACQUISITION_LIMITS,
+      ...LOCAL_MEDIA_ACQUISITION_LIMITS,
     });
     expect(harness.pickAudioFile).not.toHaveBeenCalled();
     expect(decodeMedia).toHaveBeenCalledWith(

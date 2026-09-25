@@ -1609,6 +1609,62 @@
   justify-content: flex-end;
 }
 
+.local-stt-media-source-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.local-stt-media-source-tabs button {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.local-stt-media-source-tabs button.is-active {
+  border-bottom-color: var(--interactive-accent);
+  color: var(--text-normal);
+}
+
+.local-stt-media-drop-zone {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin: 12px 0 20px;
+  padding: 28px 16px;
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+  text-align: center;
+}
+
+.local-stt-media-drop-zone.is-dragging {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+
+.local-stt-media-drop-zone p {
+  margin: 0;
+}
+
+.local-stt-media-selected-file {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.local-stt-media-progress,
+.local-stt-media-error {
+  margin-top: 12px;
+}
+
+.local-stt-media-error {
+  color: var(--text-error);
+}
+
 @media (max-width: 600px) {
   .local-stt-language-rail {
     max-height: none;

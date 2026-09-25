@@ -185,6 +185,7 @@ describe('yt-dlp helper policy', () => {
     const spawnProcess = vi.fn();
     expect(isYouTubeSupportedPlatform('win32')).toBe(false);
     expect(isYouTubeSupportedPlatform('darwin')).toBe(true);
+    expect(isYouTubeSupportedPlatform('linux', 'arm64')).toBe(false);
     await expect(
       probeYtDlpVersion('/private/yt-dlp', {
         platform: 'win32',
