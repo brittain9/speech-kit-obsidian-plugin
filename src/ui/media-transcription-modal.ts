@@ -10,6 +10,7 @@ import {
   type MediaTranscriptionJobOptions,
   type MediaTranscriptionModelOption,
 } from '../media/media-transcription-options';
+import { youtubeMediaFailureAdapter } from '../media/youtube-failure-mapper';
 import {
   explicitYouTubeRightsConfirmation,
   hasYouTubeRightsConfirmation,
@@ -85,6 +86,7 @@ class MediaTranscriptionModal extends Modal {
   private modelSelectionKey = '';
   private mediaPresetRef: string | null;
   private transcriptFormatting: TranscriptFormattingMode;
+  private optionsExpanded = false;
   private busy = false;
   private cancelRequested = false;
   private progressEl: HTMLElement | null = null;
@@ -147,6 +149,7 @@ class MediaTranscriptionModal extends Modal {
     const source = this.contentEl.createDiv({ cls: 'local-stt-media-source' });
     if (this.tab === 'file') this.renderFileSource(source);
     else this.renderYouTubeSource(source);
+    this.renderAiPreset();
     this.renderJobOptions();
 
     this.requirementEl = this.contentEl.createDiv({
@@ -229,10 +232,6 @@ class MediaTranscriptionModal extends Modal {
   }
 
   private renderYouTubeSource(parent: HTMLElement): void {
-    parent.createEl('p', {
-      text: t('media.modal.youtubeFreshTranscript'),
-      cls: 'local-stt-media-source-hint',
-    });
     new Setting(parent).setName(t('youtube.modal.urlName')).addText((text) => {
       text.setPlaceholder(t('youtube.modal.urlPlaceholder')).setValue(this.url);
       text.onChange((value) => {
@@ -240,35 +239,52 @@ class MediaTranscriptionModal extends Modal {
         this.updatePrimaryButton();
       });
     });
+    parent.createEl('p', {
+      text: t('media.modal.youtubeFreshTranscript'),
+      cls: 'local-stt-media-source-hint',
+    });
     if (!this.rightsConfirmed) {
-      new Setting(parent)
-        .setName(t('youtube.modal.rightsLabel'))
-        .setDesc(t('youtube.modal.policyRequired'))
-        .addToggle((toggle) => {
-          toggle.setValue(false).onChange((value) => {
-            this.rightsConfirmed = value;
-            this.updatePrimaryButton();
-          });
+      new Setting(parent).setName(t('youtube.modal.rightsLabel')).addToggle((toggle) => {
+        toggle.setValue(false).onChange((value) => {
+          this.rightsConfirmed = value;
+          this.updatePrimaryButton();
         });
+      });
     }
   }
 
   private renderJobOptions(): void {
-    const section = this.contentEl.createDiv({ cls: 'local-stt-media-options' });
-    section.createEl('h3', { text: t('media.modal.optionsTitle') });
-    const grid = section.createDiv({ cls: 'local-stt-media-options-grid' });
     const models = this.dependencies.getModels(this.language);
     const settings = this.dependencies.getSettings();
     const defaultModel = chooseDefaultMediaTranscriptionModel(models, settings.selectedModel);
     if (!models.some((option) => modelKey(option) === this.modelSelectionKey)) {
       this.modelSelectionKey = modelKey(defaultModel ?? models[0]);
     }
+    const section = this.contentEl.createEl('details', { cls: 'local-stt-media-options' });
+    section.open = this.optionsExpanded;
+    section.addEventListener('toggle', () => {
+      this.optionsExpanded = section.open;
+    });
+    const summary = section.createEl('summary');
+    summary.createSpan({ text: t('media.modal.optionsTitle') });
+    const selectedModel = models.find((option) => modelKey(option) === this.modelSelectionKey);
+    const selectedLanguage = DICTATION_LANGUAGE_OPTIONS.find(
+      (option) => option.value === this.language,
+    );
+    const summaryDetail = summary.createSpan({
+      cls: 'local-stt-media-options-summary',
+      text: selectedModel
+        ? `${selectedLanguage?.label ?? this.language} · ${selectedModel.label}`
+        : t('media.modal.noBatchModel'),
+    });
+    const grid = section.createDiv({ cls: 'local-stt-media-options-grid' });
     new Setting(grid).setName(t('media.modal.language')).addDropdown((dropdown) => {
       for (const option of DICTATION_LANGUAGE_OPTIONS)
         dropdown.addOption(option.value, option.label);
       dropdown.setValue(this.language);
       dropdown.onChange((value) => {
         this.language = value as DictationLanguage;
+        this.optionsExpanded = true;
         this.render();
       });
     });
@@ -289,12 +305,17 @@ class MediaTranscriptionModal extends Modal {
       dropdown.setValue(this.modelSelectionKey);
       dropdown.onChange((value) => {
         this.modelSelectionKey = value;
+        const chosen = models.find((option) => modelKey(option) === value);
+        summaryDetail.setText(
+          `${selectedLanguage?.label ?? this.language} · ${chosen?.label ?? ''}`,
+        );
         this.updatePrimaryButton();
       });
     });
     new Setting(grid).setName(t('settings.timestamps.enable.name')).addToggle((toggle) => {
       toggle.setValue(this.timestampEnabled).onChange((value) => {
         this.timestampEnabled = value;
+        this.optionsExpanded = true;
         this.render();
       });
     });
@@ -308,6 +329,7 @@ class MediaTranscriptionModal extends Modal {
         dropdown.setValue(this.timestampDensity);
         dropdown.onChange((value) => {
           this.timestampDensity = value as TimestampDensity;
+          this.optionsExpanded = true;
           this.render();
         });
       });
@@ -343,18 +365,23 @@ class MediaTranscriptionModal extends Modal {
         if (this.transcriptFormatting !== 'smart' && this.timestampDensity === 'paragraph') {
           this.timestampDensity = 'sparse';
         }
+        this.optionsExpanded = true;
         this.render();
       });
     });
+  }
 
+  private renderAiPreset(): void {
+    const settings = this.dependencies.getSettings();
     const presets = listPresetEntries(settings.llmPostprocessUserPresets);
+    const container = this.contentEl.createDiv({ cls: 'local-stt-media-preset' });
     if (
       this.mediaPresetRef !== null &&
       !presets.some((entry) => entry.ref === this.mediaPresetRef)
     ) {
       this.mediaPresetRef = null;
     }
-    new Setting(section)
+    new Setting(container)
       .setName(t('media.modal.aiPreset'))
       .setDesc(
         this.mediaPresetRef === null
@@ -545,6 +572,8 @@ function formatBytes(bytes: number): string {
 }
 
 function errorDetail(error: unknown): string {
+  const youtubeFailure = youtubeMediaFailureAdapter.map(error);
+  if (youtubeFailure !== null) return youtubeFailure.message;
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
   return t('media.modal.unknownFailure');

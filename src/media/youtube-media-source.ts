@@ -495,7 +495,6 @@ export function buildYouTubeAcquisitionArgs(options: {
     '--no-write-thumbnail',
     '--no-write-subs',
     '--no-write-auto-subs',
-    '--no-archive',
     '--no-simulate',
     '--use-extractors',
     'youtube',

@@ -86,7 +86,7 @@ export const en = {
   'youtube.error.resource_limit':
     'The YouTube video or helper output exceeded a safety limit. Choose a shorter or smaller video.',
   'youtube.error.tool_failed':
-    'The experimental yt-dlp helper could not complete the acquisition. Check helper health and try again.',
+    'YouTube audio download failed. Retry, or reinstall yt-dlp from Settings if it keeps failing.',
   'youtube.error.cancelled': 'The YouTube acquisition was cancelled.',
   'youtube.error.unsupported_platform':
     'The experimental YouTube source is not supported on Windows. Use macOS or Linux; the command and helper are disabled here.',
@@ -104,7 +104,7 @@ export const en = {
     'Rights confirmation already accepted for policy {policy}; no repeated prompt will be shown.',
   'youtube.modal.policyRequired': 'Confirm once before downloading video audio.',
   'youtube.modal.rightsLabel': 'I have permission to transcribe this video',
-  'youtube.modal.urlName': 'YouTube VOD URL',
+  'youtube.modal.urlName': 'YouTube link',
   'youtube.modal.urlPlaceholder': 'https://www.youtube.com/watch?v=…',
   'youtube.modal.summary': 'Canonical video: {canonicalUrl} · Host: {host} · ID: {videoId}',
   'youtube.modal.invalidSummary': 'Enter one valid YouTube VOD URL.',
@@ -311,7 +311,7 @@ export const en = {
   'media.modal.noBatchModel': 'Install a compatible batch transcription model to continue.',
   'media.modal.manageModels': 'Manage models',
   'media.modal.youtubeFreshTranscript':
-    'Create a fresh local transcript from this video’s audio. Captions are not imported.',
+    'Creates a fresh local transcript from the video audio. This may take a while for long videos.',
   'media.modal.configureYouTubeHelper': 'Configure yt-dlp in Settings before starting.',
   'media.modal.enterYouTubeUrl': 'Paste a YouTube video link to continue.',
   'media.modal.invalidYouTubeUrl': 'Enter a link to one YouTube video.',
@@ -319,8 +319,7 @@ export const en = {
   'media.modal.selectFile': 'Choose an audio or video file to continue.',
   'media.modal.aiPreset': 'After transcription',
   'media.modal.aiPresetNone': 'Transcript only',
-  'media.modal.aiPresetDesc':
-    'Optional: run a preset on the transcript text, then review its result before applying it.',
+  'media.modal.aiPresetDesc': 'Optional AI step. Review its result before applying it.',
   'media.modal.aiProviderRequired': 'Choose an AI provider in Settings or select Transcript only.',
   'media.modal.aiPresetMissing': 'The selected AI preset is no longer available. Choose another.',
   'media.modal.aiNotReady':
@@ -333,8 +332,7 @@ export const en = {
   'media.modal.cancelled': 'Transcription cancelled.',
   'media.modal.alreadyRunning':
     'A media transcription is already running. Finish or cancel it before starting another.',
-  'media.modal.recoverableError':
-    'Could not complete transcription: {detail}. Fix the issue and try again.',
+  'media.modal.recoverableError': 'Could not complete transcription: {detail}',
   'media.modal.unknownFailure': 'An unexpected error occurred.',
   'commands.cancelAudioFile': 'Cancel local audio-file transcription',
   'commands.readAloud': 'Read aloud from selection or note start',
