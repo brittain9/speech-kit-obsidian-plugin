@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   installPinnedYouTubeHelper,
   YOUTUBE_HELPER_ASSETS,
+  YOUTUBE_HELPER_INSTALL_MAX_BYTES,
 } from '../src/media/youtube-helper-installer';
 
 const temporaryDirectories: string[] = [];
@@ -19,6 +20,11 @@ afterEach(async () => {
 });
 
 describe('pinned yt-dlp installation', () => {
+  it('allows the pinned standalone executables within a bounded download size', () => {
+    expect(YOUTUBE_HELPER_INSTALL_MAX_BYTES).toBeGreaterThan(40_446_224);
+    expect(YOUTUBE_HELPER_INSTALL_MAX_BYTES).toBeLessThanOrEqual(64 * 1024 * 1024);
+  });
+
   it('rejects platforms without a pinned executable before any network request', async () => {
     await expect(installPinnedYouTubeHelper('/unused', 'win32')).rejects.toThrow(/not supported/u);
     expect(requestUrl).not.toHaveBeenCalled();

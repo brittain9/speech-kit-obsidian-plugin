@@ -1,80 +1,54 @@
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
 import { Setting } from 'obsidian';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
+
+import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import { renderYouTubeHelperSettings } from '../src/settings/youtube-helper-settings';
 import { t } from '../src/shared/i18n';
 import { TestElement } from './__mocks__/obsidian';
 
 interface SettingFixture {
+  readonly name: string;
+  readonly descEl: TestElement;
+  readonly textComponents: unknown[];
+  readonly toggleComponents: unknown[];
   readonly buttonComponents: Array<{ click(): Promise<void> }>;
-  readonly textComponents: Array<{ change(value: string): void }>;
 }
 
-const temporaryPaths: string[] = [];
+const settingInstances = (): SettingFixture[] =>
+  (Setting as unknown as { instances: SettingFixture[] }).instances;
 
-afterEach(async () => {
-  (Setting as unknown as { instances: SettingFixture[] }).instances.length = 0;
-  await Promise.all(
-    temporaryPaths.splice(0).map((path) => rm(path, { force: true, recursive: true })),
-  );
+afterEach(() => {
+  settingInstances().length = 0;
 });
 
-describe('YouTube helper settings lifecycle', () => {
-  it('aborts stale probes and serializes path persistence so path A cannot win', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-settings-'));
-    temporaryPaths.push(root);
-    const helperA = join(root, 'a');
-    const helperB = join(root, 'b');
-    await writeFile(helperA, '#!/bin/sh\nsleep 10\n', { mode: 0o700 });
-    await writeFile(helperB, '#!/bin/sh\nprintf "yt-dlp 2026.08.19\\n"\n', { mode: 0o700 });
-    await chmod(helperA, 0o700);
-    await chmod(helperB, 0o700);
-    let resolvePersistence: () => void = () => {};
-    const persistenceGate = new Promise<void>((resolve) => {
-      resolvePersistence = resolve;
-    });
-    const persistOne = vi.fn(
-      async <K extends keyof PluginSettings>(key: K, value: PluginSettings[K]) => {
-        if (key === 'youtubeHelperPath' && value === helperA) await persistenceGate;
-      },
-    );
-    const access = {
-      getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, youtubeHelperPath: helperA }),
-      persistOne,
-    };
+describe('YouTube helper settings', () => {
+  it('keeps setup in one compact row and saves an installed helper', async () => {
+    const helperPath = '/tmp/speech-kit-yt-dlp';
+    const persistOne = vi.fn(async () => {});
     const parent = new TestElement();
     renderYouTubeHelperSettings(parent as unknown as HTMLElement, {
-      access,
-      getSettings: access.getSettings,
-    });
-    const status = parent.findByClass('local-stt-youtube-helper-status');
-    const liveStatus = status?.children.at(-1);
-    expect(liveStatus?.getAttribute('role')).toBe('status');
-    expect(liveStatus?.getAttribute('aria-live')).toBe('polite');
-    expect(liveStatus?.getAttribute('aria-atomic')).toBe('true');
-    const setting = (Setting as unknown as { instances: SettingFixture[] }).instances[1];
-    const text = setting?.textComponents[0];
-    const check = setting?.buttonComponents[0];
-    if (setting === undefined || text === undefined || check === undefined) {
-      throw new Error('Expected helper setting controls');
-    }
-
-    await check.click();
-    text.change(helperB);
-    resolvePersistence();
-    await vi.waitFor(() => {
-      expect(persistOne).toHaveBeenCalledWith('youtubeHelperPath', helperB);
+      access: {
+        getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+        persistOne,
+      },
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      installPinnedHelper: async () => helperPath,
     });
 
-    expect(persistOne.mock.calls.map(([, value]) => value)).toEqual([helperB]);
+    const helperSetting = settingInstances()[1];
+    expect(helperSetting).toBeDefined();
+    expect(helperSetting?.textComponents).toHaveLength(0);
+    expect(helperSetting?.buttonComponents).toHaveLength(1);
+    const status = helperSetting?.descEl.findByClass('local-stt-youtube-helper-status');
+    expect(status?.getAttribute('role')).toBe('status');
+    expect(status?.getAttribute('aria-live')).toBe('polite');
+    expect(status?.textContent).toBe(t('youtube.settings.helperMissing'));
+
+    await helperSetting?.buttonComponents[0]?.click();
+    expect(persistOne).toHaveBeenCalledWith('youtubeHelperPath', helperPath);
+    expect(status?.textContent).toBe(t('youtube.settings.helperError'));
   });
-});
 
-describe('YouTube helper settings platform gate', () => {
   it('shows a localized unsupported message and no helper controls on Windows', () => {
     const parent = new TestElement();
     renderYouTubeHelperSettings(parent as unknown as HTMLElement, {
@@ -85,17 +59,7 @@ describe('YouTube helper settings platform gate', () => {
       getSettings: () => ({}) as never,
       isPlatformSupported: () => false,
     });
-    const fixture = (
-      Setting as unknown as {
-        instances: Array<{
-          buttonComponents: unknown[];
-          descEl: { textContent: string };
-          name: string;
-          textComponents: unknown[];
-          toggleComponents: unknown[];
-        }>;
-      }
-    ).instances[0];
+    const fixture = settingInstances()[0];
     expect(fixture?.name).toBe(t('youtube.settings.helperName'));
     expect(fixture?.descEl.textContent).toBe(t('youtube.settings.unsupportedPlatform'));
     expect(fixture?.toggleComponents).toHaveLength(0);

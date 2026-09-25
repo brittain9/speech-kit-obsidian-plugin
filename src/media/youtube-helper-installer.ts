@@ -25,7 +25,8 @@ export const YOUTUBE_HELPER_ASSETS: Readonly<Partial<Record<NodeJS.Platform, You
     },
   };
 
-export const YOUTUBE_HELPER_INSTALL_MAX_BYTES = 32 * 1024 * 1024;
+// The pinned macOS and Linux standalone executables are about 37 and 40 MB.
+export const YOUTUBE_HELPER_INSTALL_MAX_BYTES = 64 * 1024 * 1024;
 
 export async function installPinnedYouTubeHelper(
   pluginDirectory: string,

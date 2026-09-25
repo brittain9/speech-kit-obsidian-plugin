@@ -116,23 +116,24 @@ export const en = {
   'youtube.modal.helperError': 'The selected helper is missing, unsupported, or could not be run.',
   'youtube.modal.submitError':
     'Enter a valid single VOD URL, select a supported absolute helper, and confirm rights.',
-  'youtube.settings.enableName': 'Enable experimental YouTube media source',
+  'youtube.settings.enableName': 'YouTube transcripts',
   'youtube.settings.enableDesc':
-    'Experimental and disabled by default. Supported on macOS and Linux only. Enable only after selecting a supported helper and accepting the one-time rights policy in the command modal.',
-  'youtube.settings.helperName': 'Experimental YouTube media source',
-  'youtube.settings.helperDesc':
-    'Unofficial yt-dlp helper. Select an absolute executable path; suggestions are discovered from PATH without executing candidates. No bundled installer or retention is provided.',
+    'Create a fresh local transcript from video audio. Experimental on macOS and Linux.',
+  'youtube.settings.helperName': 'YouTube downloader',
+  'youtube.settings.helperDesc': 'Install the verified yt-dlp helper once to download audio.',
   'youtube.settings.suggestions': 'Existing PATH suggestions: {suggestions}',
   'youtube.settings.policyAccepted': 'Rights confirmation: accepted for {policy}.',
   'youtube.settings.policyRequired': 'Rights confirmation: required before the first YouTube job.',
   'youtube.settings.checkHelper': 'Check helper',
-  'youtube.settings.installHelper': 'Install pinned yt-dlp',
+  'youtube.settings.installHelper': 'Install yt-dlp',
   'youtube.settings.installingHelper': 'Downloading and verifying yt-dlp…',
-  'youtube.settings.installFailed':
-    'Could not install the verified yt-dlp release. Try again or choose an existing executable.',
+  'youtube.settings.installFailed': 'Could not install yt-dlp. Try again.',
+  'youtube.settings.installFailedDetail': 'Could not install yt-dlp: {reason}',
+  'youtube.settings.helperMissing': 'Helper not installed.',
+  'youtube.settings.checkingHelper': 'Checking installed helper…',
   'youtube.settings.pathRequired': 'Choose an absolute executable path. No path was saved.',
   'youtube.settings.pathSaved': 'Selected helper path saved. Check the version explicitly.',
-  'youtube.settings.helperReady': 'Helper ready: {version} ({path})',
+  'youtube.settings.helperReady': 'Ready · yt-dlp {version}',
   'youtube.settings.helperError':
     'The selected helper could not be run or is not a supported version.',
   'youtube.settings.unsupportedPlatform':
