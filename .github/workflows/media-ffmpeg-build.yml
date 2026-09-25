@@ -32,6 +32,10 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y nasm
 
+      - name: Install macOS Intel assembler
+        if: matrix.platform == 'macos-x86_64'
+        run: brew install nasm
+
       - name: Set up Windows native build tools
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
