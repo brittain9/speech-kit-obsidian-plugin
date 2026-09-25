@@ -11,6 +11,7 @@ describe('YouTube media failure adapter', () => {
     ['helper_version_unsupported', 'youtube.error.helper_version_unsupported'],
     ['resource_limit', 'youtube.error.resource_limit'],
     ['tool_failed', 'youtube.error.helper_probe_failed'],
+    ['unsupported_platform', 'youtube.error.unsupported_platform'],
   ] as const)('maps helper %s to actionable copy', (code, expectedKey) => {
     const feedback = { show: vi.fn() };
     const mapper = new AudioFileFailureMapper({

@@ -28,9 +28,8 @@ export interface JobCleanupOptions {
 export function supportsDescriptorRelativeCleanup(
   platform: NodeJS.Platform = process.platform,
 ): boolean {
-  // Descriptor inheritance is attempted on every supported desktop runtime;
-  // the child verifies identity before it can remove anything.
-  return platform === 'linux' || platform === 'darwin' || platform === 'win32';
+  // Windows has no portable descriptor-backed directory cwd for this child.
+  return platform === 'linux' || platform === 'darwin';
 }
 
 export class PathMediaLeaseError extends Error {
@@ -530,8 +529,9 @@ async function removeRootContentsFromHeldDescriptor(
     root.handle.fd,
   ];
   const spawnOptions = {
-    cwd: '/dev/fd/3',
+    ...(platform === 'linux' || platform === 'darwin' ? { cwd: '/dev/fd/3' } : {}),
     env: {
+      ELECTRON_RUN_AS_NODE: '1',
       LANG: 'C',
       LC_ALL: 'C',
       PATH: '',

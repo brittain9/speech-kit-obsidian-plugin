@@ -88,6 +88,8 @@ export const en = {
   'youtube.error.tool_failed':
     'The experimental yt-dlp helper could not complete the acquisition. Check helper health and try again.',
   'youtube.error.cancelled': 'The YouTube acquisition was cancelled.',
+  'youtube.error.unsupported_platform':
+    'The experimental YouTube source is not supported on Windows. Use macOS or Linux; the command and helper are disabled here.',
   'youtube.modal.experimentalBadge': 'Experimental',
   'youtube.modal.disclosure':
     'Unofficial helper disclosure: yt-dlp contacts YouTube using an external executable and may stop working when YouTube changes. Speech Kit does not bundle or update it.',
@@ -116,7 +118,7 @@ export const en = {
     'Enter a valid single VOD URL, select a supported absolute helper, and confirm rights.',
   'youtube.settings.enableName': 'Enable experimental YouTube media source',
   'youtube.settings.enableDesc':
-    'Experimental and disabled by default. Enable only after selecting a supported helper and accepting the one-time rights policy in the command modal.',
+    'Experimental and disabled by default. Supported on macOS and Linux only. Enable only after selecting a supported helper and accepting the one-time rights policy in the command modal.',
   'youtube.settings.helperName': 'Experimental YouTube media source',
   'youtube.settings.helperDesc':
     'Unofficial yt-dlp helper. Select an absolute executable path; suggestions are discovered from PATH without executing candidates. No bundled installer or retention is provided.',
@@ -129,6 +131,8 @@ export const en = {
   'youtube.settings.helperReady': 'Helper ready: {version} ({path})',
   'youtube.settings.helperError':
     'The selected helper could not be run or is not a supported version.',
+  'youtube.settings.unsupportedPlatform':
+    'Not available on Windows. The experimental YouTube source and yt-dlp helper are disabled here; use macOS or Linux.',
   'media-llm-empty':
     'The media transcript is empty or the AI provider returned no text. The raw transcript was kept; record a non-empty transcript or check the provider and try again.',
   'media-llm-failed':

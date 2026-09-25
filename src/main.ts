@@ -28,6 +28,7 @@ import { createConfiguredLlmRouter } from './llm/runtime';
 import { LocalMediaSource } from './media/local-media-source';
 import type { LocalMediaAcquireRequest, MediaTranscriptionEntry } from './media/media-source';
 import { youtubeMediaFailureAdapter } from './media/youtube-failure-mapper';
+import { isYouTubeSupportedPlatform } from './media/youtube-helper';
 import {
   sweepAbandonedYouTubeJobs,
   YOUTUBE_POLICY_VERSION,
@@ -369,7 +370,7 @@ export default class LocalSttPlugin extends Plugin {
     > = {
       createRequest: (context, request) => youtubeMediaSource.createRequest(context, request),
       id: youtubeMediaSource.id,
-      isEnabled: () => this.settings.youtubeMediaSourceEnabled,
+      isEnabled: () => isYouTubeSupportedPlatform() && this.settings.youtubeMediaSourceEnabled,
       source: youtubeMediaSource,
     };
     this.audioFileTranscriptionController = new AudioFileTranscriptionController({
@@ -490,6 +491,7 @@ export default class LocalSttPlugin extends Plugin {
       isAudioFileTranscriptionActive: () =>
         this.audioFileTranscriptionController?.isCaptureActive() ?? false,
       isYouTubeMediaSourceEnabled: () => this.settings.youtubeMediaSourceEnabled,
+      isYouTubePlatformSupported: isYouTubeSupportedPlatform,
       isReadAloudActive: () => this.requireReadAloudController().isActive(),
       plugin: this,
       readAloud: (editor) => this.requireReadAloudController().read(editor),
@@ -507,7 +509,7 @@ export default class LocalSttPlugin extends Plugin {
       stopDictation: async () => this.requireDictationController().stopDictation(),
       transcribeAudioFile: async () => this.requireAudioFileTranscriptionController().transcribe(),
       transcribeYouTube: async () => {
-        if (!this.settings.youtubeMediaSourceEnabled) return;
+        if (!isYouTubeSupportedPlatform() || !this.settings.youtubeMediaSourceEnabled) return;
         const modal = this.youtubeModalSessions.open(this.app, {
           getHelperPath: () => this.settings.youtubeHelperPath,
           getPolicyVersion: () => this.settings.youtubePolicyVersion,

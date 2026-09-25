@@ -6,6 +6,7 @@ import { Setting } from 'obsidian';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
 import { renderYouTubeHelperSettings } from '../src/settings/youtube-helper-settings';
+import { t } from '../src/shared/i18n';
 import { TestElement } from './__mocks__/obsidian';
 
 interface SettingFixture {
@@ -70,5 +71,35 @@ describe('YouTube helper settings lifecycle', () => {
     });
 
     expect(persistOne.mock.calls.map(([, value]) => value)).toEqual([helperB]);
+  });
+});
+
+describe('YouTube helper settings platform gate', () => {
+  it('shows a localized unsupported message and no helper controls on Windows', () => {
+    const parent = new TestElement();
+    renderYouTubeHelperSettings(parent as unknown as HTMLElement, {
+      access: {
+        getSettings: () => ({}) as never,
+        persistOne: vi.fn(async () => {}),
+      },
+      getSettings: () => ({}) as never,
+      isPlatformSupported: () => false,
+    });
+    const fixture = (
+      Setting as unknown as {
+        instances: Array<{
+          buttonComponents: unknown[];
+          descEl: { textContent: string };
+          name: string;
+          textComponents: unknown[];
+          toggleComponents: unknown[];
+        }>;
+      }
+    ).instances[0];
+    expect(fixture?.name).toBe(t('youtube.settings.helperName'));
+    expect(fixture?.descEl.textContent).toBe(t('youtube.settings.unsupportedPlatform'));
+    expect(fixture?.toggleComponents).toHaveLength(0);
+    expect(fixture?.textComponents).toHaveLength(0);
+    expect(fixture?.buttonComponents).toHaveLength(0);
   });
 });

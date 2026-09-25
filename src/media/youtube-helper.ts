@@ -14,7 +14,12 @@ export type YouTubeHelperFailureCode =
   | 'helper_version_unsupported'
   | 'tool_failed'
   | 'cancelled'
-  | 'resource_limit';
+  | 'resource_limit'
+  | 'unsupported_platform';
+
+export function isYouTubeSupportedPlatform(platform: NodeJS.Platform = process.platform): boolean {
+  return platform === 'linux' || platform === 'darwin';
+}
 
 const VERSION_PATTERN = /(?:^|\s)yt-dlp\s+(\d{4}\.\d{2}\.\d{2})(?:\s|$)/iu;
 const BARE_VERSION_PATTERN = /^(\d{4}\.\d{2}\.\d{2})$/u;
@@ -96,6 +101,13 @@ export async function probeYtDlpVersion(
   executablePath: string,
   options: YtDlpVersionProbeOptions = {},
 ): Promise<YtDlpVersion> {
+  const platform = options.platform ?? process.platform;
+  if (!isYouTubeSupportedPlatform(platform)) {
+    throw new YouTubeHelperError(
+      'unsupported_platform',
+      'The experimental YouTube helper is not supported on Windows.',
+    );
+  }
   const path = normalizeYouTubeHelperPath(executablePath);
   if (path === null) {
     throw new YouTubeHelperError(

@@ -26,6 +26,7 @@ import {
 } from './path-backed-media-lease';
 import { runManagedProcess } from './process-runner';
 import {
+  isYouTubeSupportedPlatform,
   normalizeYouTubeHelperPath,
   probeYtDlpVersion,
   YouTubeHelperError,
@@ -65,6 +66,7 @@ export type YouTubeFailureCode =
   | 'helper_version_unsupported'
   | 'resource_limit'
   | 'tool_failed'
+  | 'unsupported_platform'
   | 'cancelled';
 
 export interface YouTubeConsentGrant {
@@ -185,6 +187,12 @@ export class YouTubeMediaSource implements MediaSource<YouTubeMediaAcquireReques
   ): AsyncIterable<AcquisitionEvent<YouTubeMediaLease>> {
     if (!isYouTubeMediaAcquireRequest(request)) {
       throw new YouTubeAcquisitionError('invalid_or_unsupported_url', 'Enter one YouTube VOD URL.');
+    }
+    if (!isYouTubeSupportedPlatform(this.platform)) {
+      throw new YouTubeAcquisitionError(
+        'unsupported_platform',
+        'The experimental YouTube source is not supported on Windows.',
+      );
     }
     throwIfCancelled(request.signal);
     const video = request.provider.ref;

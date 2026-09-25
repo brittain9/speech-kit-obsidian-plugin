@@ -9,6 +9,7 @@ import {
   languageFeatureCoverage,
 } from '../language/dictation-language';
 import { describeMediaLlmConfiguration } from '../llm/media-llm-policy';
+import { isYouTubeSupportedPlatform } from '../media/youtube-helper';
 import type { ModelPickerOptions } from '../models/manage-models-modal';
 import type { ModelInstallManager } from '../models/model-install-manager';
 import {
@@ -581,6 +582,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
     renderYouTubeHelperSettings(advancedSection, {
       access: this.access,
       getSettings: this.dependencies.getSettings,
+      isPlatformSupported: isYouTubeSupportedPlatform,
     });
 
     addToggleSetting(advancedSection, this.access, {

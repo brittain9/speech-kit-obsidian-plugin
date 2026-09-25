@@ -33,7 +33,9 @@ import {
   discoverYtDlpCandidates,
   interpretVersionResult,
   isCompatibleYtDlpVersion,
+  isYouTubeSupportedPlatform,
   parseYtDlpVersion,
+  probeYtDlpVersion,
 } from '../src/media/youtube-helper';
 import {
   buildYouTubeAcquisitionArgs,
@@ -174,6 +176,19 @@ describe('yt-dlp helper policy', () => {
     });
     expect(candidates).toEqual(['/one/yt-dlp']);
     expect(calls).toEqual(['/one/yt-dlp', '/one/yt-dlp_linux', '/one/yt-dlp_macos']);
+  });
+
+  it('rejects Windows before spawning the helper', async () => {
+    const spawnProcess = vi.fn();
+    expect(isYouTubeSupportedPlatform('win32')).toBe(false);
+    expect(isYouTubeSupportedPlatform('darwin')).toBe(true);
+    await expect(
+      probeYtDlpVersion('/private/yt-dlp', {
+        platform: 'win32',
+        spawnProcess: spawnProcess as unknown as typeof spawn,
+      }),
+    ).rejects.toMatchObject({ code: 'unsupported_platform' });
+    expect(spawnProcess).not.toHaveBeenCalled();
   });
 
   it('parses and accepts only the pinned-compatible version floor', () => {
@@ -433,58 +448,24 @@ describe('YouTube path-backed MediaLease', () => {
     expect(spawnMock).toHaveBeenCalledOnce();
   });
 
-  it('uses the fixed descriptor child on injected Windows cleanup', async () => {
-    class ImmediateChild extends EventEmitter {
-      pid: number | undefined;
-      stdout = null;
-      stderr = null;
-      kill = vi.fn();
-    }
-
+  it('does not spawn a cleanup child on Windows', async () => {
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-lease-win-cleanup-'));
     temporaryPaths.push(root);
     const jobRoot = join(root, 'job');
     await (await import('node:fs/promises')).mkdir(jobRoot, { mode: 0o700 });
-    await writeFile(join(jobRoot, 'owner.json'), JSON.stringify(validOwnerMarker()));
+    const marker = validOwnerMarker();
+    await writeFile(join(jobRoot, 'owner.json'), JSON.stringify(marker));
     const capability = await claimJobRoot(jobRoot);
-    const calls: Array<{
-      args: readonly string[];
-      command: string;
-      options?: { cwd?: string; stdio?: readonly unknown[] };
-    }> = [];
-    const spawnMock = vi.fn(
-      (
-        command: string,
-        args: readonly string[],
-        options?: { cwd?: string; stdio?: readonly unknown[] },
-      ): ImmediateChild => {
-        calls.push({ args, command, ...(options === undefined ? {} : { options }) });
-        if (command === process.execPath) {
-          for (const entry of readdirSync(jobRoot, { withFileTypes: true })) {
-            rmSync(join(jobRoot, entry.name), { force: true, recursive: true });
-          }
-        }
-        const child = new ImmediateChild();
-        child.pid = command.endsWith('taskkill.exe') ? undefined : 424_245;
-        queueMicrotask(() => {
-          child.emit('exit', 0);
-          child.emit('close', 0);
-        });
-        return child;
-      },
-    );
+    const spawnMock = vi.fn();
     await removeMediaJob(capability, {
       platform: 'win32',
       spawnProcess: spawnMock as unknown as NonNullable<JobCleanupOptions['spawnProcess']>,
       timeoutMs: 100,
     });
-    const cleanupCall = calls.find(({ command }) => command === process.execPath);
-    expect(cleanupCall?.args[0]).toBe('-e');
-    expect(cleanupCall?.args[1]).toContain('fstatSync(3)');
-    expect(cleanupCall?.args[1]).toContain("statSync('.')");
-    expect(cleanupCall?.options?.cwd).toBe('/dev/fd/3');
-    expect(cleanupCall?.options?.stdio?.[3]).toEqual(expect.any(Number));
-    await expect(readdir(jobRoot)).rejects.toThrow();
+    expect(spawnMock).not.toHaveBeenCalled();
+    await expect(readFile(join(jobRoot, 'owner.json'))).resolves.toEqual(
+      Buffer.from(JSON.stringify(marker)),
+    );
   });
 
   it('keeps marker reads on the held descriptor after root replacement', async () => {
@@ -641,6 +622,7 @@ describe('YouTube path-backed MediaLease', () => {
       ['-e', expect.stringContaining('fstatSync(3)')],
       expect.objectContaining({
         cwd: '/dev/fd/3',
+        env: expect.objectContaining({ ELECTRON_RUN_AS_NODE: '1' }),
         stdio: ['ignore', 'ignore', 'ignore', expect.any(Number)],
       }),
     );
@@ -668,6 +650,24 @@ describe('YouTube path-backed MediaLease', () => {
 });
 
 describe('YouTubeMediaSource with a local fake helper', () => {
+  it('rejects Windows before spawning the helper or cleanup child', async () => {
+    const helperSpawn = vi.fn();
+    const cleanupSpawn = vi.fn();
+    const source = new YouTubeMediaSource({
+      cleanupSpawnProcess: cleanupSpawn as unknown as typeof spawn,
+      getHelperPath: () => '/private/yt-dlp',
+      platform: 'win32',
+      spawnProcess: helperSpawn as unknown as typeof spawn,
+    });
+    await expect(
+      collect(source.acquire(youtubeRequest(new AbortController().signal))),
+    ).rejects.toMatchObject({
+      code: 'unsupported_platform',
+    });
+    expect(helperSpawn).not.toHaveBeenCalled();
+    expect(cleanupSpawn).not.toHaveBeenCalled();
+  });
+
   it('acquires bounded metadata into the same temporary lease boundary', async () => {
     const helper = await makeHelper(false);
     const root = await mkdtemp(join(tmpdir(), 'speech-kit-youtube-test-'));

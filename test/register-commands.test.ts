@@ -78,6 +78,50 @@ describe('registerCommands', () => {
     expect(clearCommand?.checkCallback?.(true)).toBe(false);
   });
 
+  it('hides the experimental YouTube command when the provider is unsupported or disabled', () => {
+    const commands: Command[] = [];
+    const plugin = {
+      addCommand: vi.fn((command: Command) => {
+        commands.push(command);
+      }),
+    } as unknown as Plugin;
+    const transcribeYouTube = vi.fn(async () => {});
+    registerCommands({
+      cancelAudioFile: vi.fn(async () => {}),
+      cancelDictation: vi.fn(async () => {}),
+      clearLastUtterance: vi.fn(),
+      clearRawTranscriptRecovery: vi.fn(),
+      checkSidecarHealth: vi.fn(async () => {}),
+      copyLastUtterance: vi.fn(),
+      copyRawTranscript: vi.fn(),
+      hasLastUtterance: vi.fn(() => false),
+      hasRawTranscriptRecovery: vi.fn(() => false),
+      isAudioFileTranscriptionActive: vi.fn(() => false),
+      isReadAloudActive: vi.fn(() => false),
+      isYouTubeMediaSourceEnabled: vi.fn(() => true),
+      isYouTubePlatformSupported: vi.fn(() => false),
+      plugin,
+      readAloud: vi.fn(async () => {}),
+      readAloudFromCursor: vi.fn(async () => {}),
+      reinsertLastUtterance: vi.fn(),
+      restoreRawTranscript: vi.fn(),
+      restartSidecar: vi.fn(async () => {}),
+      startDictation: vi.fn(async () => {}),
+      stopDictation: vi.fn(),
+      stopReadAloud: vi.fn(),
+      transcribeAudioFile: vi.fn(async () => {}),
+      transcribeYouTube,
+      translateNote: vi.fn(),
+      translateSelection: vi.fn(),
+      toggleDictation: vi.fn(async () => {}),
+      toggleReadAloudPaused: vi.fn(async () => {}),
+    });
+    const command = commands.find(({ id }) => id === 'transcribe-youtube-video');
+    expect(command?.checkCallback?.(true)).toBe(false);
+    expect(command?.checkCallback?.(false)).toBe(false);
+    expect(transcribeYouTube).not.toHaveBeenCalled();
+  });
+
   it('gates raw transcript recovery commands on one shared availability source', () => {
     const commands: Command[] = [];
     const plugin = {

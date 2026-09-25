@@ -24,6 +24,7 @@ const YOUTUBE_ERROR_KEYS: Readonly<Record<YouTubeFailureCode, YouTubeFeedbackKey
   helper_version_unsupported: 'youtube.error.helper_version_unsupported',
   resource_limit: 'youtube.error.resource_limit',
   tool_failed: 'youtube.error.tool_failed',
+  unsupported_platform: 'youtube.error.unsupported_platform',
   cancelled: 'youtube.error.cancelled',
 };
 
@@ -32,6 +33,7 @@ const HELPER_ERROR_KEYS: Readonly<Record<YouTubeHelperFailureCode, YouTubeFeedba
   helper_version_unsupported: 'youtube.error.helper_version_unsupported',
   resource_limit: 'youtube.error.resource_limit',
   tool_failed: 'youtube.error.helper_probe_failed',
+  unsupported_platform: 'youtube.error.unsupported_platform',
   cancelled: 'youtube.error.cancelled',
 };
 

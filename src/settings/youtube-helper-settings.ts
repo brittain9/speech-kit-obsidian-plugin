@@ -2,6 +2,7 @@ import { Setting } from 'obsidian';
 
 import {
   discoverYtDlpCandidates,
+  isYouTubeSupportedPlatform,
   normalizeYouTubeHelperPath,
   probeYtDlpVersion,
 } from '../media/youtube-helper';
@@ -17,12 +18,19 @@ import { addToggleSetting } from './setting-helpers';
 export interface YouTubeHelperSettingsDependencies {
   readonly access: SettingAccess;
   readonly getSettings: () => PluginSettings;
+  readonly isPlatformSupported?: () => boolean;
 }
 
 export function renderYouTubeHelperSettings(
   parent: HTMLElement,
   dependencies: YouTubeHelperSettingsDependencies,
 ): Setting {
+  const isPlatformSupported = dependencies.isPlatformSupported ?? isYouTubeSupportedPlatform;
+  if (!isPlatformSupported()) {
+    return new Setting(parent)
+      .setName(t('youtube.settings.helperName'))
+      .setDesc(t('youtube.settings.unsupportedPlatform'));
+  }
   addToggleSetting(parent, dependencies.access, {
     desc: t('youtube.settings.enableDesc'),
     key: 'youtubeMediaSourceEnabled',
