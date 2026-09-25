@@ -7,7 +7,7 @@ import { type ManagedProcessResult, runManagedProcess } from './process-runner';
 
 export const YOUTUBE_HELPER_PINNED_VERSION = '2026.08.19';
 export const YOUTUBE_HELPER_MAX_VERSION_OUTPUT_BYTES = 8 * 1024;
-export const YOUTUBE_HELPER_PROBE_TIMEOUT_MS = 10_000;
+export const YOUTUBE_HELPER_PROBE_TIMEOUT_MS = 30_000;
 
 export type YouTubeHelperFailureCode =
   | 'helper_unavailable'
