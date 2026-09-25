@@ -18,6 +18,7 @@ export interface MediaTranscriptionJobOptions {
   readonly language: DictationLanguage;
   readonly modelSelection: SelectedModel;
   readonly timestampDensity: TimestampDensity;
+  readonly timestampSparseIntervalMs?: number;
   readonly timestampsEnabled: boolean;
   readonly transcriptFormatting: TranscriptFormattingMode;
   /** null means transcript only; undefined preserves legacy non-modal callers. */

@@ -1107,7 +1107,7 @@ function createRendererOptions(
       enabled: options?.timestampsEnabled ?? settings.timestampsEnabled,
       header: settings.timestampSessionHeader,
       sessionStartUnixMs,
-      sparseIntervalMs: settings.timestampSparseIntervalMs,
+      sparseIntervalMs: options?.timestampSparseIntervalMs ?? settings.timestampSparseIntervalMs,
     },
     transcriptFormatting: options?.transcriptFormatting ?? settings.transcriptFormatting,
   };

@@ -20,6 +20,7 @@ import type {
   TimestampDensity,
   TranscriptFormattingMode,
 } from '../settings/plugin-settings';
+import { validateTimestampIntervalSeconds } from '../settings/plugin-settings';
 import { t } from '../shared/i18n';
 import { mediaProgressText } from './media-progress-presenter';
 
@@ -78,6 +79,7 @@ class MediaTranscriptionModal extends Modal {
   private rightsConfirmed: boolean;
   private timestampEnabled: boolean;
   private timestampDensity: TimestampDensity;
+  private timestampSparseIntervalSeconds: string;
   private diarizationEnabled: boolean;
   private language: DictationLanguage;
   private modelSelectionKey = '';
@@ -102,6 +104,7 @@ class MediaTranscriptionModal extends Modal {
     this.tab = initialTab;
     this.rightsConfirmed = hasYouTubeRightsConfirmation(dependencies.getYouTubePolicyVersion());
     this.timestampEnabled = settings.timestampsEnabled;
+    this.timestampSparseIntervalSeconds = String(settings.timestampSparseIntervalMs / 1_000);
     this.timestampDensity =
       settings.timestampDensity === 'paragraph' && settings.transcriptFormatting !== 'smart'
         ? 'sparse'
@@ -305,8 +308,24 @@ class MediaTranscriptionModal extends Modal {
         dropdown.setValue(this.timestampDensity);
         dropdown.onChange((value) => {
           this.timestampDensity = value as TimestampDensity;
+          this.render();
         });
       });
+      if (this.timestampDensity === 'sparse') {
+        new Setting(grid)
+          .setName(t('settings.timestamps.interval.name'))
+          .setDesc(t('settings.timestamps.interval.desc', { min: 10, max: 600 }))
+          .addText((text) => {
+            text.inputEl.type = 'number';
+            text.inputEl.min = '10';
+            text.inputEl.max = '600';
+            text.inputEl.step = '1';
+            text.setValue(this.timestampSparseIntervalSeconds).onChange((value) => {
+              this.timestampSparseIntervalSeconds = value;
+              this.updatePrimaryButton();
+            });
+          });
+      }
     }
     new Setting(grid).setName(t('settings.speakerLabels.name')).addToggle((toggle) => {
       toggle.setValue(this.diarizationEnabled).onChange((value) => {
@@ -400,6 +419,10 @@ class MediaTranscriptionModal extends Modal {
     if (this.mediaPresetRef !== null && this.dependencies.getSettings().llmRoutingPolicy === null) {
       return t('media.modal.aiProviderRequired');
     }
+    if (this.timestampEnabled && this.timestampDensity === 'sparse') {
+      const interval = validateTimestampIntervalSeconds(this.timestampSparseIntervalSeconds);
+      if (!interval.valid) return interval.message;
+    }
     return null;
   }
 
@@ -438,11 +461,15 @@ class MediaTranscriptionModal extends Modal {
       this.errorEl?.setText(t('media.modal.aiPresetMissing'));
       return;
     }
+    const interval = validateTimestampIntervalSeconds(this.timestampSparseIntervalSeconds);
     const options: MediaTranscriptionJobOptions = {
       diarizationEnabled: this.diarizationEnabled,
       language: this.language,
       modelSelection: model.selection,
       timestampDensity: this.timestampDensity,
+      timestampSparseIntervalMs: interval.valid
+        ? interval.milliseconds
+        : settings.timestampSparseIntervalMs,
       timestampsEnabled: this.timestampEnabled,
       transcriptFormatting: this.transcriptFormatting,
       mediaLlmSnapshot:

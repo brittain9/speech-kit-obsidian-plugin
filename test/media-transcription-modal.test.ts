@@ -117,6 +117,7 @@ describe('media transcription modal eligibility', () => {
     const saved = {
       ...DEFAULT_PLUGIN_SETTINGS,
       llmRoutingPolicy: { kind: 'fixed' as const, providerId: 'ollama' as const },
+      timestampsEnabled: true,
     };
     const startYouTube = vi.fn(async (_url: string, _options: MediaTranscriptionJobOptions) => {});
     const registry = new MediaTranscriptionModalRegistry();
@@ -155,6 +156,10 @@ describe('media transcription modal eligibility', () => {
       .find((setting) => setting.name === t('media.modal.aiPreset'))
       ?.dropdownComponents[0]?.change('builtin:tldr');
     settings()
+      .filter((setting) => setting.name === t('settings.timestamps.interval.name'))
+      .at(-1)
+      ?.textComponents[0]?.change('45');
+    settings()
       .filter((setting) => setting.name === t('youtube.modal.urlName'))
       .at(-1)
       ?.textComponents[0]?.change('https://www.youtube.com/watch?v=8MxG6tOkdNY&t=407s');
@@ -167,10 +172,12 @@ describe('media transcription modal eligibility', () => {
     await vi.waitFor(() => expect(startYouTube).toHaveBeenCalledOnce());
     expect(startYouTube.mock.calls[0]?.[1]).toMatchObject({
       mediaLlmSnapshot: { output: 'add_above', prompt: expect.stringContaining('summary') },
+      timestampSparseIntervalMs: 45_000,
     });
     expect(saved.llmPostprocessActivePresetRef).toBe(
       DEFAULT_PLUGIN_SETTINGS.llmPostprocessActivePresetRef,
     );
+    expect(saved.timestampSparseIntervalMs).toBe(DEFAULT_PLUGIN_SETTINGS.timestampSparseIntervalMs);
     registry.closeAll();
   });
 });
