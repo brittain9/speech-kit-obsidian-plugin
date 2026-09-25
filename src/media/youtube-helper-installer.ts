@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { chmod, lstat, mkdir, open, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { requestUrl } from 'obsidian';
@@ -41,6 +42,27 @@ export async function installPinnedYouTubeHelper(
     throw new Error(`No pinned yt-dlp release asset is available for ${platform}.`);
   }
 
+  const helperDirectory = join(pluginDirectory, 'data', 'media-tools');
+  const executablePath = join(helperDirectory, asset.executableName);
+  const existing = await lstat(executablePath).catch(() => null);
+  if (existing?.isSymbolicLink()) {
+    throw new Error('The configured yt-dlp destination is a symbolic link.');
+  }
+  if (existing !== null && !existing.isFile()) {
+    throw new Error('The configured yt-dlp destination is not a regular file.');
+  }
+  if (existing !== null && existing.size <= YOUTUBE_HELPER_INSTALL_MAX_BYTES) {
+    const hash = createHash('sha256');
+    for await (const chunk of createReadStream(executablePath)) {
+      if (!Buffer.isBuffer(chunk)) throw new Error('Could not read the existing yt-dlp helper.');
+      hash.update(chunk);
+    }
+    if (hash.digest('hex') === asset.sha256) {
+      await chmod(executablePath, 0o700);
+      return executablePath;
+    }
+  }
+
   const url = `https://github.com/yt-dlp/yt-dlp/releases/download/${YOUTUBE_HELPER_PINNED_VERSION}/${asset.assetName}`;
   const response = await requestUrl({ url, method: 'GET', throw: false });
   if (response.status < 200 || response.status >= 300) {
@@ -55,14 +77,8 @@ export async function installPinnedYouTubeHelper(
     throw new Error('The pinned yt-dlp download did not match its verified SHA-256 hash.');
   }
 
-  const helperDirectory = join(pluginDirectory, 'data', 'media-tools');
   await mkdir(helperDirectory, { recursive: true, mode: 0o700 });
-  const executablePath = join(helperDirectory, asset.executableName);
   const temporaryPath = join(helperDirectory, `.yt-dlp-${randomUUID()}.partial`);
-  const existing = await lstat(executablePath).catch(() => null);
-  if (existing?.isSymbolicLink()) {
-    throw new Error('The configured yt-dlp destination is a symbolic link.');
-  }
 
   let handle: Awaited<ReturnType<typeof open>> | null = null;
   try {
