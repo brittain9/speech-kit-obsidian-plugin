@@ -169,6 +169,7 @@ export const en = {
   'llm.mediaPayload.transcriptOnly': 'transcript text only',
   'llm.mediaPayload.transcriptAndBoundedNoteContext': 'transcript text and bounded note context',
   'media.progress.acquire': 'Preparing media…',
+  'media.progress.download': 'Downloading video audio…',
   'media.progress.decode': 'Decoding media…',
   'media.progress.transcribe': 'Transcribing media…',
   'media.progress.format': 'Formatting transcript…',

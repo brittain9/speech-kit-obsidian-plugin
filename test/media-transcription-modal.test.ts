@@ -12,7 +12,12 @@ interface SettingFixture {
   readonly name: string;
   readonly textComponents: Array<{ change(value: string): void }>;
   readonly dropdownComponents: Array<{ change(value: string): void }>;
-  readonly buttonComponents: Array<{ disabled: boolean; text: string; click(): Promise<void> }>;
+  readonly buttonComponents: Array<{
+    buttonEl: TestElement;
+    disabled: boolean;
+    text: string;
+    click(): Promise<void>;
+  }>;
 }
 
 const settings = (): SettingFixture[] =>
@@ -178,6 +183,75 @@ describe('media transcription modal eligibility', () => {
       DEFAULT_PLUGIN_SETTINGS.llmPostprocessActivePresetRef,
     );
     expect(saved.timestampSparseIntervalMs).toBe(DEFAULT_PLUGIN_SETTINGS.timestampSparseIntervalMs);
+    registry.closeAll();
+  });
+
+  it('shows progress and only one cancel action while a YouTube job runs', async () => {
+    let finishJob: (() => void) | undefined;
+    const startYouTube = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishJob = resolve;
+        }),
+    );
+    const cancel = vi.fn(async () => {});
+    const registry = new MediaTranscriptionModalRegistry();
+    registry.open(
+      {} as never,
+      {
+        cancel,
+        getModels: () => [
+          {
+            capabilities: {} as never,
+            label: 'Whisper',
+            selection: {
+              familyId: 'whisper',
+              kind: 'catalog_model',
+              modelId: 'whisper-small',
+              runtimeId: 'whisper_cpp',
+            },
+          },
+        ],
+        getLastError: () => null,
+        getProgress: () => null,
+        getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+        getYouTubeHelperPath: () => '/tmp/yt-dlp',
+        getYouTubePolicyVersion: () => YOUTUBE_POLICY_VERSION,
+        isTranscribing: () => false,
+        isYouTubeEnabled: () => true,
+        onManageModels: () => {},
+        startFile: async () => {},
+        startYouTube,
+        subscribeProgress: () => () => {},
+      },
+      'youtube',
+    );
+
+    settings()
+      .find((setting) => setting.name === t('youtube.modal.urlName'))
+      ?.textComponents[0]?.change('https://www.youtube.com/watch?v=8MxG6tOkdNY');
+    const buttons = settings().flatMap((setting) => setting.buttonComponents);
+    const start = buttons.find((button) => button.text === t('media.modal.start'));
+    const close = buttons.find((button) => button.text === t('common.close'));
+    const modal = (
+      Modal as unknown as { instances: Array<{ contentEl: TestElement }> }
+    ).instances.at(-1);
+    if (start === undefined || close === undefined || modal === undefined)
+      throw new Error('Expected job controls');
+
+    await start.click();
+    expect(start.text).toBe(t('media.modal.cancelJob'));
+    expect(close.buttonEl.style.display).toBe('none');
+    expect(modal.contentEl.findByClass('local-stt-media-spinner')?.style.display).toBe('');
+    expect(modal.contentEl.findByClass('local-stt-media-progress-text')?.textContent).toBe(
+      t('media.progress.download'),
+    );
+
+    await start.click();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(modal.contentEl.findByClass('local-stt-media-spinner')?.style.display).toBe('none');
+    finishJob?.();
+    await vi.waitFor(() => expect(start.text).toBe(t('media.modal.start')));
     registry.closeAll();
   });
 });

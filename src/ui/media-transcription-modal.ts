@@ -90,10 +90,13 @@ class MediaTranscriptionModal extends Modal {
   private busy = false;
   private cancelRequested = false;
   private progressEl: HTMLElement | null = null;
+  private progressRowEl: HTMLElement | null = null;
+  private progressSpinnerEl: HTMLElement | null = null;
   private errorEl: HTMLElement | null = null;
   private requirementEl: HTMLElement | null = null;
   private fileNameEl: HTMLElement | null = null;
   private primaryButton: ButtonComponent | null = null;
+  private closeButton: ButtonComponent | null = null;
 
   constructor(
     app: App,
@@ -139,6 +142,7 @@ class MediaTranscriptionModal extends Modal {
   private render(): void {
     this.contentEl.empty();
     this.primaryButton = null;
+    this.closeButton = null;
     const tabs = this.contentEl.createDiv({ cls: 'local-stt-media-source-tabs' });
     tabs.setAttribute('role', 'tablist');
     this.addTab(tabs, 'file', t('media.modal.fileTab'));
@@ -157,8 +161,14 @@ class MediaTranscriptionModal extends Modal {
       attr: { role: 'status', 'aria-live': 'polite' },
     });
 
-    this.progressEl = this.contentEl.createDiv({
-      cls: 'local-stt-media-progress',
+    const progressRow = this.contentEl.createDiv({ cls: 'local-stt-media-progress' });
+    this.progressRowEl = progressRow;
+    this.progressSpinnerEl = progressRow.createSpan({
+      cls: 'local-stt-media-spinner',
+      attr: { 'aria-hidden': 'true' },
+    });
+    this.progressEl = progressRow.createSpan({
+      cls: 'local-stt-media-progress-text',
       attr: { role: 'status', 'aria-live': 'polite' },
     });
     this.errorEl = this.contentEl.createDiv({
@@ -169,9 +179,10 @@ class MediaTranscriptionModal extends Modal {
 
     const footer = this.contentEl.createDiv({ cls: 'local-stt-media-footer' });
     const actions = new Setting(footer);
-    actions.addButton((button) =>
-      button.setButtonText(t('common.cancel')).onClick(() => this.close()),
-    );
+    actions.addButton((button) => {
+      this.closeButton = button;
+      button.setButtonText(t('common.close')).onClick(() => this.close());
+    });
     actions.addButton((button) => {
       this.primaryButton = button;
       button
@@ -425,7 +436,9 @@ class MediaTranscriptionModal extends Modal {
     this.primaryButton?.setButtonText(
       this.busy ? t('media.modal.cancelJob') : t('media.modal.start'),
     );
-    this.primaryButton?.setDisabled(blocker !== null);
+    this.primaryButton?.setDisabled(this.cancelRequested || blocker !== null);
+    this.closeButton?.buttonEl.toggle(!this.busy);
+    this.progressSpinnerEl?.toggle(this.busy && !this.cancelRequested);
     this.requirementEl?.setText(blocker ?? '');
   }
 
@@ -455,17 +468,26 @@ class MediaTranscriptionModal extends Modal {
 
   private renderProgress(progress: MediaTranscriptionProgress | null): void {
     if (this.progressEl !== null) {
-      this.progressEl.setText(
+      const message =
         progress === null
-          ? this.dependencies.isTranscribing()
-            ? t('media.modal.alreadyRunning')
-            : ''
+          ? this.busy
+            ? this.acquisitionProgressText()
+            : this.dependencies.isTranscribing()
+              ? t('media.modal.alreadyRunning')
+              : ''
           : this.busy
-            ? mediaProgressText(progress)
-            : t('media.modal.completed'),
-      );
+            ? progress.phase === 'acquire'
+              ? this.acquisitionProgressText()
+              : mediaProgressText(progress)
+            : t('media.modal.completed');
+      this.progressEl.setText(message);
+      this.progressRowEl?.toggle(message.length > 0);
     }
     this.updatePrimaryButton();
+  }
+
+  private acquisitionProgressText(): string {
+    return this.tab === 'youtube' ? t('media.progress.download') : t('media.progress.acquire');
   }
 
   private async startJob(): Promise<void> {
@@ -523,32 +545,38 @@ class MediaTranscriptionModal extends Modal {
       if (!this.lifecycle.signal.aborted && !this.cancelRequested) {
         const error = this.dependencies.getLastError();
         if (error !== null) {
-          this.errorEl?.setText(
-            t('media.modal.recoverableError', {
-              detail: errorDetail(error),
-            }),
-          );
-        } else this.progressEl?.setText(t('media.modal.completed'));
+          this.showError(error);
+        } else {
+          this.progressEl?.setText(t('media.modal.completed'));
+          this.progressRowEl?.toggle(true);
+        }
       }
     } catch (error) {
-      if (!this.lifecycle.signal.aborted) {
-        this.errorEl?.setText(
-          t('media.modal.recoverableError', {
-            detail: errorDetail(error),
-          }),
-        );
-      }
+      if (!this.lifecycle.signal.aborted) this.showError(error);
     } finally {
       this.busy = false;
+      this.cancelRequested = false;
       this.updatePrimaryButton();
     }
   }
 
+  private showError(error: unknown): void {
+    this.progressEl?.setText('');
+    this.progressRowEl?.toggle(false);
+    this.errorEl?.setText(
+      t('media.modal.recoverableError', {
+        detail: errorDetail(error),
+      }),
+    );
+  }
+
   private async cancelJob(): Promise<void> {
     this.cancelRequested = true;
+    this.updatePrimaryButton();
     await this.dependencies.cancel();
     this.busy = false;
     this.progressEl?.setText(t('media.modal.cancelled'));
+    this.progressRowEl?.toggle(true);
     this.updatePrimaryButton();
   }
 }
