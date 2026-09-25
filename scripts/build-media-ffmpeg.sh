@@ -24,9 +24,11 @@ printf '%s  %s\n' "$source_sha256" "$build_dir/$source_name" | shasum -a 256 -c 
 tar -xJf "$build_dir/$source_name" -C "$build_dir"
 
 source_dir="$build_dir/ffmpeg-$version"
-prefix="$build_dir/install"
+install_prefix="/speech-kit-media-ffmpeg-$version"
+stage_dir="$build_dir/stage"
+prefix="$stage_dir$install_prefix"
 configure_flags=(
-  "--prefix=$prefix"
+  "--prefix=$install_prefix"
   --disable-gpl
   --disable-nonfree
   --disable-network
@@ -42,7 +44,7 @@ configure_flags=(
   cd "$source_dir"
   ./configure "${configure_flags[@]}"
   make -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu)"
-  make install
+  make install "DESTDIR=$stage_dir"
 )
 
 cp "$prefix/bin/ffmpeg${executable_suffix}" "$prefix/bin/ffprobe${executable_suffix}" "$output_dir/"
@@ -54,6 +56,17 @@ if grep -E -- '--enable-(gpl|nonfree)' "$output_dir/BUILD_CONFIGURATION.txt"; th
   echo 'FFmpeg build unexpectedly enabled GPL or nonfree components.' >&2
   exit 1
 fi
+"$output_dir/ffmpeg${executable_suffix}" -nostdin -hide_banner -loglevel error \
+  -f lavfi -i sine=frequency=440:duration=1 \
+  -f lavfi -i color=c=black:s=32x32:r=1:d=1 \
+  -c:v mpeg4 -c:a aac -y "$build_dir/smoke.mp4"
+"$output_dir/ffprobe${executable_suffix}" -v error -select_streams a:0 \
+  -show_entries stream=codec_name -of default=noprint_wrappers=1 \
+  "$build_dir/smoke.mp4" | grep -qx codec_name=aac
+"$output_dir/ffmpeg${executable_suffix}" -nostdin -hide_banner -loglevel error \
+  -i "$build_dir/smoke.mp4" -map 0:a:0 -ac 1 -ar 16000 -c:a pcm_s16le \
+  -f s16le -y "$build_dir/smoke.pcm"
+test "$(wc -c < "$build_dir/smoke.pcm")" -ge 30000
 (
   cd "$output_dir"
   shasum -a 256 "ffmpeg${executable_suffix}" "ffprobe${executable_suffix}" "$source_name" COPYING.LGPLv2.1 COPYING.LGPLv3 \
