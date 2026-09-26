@@ -11,6 +11,7 @@ type ModalFixture = { contentEl: TestElement };
 interface SettingFixture {
   readonly name: string;
   readonly textComponents: Array<{ change(value: string): void }>;
+  readonly dropdownComponents: Array<{ change(value: string): void }>;
   readonly buttonComponents: Array<{
     readonly buttonEl: TestElement;
     readonly disabled: boolean;
@@ -60,8 +61,8 @@ describe('YouTube transcript modal', () => {
       .find(({ name }) => name === t('youtube.modal.urlName'))
       ?.textComponents[0]?.change('https://www.youtube.com/watch?v=8MxG6tOkdNY&t=407s');
     settings()
-      .find(({ name }) => name === t('settings.timestamps.interval.name'))
-      ?.textComponents[0]?.change('45');
+      .find(({ name }) => name === t('youtube.modal.timeGrouping'))
+      ?.dropdownComponents[0]?.change('30');
     const primary = buttonNamed(t('media.modal.start'));
     expect(primary.disabled).toBe(false);
     await primary.click();
@@ -69,10 +70,10 @@ describe('YouTube transcript modal', () => {
 
     expect(start.mock.calls[0]?.[0]).toBe('https://www.youtube.com/watch?v=8MxG6tOkdNY&t=407s');
     expect(start.mock.calls[0]?.[1]).toMatchObject({
-      language: saved.dictationLanguage,
-      timestampSparseIntervalMs: 45_000,
+      language: 'auto',
+      timestampSparseIntervalMs: 30_000,
       timestampsEnabled: true,
-      transcriptFormatting: saved.transcriptFormatting,
+      transcriptFormatting: 'space',
     });
     expect(saved.timestampSparseIntervalMs).toBe(DEFAULT_PLUGIN_SETTINGS.timestampSparseIntervalMs);
     expect(saved.timestampsEnabled).toBe(true);
@@ -160,6 +161,7 @@ describe('YouTube transcript modal', () => {
     );
     expect(getPartialTranscript).toHaveBeenCalledOnce();
     expect(modal?.contentEl.findByClass('local-stt-media-error')?.textContent).toBe(error.message);
+    expect(modal?.contentEl.findByClass('local-stt-media-progress')?.style.display).toBe('none');
     const partialActions = modal?.contentEl.findByClass('local-stt-media-partial-actions');
     expect(partialActions?.children[0]?.textContent).toBe(t('media.modal.partialAvailable'));
     const insert = partialActions?.children.at(-1);

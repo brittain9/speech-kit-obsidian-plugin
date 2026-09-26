@@ -31,6 +31,7 @@ import {
   type MediaTranscriptionJobOptions,
   type MediaTranscriptionModelOptions,
 } from '../media/media-transcription-options';
+import { formatYouTubeCaptions } from '../media/youtube-caption-format';
 import { CaptionAcquisitionError, type CaptionResult } from '../media/youtube-captions';
 import type { YouTubeVideoRef } from '../media/youtube-url';
 import {
@@ -656,9 +657,15 @@ export class AudioFileTranscriptionController {
     this.revalidateTarget(target, signal);
     const settings = this.dependencies.getSettings();
     const sessionId = randomUUID();
+    const baseRendererOptions = createRendererOptions(settings, Date.now(), options);
     const rendererOptions = {
-      ...createRendererOptions(settings, Date.now(), options),
-      maxSmartParagraphChars: 1_200,
+      ...baseRendererOptions,
+      timestamps: {
+        ...baseRendererOptions.timestamps,
+        enabled: false,
+        header: false,
+      },
+      transcriptFormatting: 'space' as const,
     };
     const session = this.dependencies.createSession({
       callbacks: {
@@ -667,11 +674,7 @@ export class AudioFileTranscriptionController {
         onSurfaceDesynchronized: () => {},
       },
       placement: { anchor: settings.dictationAnchor },
-      rendererOptions: {
-        ...rendererOptions,
-        timestamps: { ...rendererOptions.timestamps, enabled: false, header: false },
-        transcriptFormatting: 'space',
-      },
+      rendererOptions,
       sessionId,
       target,
     });
@@ -687,39 +690,38 @@ export class AudioFileTranscriptionController {
     );
     let transcriptCommitted = false;
     try {
-      let previousEnd = 0;
-      for (const [index, cue] of captions.cues.entries()) {
-        this.throwIfCancelled(signal);
-        const event: TranscriptReadyEvent = {
-          type: 'transcript_ready',
-          isFinal: true,
-          pauseMsBeforeUtterance: index === 0 ? null : Math.max(0, cue.startMs - previousEnd),
-          processingDurationMs: 0,
-          revision: 0,
-          segments: [
-            {
-              startMs: cue.startMs,
-              endMs: cue.endMs,
-              speaker: null,
-              text: cue.text,
-              timestampGranularity: 'segment',
-              timestampSource: 'engine',
-            },
-          ],
-          sessionId,
-          speakerIndex: null,
-          stageResults: [],
-          text: cue.text,
-          utteranceDurationMs: cue.endMs - cue.startMs,
-          utteranceEndMsInSession: cue.endMs,
-          utteranceId: `${sessionId}-${index}`,
-          utteranceIndex: index,
-          utteranceStartMsInSession: cue.startMs,
-          warnings: [],
-        };
-        transcript.handleTranscript(event);
-        previousEnd = cue.endMs;
+      const rendered = formatYouTubeCaptions(captions.cues, {
+        ...(options?.timestampSparseIntervalMs === undefined
+          ? {}
+          : { intervalMs: options.timestampSparseIntervalMs }),
+        showTimestamps: options?.timestampsEnabled ?? false,
+        videoUrl: captions.videoUrl,
+      });
+      const firstCue = captions.cues[0];
+      const lastCue = captions.cues.at(-1);
+      if (rendered.length === 0 || firstCue === undefined || lastCue === undefined) {
+        throw new Error('The caption response contained no text.');
       }
+      this.throwIfCancelled(signal);
+      const event: TranscriptReadyEvent = {
+        type: 'transcript_ready',
+        isFinal: true,
+        pauseMsBeforeUtterance: null,
+        processingDurationMs: 0,
+        revision: 0,
+        segments: [],
+        sessionId,
+        speakerIndex: null,
+        stageResults: [],
+        text: rendered,
+        utteranceDurationMs: lastCue.endMs - firstCue.startMs,
+        utteranceEndMsInSession: lastCue.endMs,
+        utteranceId: `${sessionId}-captions`,
+        utteranceIndex: 0,
+        utteranceStartMsInSession: firstCue.startMs,
+        warnings: [],
+      };
+      transcript.handleTranscript(event);
       this.revalidateTarget(target, signal);
       await transcript.commitStaged();
       transcriptCommitted = true;

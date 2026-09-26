@@ -216,7 +216,11 @@ describe('YouTube captions', () => {
     );
     await expect(
       fetchDirectYouTubeCaptions(ref, 'en', { request }, new AbortController().signal),
-    ).rejects.toMatchObject({ code: 'unavailable' });
+    ).rejects.toMatchObject({
+      availableLanguages: ['es'],
+      code: 'unavailable',
+      message: expect.stringContaining('English captions'),
+    });
     expect(request).toHaveBeenCalledOnce();
   });
 });

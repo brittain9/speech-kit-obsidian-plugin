@@ -56,9 +56,21 @@ export const en = {
     'Audio-file transcription stopped because the note changed in a way Speech Kit could not safely track. Restore the intended note and run the command again.',
   'youtube.modal.title': 'Get YouTube transcript',
   'youtube.modal.captionDescription':
-    'Fetches the video’s available captions and adds the transcript to the active note. No video download or speech model is needed.',
-  'youtube.modal.smartParagraphDesc':
-    'Break at pauses and sentence endings. Continuous captions form paragraphs of roughly 1,200–1,800 characters.',
+    'Add the video’s available captions to your active note in readable passages.',
+  'youtube.modal.captionLanguage': 'Caption language',
+  'youtube.modal.originalLanguage': 'Original language',
+  'youtube.modal.captionLanguageDesc': 'Uses existing captions. This does not translate the video.',
+  'youtube.modal.timestamps': 'Link to video timestamps',
+  'youtube.modal.timestampsDesc': 'Add a clickable time at the start of each passage.',
+  'youtube.modal.timeGrouping': 'Time between passages',
+  'youtube.modal.timeGroupingDesc':
+    'Start a new passage around this time, at a sentence break when possible.',
+  'youtube.modal.interval30': '30 seconds',
+  'youtube.modal.interval60': '1 minute',
+  'youtube.modal.interval120': '2 minutes',
+  'youtube.modal.interval300': '5 minutes',
+  'youtube.modal.aiPreset': 'After importing',
+  'youtube.modal.aiPresetDesc': 'Optional: run an AI preset on the complete transcript.',
   'youtube.modal.urlName': 'YouTube link',
   'youtube.modal.urlPlaceholder': 'https://www.youtube.com/watch?v=…',
   'youtube.modal.enterUrl': 'Paste a YouTube video link to continue.',
@@ -78,10 +90,11 @@ export const en = {
   'youtube.caption.restricted': 'This video is restricted.',
   'youtube.caption.unavailable': 'This video is unavailable.',
   'youtube.caption.languageUnavailable':
-    'This video does not have captions in the selected language.',
+    'This video does not have {language} captions. The note was not changed.',
+  'youtube.caption.availableLanguages': 'Available: {languages}.',
   'youtube.caption.readFailed':
     'YouTube captions were unavailable or could not be read. Try again later.',
-  'youtube.caption.chooseLanguage': 'Choose a caption language in Transcript options.',
+  'youtube.caption.chooseLanguage': 'Choose a caption language above.',
   'youtube.caption.cancelled': 'Caption retrieval was cancelled.',
   'media.tools.title': 'Media decoder',
   'media.tools.description':

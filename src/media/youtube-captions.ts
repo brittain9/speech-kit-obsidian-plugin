@@ -1,4 +1,4 @@
-import type { DictationLanguage } from '../language/dictation-language';
+import { type DictationLanguage, dictationLanguageLabel } from '../language/dictation-language';
 import { t } from '../shared/i18n';
 import { canonicalYouTubeUrl, type YouTubeVideoRef } from './youtube-url';
 
@@ -139,8 +139,31 @@ export async function fetchDirectYouTubeCaptions(
     language,
     metadata.videoDetails?.defaultAudioLanguage,
   );
-  if (candidates.length === 0)
-    throw new CaptionAcquisitionError('unavailable', t('youtube.caption.languageUnavailable'));
+  if (candidates.length === 0) {
+    const availableLanguages = [
+      ...new Set(
+        (tracks as CaptionTrack[])
+          .filter((track) => {
+            if (typeof track.languageCode !== 'string' || typeof track.baseUrl !== 'string')
+              return false;
+            if (track.languageCode === 'live_chat') return false;
+            try {
+              return !new URL(track.baseUrl).searchParams.has('tlang');
+            } catch {
+              return false;
+            }
+          })
+          .map((track) => track.languageCode as string),
+      ),
+    ];
+    throw new CaptionAcquisitionError(
+      'unavailable',
+      t('youtube.caption.languageUnavailable', {
+        language: language === 'auto' ? 'the original language' : dictationLanguageLabel(language),
+      }),
+      availableLanguages,
+    );
+  }
 
   for (const selected of candidates) {
     let captionUrl: URL;

@@ -8,12 +8,7 @@ import type { MediaTranscriptionProgress } from '../media/media-source';
 import type { MediaTranscriptionJobOptions } from '../media/media-transcription-options';
 import { CaptionAcquisitionError } from '../media/youtube-captions';
 import { parseYouTubeVideoUrl } from '../media/youtube-url';
-import type {
-  PluginSettings,
-  TimestampDensity,
-  TranscriptFormattingMode,
-} from '../settings/plugin-settings';
-import { validateTimestampIntervalSeconds } from '../settings/plugin-settings';
+import type { PluginSettings } from '../settings/plugin-settings';
 import { t } from '../shared/i18n';
 import { mediaProgressText } from './media-progress-presenter';
 
@@ -55,11 +50,8 @@ class YouTubeTranscriptModal extends Modal {
   private url = '';
   private language: DictationLanguage;
   private timestampsEnabled: boolean;
-  private timestampDensity: TimestampDensity;
-  private timestampSparseIntervalSeconds: string;
-  private transcriptFormatting: TranscriptFormattingMode;
+  private timestampIntervalSeconds = 60;
   private mediaPresetRef: string | null;
-  private optionsExpanded = false;
   private busy = false;
   private completedVideoId: string | null = null;
   private cancelRequested = false;
@@ -78,14 +70,8 @@ class YouTubeTranscriptModal extends Modal {
   ) {
     super(app);
     const settings = dependencies.getSettings();
-    this.language = settings.dictationLanguage;
+    this.language = 'auto';
     this.timestampsEnabled = settings.timestampsEnabled;
-    this.timestampDensity =
-      settings.timestampDensity === 'paragraph' && settings.transcriptFormatting !== 'smart'
-        ? 'sparse'
-        : settings.timestampDensity;
-    this.timestampSparseIntervalSeconds = String(settings.timestampSparseIntervalMs / 1_000);
-    this.transcriptFormatting = settings.transcriptFormatting;
     this.mediaPresetRef = settings.mediaLlmProcessing
       ? settings.llmPostprocessActivePresetRef
       : null;
@@ -124,8 +110,8 @@ class YouTubeTranscriptModal extends Modal {
       text: t('youtube.modal.captionDescription'),
       cls: 'local-stt-media-source-hint',
     });
-    this.renderAiPreset();
     this.renderOptions();
+    this.renderAiPreset();
 
     const progressRow = this.contentEl.createDiv({ cls: 'local-stt-media-progress' });
     this.progressRowEl = progressRow;
@@ -173,8 +159,8 @@ class YouTubeTranscriptModal extends Modal {
       this.mediaPresetRef = null;
     }
     new Setting(this.contentEl)
-      .setName(t('media.modal.aiPreset'))
-      .setDesc(t('media.modal.aiPresetDesc'))
+      .setName(t('youtube.modal.aiPreset'))
+      .setDesc(t('youtube.modal.aiPresetDesc'))
       .addDropdown((dropdown) => {
         dropdown.addOption('', t('media.modal.aiPresetNone'));
         for (const entry of presets) dropdown.addOption(entry.ref, entry.preset.label);
@@ -196,79 +182,44 @@ class YouTubeTranscriptModal extends Modal {
   }
 
   private renderOptions(): void {
-    const section = this.contentEl.createEl('details', { cls: 'local-stt-media-options' });
-    section.open = this.optionsExpanded;
-    section.addEventListener('toggle', () => {
-      this.optionsExpanded = section.open;
-    });
-    section.createEl('summary', { text: t('media.modal.optionsTitle') });
-    const grid = section.createDiv({ cls: 'local-stt-media-options-grid' });
+    const grid = this.contentEl.createDiv({ cls: 'local-stt-youtube-options' });
 
-    new Setting(grid).setName(t('media.modal.language')).addDropdown((dropdown) => {
-      for (const option of DICTATION_LANGUAGE_OPTIONS)
-        dropdown.addOption(option.value, option.label);
-      dropdown.setValue(this.language).onChange((value) => {
-        this.language = value as DictationLanguage;
-        this.optionsExpanded = true;
-      });
-    });
-    new Setting(grid).setName(t('settings.timestamps.enable.name')).addToggle((toggle) => {
-      toggle.setValue(this.timestampsEnabled).onChange((value) => {
-        this.timestampsEnabled = value;
-        this.optionsExpanded = true;
-        this.render();
-      });
-    });
-    if (this.timestampsEnabled) {
-      new Setting(grid).setName(t('settings.timestamps.frequency.name')).addDropdown((dropdown) => {
-        dropdown.addOption('sparse', t('settings.timestamps.frequency.atIntervals'));
-        dropdown.addOption('every_utterance', t('settings.timestamps.frequency.everyPhrase'));
-        if (this.transcriptFormatting === 'smart') {
-          dropdown.addOption('paragraph', t('settings.timestamps.frequency.atParagraphBreaks'));
-        }
-        dropdown.setValue(this.timestampDensity).onChange((value) => {
-          this.timestampDensity = value as TimestampDensity;
-          this.optionsExpanded = true;
-          this.render();
-        });
-      });
-      if (this.timestampDensity === 'sparse') {
-        new Setting(grid)
-          .setName(t('settings.timestamps.interval.name'))
-          .setDesc(t('settings.timestamps.interval.desc', { min: 10, max: 600 }))
-          .addText((text) => {
-            text.inputEl.type = 'number';
-            text.inputEl.min = '10';
-            text.inputEl.max = '600';
-            text.inputEl.step = '1';
-            text.setValue(this.timestampSparseIntervalSeconds);
-            text.onChange((value) => {
-              this.timestampSparseIntervalSeconds = value;
-            });
-          });
-      }
-    }
     new Setting(grid)
-      .setName(t('settings.transcriptFormatting.name'))
-      .setDesc(
-        this.transcriptFormatting === 'smart'
-          ? t('youtube.modal.smartParagraphDesc')
-          : t('settings.transcriptFormatting.desc'),
-      )
+      .setName(t('youtube.modal.captionLanguage'))
+      .setDesc(t('youtube.modal.captionLanguageDesc'))
       .addDropdown((dropdown) => {
-        dropdown.addOption('smart', t('settings.transcriptFormatting.smartParagraphs'));
-        dropdown.addOption('space', t('settings.transcriptFormatting.space'));
-        dropdown.addOption('new_line', t('settings.transcriptFormatting.newLine'));
-        dropdown.addOption('new_paragraph', t('settings.transcriptFormatting.newParagraph'));
-        dropdown.setValue(this.transcriptFormatting).onChange((value) => {
-          this.transcriptFormatting = value as TranscriptFormattingMode;
-          if (this.transcriptFormatting !== 'smart' && this.timestampDensity === 'paragraph') {
-            this.timestampDensity = 'sparse';
-          }
-          this.optionsExpanded = true;
+        for (const option of DICTATION_LANGUAGE_OPTIONS)
+          dropdown.addOption(
+            option.value,
+            option.value === 'auto' ? t('youtube.modal.originalLanguage') : option.label,
+          );
+        dropdown.setValue(this.language).onChange((value) => {
+          this.language = value as DictationLanguage;
+        });
+      });
+    new Setting(grid)
+      .setName(t('youtube.modal.timestamps'))
+      .setDesc(t('youtube.modal.timestampsDesc'))
+      .addToggle((toggle) => {
+        toggle.setValue(this.timestampsEnabled).onChange((value) => {
+          this.timestampsEnabled = value;
           this.render();
         });
       });
+    if (this.timestampsEnabled) {
+      new Setting(grid)
+        .setName(t('youtube.modal.timeGrouping'))
+        .setDesc(t('youtube.modal.timeGroupingDesc'))
+        .addDropdown((dropdown) => {
+          dropdown.addOption('30', t('youtube.modal.interval30'));
+          dropdown.addOption('60', t('youtube.modal.interval60'));
+          dropdown.addOption('120', t('youtube.modal.interval120'));
+          dropdown.addOption('300', t('youtube.modal.interval300'));
+          dropdown.setValue(String(this.timestampIntervalSeconds)).onChange((value) => {
+            this.timestampIntervalSeconds = Number(value);
+          });
+        });
+    }
   }
 
   private updatePrimaryButton(): void {
@@ -305,20 +256,15 @@ class YouTubeTranscriptModal extends Modal {
     if (this.mediaPresetRef !== null && this.dependencies.getSettings().llmRoutingPolicy === null) {
       return t('media.modal.aiProviderRequired');
     }
-    if (this.timestampsEnabled && this.timestampDensity === 'sparse') {
-      const interval = validateTimestampIntervalSeconds(this.timestampSparseIntervalSeconds);
-      if (!interval.valid) return interval.message;
-    }
     return null;
   }
 
   private renderProgress(progress: MediaTranscriptionProgress | null): void {
     if (this.progressEl === null) return;
-    const message =
-      progress === null
-        ? this.busy
-          ? t('media.progress.captions')
-          : ''
+    const message = !this.busy
+      ? ''
+      : progress === null
+        ? t('media.progress.captions')
         : mediaProgressText(progress);
     this.progressEl.setText(message);
     this.progressRowEl?.toggle(message.length > 0 || this.busy);
@@ -337,18 +283,15 @@ class YouTubeTranscriptModal extends Modal {
       this.errorEl?.setText(t('media.modal.aiPresetMissing'));
       return;
     }
-    const interval = validateTimestampIntervalSeconds(this.timestampSparseIntervalSeconds);
     const submittedUrl = this.url.trim();
     const submittedVideoId = parseYouTubeVideoUrl(submittedUrl).videoId;
     const options: MediaTranscriptionJobOptions = {
       diarizationEnabled: false,
       language: this.language,
-      timestampDensity: this.timestampDensity,
-      timestampSparseIntervalMs: interval.valid
-        ? interval.milliseconds
-        : settings.timestampSparseIntervalMs,
+      timestampDensity: 'sparse',
+      timestampSparseIntervalMs: this.timestampIntervalSeconds * 1_000,
       timestampsEnabled: this.timestampsEnabled,
-      transcriptFormatting: this.transcriptFormatting,
+      transcriptFormatting: 'space',
       mediaLlmSnapshot:
         preset === null
           ? null
@@ -378,6 +321,8 @@ class YouTubeTranscriptModal extends Modal {
       }
     } catch (error) {
       if (!this.cancelRequested) {
+        this.progressEl?.setText('');
+        this.progressRowEl?.hide();
         const detail = errorMessage(error);
         this.errorEl?.setText(
           this.dependencies.getResultSource() === null
@@ -425,7 +370,15 @@ class YouTubeTranscriptModal extends Modal {
 
 function errorMessage(error: unknown): string {
   if (error instanceof CaptionAcquisitionError && error.availableLanguages.length > 0) {
-    return `${error.message} Available: ${error.availableLanguages.join(', ')}`;
+    const displayNames = new Intl.DisplayNames(undefined, { type: 'language' });
+    const languages = error.availableLanguages.map((code) => {
+      try {
+        return displayNames.of(code) ?? code;
+      } catch {
+        return code;
+      }
+    });
+    return `${error.message} ${t('youtube.caption.availableLanguages', { languages: languages.join(', ') })}`;
   }
   if (error instanceof Error && error.message.length > 0) return error.message;
   return t('media.modal.unknownFailure');

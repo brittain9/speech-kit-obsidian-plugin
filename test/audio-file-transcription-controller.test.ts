@@ -412,6 +412,9 @@ describe('AudioFileTranscriptionController', () => {
     expect(harness.sidecarConnection.startSessionWithControl).not.toHaveBeenCalled();
     expect(harness.sessions[0]?.accepted).toHaveLength(1);
     expect(harness.sessions[0]?.accepted[0]?.text).toContain('Ending');
+    expect(harness.sessions[0]?.accepted[0]?.text).toContain(
+      '[2:30:00](https://www.youtube.com/watch?v=8MxG6tOkdNY&t=9000s) Ending',
+    );
   });
 
   it('sends plain YouTube caption text to the selected AI preset after insertion', async () => {
