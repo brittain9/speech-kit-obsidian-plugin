@@ -24,6 +24,7 @@ import type { SidecarInstallManager } from '../sidecar/sidecar-install-manager';
 import type { SidecarLifecycleGate } from '../sidecar/sidecar-lifecycle-gate';
 import { ConfirmModal } from '../ui/confirm-modal';
 import { styleDestructiveButton } from '../ui/destructive-button';
+import { MediaToolInstallModal } from '../ui/media-tool-install-modal';
 import { diarizationSettingDescription } from './diarization-setting';
 import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
@@ -563,6 +564,33 @@ export class LocalSttSettingTab extends PluginSettingTab {
         },
       },
     );
+
+    new Setting(advancedSection)
+      .setName(t('media.tools.title'))
+      .setDesc(t('media.tools.settingsDesc'))
+      .addButton((button) => {
+        button.setButtonText(t('media.tools.install')).onClick(() => {
+          if (this.dependencies.isDictationBusy()) {
+            this.dependencies.feedback.show({
+              intent: 'action-required',
+              message: t('media.tools.busy'),
+            });
+            return;
+          }
+          void this.dependencies
+            .resolvePluginDirectory()
+            .then((pluginDirectory) => {
+              new MediaToolInstallModal(this.app, pluginDirectory).open();
+            })
+            .catch((error: unknown) => {
+              this.dependencies.feedback.show({
+                cause: error,
+                intent: 'error',
+                message: t('media.tools.failed'),
+              });
+            });
+        });
+      });
 
     addToggleSetting(advancedSection, this.access, {
       name: t('settings.recoveryMemory.name'),

@@ -9,6 +9,7 @@ export type FileWorkflowTranslationKey =
   | 'audio-file-busy'
   | 'audio-file-decoded-memory'
   | 'audio-file-decode-failed'
+  | 'audio-file-decoder-missing'
   | 'audio-file-desktop-only'
   | 'audio-file-duration'
   | 'audio-file-empty'
@@ -171,6 +172,8 @@ function resolveWorkflowTranslationKey(error: unknown): FileWorkflowTranslationK
       case 'decode_failed':
       case 'invalid_decode':
         return 'audio-file-decode-failed';
+      case 'decoder_missing':
+        return 'audio-file-decoder-missing';
       case 'duration':
         return 'audio-file-duration';
       case 'encoded_size':

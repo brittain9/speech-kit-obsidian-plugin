@@ -24,6 +24,8 @@ export const en = {
     'Speech Kit could not read the selected file. Check that the file still exists and is accessible, then try again.',
   'audio-file-decode-failed':
     'FFmpeg could not read the audio track, or decoding stopped before the recording ended. Check the media file and try again.',
+  'audio-file-decoder-missing':
+    'Install the media decoder in Speech Kit settings, then try the file again.',
   'audio-file-encoded-size':
     'This media file exceeds the size limit. Choose a smaller file or reduce its bitrate, then try again.',
   'audio-file-duration':
@@ -81,6 +83,21 @@ export const en = {
     'YouTube captions were unavailable or could not be read. Try again later.',
   'youtube.caption.chooseLanguage': 'Choose a caption language in Transcript options.',
   'youtube.caption.cancelled': 'Caption retrieval was cancelled.',
+  'media.tools.title': 'Media decoder',
+  'media.tools.description':
+    'Install the verified media decoder to transcribe audio and video files. This is a one-time download.',
+  'media.tools.ready': 'The media decoder is installed for audio and video files.',
+  'media.tools.install': 'Install decoder',
+  'media.tools.reinstall': 'Reinstall decoder',
+  'media.tools.cancel': 'Cancel download',
+  'media.tools.failed': 'The media decoder could not be installed. Try again.',
+  'media.tools.phase.download': 'Downloading media decoder…',
+  'media.tools.phase.verify': 'Verifying media decoder…',
+  'media.tools.phase.install': 'Installing media decoder…',
+  'media.tools.settingsDesc':
+    'Required for audio and video file transcription. Downloads verified FFmpeg executables for this computer.',
+  'media.tools.busy':
+    'Finish or cancel the current transcription before installing the media decoder.',
   'media-llm-empty':
     'The media transcript is empty or the AI provider returned no text. The raw transcript was kept; record a non-empty transcript or check the provider and try again.',
   'media-llm-failed':

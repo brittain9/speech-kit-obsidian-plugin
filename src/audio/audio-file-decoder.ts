@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, open, rm } from 'node:fs/promises';
+import { access, mkdtemp, open, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -28,6 +28,7 @@ export type AudioFileErrorCode =
   | 'cancelled'
   | 'decoded_memory'
   | 'decode_failed'
+  | 'decoder_missing'
   | 'duration'
   | 'encoded_size'
   | 'empty'
@@ -144,6 +145,17 @@ export class FfmpegAudioFileDecoder implements AudioFileDecoder {
       await writeMediaStream(stream, inputPath, expectedBytes, signal);
       throwIfCancelled(signal);
       const audio = await this.options.getExecutables();
+      if (this.options.runProcess === undefined) {
+        try {
+          await Promise.all([access(audio.ffmpegPath), access(audio.ffprobePath)]);
+        } catch (error) {
+          throw new AudioFileError(
+            'decoder_missing',
+            'The media decoder is missing. Install it in Speech Kit settings.',
+            { cause: error },
+          );
+        }
+      }
       const durationMs = await this.probeDuration(audio.ffprobePath, inputPath, signal);
       const metadata: DecodedAudioFile = {
         length: Math.round((durationMs / 1_000) * PCM_SAMPLE_RATE_HZ),
