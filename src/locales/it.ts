@@ -2,6 +2,60 @@ import type { TranslationCatalog } from './index';
 
 export const it = {
   'notice.dictationNotActive': 'La dettatura non è attiva.',
+  'commands.transcribeAudioFile': 'Trascrivi file audio locale',
+  'commands.cancelAudioFile': 'Annulla trascrizione del file audio locale',
+  'audio-file-model-required':
+    'Seleziona e convalida un modello locale di riconoscimento vocale in Gestisci modelli, quindi riprova.',
+  'audio-file-model-changed':
+    'Il modello di trascrizione è cambiato mentre il selettore file era aperto. Riavvia Trascrivi file audio locale.',
+  'audio-file-language-changed':
+    'La lingua di dettatura è cambiata durante la preparazione del file audio. Riavvia Trascrivi file audio locale per usare la lingua attuale.',
+  'audio-file-model-not-batch':
+    'I file audio richiedono un modello batch. Seleziona un modello senza streaming e riprova.',
+  'audio-file-language-unsupported':
+    'Il modello non supporta la lingua di dettatura configurata ({language}). Scegli un modello compatibile o cambia la lingua.',
+  'audio-file-target-required':
+    'Apri in modalità modifica la nota Markdown che deve ricevere la trascrizione, quindi riprova.',
+  'audio-file-target-changed':
+    'La destinazione è cambiata durante la preparazione. Torna alla nota originale e riavvia il comando.',
+  'audio-file-desktop-only':
+    'La trascrizione dei file audio è disponibile nell’app desktop di Obsidian. Apri questo vault su un computer per continuare.',
+  'audio-file-busy':
+    'La dettatura o un’altra trascrizione di file audio è già attiva. Completala o annullala, quindi riprova.',
+  'audio-file-maintenance':
+    'Il motore vocale locale viene installato, riavviato o aggiornato. Attendi il termine e riprova.',
+  'audio-file-read-failed':
+    'Impossibile leggere il file selezionato. Verifica che esista e sia accessibile, quindi riprova.',
+  'audio-file-decode-failed':
+    'Obsidian non ha decodificato l’audio. Convertilo in un formato riproducibile dalla tua versione di Obsidian, spesso WAV.',
+  'audio-file-encoded-size':
+    'Il file codificato è troppo grande. Scegli un file più corto o a bitrate inferiore (massimo 64 MiB).',
+  'audio-file-duration':
+    'L’audio supera il limite di sicurezza di 30 minuti. Dividilo in file più brevi.',
+  'audio-file-model-duration':
+    'L’audio supera la durata massima del modello. Dividilo o scegli un modello con un limite maggiore.',
+  'audio-file-decoded-memory':
+    'La decodifica richiederebbe troppa memoria. Scegli un file più corto, a basso bitrate o con meno canali.',
+  'audio-file-empty':
+    'Il file selezionato non contiene audio trascrivibile. Scegli un altro file audio.',
+  'audio-file-start-failed':
+    'Il motore vocale locale non ha avviato la trascrizione. Controlla il modello selezionato e riprova.',
+  'audio-file-sidecar-missing':
+    'Installa il motore vocale locale, seleziona un modello di riconoscimento vocale e riprova.',
+  'audio-file-shutdown-uncertain':
+    'Il motore vocale locale non ha confermato la chiusura della trascrizione del file audio. Speech Kit ha protetto la sessione per evitare operazioni vocali sovrapposte. Controlla il motore locale e riprova.',
+  'audio-file-sidecar-failed':
+    'La trascrizione si è interrotta perché il motore locale non ha funzionato. Controlla il modello e riprova.',
+  'audio-file-queue-overload':
+    'Il motore non è riuscito a tenere il passo. Dividi la registrazione o scegli un modello più veloce.',
+  'audio-file-transcript-write-failed':
+    'La trascrizione si è interrotta perché Speech Kit non ha potuto scrivere in sicurezza nella nota. Ripristinala e riprova.',
+  'audio-file-target-closed':
+    'La nota di destinazione è stata chiusa o sostituita. Riaprila e riavvia il comando.',
+  'audio-file-target-deleted':
+    'La nota di destinazione è stata eliminata. Ripristinala o ricreala, quindi riavvia il comando.',
+  'audio-file-surface-changed':
+    'La nota è cambiata in un modo che Speech Kit non ha potuto seguire in sicurezza. Ripristinala e riavvia il comando.',
   'notice.dictationStartFailed': 'Impossibile avviare la dettatura.',
   'notice.dictationStopFailed': 'Impossibile interrompere la dettatura.',
   'notice.lastUtteranceCleared': 'L’ultima frase conservata è stata eliminata.',

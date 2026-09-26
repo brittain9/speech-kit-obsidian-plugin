@@ -1,4 +1,4 @@
-import type { Editor, Plugin } from 'obsidian';
+import { type Editor, Platform, type Plugin } from 'obsidian';
 import { t } from '../shared/i18n';
 
 const START_DICTATION_COMMAND_ID = 'start-dictation-session';
@@ -12,6 +12,7 @@ const COPY_RAW_TRANSCRIPT_COMMAND_ID = 'copy-raw-transcript';
 const CLEAR_RAW_RECOVERY_COMMAND_ID = 'clear-raw-transcript-recovery';
 
 interface CommandDependencies {
+  cancelAudioFile: () => Promise<void>;
   cancelDictation: () => Promise<void>;
   clearLastUtterance: () => void;
   clearRawTranscriptRecovery: () => void;
@@ -19,6 +20,7 @@ interface CommandDependencies {
   copyLastUtterance: () => void;
   copyRawTranscript: () => void;
   hasRawTranscriptRecovery: () => boolean;
+  isAudioFileTranscriptionActive: () => boolean;
   isReadAloudActive: () => boolean;
   plugin: Plugin;
   hasLastUtterance: () => boolean;
@@ -28,6 +30,7 @@ interface CommandDependencies {
   readAloud: (editor: Editor) => Promise<void>;
   readAloudFromCursor: (editor: Editor) => Promise<void>;
   stopReadAloud: () => void;
+  transcribeAudioFile: () => Promise<void>;
   translateNote: (editor: Editor) => void;
   translateSelection: (editor: Editor) => void;
   toggleReadAloudPaused: () => Promise<void>;
@@ -81,6 +84,26 @@ export function registerCommands(dependencies: CommandDependencies): void {
     checkCallback: (checking) => {
       if (!dependencies.isReadAloudActive()) return false;
       if (!checking) dependencies.stopReadAloud();
+      return true;
+    },
+  });
+
+  dependencies.plugin.addCommand({
+    id: 'transcribe-local-audio-file',
+    name: t('commands.transcribeAudioFile'),
+    checkCallback: (checking) => {
+      if (!Platform.isDesktopApp) return false;
+      if (!checking) void dependencies.transcribeAudioFile();
+      return true;
+    },
+  });
+
+  dependencies.plugin.addCommand({
+    id: 'cancel-local-audio-file-transcription',
+    name: t('commands.cancelAudioFile'),
+    checkCallback: (checking) => {
+      if (!dependencies.isAudioFileTranscriptionActive()) return false;
+      if (!checking) void dependencies.cancelAudioFile();
       return true;
     },
   });

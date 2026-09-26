@@ -72,6 +72,14 @@ it into fixed 640-byte frames at 50 fps.
   `AudioWorklet` runs on a dedicated real-time thread; `PcmFrameProcessor` does
   linear-interpolation resampling from the browser's native rate (44.1/48 kHz)
   down to 16 kHz.
+- **Local audio files** are selected through a renderer-local file input,
+  encoded-size checked before reading, and decoded by the running Obsidian
+  Web Audio implementation. A conservative 192 MiB / 30-minute decoded budget
+  (plus the selected model's own duration limit) is enforced before the sidecar
+  session starts. Decoded channels are sliced, mixed, resampled, and written
+  with sidecar-queue backpressure; the bytes never leave the local stdin pipe.
+  The accepted-format contract is successful decode by the active desktop
+  runtime, not a promised extension-to-codec mapping.
 - **System audio** (this computer's output) is captured natively by the sidecar
   on Windows (WASAPI loopback), Linux (the default PulseAudio/PipeWire monitor),
   and macOS 14.2+ (CoreAudio process taps attached to a private aggregate
@@ -89,8 +97,76 @@ it into fixed 640-byte frames at 50 fps.
 | Samples per frame | 320 |
 | Bytes per frame | 640 |
 
-This stage is effectively real-time and never a bottleneck (~3-6 ms AudioContext
-latency plus 20 ms frame accumulation).
+This stage is effectively real-time for microphone capture and never a
+bottleneck (~3-6 ms AudioContext latency plus 20 ms frame accumulation).
+
+#### Local audio-file workflow
+
+The **Transcribe local audio file** command is deliberately separate from live
+microphone capture. It is available only in the Obsidian desktop app and uses a
+renderer-local `File`; there is no URL fetch, upload, or remote fallback.
+
+1. The command captures the exact active/fallback Markdown target and validates
+   a validated non-streaming speech-to-text model, configured dictation language,
+   speech lease, and absence of conflicting capture. It opens the picker only
+   after this preflight.
+2. The same target, model selection, and language are revalidated after the
+   picker and again immediately before `start_session`. A target that merely
+   still has *some* Markdown editor open is not considered the same target: the
+   `(file, CodeMirror view, target kind)` identity must match.
+3. The selected file is encoded-size checked before its bytes are read. The
+   encoded read, Web Audio decode wrapper, frame source, and drain-aware sidecar
+   write share one `AbortSignal`. Every created `AudioContext` is closed on
+   success, failure, and cancellation. Cancellation before `start_session` is
+   written prevents issuance of that command and never sends a cancellation that
+   could respawn the sidecar.
+4. A whole-buffer decode is accepted only within these conservative guardrails:
+
+   | Guardrail | Limit |
+   |---|---:|
+   | Encoded `File.size` | 64 MiB |
+   | Logical decoded PCM (`channels × frames × 4`) | 192 MiB |
+   | Decoded duration | 30 minutes |
+   | Selected model duration | Model's shorter declared limit |
+
+   These checks happen immediately after decode and before any sidecar session.
+   They are product guardrails, not a promise that Web Audio's transient native
+   decoder allocations are zero. The plugin does not create a second whole-file
+   mono buffer: channel slices are mixed, resampled, and released incrementally.
+5. Each output frame is exactly 16 kHz mono signed PCM16, 320 samples / 640
+   bytes. `SidecarProcess.writeAudioFrame` is required and waits for Node stdin
+   `drain` when a write returns false. The source awaits that bounded write;
+   `falling_behind` and `saturated` queue tiers pause it, while
+   `utterance_queue_overload` and the finite backpressure deadline abort the
+   source and issue native `cancel_session`, never graceful stop.
+6. Normal completion requests `stop_session` after all accepted frames. The
+   `ManagedAudioFileSession` lifecycle owns start issuance, start acknowledgement,
+   stop/cancel requests, feedback arbitration, and lease disposition. A local
+   projection adapter tracks only insertion promises; it never waits for native
+   cancellation while a transcript event is being inserted.
+7. `transcript_ready` is projected through the existing `Session` surface. A
+   complete final revision is one atomic insertion; a rejected projection
+   reports actionable copy and starts cancellation without deadlocking the
+   transcript drain. The session is disposed only after its projection work and
+   editor resources finish.
+8. A failed or unacknowledged cancellation retains the speech lease in quarantine
+   while the sidecar process remains alive. Only a correlated `session_stopped`
+   result, a `no_active_session` acknowledgement, or an observed forced process
+   exit releases that lease. This keeps mutations blocked without allowing a
+   late native session to overlap maintenance. Terminal workflow errors clear
+   local state and are retryable through a new command invocation.
+
+The file workflow does not invoke LLM cleanup. Existing microphone LLM behavior
+is unchanged, and audio bytes never cross the local sidecar pipe.
+
+#### Verification boundary
+
+Generated WAV fixtures exercise stereo channel mixing, real linear resampling,
+fixed frame output, encoded/decoded budgets, cancellation, and backpressure.
+Fake platform decoders stand in for Electron's codec implementation. Manual
+real-Electron codec/file-picker smoke testing and real Node stream backpressure
+against a running sidecar remain release verification tasks; the TypeScript
+suite cannot prove those platform integrations.
 
 ---
 

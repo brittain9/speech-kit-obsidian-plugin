@@ -118,6 +118,21 @@ interface RawSessionEntry {
   utteranceId: UtteranceId;
 }
 
+export interface SessionTarget {
+  readonly file: TFile;
+  readonly kind: 'active' | 'fallback';
+  readonly view: EditorView;
+}
+
+export interface SessionCreateOptions {
+  callbacks: SessionLifecycleCallbacks;
+  leafPinManager: Pick<TemporaryLeafPinLeaseManager, 'acquire'>;
+  logger?: PluginLogger;
+  placement: NotePlacementOptions;
+  rendererOptions: TranscriptRenderOptions;
+  sessionId: string;
+}
+
 export class Session {
   private readonly journal: SessionJournal;
   private readonly renderer: TranscriptRenderer;
@@ -136,23 +151,30 @@ export class Session {
     return resolveDictationTarget(app) !== null;
   }
 
+  static getDictationTarget(app: Pick<App, 'workspace'>): SessionTarget | null {
+    return resolveDictationTarget(app);
+  }
+
+  static targetsEqual(left: SessionTarget, right: SessionTarget): boolean {
+    return left.file === right.file && left.view === right.view && left.kind === right.kind;
+  }
+
   static createFromActiveEditor(
     app: Pick<App, 'vault' | 'workspace'>,
-    options: {
-      callbacks: SessionLifecycleCallbacks;
-      leafPinManager: Pick<TemporaryLeafPinLeaseManager, 'acquire'>;
-      logger?: PluginLogger;
-      placement: NotePlacementOptions;
-      rendererOptions: TranscriptRenderOptions;
-      sessionId: string;
-    },
+    options: SessionCreateOptions,
   ): Session {
     const target = resolveDictationTarget(app);
-
     if (target === null) {
       throw new Error('No active Markdown editor is available.');
     }
+    return Session.createFromTarget(app, target, options);
+  }
 
+  static createFromTarget(
+    app: Pick<App, 'vault' | 'workspace'>,
+    target: SessionTarget,
+    options: SessionCreateOptions,
+  ): Session {
     // No cursor available — append to end of the open note rather than blocking on a popup.
     const placement: NotePlacementOptions =
       target.kind === 'fallback'
@@ -787,11 +809,7 @@ function createNoteSurface(
   return new NoteSurface(view, placement, onSurfaceDesynchronized);
 }
 
-type DictationTarget =
-  | { file: TFile; kind: 'active'; view: EditorView }
-  | { file: TFile; kind: 'fallback'; view: EditorView };
-
-function resolveDictationTarget(app: Pick<App, 'workspace'>): DictationTarget | null {
+function resolveDictationTarget(app: Pick<App, 'workspace'>): SessionTarget | null {
   const active = resolveActiveEditorTarget(app);
   if (active !== null) {
     return { ...active, kind: 'active' };

@@ -108,6 +108,7 @@ type StartSynthesisMock = ReturnType<
 >;
 
 function controllerHarness(options: {
+  audioFileActive?: boolean;
   catalog?: ModelCatalogRecord;
   dictationLanguage?: 'auto' | 'en' | 'sr';
   installedModels?: readonly InstalledModelRecord[];
@@ -149,6 +150,7 @@ function controllerHarness(options: {
     getCatalog: () => options.catalog ?? TTS_CATALOG,
     getInstalledModels: () => options.installedModels ?? TTS_INSTALLED_MODELS,
     getSettings: () => settings,
+    isAudioFileTranscriptionActive: () => options.audioFileActive ?? false,
     isDictationBusy: () => true,
     onModelMissing,
     onStateChange: vi.fn(),
@@ -216,6 +218,18 @@ describe('resolveReadRange', () => {
 });
 
 describe('ReadAloudController', () => {
+  it('does not start while a local audio file owns speech input', async () => {
+    const harness = controllerHarness({ audioFileActive: true, selected: true });
+
+    await harness.controller.readText('Wait until file transcription finishes.', 'en');
+
+    expect(harness.stopDictation).not.toHaveBeenCalled();
+    expect(harness.startSynthesis).not.toHaveBeenCalled();
+    expect(harness.feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'audio-file-busy' }),
+    );
+  });
+
   it('publishes only the audible chunk range to the follow-along target', async () => {
     const setDesiredRange = vi.fn();
     const followAlong = { begin: vi.fn(() => ({ setDesiredRange })) };

@@ -2,6 +2,60 @@ import type { TranslationCatalog } from '.';
 
 export const de = {
   'notice.dictationNotActive': 'Das Diktat ist derzeit nicht aktiv.',
+  'commands.transcribeAudioFile': 'Lokale Audiodatei transkribieren',
+  'commands.cancelAudioFile': 'Transkription lokaler Audiodatei abbrechen',
+  'audio-file-model-required':
+    'Wählen und validieren Sie in „Modelle verwalten“ ein lokales Sprach-zu-Text-Modell und versuchen Sie es erneut.',
+  'audio-file-model-changed':
+    'Das ausgewählte Transkriptionsmodell wurde geändert, während die Dateiauswahl geöffnet war. Starten Sie „Lokale Audiodatei transkribieren“ erneut.',
+  'audio-file-language-changed':
+    'Die Diktionssprache wurde während der Vorbereitung der Audiodatei geändert. Starten Sie „Lokale Audiodatei transkribieren“ erneut, um die aktuelle Sprache zu verwenden.',
+  'audio-file-model-not-batch':
+    'Für Audiodateien wird ein Batch-Sprachmodell benötigt. Wählen Sie ein Modell ohne Streaming und versuchen Sie es erneut.',
+  'audio-file-language-unsupported':
+    'Das ausgewählte Modell unterstützt die eingestellte Diktionssprache ({language}) nicht. Wählen Sie ein kompatibles Modell oder ändern Sie die Diktionssprache.',
+  'audio-file-target-required':
+    'Öffnen Sie die Markdown-Notiz, die das Transkript erhalten soll, im Bearbeitungsmodus und versuchen Sie es erneut.',
+  'audio-file-target-changed':
+    'Das Transkriptziel wurde während der Vorbereitung geändert. Öffnen Sie die ursprüngliche Notiz und starten Sie den Befehl erneut.',
+  'audio-file-desktop-only':
+    'Die Transkription von Audiodateien ist in der Obsidian-Desktop-App verfügbar. Öffnen Sie diesen Tresor auf dem Desktop, um fortzufahren.',
+  'audio-file-busy':
+    'Mikrofondiktat oder eine andere Audiodateitranskription ist bereits aktiv. Beenden oder abbrechen Sie sie zuerst.',
+  'audio-file-maintenance':
+    'Die lokale Speech Engine wird installiert, neu gestartet oder aktualisiert. Warten Sie und versuchen Sie es dann erneut.',
+  'audio-file-read-failed':
+    'Die ausgewählte Datei konnte nicht gelesen werden. Prüfen Sie Zugriff und Existenz und versuchen Sie es erneut.',
+  'audio-file-decode-failed':
+    'Obsidian konnte die Audiodatei nicht dekodieren. Konvertieren Sie sie in ein von Ihrer Obsidian-Version abspielbares Format, häufig WAV.',
+  'audio-file-encoded-size':
+    'Die kodierte Audiodatei ist zu groß. Wählen Sie eine kürzere Datei mit geringerer Bitrate (maximal 64 MiB).',
+  'audio-file-duration':
+    'Die Audiodatei ist länger als das Sicherheitslimit von 30 Minuten. Teilen Sie sie in kürzere Dateien auf.',
+  'audio-file-model-duration':
+    'Die Audiodatei ist länger, als das ausgewählte Modell verarbeiten kann. Teilen Sie sie auf oder wählen Sie ein Modell mit höherem Zeitlimit.',
+  'audio-file-decoded-memory':
+    'Die Dekodierung würde zu viel Speicher benötigen. Wählen Sie eine kürzere Datei mit geringerer Bitrate oder weniger Kanälen.',
+  'audio-file-empty':
+    'Die ausgewählte Datei enthält kein transkribierbares Audio. Wählen Sie eine andere Audiodatei.',
+  'audio-file-start-failed':
+    'Die lokale Speech Engine konnte nicht gestartet werden. Prüfen Sie das ausgewählte Modell und versuchen Sie es erneut.',
+  'audio-file-sidecar-missing':
+    'Installieren Sie die lokale Speech Engine, wählen Sie ein Sprach-zu-Text-Modell und versuchen Sie es erneut.',
+  'audio-file-shutdown-uncertain':
+    'Die lokale Speech Engine hat das Beenden der Audiodateitranskription nicht bestätigt. Speech Kit hat die Sitzung geschützt, damit keine überlappenden Sprachaufträge entstehen. Prüfen Sie die lokale Speech Engine und versuchen Sie es erneut.',
+  'audio-file-sidecar-failed':
+    'Die Transkription wurde beendet, weil die lokale Speech Engine fehlgeschlagen ist. Prüfen Sie das Modell und versuchen Sie es erneut.',
+  'audio-file-queue-overload':
+    'Die Speech Engine konnte nicht Schritt halten. Teilen Sie die Aufnahme auf oder wählen Sie ein schnelleres Modell.',
+  'audio-file-transcript-write-failed':
+    'Die Transkription wurde beendet, weil Speech Kit nicht sicher in die Notiz schreiben konnte. Stellen Sie die Notiz wieder her.',
+  'audio-file-target-closed':
+    'Die Transkription wurde beendet, weil die Zielnotiz geschlossen oder ersetzt wurde. Öffnen Sie sie erneut und starten Sie den Befehl.',
+  'audio-file-target-deleted':
+    'Die Zielnotiz wurde gelöscht. Stellen Sie sie wieder her und starten Sie den Befehl erneut.',
+  'audio-file-surface-changed':
+    'Die Notiz wurde so geändert, dass Speech Kit den Speicherort nicht sicher verfolgen konnte. Stellen Sie sie wieder her und versuchen Sie es erneut.',
   'notice.dictationStartFailed': 'Das Diktat konnte nicht gestartet werden.',
   'notice.dictationStopFailed': 'Das Diktat konnte nicht gestoppt werden.',
   'notice.lastUtteranceCleared': 'Die zuletzt gespeicherte Äußerung wurde gelöscht.',

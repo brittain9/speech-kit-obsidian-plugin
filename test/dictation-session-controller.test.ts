@@ -161,6 +161,33 @@ class FakeAudioLevelMeter {
 }
 
 describe('DictationSessionController', () => {
+  it('refuses microphone dictation while a local audio file is being transcribed', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const captureStream = new FakeCaptureStream();
+    const feedback = { show: vi.fn() };
+    const controller = new DictationSessionController({
+      audioLevelMeter: new FakeAudioLevelMeter(),
+      captureStream,
+      createLlmRouter: () => null,
+      createSession: () => new FakeSession(),
+      feedback,
+      getSettings: () => createSettings({ selectedModel: createExternalModelSelection() }),
+      hasDictationTarget: () => true,
+      isAudioFileTranscriptionActive: () => true,
+      setRibbonQueueTier: vi.fn(),
+      setRibbonState: vi.fn(),
+      sidecarConnection,
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
+      stopConflictingSpeech: vi.fn(),
+    });
+
+    await controller.startDictation();
+
+    expect(captureStream.start).not.toHaveBeenCalled();
+    expect(sidecarConnection.startSession).not.toHaveBeenCalled();
+    expect(feedback.show).toHaveBeenCalledWith(expect.objectContaining({ key: 'audio-file-busy' }));
+  });
+
   it('refuses a start synchronously while sidecar maintenance is active', async () => {
     const sidecarLifecycleGate = new SidecarLifecycleGate();
     const mutation = sidecarLifecycleGate.acquireMutation();
@@ -3369,6 +3396,7 @@ function createController({
     feedback,
     getSettings,
     hasDictationTarget,
+    isAudioFileTranscriptionActive: () => false,
     logger,
     ...(onBatchTranscriptReplacementAccepted !== undefined
       ? { onBatchTranscriptReplacementAccepted }

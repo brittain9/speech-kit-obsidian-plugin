@@ -1,5 +1,57 @@
 export const en = {
   'notice.dictationNotActive': 'Dictation is not currently active.',
+  'audio-file-model-required':
+    'Select and validate a local speech-to-text model in Manage models, then try the audio file again.',
+  'audio-file-model-changed':
+    'The selected transcription model changed while the file picker was open. Run Transcribe local audio file again to use the current model.',
+  'audio-file-language-changed':
+    'The dictation language changed while the audio file was being prepared. Run Transcribe local audio file again to use the current language.',
+  'audio-file-model-not-batch':
+    'Audio-file transcription requires a batch speech-to-text model. Select a non-streaming model in Manage models, then try again.',
+  'audio-file-language-unsupported':
+    'The selected model does not support the configured dictation language ({language}). Choose a compatible model or change Dictation language, then try again.',
+  'audio-file-target-required':
+    'Open the Markdown note that should receive the transcript in editing mode, then run Transcribe local audio file again.',
+  'audio-file-target-changed':
+    'The transcript target changed while the audio file was being prepared. Return to the original note and run Transcribe local audio file again.',
+  'audio-file-desktop-only':
+    'Audio-file transcription is available in the Obsidian desktop app. Open this vault on desktop to continue.',
+  'audio-file-busy':
+    'Microphone dictation or another audio-file transcription is already active. Finish or cancel it, then try again.',
+  'audio-file-maintenance':
+    'The local speech engine is being installed, restarted, or updated. Wait for it to finish, then try the audio file again.',
+  'audio-file-read-failed':
+    'Speech Kit could not read the selected file. Check that the file still exists and is accessible, then try again.',
+  'audio-file-decode-failed':
+    'Obsidian could not decode this audio file. Convert it to a format your Obsidian version can play (often WAV), then try again.',
+  'audio-file-encoded-size':
+    'This encoded audio file is too large for safe in-app decoding. Choose a shorter or lower-bitrate file (maximum 64 MiB), then try again.',
+  'audio-file-duration':
+    'This audio file is longer than the 30-minute safety limit. Split it into shorter files, then transcribe each part.',
+  'audio-file-model-duration':
+    'This audio file is longer than the selected model can transcribe in one file. Split it into shorter files or choose a model with a longer audio limit.',
+  'audio-file-decoded-memory':
+    'Decoding this file would use too much memory. Choose a shorter or lower-bitrate file, or one with fewer channels, then try again.',
+  'audio-file-empty':
+    'The selected file contains no audio that can be transcribed. Choose a different audio file.',
+  'audio-file-start-failed':
+    'The local speech engine could not start audio-file transcription. Check the selected model, then try again.',
+  'audio-file-sidecar-missing':
+    'Install the local speech engine in Setup, select a speech-to-text model, then try the audio file again.',
+  'audio-file-shutdown-uncertain':
+    'The local speech engine did not confirm that audio-file shutdown completed. Speech Kit kept the session protected to prevent overlapping speech work. Check the local engine and try again.',
+  'audio-file-sidecar-failed':
+    'Audio-file transcription stopped because the local speech engine failed. Check the selected model and try again.',
+  'audio-file-queue-overload':
+    'The local speech engine could not keep up, so Speech Kit stopped reading more audio. Split the recording or choose a faster model, then try again.',
+  'audio-file-transcript-write-failed':
+    'Audio-file transcription stopped because Speech Kit could not safely write to the note. Restore the intended note and try again.',
+  'audio-file-target-closed':
+    'Audio-file transcription stopped because its target note was closed or replaced. Reopen the note and run the command again.',
+  'audio-file-target-deleted':
+    'Audio-file transcription stopped because its target note was deleted. Restore or recreate the note, then run the command again.',
+  'audio-file-surface-changed':
+    'Audio-file transcription stopped because the note changed in a way Speech Kit could not safely track. Restore the intended note and run the command again.',
   'notice.dictationStartFailed': 'Could not start dictation.',
   'notice.dictationStopFailed': 'Could not stop dictation.',
   'notice.finalizedUtteranceAutoCopyFailed':
@@ -118,6 +170,8 @@ export const en = {
   'commands.clearRawRecovery': 'Clear raw recovery',
   'commands.checkSidecarHealth': 'Check sidecar health',
   'commands.restartSidecar': 'Restart sidecar',
+  'commands.transcribeAudioFile': 'Transcribe local audio file',
+  'commands.cancelAudioFile': 'Cancel local audio-file transcription',
   'commands.readAloud': 'Read aloud from selection or note start',
   'commands.readAloudFromCursor': 'Read aloud from cursor',
   'commands.pauseResumeReadAloud': 'Pause or resume reading',
