@@ -13,6 +13,13 @@ output_dir="${1:-dist/media-ffmpeg}"
 # a remote archive. Use the shell's POSIX temporary directory on every host.
 case "$(uname -s)" in
   MINGW*|MSYS*) executable_suffix=.exe; temporary_root=/tmp ;;
+  Darwin*)
+    executable_suffix=
+    temporary_root="${TMPDIR:-/tmp}"
+    # Match Speech Kit's published macOS minimum instead of inheriting the
+    # GitHub runner's newer deployment target.
+    export MACOSX_DEPLOYMENT_TARGET=14.2
+    ;;
   *) executable_suffix=; temporary_root="${TMPDIR:-/tmp}" ;;
 esac
 build_dir="$temporary_root/speech-kit-ffmpeg-${version}-$$"
@@ -39,6 +46,11 @@ configure_flags=(
   --enable-ffmpeg
   --enable-ffprobe
 )
+if [[ "$executable_suffix" == .exe ]]; then
+  # MinGW defaults to a dynamically linked winpthread runtime. Keep the two
+  # executables self-contained so a clean Windows install can actually run them.
+  configure_flags+=(--extra-ldflags=-static)
+fi
 
 (
   cd "$source_dir"
@@ -48,6 +60,22 @@ configure_flags=(
 )
 
 cp "$prefix/bin/ffmpeg${executable_suffix}" "$prefix/bin/ffprobe${executable_suffix}" "$output_dir/"
+if [[ "$(uname -s)" == Darwin ]]; then
+  for executable in ffmpeg ffprobe; do
+    if ! xcrun vtool -show-build "$output_dir/$executable" | grep -Eq 'minos 14\.2([[:space:]]|$)'; then
+      echo "$executable does not target macOS 14.2." >&2
+      exit 1
+    fi
+  done
+fi
+if [[ "$executable_suffix" == .exe ]]; then
+  for executable in ffmpeg.exe ffprobe.exe; do
+    if objdump -p "$output_dir/$executable" | grep -Eiq 'DLL Name: (libwinpthread|libgcc|libstdc\+\+)'; then
+      echo "$executable requires an unbundled MinGW runtime DLL." >&2
+      exit 1
+    fi
+  done
+fi
 cp "$source_dir/COPYING.LGPLv2.1" "$source_dir/COPYING.LGPLv3" "$output_dir/"
 cp "$build_dir/$source_name" "$output_dir/"
 "$output_dir/ffmpeg${executable_suffix}" -buildconf > "$output_dir/BUILD_CONFIGURATION.txt"
