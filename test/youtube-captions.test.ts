@@ -67,7 +67,7 @@ describe('YouTube captions', () => {
   });
 
   it('uses the player default audio track when the video language field is absent', async () => {
-    const request = vi.fn(async ({ method }: { method: string }) =>
+    const request = vi.fn(async ({ method }: { method: string; url: string }) =>
       method === 'POST'
         ? JSON.stringify({
             playabilityStatus: { status: 'OK' },
@@ -95,6 +95,7 @@ describe('YouTube captions', () => {
     );
     expect(result?.language).toBe('en');
     expect(result?.cues[0]?.text).toBe('Hello');
+    expect(request.mock.calls[0]?.[0].url).toBe('https://www.youtube.com/youtubei/v1/player');
   });
 
   it('removes rolling-caption overlap while retaining separate repeated speech', () => {

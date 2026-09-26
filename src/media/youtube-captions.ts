@@ -2,8 +2,7 @@ import { type DictationLanguage, dictationLanguageLabel } from '../language/dict
 import { t } from '../shared/i18n';
 import { canonicalYouTubeUrl, type YouTubeVideoRef } from './youtube-url';
 
-const PLAYER_URL =
-  'https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+const PLAYER_URL = 'https://www.youtube.com/youtubei/v1/player';
 const IOS_CLIENT_VERSION = '20.10.38';
 const IOS_USER_AGENT =
   'com.google.ios.youtube/20.10.38 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X)';

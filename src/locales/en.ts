@@ -284,7 +284,7 @@ export const en = {
   'media.modal.selectFile': 'Choose an audio or video file to continue.',
   'media.modal.aiPreset': 'After transcription',
   'media.modal.aiPresetNone': 'Transcript only',
-  'media.modal.aiPresetDesc': 'Optional AI step. Review its result before applying it.',
+  'media.modal.aiPresetDesc': 'Optional: apply the selected AI preset to the complete transcript.',
   'media.modal.aiProviderRequired': 'Choose an AI provider in Settings or select Transcript only.',
   'media.modal.aiPresetMissing': 'The selected AI preset is no longer available. Choose another.',
   'media.modal.aiNotReady':
