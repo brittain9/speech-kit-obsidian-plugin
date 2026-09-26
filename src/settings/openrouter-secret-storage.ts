@@ -7,6 +7,7 @@ import {
   type PluginSettings,
   resolvePluginSettings,
 } from './plugin-settings';
+import { needsPluginSettingsMigration } from './schema-migration';
 
 export const DEFAULT_OPENROUTER_SECRET_ID = 'local-dictation-openrouter-api-key';
 export { DEFAULT_OPENAI_COMPATIBLE_SECRET_ID };
@@ -24,8 +25,7 @@ export function loadPluginSettings(
 ): LoadedPluginSettings {
   const raw = isRecord(data) ? data : {};
   let settings = resolvePluginSettings(data);
-  const needsSchemaMigration =
-    data !== null && data !== undefined && (!isRecord(data) || data.schemaVersion !== 10);
+  const needsSchemaMigration = needsPluginSettingsMigration(data);
 
   if (!Object.hasOwn(raw, LEGACY_OPENROUTER_API_KEY)) {
     return { settings, shouldPersist: needsSchemaMigration };

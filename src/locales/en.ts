@@ -52,6 +52,43 @@ export const en = {
     'Audio-file transcription stopped because its target note was deleted. Restore or recreate the note, then run the command again.',
   'audio-file-surface-changed':
     'Audio-file transcription stopped because the note changed in a way Speech Kit could not safely track. Restore the intended note and run the command again.',
+  'media-llm-empty':
+    'The media transcript is empty or the AI provider returned no text. The raw transcript was kept; record a non-empty transcript or check the provider and try again.',
+  'media-llm-failed':
+    'AI media processing failed, so the raw transcript was kept. Check the configured provider and try again.',
+  'media-llm-cancelled': 'AI media processing was cancelled; the raw transcript was kept.',
+  'media-llm-range-unavailable':
+    'The media transcript changed while AI processing was pending, so the raw transcript was kept.',
+  'media-llm-readiness':
+    'Media AI is not ready ({issue}). Configure the selected provider, model, and credentials before enabling it.',
+  'llm.mediaDisclosure.none':
+    'No AI provider is selected. Configure a provider before enabling media AI.',
+  'llm.mediaDisclosure.local':
+    'Media AI processes {payload} with {provider} ({model}) on this device.',
+  'llm.mediaDisclosure.network':
+    'Media AI sends {payload} to {provider} ({model}) over the network.',
+  'llm.mediaDisclosure.unknown':
+    'Media AI provider {provider} ({model}) has unknown data egress for {payload}.',
+  'media-llm-readiness-provider_missing':
+    'Media AI has no selected provider. Choose a provider and try again.',
+  'media-llm-readiness-provider_unavailable':
+    'Media AI is unavailable because its provider or preview service is not configured.',
+  'media-llm-readiness-routing_invalid':
+    'Media AI routing is invalid. Choose a valid provider policy and try again.',
+  'media-llm-readiness-model_missing':
+    'Media AI has no model configured. Choose a model and try again.',
+  'media-llm-readiness-api_key_missing':
+    'Media AI has no API key configured. Add the provider key and try again.',
+  'media-llm-readiness-base_url_invalid':
+    'The custom media AI endpoint is not a valid HTTP or HTTPS URL. Correct it and try again.',
+  'llm.mediaPayload.transcriptOnly': 'transcript text only',
+  'llm.mediaPayload.transcriptAndBoundedNoteContext': 'transcript text and bounded note context',
+  'media.progress.acquire': 'Preparing media…',
+  'media.progress.decode': 'Decoding media…',
+  'media.progress.transcribe': 'Transcribing media…',
+  'media.progress.format': 'Formatting transcript…',
+  'media.progress.aiProcessing': 'Processing transcript with AI…',
+  'media.progress.insert': 'Inserting transcript…',
   'notice.dictationStartFailed': 'Could not start dictation.',
   'notice.dictationStopFailed': 'Could not stop dictation.',
   'notice.finalizedUtteranceAutoCopyFailed':
@@ -63,6 +100,10 @@ export const en = {
   'notice.lastUtteranceReinserted': 'Reinserted the last finalized utterance.',
   'notice.lastUtteranceUnavailable': 'No finalized utterance is available.',
   'notice.llmTransformEmpty': 'LLM transform returned nothing to add.',
+  'llm.mediaPreview.title': 'Preview media transcript transformation',
+  'llm.mediaPreview.description':
+    'Review the text result before applying it. The raw media transcript remains available for recovery.',
+  'llm.mediaPreview.apply': 'Apply result',
   'notice.microphoneDisconnected':
     'Microphone disconnected. Dictation stopped and will finish processing audio already captured. Reconnect the microphone, then start dictation again.',
   'notice.rawTranscriptChanged':
@@ -439,6 +480,9 @@ export const en = {
   'settings.llm.enableFeatures.name': 'Enable LLM features',
   'settings.llm.enableFeatures.desc':
     'Make LLM transformations available. Turn transformation on or off in the sidebar.',
+  'settings.llm.mediaProcessing.name': 'Process media transcripts with AI',
+  'settings.llm.mediaProcessing.desc':
+    'After a local media transcript finishes, use the active preset on its text. You will preview or confirm the result before it is applied; media and source details are never sent.',
   'settings.llm.restoreDefaults.name': 'Restore transform defaults',
   'settings.llm.restoreDefaults.desc':
     'Reset preset, timing, context, minimum words, and temperature. Saved presets and models are kept.',

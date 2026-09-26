@@ -1,4 +1,4 @@
-import type { SessionAcceptResult } from '../session/session';
+import type { SessionAcceptResult, SessionRangeReplacementResult } from '../session/session';
 import type { TranscriptRevision } from '../session/session-journal';
 import type { TranscriptReadyEvent } from '../sidecar/protocol';
 import { buildTranscriptSpans, type TranscriptRenderOptions } from '../transcript/renderer';
@@ -8,6 +8,24 @@ export interface AudioFileEditorSession {
   readonly clearSessionProcessingMark: () => void;
   readonly dispose: () => void;
   readonly readNoteGlossary: (maxChars: number) => { text: string; truncated: boolean } | null;
+  readonly wasLastTranscriptInserted?: () => boolean;
+}
+
+export interface MediaLlmEditorSession {
+  readonly clearSessionProcessingMark: () => void;
+  readonly insertAdjacentToSessionRange: (
+    blockText: string,
+    placement: 'above' | 'below',
+    options?: { rejectUserEdits?: boolean },
+  ) => boolean;
+  readonly joinRawSessionText: () => string;
+  readonly markSessionRangeAsProcessing: () => boolean;
+  readonly readNoteText: (maxChars: number) => { text: string; truncated: boolean } | null;
+  readonly replaceSessionRangeWithCleaned: (
+    cleanText: string,
+    options?: { rawTextForCallout?: string; rejectUserEdits?: boolean; showRawBelow?: boolean },
+  ) => SessionRangeReplacementResult;
+  readonly setAnchorMode: (mode: 'hidden' | 'visible') => void;
 }
 
 export class AudioFileTranscriptAdapter {
@@ -17,13 +35,27 @@ export class AudioFileTranscriptAdapter {
     private readonly session: AudioFileEditorSession,
     readonly timestamps: TranscriptRenderOptions['timestamps'],
     private readonly onProjectionFailure: (error: unknown) => void,
+    private readonly onProjectionPhase?: (phase: 'format' | 'insert') => void,
   ) {}
 
   readNoteGlossary(maxChars: number): { text: string; truncated: boolean } | null {
     return this.session.readNoteGlossary(maxChars);
   }
 
+  getMediaLlmSession(): MediaLlmEditorSession | null {
+    const candidate = this.session as Partial<MediaLlmEditorSession>;
+    return typeof candidate.joinRawSessionText === 'function' &&
+      typeof candidate.markSessionRangeAsProcessing === 'function' &&
+      typeof candidate.readNoteText === 'function' &&
+      typeof candidate.replaceSessionRangeWithCleaned === 'function' &&
+      typeof candidate.insertAdjacentToSessionRange === 'function' &&
+      typeof candidate.setAnchorMode === 'function'
+      ? (candidate as MediaLlmEditorSession)
+      : null;
+  }
+
   handleTranscript(event: TranscriptReadyEvent): void {
+    this.onProjectionPhase?.('format');
     const projection = this.projectTranscript(event);
     this.pendingProjections.add(projection);
     const removeProjection = (): void => {
@@ -64,6 +96,8 @@ export class AudioFileTranscriptAdapter {
 
     if (result.kind === 'rejected') {
       this.onProjectionFailure(new Error(result.reason));
+    } else if (result.kind === 'accepted' && (this.session.wasLastTranscriptInserted?.() ?? true)) {
+      this.onProjectionPhase?.('insert');
     }
   }
 }

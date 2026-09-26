@@ -64,6 +64,16 @@ describe('LLM Secret Storage integration', () => {
     expect(result.shouldPersist).toBe(true);
   });
 
+  it('migrates schema 10 data that predates the media LLM opt-in', () => {
+    const result = loadPluginSettings(
+      { schemaVersion: 10 },
+      { getSecret: () => null, setSecret: vi.fn() },
+    );
+
+    expect(result.settings.mediaLlmProcessing).toBe(false);
+    expect(result.shouldPersist).toBe(true);
+  });
+
   it('does not rewrite already-normalized schema 10 settings', () => {
     const result = loadPluginSettings(DEFAULT_PLUGIN_SETTINGS, {
       getSecret: () => null,

@@ -106,6 +106,45 @@ The **Transcribe local audio file** command is deliberately separate from live
 microphone capture. It is available only in the Obsidian desktop app and uses a
 renderer-local `File`; there is no URL fetch, upload, or remote fallback.
 
+The file picker is the first `MediaSource` adapter. It emits provider-neutral
+plan/progress/ready events and returns a short-lived `MediaLease` implemented by
+`LocalMediaLease`, with an opaque pull-driven `ReadableStream` and typed
+provenance. Interactive acquisition opens the picker once and does not retain an
+abandoned `File` or expose a local token/reference API. The lease is released
+immediately after decode/VAD/ASR transcript projection and before optional
+post-completion AI work, with an idempotent cleanup promise covering success,
+failure, cancellation, and disposal. The ASR, renderer, and LLM layers never
+receive a provider URL, path, credential, subprocess, or remote response body.
+Local-file acquisition remains the only adapter in this release; referenced
+provider sources arrive in the next stacked PR.
+
+The media controller owns the provider-neutral sequence: acquire → local decode
+→ the existing VAD/batch-ASR `Session` → timestamps, diarization, and smart
+formatting → safe editor insertion. Progress exposes `acquire`, `decode`,
+`transcribe`, `format`, `AI processing`, and `insert` independently. Existing
+encoded/decoded budgets, bounded frame work, sidecar drain/backpressure,
+speech-lease quarantine, exact target ownership, retry, and localization
+behavior are unchanged.
+
+When `mediaLlmProcessing` is explicitly enabled, a dedicated media LLM
+coordinator preflights provider/model/key/base-URL readiness before expensive
+local transcription, then re-reads settings at post-completion and before
+application. It uses the existing configured provider, active preset, and
+provider/model/data-egress disclosure. The provider receives only the recorded
+transcript text and explicitly bounded current-note context—never media, a
+media path/name, source URL, provenance, cookies, or tokens. The raw media
+range remains the source of truth. A preview/explicit confirmation is required
+before replace or additive output; empty/failure leaves raw text and reports
+actionable feedback. Disabling media processing or all LLM features aborts an
+in-flight provider request. A user edit latches the range and wins over pending
+AI output. Replacement is one undoable editor operation, raw recovery restores
+the pre-AI range, and additive outputs leave the raw range and citation boundary
+untouched. Custom OpenAI-compatible chat uses a CORS-free Node HTTP(S) stream
+with bounded response reads, early Content-Length rejection, timeout, and
+AbortSignal propagation; model discovery retains the existing requestUrl probe.
+The setting defaults to off, so file behavior is unchanged unless the user opts
+in.
+
 1. The command captures the exact active/fallback Markdown target and validates
    a validated non-streaming speech-to-text model, configured dictation language,
    speech lease, and absence of conflicting capture. It opens the picker only
@@ -156,8 +195,11 @@ renderer-local `File`; there is no URL fetch, upload, or remote fallback.
    late native session to overlap maintenance. Terminal workflow errors clear
    local state and are retryable through a new command invocation.
 
-The file workflow does not invoke LLM cleanup. Existing microphone LLM behavior
-is unchanged, and audio bytes never cross the local sidecar pipe.
+The file workflow keeps the existing microphone LLM behavior separate. With
+`mediaLlmProcessing` off, media transcription never invokes a provider and
+retains the existing raw insertion behavior. With it on, only the completed
+media transcript text is considered by the explicit, confirmed media transform;
+audio bytes never cross the local sidecar pipe or an LLM request.
 
 #### Verification boundary
 
@@ -644,7 +686,8 @@ A representative slice of user-facing settings (full list and defaults in
 | `timestampsEnabled` | `false` | Render timestamps in the note |
 | `timestampClock` | `elapsed` | `elapsed` session time vs `wallclock` |
 | `timestampDensity` | `sparse` | `sparse` (interval), `every_utterance`, or `paragraph` |
-| `llmPostprocessMode` | `off` | LLM transform: `off` / `per_utterance` / `batch` |
+| `llmPostprocessMode` | `off` | Microphone LLM transform: `off` / `per_utterance` / `batch` |
+| `mediaLlmProcessing` | `false` | Explicit, confirmed batch text transform after local media transcription |
 | `llmRoutingPolicy` | `null` | Fixed provider or optional transcript-size split |
 | `llmProviderConfigurations` | Empty models | Ollama, OpenRouter, and OpenAI-compatible connection settings |
 | `llmNetworkTimeoutSec` | `60` | OpenRouter and custom-endpoint request timeout |

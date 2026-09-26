@@ -1,4 +1,5 @@
 import type { AudioFileBackpressureGate } from '../audio/audio-file-backpressure';
+import type { MediaLease } from '../media/media-source';
 import type { SidecarLifecycleLease } from '../sidecar/sidecar-lifecycle-gate';
 import type { AudioFileTranscriptAdapter } from './audio-file-transcript-adapter';
 
@@ -33,6 +34,10 @@ export class ManagedAudioFileSession {
   private completionResolve: () => void = () => {};
   private startCompletion: Promise<void> = Promise.resolve();
   private startCompletionResolve: () => void = () => {};
+  private postCompletion: (() => Promise<void>) | null = null;
+  private postCompletionStarted = false;
+  private mediaLease: MediaLease | null = null;
+  private mediaReleasePromise: Promise<void> | null = null;
 
   private constructor(
     readonly abortController: AbortController,
@@ -77,6 +82,28 @@ export class ManagedAudioFileSession {
       () => this.startCompletionResolve(),
       () => this.startCompletionResolve(),
     );
+  }
+
+  setPostCompletion(operation: (() => Promise<void>) | null): void {
+    this.postCompletion = operation;
+  }
+
+  setMediaLease(lease: MediaLease): void {
+    this.mediaLease = lease;
+  }
+
+  releaseMediaLease(): Promise<void> {
+    if (this.mediaReleasePromise !== null) return this.mediaReleasePromise;
+    this.mediaReleasePromise = this.mediaLease?.release() ?? Promise.resolve();
+    return this.mediaReleasePromise;
+  }
+
+  async runPostCompletion(): Promise<void> {
+    if (this.postCompletionStarted) {
+      return;
+    }
+    this.postCompletionStarted = true;
+    await this.postCompletion?.();
   }
 
   runCancellation(operation: () => Promise<void>): Promise<void> {

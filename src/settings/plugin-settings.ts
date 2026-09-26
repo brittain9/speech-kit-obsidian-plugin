@@ -187,6 +187,7 @@ export interface PluginSettings {
   llmRoutingPolicy: LlmRoutingPolicy | null;
   lastObsidianLanguage: string | null;
   localTranscriptSidebarBootstrapped: boolean;
+  mediaLlmProcessing: boolean;
   modelStorePathOverride: string;
   readAloudLanguage: DictationLanguage;
   retainLastUtterance: boolean;
@@ -259,6 +260,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   llmRoutingPolicy: null,
   lastObsidianLanguage: null,
   localTranscriptSidebarBootstrapped: false,
+  mediaLlmProcessing: false,
   modelStorePathOverride: '',
   readAloudLanguage: 'auto',
   retainLastUtterance: true,
@@ -384,6 +386,10 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
     localTranscriptSidebarBootstrapped: readBoolean(
       raw.localTranscriptSidebarBootstrapped,
       DEFAULT_PLUGIN_SETTINGS.localTranscriptSidebarBootstrapped,
+    ),
+    mediaLlmProcessing: readBoolean(
+      raw.mediaLlmProcessing,
+      DEFAULT_PLUGIN_SETTINGS.mediaLlmProcessing,
     ),
     modelStorePathOverride: readString(
       raw.modelStorePathOverride,

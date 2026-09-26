@@ -1,4 +1,5 @@
 import type { LlmPreset } from '../llm/presets';
+import { llmSettingsFingerprint } from '../llm/settings-fingerprint';
 import { isRecord } from '../shared/type-guards';
 import { type PluginSettings, resolvePluginSettings } from './plugin-settings';
 
@@ -80,7 +81,10 @@ export class LlmPresetStateStore {
         withLlmPresetState(currentSettings, mutation(currentState)),
       );
       const normalizedState = readLlmPresetState(normalizedSettings);
-      if (areLlmPresetStatesEqual(currentState, normalizedState)) {
+      if (
+        areLlmPresetStatesEqual(currentState, normalizedState) &&
+        llmSettingsFingerprint(currentSettings) === llmSettingsFingerprint(normalizedSettings)
+      ) {
         return;
       }
 
