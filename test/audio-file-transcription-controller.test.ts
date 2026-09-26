@@ -431,7 +431,6 @@ describe('AudioFileTranscriptionController', () => {
       text: 'Summary of the video.',
     }));
     const harness = createHarness({
-      confirmMediaLlm: async () => true,
       createLlmRouter: () => createFakeLlmRouter({ cleanup }),
       fetchYouTubeCaptions: async () => ({
         cues: [
@@ -1664,17 +1663,15 @@ describe('AudioFileTranscriptionController', () => {
     expect(createLlmRouter).not.toHaveBeenCalled();
   });
 
-  it('keeps the raw media transcript until explicit LLM confirmation and records recovery', async () => {
+  it('applies media AI output automatically and records raw transcript recovery', async () => {
     const cleanup = vi.fn(async (_options: unknown) => ({
       model: 'fake-model',
       providerId: 'ollama' as const,
       text: 'Clean media transcript.',
     }));
-    const confirm = vi.fn(async () => true);
     const recoveries: unknown[] = [];
     const progress: string[] = [];
     const harness = createHarness({
-      confirmMediaLlm: confirm,
       createLlmRouter: () => createFakeLlmRouter({ cleanup }),
       getSettings: () =>
         createSettings({
@@ -1708,10 +1705,6 @@ describe('AudioFileTranscriptionController', () => {
           '<media_transcript>\nRaw media transcript.\n</media_transcript>',
         ),
       }),
-    );
-    expect(confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ output: 'replace', text: 'Clean media transcript.' }),
-      expect.any(AbortSignal),
     );
     expect(progress).toContain('ai_processing');
     expect(harness.sessions[0]?.replaceSessionRangeWithCleaned).toHaveBeenCalledWith(

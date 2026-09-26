@@ -75,7 +75,6 @@ import {
   type MediaLlmJob,
   type MediaLlmRunOutcome,
 } from './media-llm-coordinator';
-import type { MediaLlmPreview } from './media-llm-processor';
 
 export type AudioFileTranscriptionState =
   | 'idle'
@@ -136,7 +135,6 @@ interface PartialTranscriptRecovery {
 
 export interface AudioFileTranscriptionControllerDependencies {
   readonly backpressureTimeoutMs: number;
-  readonly confirmMediaLlm?: (preview: MediaLlmPreview, signal: AbortSignal) => Promise<boolean>;
   readonly createLlmRouter?: (settings: PluginSettings) => LlmRouter | null;
   readonly createSession: (options: CreateAudioFileSessionOptions) => AudioFileEditorSession;
   readonly decoder: AudioFileDecoder;
@@ -216,9 +214,6 @@ export class AudioFileTranscriptionController {
     this.mediaLlmCoordinator =
       dependencies.mediaLlmCoordinator ??
       new MediaLlmCoordinator({
-        ...(dependencies.confirmMediaLlm === undefined
-          ? {}
-          : { confirm: dependencies.confirmMediaLlm }),
         ...(dependencies.createLlmRouter === undefined
           ? {}
           : { createRouter: dependencies.createLlmRouter }),

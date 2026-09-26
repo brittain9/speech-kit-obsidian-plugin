@@ -35,6 +35,7 @@ interface PresetManagerModalDependencies {
   feedback: Pick<UserFeedback, 'show'>;
   getSettings: () => PluginSettings;
   mutatePresetState: (mutation: LlmPresetStateMutation) => Promise<void>;
+  onClose?: () => void;
 }
 
 type EditorState =
@@ -64,6 +65,7 @@ export class PresetManagerModal extends Modal {
     this.isOpen = false;
     this.contentEl.empty();
     this.editor = null;
+    this.deps.onClose?.();
   }
 
   private render(): void {

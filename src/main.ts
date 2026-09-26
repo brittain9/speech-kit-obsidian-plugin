@@ -104,9 +104,9 @@ import { ReadAloudController, type ReadAloudState } from './tts/read-aloud-contr
 import { didReadAloudSettingsChange, resolveReadAloudVoiceId } from './tts/read-aloud-selection';
 import { DictationRibbonController } from './ui/dictation-ribbon';
 import { LOCAL_DICTATION_VIEW_TYPE, LocalDictationView } from './ui/local-dictation-view';
-import { confirmMediaLlmPreview } from './ui/media-llm-preview-modal';
 import { renderMediaProgressStatus } from './ui/media-progress-presenter';
 import { MediaTranscriptionModalRegistry } from './ui/media-transcription-modal';
+import { PresetManagerModal } from './ui/preset-manager-modal';
 import { YouTubeTranscriptModalRegistry } from './ui/youtube-transcript-modal';
 
 export default class LocalSttPlugin extends Plugin {
@@ -376,6 +376,7 @@ export default class LocalSttPlugin extends Plugin {
         getSettings: () => this.settings,
         isTranscribing: () => this.requireAudioFileTranscriptionController().isBusy(),
         onManageModels: () => void this.openModelPicker(),
+        onManagePresets: (onClosed) => void this.openMediaPresetManager(onClosed),
         startFile: async (file, options) => {
           const controller = this.requireAudioFileTranscriptionController();
           if (controller.isBusy()) throw new Error(t('media.modal.alreadyRunning'));
@@ -389,7 +390,6 @@ export default class LocalSttPlugin extends Plugin {
     };
     this.audioFileTranscriptionController = new AudioFileTranscriptionController({
       backpressureTimeoutMs: 30_000,
-      confirmMediaLlm: (preview, signal) => confirmMediaLlmPreview(this.app, preview, signal),
       createLlmRouter: (settings) =>
         createConfiguredLlmRouter(settings, (secretId) => this.getSecret(secretId)),
       mediaEntry: localMediaEntry,
@@ -563,6 +563,7 @@ export default class LocalSttPlugin extends Plugin {
             this.requireAudioFileTranscriptionController().getLastMediaAiOutcome(),
           getSettings: () => this.settings,
           isBusy: () => this.requireAudioFileTranscriptionController().isBusy(),
+          onManagePresets: (onClosed) => void this.openMediaPresetManager(onClosed),
           insertPartialTranscript: () =>
             this.requireAudioFileTranscriptionController().insertPartialTranscript(),
           start: async (url, options) => {
@@ -1192,6 +1193,16 @@ export default class LocalSttPlugin extends Plugin {
       throw new Error('Preset state store is not initialized');
     }
     return this.presetStateStore;
+  }
+
+  private async openMediaPresetManager(onClosed: () => void): Promise<void> {
+    await this.requirePresetStateStore().synchronize();
+    new PresetManagerModal(this.app, {
+      feedback: this.feedback,
+      getSettings: () => this.settings,
+      mutatePresetState: (mutation) => this.requirePresetStateStore().mutate(mutation),
+      onClose: onClosed,
+    }).open();
   }
 
   private requireSidecarConnection(): SidecarConnection {

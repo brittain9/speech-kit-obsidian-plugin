@@ -51,9 +51,15 @@ interface CaptionTrack {
   readonly isTranslatable?: unknown;
 }
 
+interface CaptionTracklistRenderer {
+  readonly audioTracks?: unknown;
+  readonly captionTracks?: unknown;
+  readonly defaultAudioTrackIndex?: unknown;
+}
+
 interface PlayerData {
   readonly captions?: {
-    readonly playerCaptionsTracklistRenderer?: { readonly captionTracks?: unknown };
+    readonly playerCaptionsTracklistRenderer?: CaptionTracklistRenderer;
   };
   readonly playabilityStatus?: { readonly status?: unknown; readonly reason?: unknown };
   readonly videoDetails?: {
@@ -131,13 +137,14 @@ export async function fetchDirectYouTubeCaptions(
       playerReason(metadata.playabilityStatus?.reason, t('youtube.caption.unavailable')),
     );
   }
-  const tracks = metadata.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+  const renderer = metadata.captions?.playerCaptionsTracklistRenderer;
+  const tracks = renderer?.captionTracks;
   if (!Array.isArray(tracks))
     throw new CaptionAcquisitionError('unavailable', t('youtube.modal.noCaptions'));
   const candidates = selectCaptionTracks(
     tracks as CaptionTrack[],
     language,
-    metadata.videoDetails?.defaultAudioLanguage,
+    metadata.videoDetails?.defaultAudioLanguage ?? defaultAudioTrackLanguage(renderer),
   );
   if (candidates.length === 0) {
     const availableLanguages = [
@@ -211,6 +218,17 @@ export async function fetchDirectYouTubeCaptions(
     }
   }
   throw new CaptionAcquisitionError('unavailable', t('youtube.caption.readFailed'));
+}
+
+function defaultAudioTrackLanguage(renderer: CaptionTracklistRenderer | undefined): string | null {
+  if (!Array.isArray(renderer?.audioTracks)) return null;
+  const index = renderer.defaultAudioTrackIndex;
+  if (!Number.isSafeInteger(index) || (index as number) < 0) return null;
+  const track: unknown = renderer.audioTracks[index as number];
+  if (typeof track !== 'object' || track === null || !('audioTrackId' in track)) return null;
+  const id = track.audioTrackId;
+  if (typeof id !== 'string') return null;
+  return /^([a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*)\./u.exec(id)?.[1] ?? null;
 }
 
 export function selectCaptionTrack(

@@ -66,6 +66,37 @@ describe('YouTube captions', () => {
     ).toThrow(CaptionAcquisitionError);
   });
 
+  it('uses the player default audio track when the video language field is absent', async () => {
+    const request = vi.fn(async ({ method }: { method: string }) =>
+      method === 'POST'
+        ? JSON.stringify({
+            playabilityStatus: { status: 'OK' },
+            captions: {
+              playerCaptionsTracklistRenderer: {
+                audioTracks: [{ audioTrackId: 'es.10' }, { audioTrackId: 'en-US.4' }],
+                captionTracks: [
+                  { baseUrl, languageCode: 'es', kind: 'asr' },
+                  { baseUrl, languageCode: 'en', kind: 'asr' },
+                ],
+                defaultAudioTrackIndex: 1,
+              },
+            },
+          })
+        : JSON.stringify({
+            events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Hello' }] }],
+          }),
+    );
+
+    const result = await fetchDirectYouTubeCaptions(
+      ref,
+      'auto',
+      { request },
+      new AbortController().signal,
+    );
+    expect(result?.language).toBe('en');
+    expect(result?.cues[0]?.text).toBe('Hello');
+  });
+
   it('removes rolling-caption overlap while retaining separate repeated speech', () => {
     const cues = parseJson3Captions(
       JSON.stringify({

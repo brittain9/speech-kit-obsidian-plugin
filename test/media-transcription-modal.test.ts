@@ -8,6 +8,7 @@ import type { TestElement } from './__mocks__/obsidian';
 
 interface SettingFixture {
   readonly name: string;
+  readonly extraButtonComponents: Array<{ tooltip: string; click(): Promise<void> }>;
 }
 
 const settings = (): SettingFixture[] =>
@@ -19,8 +20,9 @@ afterEach(() => {
 });
 
 describe('local media transcription modal', () => {
-  it('keeps the file workflow focused on audio and video files', () => {
+  it('keeps the file workflow focused on audio and video files', async () => {
     const registry = new MediaTranscriptionModalRegistry();
+    const onManagePresets = vi.fn();
     registry.open({} as never, {
       cancel: vi.fn(async () => {}),
       getModels: () => [],
@@ -31,6 +33,7 @@ describe('local media transcription modal', () => {
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       isTranscribing: () => false,
       onManageModels: vi.fn(),
+      onManagePresets,
       startFile: vi.fn(async () => {}),
       subscribeProgress: () => () => {},
     });
@@ -42,6 +45,13 @@ describe('local media transcription modal', () => {
     expect(modal?.contentEl.findByClass('local-stt-media-source-tabs')).toBeUndefined();
     expect(settings().some(({ name }) => name === t('youtube.modal.urlName'))).toBe(false);
     expect(settings().some(({ name }) => name === t('media.modal.language'))).toBe(true);
+
+    const opener = settings()
+      .flatMap(({ extraButtonComponents }) => extraButtonComponents)
+      .find(({ tooltip }) => tooltip === t('llm.preset.manager.title'));
+    expect(opener).toBeDefined();
+    await opener?.click();
+    expect(onManagePresets).toHaveBeenCalledOnce();
 
     registry.closeAll();
   });

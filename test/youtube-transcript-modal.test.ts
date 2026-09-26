@@ -10,6 +10,7 @@ import type { TestElement } from './__mocks__/obsidian';
 type ModalFixture = { contentEl: TestElement };
 interface SettingFixture {
   readonly name: string;
+  readonly extraButtonComponents: Array<{ tooltip: string; click(): Promise<void> }>;
   readonly textComponents: Array<{ change(value: string): void }>;
   readonly dropdownComponents: Array<{ change(value: string): void }>;
   readonly buttonComponents: Array<{
@@ -36,6 +37,37 @@ afterEach(() => {
 });
 
 describe('YouTube transcript modal', () => {
+  it('opens the preset editor and refreshes the selection after it closes', async () => {
+    let onClosed: (() => void) | undefined;
+    const onManagePresets = vi.fn((callback: () => void) => {
+      onClosed = callback;
+    });
+    const registry = new YouTubeTranscriptModalRegistry();
+    registry.open({} as never, {
+      cancel: vi.fn(async () => {}),
+      getProgress: () => null,
+      getPartialTranscript: () => null,
+      getResultSource: () => null,
+      getAiOutcome: () => null,
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      insertPartialTranscript: () => false,
+      isBusy: () => false,
+      onManagePresets,
+      start: vi.fn(async () => {}),
+      subscribeProgress: () => () => {},
+    });
+
+    const opener = settings()
+      .flatMap(({ extraButtonComponents }) => extraButtonComponents)
+      .find(({ tooltip }) => tooltip === t('llm.preset.manager.title'));
+    expect(opener).toBeDefined();
+    await opener?.click();
+    expect(onManagePresets).toHaveBeenCalledOnce();
+    onClosed?.();
+    expect(settings().filter(({ name }) => name === t('youtube.modal.aiPreset'))).toHaveLength(2);
+    registry.closeAll();
+  });
+
   it('accepts a timestamped link and passes the job options without saving them', async () => {
     const saved = {
       ...DEFAULT_PLUGIN_SETTINGS,
@@ -53,6 +85,7 @@ describe('YouTube transcript modal', () => {
       getSettings: () => saved,
       insertPartialTranscript: () => false,
       isBusy: () => false,
+      onManagePresets: vi.fn(),
       start,
       subscribeProgress: () => () => {},
     });
@@ -99,6 +132,7 @@ describe('YouTube transcript modal', () => {
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       insertPartialTranscript: () => false,
       isBusy: () => false,
+      onManagePresets: vi.fn(),
       start,
       subscribeProgress: () => () => {},
     });
@@ -107,12 +141,11 @@ describe('YouTube transcript modal', () => {
       .find(({ name }) => name === t('youtube.modal.urlName'))
       ?.textComponents[0]?.change('https://youtu.be/8MxG6tOkdNY');
     const primary = buttonNamed(t('media.modal.start'));
-    const close = buttonNamed(t('common.close'));
     await primary.click();
 
     const modal = (Modal as unknown as { instances: ModalFixture[] }).instances.at(-1);
     expect(primary.text).toBe(t('media.modal.cancelJob'));
-    expect(close.buttonEl.style.display).toBe('none');
+    expect(settings().flatMap(({ buttonComponents }) => buttonComponents)).toHaveLength(1);
     expect(
       modal?.contentEl.findByClass('local-stt-media-spinner')?.getAttribute('aria-hidden'),
     ).toBe('true');
@@ -144,6 +177,7 @@ describe('YouTube transcript modal', () => {
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       insertPartialTranscript,
       isBusy: () => false,
+      onManagePresets: vi.fn(),
       start,
       subscribeProgress: () => () => {},
     });
@@ -184,6 +218,7 @@ describe('YouTube transcript modal', () => {
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       insertPartialTranscript: () => false,
       isBusy: () => false,
+      onManagePresets: vi.fn(),
       start,
       subscribeProgress: () => () => {},
     });
@@ -197,7 +232,7 @@ describe('YouTube transcript modal', () => {
         'optional AI step could not finish',
       ),
     );
-    expect(buttonNamed(t('youtube.modal.alreadyAdded')).disabled).toBe(true);
+    expect(buttonNamed(t('common.done')).disabled).toBe(false);
     expect(start).toHaveBeenCalledOnce();
     registry.closeAll();
   });

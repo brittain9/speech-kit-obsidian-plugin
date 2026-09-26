@@ -42,7 +42,6 @@ describe('MediaLlmCoordinator', () => {
     }));
     const editor = session();
     const coordinator = new MediaLlmCoordinator({
-      confirm: vi.fn(async () => true),
       createRouter: () => ({ cleanup, selectProviderId: () => 'ollama' }),
       feedback: { show: vi.fn() },
       getSettings: () => current,
@@ -68,7 +67,6 @@ describe('MediaLlmCoordinator', () => {
   it('preflights missing remote credentials with a typed localized readiness failure', () => {
     const feedback = { show: vi.fn() };
     const coordinator = new MediaLlmCoordinator({
-      confirm: vi.fn(),
       createRouter: vi.fn(),
       feedback,
       getSettings: () =>
@@ -106,7 +104,6 @@ describe('MediaLlmCoordinator', () => {
     const feedback = { show: vi.fn() };
     const editor = session();
     const coordinator = new MediaLlmCoordinator({
-      confirm: vi.fn(async () => true),
       createRouter: () => router,
       feedback,
       getSettings: () => current,
@@ -125,21 +122,16 @@ describe('MediaLlmCoordinator', () => {
     );
   });
 
-  it('rechecks settings after confirmation before applying an old provider result', async () => {
+  it('rechecks settings after the provider returns before applying its result', async () => {
     let current = settings();
     const feedback = { show: vi.fn() };
     const editor = session();
     const coordinator = new MediaLlmCoordinator({
-      confirm: vi.fn(async () => {
-        current = settings({ mediaLlmProcessing: false });
-        return true;
-      }),
       createRouter: () => ({
-        cleanup: vi.fn(async () => ({
-          model: 'local-model',
-          providerId: 'ollama' as const,
-          text: 'Clean.',
-        })),
+        cleanup: vi.fn(async () => {
+          current = settings({ mediaLlmProcessing: false });
+          return { model: 'local-model', providerId: 'ollama' as const, text: 'Clean.' };
+        }),
         selectProviderId: vi.fn(() => 'ollama' as const),
       }),
       feedback,

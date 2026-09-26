@@ -134,8 +134,8 @@ application. It uses the existing configured provider, active preset, and
 provider/model/data-egress disclosure. The provider receives only the recorded
 transcript text and explicitly bounded current-note context—never media, a
 media path/name, source URL, provenance, cookies, or tokens. The raw media
-range remains the source of truth. A preview/explicit confirmation is required
-before replace or additive output; empty/failure leaves raw text and reports
+range remains the source of truth. Selecting a preset for the job applies its
+replace or additive output automatically; empty/refused/failure leaves raw text and reports
 actionable feedback. Disabling media processing or all LLM features aborts an
 in-flight provider request. A user edit latches the range and wins over pending
 AI output. Replacement is one undoable editor operation, raw recovery restores
@@ -170,7 +170,7 @@ in.
 The file workflow keeps the existing microphone LLM behavior separate. With
 `mediaLlmProcessing` off, media transcription never invokes a provider and
 retains the existing raw insertion behavior. With it on, only the completed
-media transcript text is considered by the explicit, confirmed media transform;
+media transcript text is considered by the job's selected media transform;
 audio bytes never cross the local sidecar pipe or an LLM request.
 
 #### Verification boundary
@@ -659,7 +659,7 @@ A representative slice of user-facing settings (full list and defaults in
 | `timestampClock` | `elapsed` | `elapsed` session time vs `wallclock` |
 | `timestampDensity` | `sparse` | `sparse` (interval), `every_utterance`, or `paragraph` |
 | `llmPostprocessMode` | `off` | Microphone LLM transform: `off` / `per_utterance` / `batch` |
-| `mediaLlmProcessing` | `false` | Explicit, confirmed batch text transform after local media transcription |
+| `mediaLlmProcessing` | `false` | Default for optional batch text transforms after local media transcription |
 | `llmRoutingPolicy` | `null` | Fixed provider or optional transcript-size split |
 | `llmProviderConfigurations` | Empty models | Ollama, OpenRouter, and OpenAI-compatible connection settings |
 | `llmNetworkTimeoutSec` | `60` | OpenRouter and custom-endpoint request timeout |

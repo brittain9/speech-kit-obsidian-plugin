@@ -106,7 +106,6 @@ describe('media LLM with the real Session', () => {
     const receipts: unknown[] = [];
 
     const result = await processMediaLlm(session, {
-      confirm: async () => true,
       onRawTranscriptRecoveryAvailable: (receipt) => {
         receipts.push(receipt);
         recovery.record(receipt);
@@ -130,7 +129,7 @@ describe('media LLM with the real Session', () => {
       },
     });
 
-    expect(result.applied).toBe(true);
+    expect(result.text).toBe('Clean media words.');
     expect(view.state.doc.toString()).toBe('Existing note\nClean media words.');
     expect(receipts).toHaveLength(1);
     expect(recovery.restoreRawTranscript()).toBe(true);
@@ -142,7 +141,6 @@ describe('media LLM with the real Session', () => {
     for (const placement of ['add_above', 'add_below'] as const) {
       const { session, view } = createMediaSession();
       await processMediaLlm(session, {
-        confirm: async () => true,
         onRawTranscriptRecoveryAvailable: vi.fn(),
         router: createFakeLlmRouter({
           cleanup: async () => ({
@@ -185,7 +183,6 @@ describe('media LLM with the real Session', () => {
 
     await expect(
       processMediaLlm(session, {
-        confirm: async () => true,
         onRawTranscriptRecoveryAvailable: vi.fn(),
         router: createFakeLlmRouter({
           cleanup: async () => ({

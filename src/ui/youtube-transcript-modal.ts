@@ -21,6 +21,7 @@ export interface YouTubeTranscriptModalDependencies {
   readonly getSettings: () => PluginSettings;
   readonly insertPartialTranscript: () => boolean;
   readonly isBusy: () => boolean;
+  readonly onManagePresets: (onClosed: () => void) => void;
   readonly start: (url: string, options: MediaTranscriptionJobOptions) => Promise<void>;
   readonly subscribeProgress: (
     listener: (progress: MediaTranscriptionProgress | null) => void,
@@ -53,6 +54,7 @@ class YouTubeTranscriptModal extends Modal {
   private timestampIntervalSeconds = 60;
   private mediaPresetRef: string | null;
   private busy = false;
+  private closed = false;
   private completedVideoId: string | null = null;
   private cancelRequested = false;
   private progressRowEl: HTMLElement | null = null;
@@ -61,7 +63,6 @@ class YouTubeTranscriptModal extends Modal {
   private errorEl: HTMLElement | null = null;
   private partialEl: HTMLElement | null = null;
   private primaryButton: ButtonComponent | null = null;
-  private closeButton: ButtonComponent | null = null;
 
   constructor(
     app: App,
@@ -81,12 +82,14 @@ class YouTubeTranscriptModal extends Modal {
   }
 
   override onOpen(): void {
+    this.closed = false;
     this.modalEl.addClass('local-stt-youtube-transcript-modal');
     this.setTitle(t('youtube.modal.title'));
     this.render();
   }
 
   override onClose(): void {
+    this.closed = true;
     this.releaseProgress();
     if (this.busy) void this.dependencies.cancel();
     this.contentEl.empty();
@@ -96,22 +99,25 @@ class YouTubeTranscriptModal extends Modal {
   private render(): void {
     this.contentEl.empty();
     this.primaryButton = null;
-    this.closeButton = null;
 
-    new Setting(this.contentEl).setName(t('youtube.modal.urlName')).addText((text) => {
-      text.setPlaceholder(t('youtube.modal.urlPlaceholder')).setValue(this.url);
-      text.inputEl.addClass('local-stt-youtube-transcript-url');
-      text.onChange((value) => {
-        this.url = value;
-        this.updatePrimaryButton();
+    const urlSetting = new Setting(this.contentEl)
+      .setName(t('youtube.modal.urlName'))
+      .addText((text) => {
+        text.setPlaceholder(t('youtube.modal.urlPlaceholder')).setValue(this.url);
+        text.inputEl.addClass('local-stt-youtube-transcript-url');
+        text.onChange((value) => {
+          this.url = value;
+          this.updatePrimaryButton();
+        });
       });
-    });
+    urlSetting.settingEl.addClass('local-stt-youtube-url-setting');
     this.contentEl.createEl('p', {
       text: t('youtube.modal.captionDescription'),
       cls: 'local-stt-media-source-hint',
     });
-    this.renderOptions();
-    this.renderAiPreset();
+    const controls = this.contentEl.createDiv({ cls: 'local-stt-youtube-controls' });
+    this.renderOptions(controls);
+    this.renderAiPreset(controls);
 
     const progressRow = this.contentEl.createDiv({ cls: 'local-stt-media-progress' });
     this.progressRowEl = progressRow;
@@ -133,23 +139,20 @@ class YouTubeTranscriptModal extends Modal {
     const footer = this.contentEl.createDiv({ cls: 'local-stt-media-footer' });
     const actions = new Setting(footer);
     actions.addButton((button) => {
-      this.closeButton = button;
-      button.setButtonText(t('common.close')).onClick(() => this.close());
-    });
-    actions.addButton((button) => {
       this.primaryButton = button;
       button
         .setButtonText(t('media.modal.start'))
         .setCta()
         .onClick(() => {
           if (this.busy) void this.cancelJob();
+          else if (this.completedVideoId === this.videoId()) this.close();
           else void this.startJob();
         });
     });
     this.updatePrimaryButton();
   }
 
-  private renderAiPreset(): void {
+  private renderAiPreset(parent: HTMLElement): void {
     const settings = this.dependencies.getSettings();
     const presets = listPresetEntries(settings.llmPostprocessUserPresets);
     if (
@@ -158,9 +161,8 @@ class YouTubeTranscriptModal extends Modal {
     ) {
       this.mediaPresetRef = null;
     }
-    new Setting(this.contentEl)
+    new Setting(parent)
       .setName(t('youtube.modal.aiPreset'))
-      .setDesc(t('youtube.modal.aiPresetDesc'))
       .addDropdown((dropdown) => {
         dropdown.addOption('', t('media.modal.aiPresetNone'));
         for (const entry of presets) dropdown.addOption(entry.ref, entry.preset.label);
@@ -169,9 +171,20 @@ class YouTubeTranscriptModal extends Modal {
           this.mediaPresetRef = value || null;
           this.render();
         });
+      })
+      .addExtraButton((button) => {
+        button
+          .setIcon('list-tree')
+          .setTooltip(t('llm.preset.manager.title'))
+          .onClick(() => {
+            this.dependencies.onManagePresets(() => {
+              if (!this.closed) this.render();
+            });
+          });
+        button.extraSettingsEl.setAttribute('aria-label', t('llm.preset.manager.title'));
       });
     if (this.mediaPresetRef !== null) {
-      this.contentEl.createEl('p', {
+      parent.createEl('p', {
         text: describeMediaLlmConfiguration({
           ...settings,
           llmPostprocessActivePresetRef: this.mediaPresetRef,
@@ -181,44 +194,35 @@ class YouTubeTranscriptModal extends Modal {
     }
   }
 
-  private renderOptions(): void {
-    const grid = this.contentEl.createDiv({ cls: 'local-stt-youtube-options' });
+  private renderOptions(parent: HTMLElement): void {
+    const grid = parent.createDiv({ cls: 'local-stt-youtube-options' });
 
-    new Setting(grid)
-      .setName(t('youtube.modal.captionLanguage'))
-      .setDesc(t('youtube.modal.captionLanguageDesc'))
-      .addDropdown((dropdown) => {
-        for (const option of DICTATION_LANGUAGE_OPTIONS)
-          dropdown.addOption(
-            option.value,
-            option.value === 'auto' ? t('youtube.modal.originalLanguage') : option.label,
-          );
-        dropdown.setValue(this.language).onChange((value) => {
-          this.language = value as DictationLanguage;
-        });
+    new Setting(grid).setName(t('youtube.modal.captionLanguage')).addDropdown((dropdown) => {
+      for (const option of DICTATION_LANGUAGE_OPTIONS)
+        dropdown.addOption(
+          option.value,
+          option.value === 'auto' ? t('youtube.modal.originalLanguage') : option.label,
+        );
+      dropdown.setValue(this.language).onChange((value) => {
+        this.language = value as DictationLanguage;
       });
-    new Setting(grid)
-      .setName(t('youtube.modal.timestamps'))
-      .setDesc(t('youtube.modal.timestampsDesc'))
-      .addToggle((toggle) => {
-        toggle.setValue(this.timestampsEnabled).onChange((value) => {
-          this.timestampsEnabled = value;
-          this.render();
-        });
+    });
+    new Setting(grid).setName(t('youtube.modal.timestamps')).addToggle((toggle) => {
+      toggle.setValue(this.timestampsEnabled).onChange((value) => {
+        this.timestampsEnabled = value;
+        this.render();
       });
+    });
     if (this.timestampsEnabled) {
-      new Setting(grid)
-        .setName(t('youtube.modal.timeGrouping'))
-        .setDesc(t('youtube.modal.timeGroupingDesc'))
-        .addDropdown((dropdown) => {
-          dropdown.addOption('30', t('youtube.modal.interval30'));
-          dropdown.addOption('60', t('youtube.modal.interval60'));
-          dropdown.addOption('120', t('youtube.modal.interval120'));
-          dropdown.addOption('300', t('youtube.modal.interval300'));
-          dropdown.setValue(String(this.timestampIntervalSeconds)).onChange((value) => {
-            this.timestampIntervalSeconds = Number(value);
-          });
+      new Setting(grid).setName(t('youtube.modal.timeGrouping')).addDropdown((dropdown) => {
+        dropdown.addOption('30', t('youtube.modal.interval30'));
+        dropdown.addOption('60', t('youtube.modal.interval60'));
+        dropdown.addOption('120', t('youtube.modal.interval120'));
+        dropdown.addOption('300', t('youtube.modal.interval300'));
+        dropdown.setValue(String(this.timestampIntervalSeconds)).onChange((value) => {
+          this.timestampIntervalSeconds = Number(value);
         });
+      });
     }
   }
 
@@ -229,11 +233,10 @@ class YouTubeTranscriptModal extends Modal {
       this.busy
         ? t('media.modal.cancelJob')
         : alreadyAdded
-          ? t('youtube.modal.alreadyAdded')
+          ? t('common.done')
           : t('media.modal.start'),
     );
-    this.primaryButton?.setDisabled(this.cancelRequested || blocker !== null || alreadyAdded);
-    this.closeButton?.buttonEl.toggle(!this.busy);
+    this.primaryButton?.setDisabled(this.cancelRequested || (blocker !== null && !alreadyAdded));
     this.spinnerEl?.toggle(this.busy && !this.cancelRequested);
   }
 

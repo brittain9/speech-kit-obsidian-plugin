@@ -1,5 +1,4 @@
 import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-recovery';
-import { resolveMediaLlmDisclosure } from '../llm/media-llm-policy';
 import { type LlmReadinessIssueCode, resolveLlmReadiness } from '../llm/readiness';
 import type { LlmRouter } from '../llm/router';
 import { llmSettingsFingerprint } from '../llm/settings-fingerprint';
@@ -11,14 +10,12 @@ import type { PluginLogger } from '../shared/plugin-logger';
 import type { UserFeedback } from '../shared/user-feedback';
 import type { MediaLlmEditorSession } from './audio-file-transcript-adapter';
 import {
-  type MediaLlmPreview,
   MediaLlmProcessingError,
   type MediaLlmSnapshot,
   processMediaLlm,
 } from './media-llm-processor';
 
 export interface MediaLlmCoordinatorDependencies {
-  readonly confirm?: (preview: MediaLlmPreview, signal: AbortSignal) => Promise<boolean>;
   readonly createRouter?: (settings: PluginSettings) => LlmRouter | null;
   readonly feedback: Pick<UserFeedback, 'show'>;
   readonly getSecret?: (secretId: string) => string;
@@ -35,7 +32,7 @@ export interface MediaLlmJob {
   readonly snapshot: MediaLlmSnapshot;
 }
 
-export type MediaLlmRunOutcome = 'skipped' | 'applied' | 'declined' | 'failed' | 'cancelled';
+export type MediaLlmRunOutcome = 'skipped' | 'applied' | 'failed' | 'cancelled';
 
 export class MediaLlmCoordinator {
   private activeAbortController: AbortController | null = null;
@@ -47,7 +44,7 @@ export class MediaLlmCoordinator {
     if (job === undefined && (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled)) {
       return true;
     }
-    if (this.dependencies.createRouter === undefined || this.dependencies.confirm === undefined) {
+    if (this.dependencies.createRouter === undefined) {
       this.reportReadiness('provider_unavailable');
       return false;
     }
@@ -75,7 +72,6 @@ export class MediaLlmCoordinator {
       return 'failed';
     }
     const transform = job?.snapshot ?? resolveLlmTransformSnapshot(settings);
-    const disclosure = resolveMediaLlmDisclosure(settings, router, rawText.length, transform);
     const snapshot: MediaLlmSnapshot = {
       noteContextChars: transform.noteContextChars,
       output: transform.output,
@@ -85,31 +81,23 @@ export class MediaLlmCoordinator {
       totalContextCap: transform.totalContextCap,
       useNoteContext: transform.useNoteContext,
     };
-    const confirm = this.dependencies.confirm;
-    if (confirm === undefined) return 'failed';
     const abortController = new AbortController();
     this.activeAbortController = abortController;
     this.dependencies.onProgress?.('ai_processing');
     try {
-      const result = await processMediaLlm(session, {
-        confirm,
+      await processMediaLlm(session, {
         isEnabled: () =>
           job === undefined
             ? this.isCurrentConfiguration(settings)
             : this.isCurrentProviderConfiguration(settings),
         onRawTranscriptRecoveryAvailable: (receipt) =>
           this.dependencies.onRawTranscriptRecoveryAvailable?.(receipt),
-        previewMetadata: {
-          disclosure,
-          model: disclosure.model,
-          providerId: disclosure.providerId,
-        },
         router,
         signal: abortController.signal,
         snapshot,
         transcriptText: rawText,
       });
-      return result.applied ? 'applied' : 'declined';
+      return 'applied';
     } catch (error) {
       if (error instanceof MediaLlmProcessingError) {
         if (error.code === 'cancelled') return 'cancelled';
@@ -118,7 +106,9 @@ export class MediaLlmCoordinator {
             ? 'media-llm-empty'
             : error.code === 'range_unavailable'
               ? 'media-llm-range-unavailable'
-              : 'media-llm-failed',
+              : error.code === 'refused'
+                ? 'media-llm-refused'
+                : 'media-llm-failed',
         );
         return 'failed';
       }
@@ -182,6 +172,7 @@ export class MediaLlmCoordinator {
     key:
       | 'media-llm-empty'
       | 'media-llm-failed'
+      | 'media-llm-refused'
       | 'media-llm-range-unavailable'
       | 'media-llm-readiness',
     issue?: MediaLlmReadinessFailureCode,

@@ -29,6 +29,7 @@ export interface MediaTranscriptionModalDependencies {
   readonly getSettings: () => PluginSettings;
   readonly isTranscribing: () => boolean;
   readonly onManageModels: () => void;
+  readonly onManagePresets: (onClosed: () => void) => void;
   readonly startFile: (file: File, options: MediaTranscriptionJobOptions) => Promise<void>;
   readonly subscribeProgress: (
     listener: (progress: MediaTranscriptionProgress | null) => void,
@@ -67,6 +68,7 @@ class MediaTranscriptionModal extends Modal {
   private transcriptFormatting: TranscriptFormattingMode;
   private optionsExpanded = false;
   private busy = false;
+  private closed = false;
   private cancelRequested = false;
   private progressEl: HTMLElement | null = null;
   private progressRowEl: HTMLElement | null = null;
@@ -103,12 +105,14 @@ class MediaTranscriptionModal extends Modal {
   }
 
   override onOpen(): void {
+    this.closed = false;
     this.modalEl.addClass('local-stt-media-modal');
     this.setTitle(t('media.modal.title'));
     this.render();
   }
 
   override onClose(): void {
+    this.closed = true;
     this.lifecycle.abort();
     this.releaseProgress();
     if (this.busy) void this.dependencies.cancel();
@@ -348,6 +352,17 @@ class MediaTranscriptionModal extends Modal {
           this.mediaPresetRef = value || null;
           this.render();
         });
+      })
+      .addExtraButton((button) => {
+        button
+          .setIcon('list-tree')
+          .setTooltip(t('llm.preset.manager.title'))
+          .onClick(() => {
+            this.dependencies.onManagePresets(() => {
+              if (!this.closed) this.render();
+            });
+          });
+        button.extraSettingsEl.setAttribute('aria-label', t('llm.preset.manager.title'));
       });
   }
 

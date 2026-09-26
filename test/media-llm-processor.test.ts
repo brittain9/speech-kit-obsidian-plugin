@@ -59,7 +59,7 @@ const replaceSnapshot: MediaLlmSnapshot = {
 };
 
 describe('media LLM processing', () => {
-  it('uses only bounded text context, confirms explicitly, and applies one recoverable replacement', async () => {
+  it('uses only bounded text context and applies one recoverable replacement', async () => {
     const session = new FakeMediaSession();
     const cleanup = vi.fn(async (_options: unknown) => ({
       model: 'local-model',
@@ -67,19 +67,16 @@ describe('media LLM processing', () => {
       text: 'Clean media transcript.',
     }));
     const router = createFakeLlmRouter({ cleanup, providerId: 'ollama' });
-    const confirm = vi.fn(async () => true);
     const recoveries: RawTranscriptRecoveryReceipt[] = [];
 
     const result = await processMediaLlm(session, {
-      confirm,
       onRawTranscriptRecoveryAvailable: (receipt) => recoveries.push(receipt),
       router,
       signal: new AbortController().signal,
       snapshot: replaceSnapshot,
     });
 
-    expect(result).toEqual({ applied: true, text: 'Clean media transcript.' });
-    expect(confirm).toHaveBeenCalledOnce();
+    expect(result).toEqual({ text: 'Clean media transcript.' });
     expect(cleanup).toHaveBeenCalledWith(
       expect.objectContaining({
         userMessage:
@@ -107,7 +104,6 @@ describe('media LLM processing', () => {
     const router = createFakeLlmRouter({ cleanup, providerId: 'openrouter' });
 
     await processMediaLlm(session, {
-      confirm: async () => true,
       onRawTranscriptRecoveryAvailable: vi.fn(),
       router,
       signal: new AbortController().signal,
@@ -132,7 +128,6 @@ describe('media LLM processing', () => {
         }),
       });
       await processMediaLlm(session, {
-        confirm: async () => true,
         onRawTranscriptRecoveryAvailable: vi.fn(),
         router,
         signal: new AbortController().signal,
@@ -156,13 +151,33 @@ describe('media LLM processing', () => {
 
     await expect(
       processMediaLlm(session, {
-        confirm: async () => true,
         onRawTranscriptRecoveryAvailable: vi.fn(),
         router,
         signal: new AbortController().signal,
         snapshot: replaceSnapshot,
       }),
     ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'empty' });
+    expect(session.replaceSessionRangeWithCleaned).not.toHaveBeenCalled();
+  });
+
+  it('does not apply a bare provider refusal', async () => {
+    const session = new FakeMediaSession();
+    const router = createFakeLlmRouter({
+      cleanup: async () => ({
+        model: 'm',
+        providerId: 'openrouter' as const,
+        text: "I'm sorry, but I cannot assist with that request.",
+      }),
+    });
+
+    await expect(
+      processMediaLlm(session, {
+        onRawTranscriptRecoveryAvailable: vi.fn(),
+        router,
+        signal: new AbortController().signal,
+        snapshot: replaceSnapshot,
+      }),
+    ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'refused' });
     expect(session.replaceSessionRangeWithCleaned).not.toHaveBeenCalled();
   });
 
@@ -176,7 +191,6 @@ describe('media LLM processing', () => {
 
     await expect(
       processMediaLlm(session, {
-        confirm: async () => true,
         onRawTranscriptRecoveryAvailable: vi.fn(),
         router,
         signal: new AbortController().signal,
@@ -197,7 +211,6 @@ describe('media LLM processing', () => {
 
     await expect(
       processMediaLlm(session, {
-        confirm: async () => true,
         onRawTranscriptRecoveryAvailable: vi.fn(),
         router,
         signal: new AbortController().signal,
@@ -214,7 +227,6 @@ describe('media LLM processing', () => {
       text: 'Result',
     }));
     await processMediaLlm(session, {
-      confirm: async () => true,
       onRawTranscriptRecoveryAvailable: vi.fn(),
       router: createFakeLlmRouter({ cleanup }),
       signal: new AbortController().signal,
@@ -236,7 +248,6 @@ describe('media LLM processing', () => {
     }));
     await expect(
       processMediaLlm(session, {
-        confirm: async () => true,
         onRawTranscriptRecoveryAvailable: vi.fn(),
         router: createFakeLlmRouter({ cleanup }),
         signal: new AbortController().signal,
@@ -246,7 +257,7 @@ describe('media LLM processing', () => {
     expect(cleanup).not.toHaveBeenCalled();
   });
 
-  it('aborts an opt-out before provider work and after confirmation', async () => {
+  it('aborts an opt-out before provider work and after the provider returns', async () => {
     const session = new FakeMediaSession();
     const cleanup = vi.fn(async () => ({
       model: 'm',
@@ -255,7 +266,6 @@ describe('media LLM processing', () => {
     }));
     await expect(
       processMediaLlm(session, {
-        confirm: async () => true,
         isEnabled: () => false,
         onRawTranscriptRecoveryAvailable: vi.fn(),
         router: createFakeLlmRouter({ cleanup }),
@@ -267,13 +277,12 @@ describe('media LLM processing', () => {
 
     const controller = new AbortController();
     const pending = processMediaLlm(new FakeMediaSession(), {
-      confirm: async () => {
-        controller.abort();
-        return true;
-      },
       onRawTranscriptRecoveryAvailable: vi.fn(),
       router: createFakeLlmRouter({
-        cleanup: async () => ({ model: 'm', providerId: 'ollama' as const, text: 'Result' }),
+        cleanup: async () => {
+          controller.abort();
+          return { model: 'm', providerId: 'ollama' as const, text: 'Result' };
+        },
       }),
       signal: controller.signal,
       snapshot: replaceSnapshot,
@@ -293,7 +302,6 @@ describe('media LLM processing', () => {
     });
     await expect(
       processMediaLlm(new FakeMediaSession(), {
-        confirm: async () => true,
         onRawTranscriptRecoveryAvailable: vi.fn(),
         router,
         signal: controller.signal,

@@ -55,22 +55,16 @@ export const en = {
   'audio-file-surface-changed':
     'Audio-file transcription stopped because the note changed in a way Speech Kit could not safely track. Restore the intended note and run the command again.',
   'youtube.modal.title': 'Get YouTube transcript',
-  'youtube.modal.captionDescription':
-    'Add the video’s available captions to your active note in readable passages.',
-  'youtube.modal.captionLanguage': 'Caption language',
+  'youtube.modal.captionDescription': 'Import the video’s available captions into this note.',
+  'youtube.modal.captionLanguage': 'Language',
   'youtube.modal.originalLanguage': 'Original language',
-  'youtube.modal.captionLanguageDesc': 'Uses existing captions. This does not translate the video.',
-  'youtube.modal.timestamps': 'Link to video timestamps',
-  'youtube.modal.timestampsDesc': 'Add a clickable time at the start of each passage.',
-  'youtube.modal.timeGrouping': 'Time between passages',
-  'youtube.modal.timeGroupingDesc':
-    'Start a new passage around this time, at a sentence break when possible.',
+  'youtube.modal.timestamps': 'Linked timestamps',
+  'youtube.modal.timeGrouping': 'Group passages about every',
   'youtube.modal.interval30': '30 seconds',
   'youtube.modal.interval60': '1 minute',
   'youtube.modal.interval120': '2 minutes',
   'youtube.modal.interval300': '5 minutes',
-  'youtube.modal.aiPreset': 'After importing',
-  'youtube.modal.aiPresetDesc': 'Optional: run an AI preset on the complete transcript.',
+  'youtube.modal.aiPreset': 'AI preset',
   'youtube.modal.urlName': 'YouTube link',
   'youtube.modal.urlPlaceholder': 'https://www.youtube.com/watch?v=…',
   'youtube.modal.enterUrl': 'Paste a YouTube video link to continue.',
@@ -80,7 +74,6 @@ export const en = {
   'youtube.modal.completedCreatorCaptions': 'Creator captions were added to the active note.',
   'youtube.modal.completedAutomaticCaptions':
     'YouTube automatic captions were added to the active note.',
-  'youtube.modal.alreadyAdded': 'Added to note',
   'youtube.modal.aiFailedRawKept':
     'The transcript was added, but the optional AI step failed: {reason}',
   'youtube.modal.aiCouldNotFinish':
@@ -115,6 +108,8 @@ export const en = {
     'The media transcript is empty or the AI provider returned no text. The raw transcript was kept; record a non-empty transcript or check the provider and try again.',
   'media-llm-failed':
     'AI media processing failed, so the raw transcript was kept. Check the configured provider and try again.',
+  'media-llm-refused':
+    'The AI model declined this transcript. The raw transcript is still in your note. Try another preset or model.',
   'media-llm-cancelled': 'AI media processing was cancelled; the raw transcript was kept.',
   'media-llm-range-unavailable':
     'The media transcript changed while AI processing was pending, so the raw transcript was kept.',
@@ -161,10 +156,6 @@ export const en = {
   'notice.lastUtteranceReinserted': 'Reinserted the last finalized utterance.',
   'notice.lastUtteranceUnavailable': 'No finalized utterance is available.',
   'notice.llmTransformEmpty': 'LLM transform returned nothing to add.',
-  'llm.mediaPreview.title': 'Preview media transcript transformation',
-  'llm.mediaPreview.description':
-    'Review the text result before applying it. The raw media transcript remains available for recovery.',
-  'llm.mediaPreview.apply': 'Apply result',
   'notice.microphoneDisconnected':
     'Microphone disconnected. Dictation stopped and will finish processing audio already captured. Reconnect the microphone, then start dictation again.',
   'notice.rawTranscriptChanged':
