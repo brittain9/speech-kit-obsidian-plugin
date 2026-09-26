@@ -9,6 +9,7 @@ source_sha256=8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
 source_name="ffmpeg-${version}.tar.xz"
 source_url="https://ffmpeg.org/releases/${source_name}"
 output_dir="${1:-dist/media-ffmpeg}"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # RUNNER_TEMP is a Windows drive path under MSYS2, which GNU tar interprets as
 # a remote archive. Use the shell's POSIX temporary directory on every host.
 case "$(uname -s)" in
@@ -77,6 +78,12 @@ if [[ "$executable_suffix" == .exe ]]; then
   done
 fi
 cp "$source_dir/COPYING.LGPLv2.1" "$source_dir/COPYING.LGPLv3" "$output_dir/"
+if [[ "$executable_suffix" == .exe ]]; then
+  # Exact notice from mingw-w64 commit 4564ee4b5063097bf747af3a3f8270a28adff820.
+  runtime_notice="$script_dir/licenses/COPYING.MinGW-w64-runtime.txt"
+  printf '%s  %s\n' '1db8da07b436c68833c0673ffee3d9fcb2526047f3820b81661865dfedc79a1f' "$runtime_notice" | shasum -a 256 -c -
+  cp "$runtime_notice" "$output_dir/"
+fi
 cp "$build_dir/$source_name" "$output_dir/"
 "$output_dir/ffmpeg${executable_suffix}" -buildconf > "$output_dir/BUILD_CONFIGURATION.txt"
 "$output_dir/ffmpeg${executable_suffix}" -L > "$output_dir/LICENSE_INFORMATION.txt"
@@ -97,7 +104,11 @@ fi
 test "$(wc -c < "$build_dir/smoke.pcm")" -ge 30000
 (
   cd "$output_dir"
-  shasum -a 256 "ffmpeg${executable_suffix}" "ffprobe${executable_suffix}" "$source_name" COPYING.LGPLv2.1 COPYING.LGPLv3 \
-    BUILD_CONFIGURATION.txt LICENSE_INFORMATION.txt > SHA256SUMS.txt
+  hash_files=("ffmpeg${executable_suffix}" "ffprobe${executable_suffix}" "$source_name" COPYING.LGPLv2.1 COPYING.LGPLv3 \
+    BUILD_CONFIGURATION.txt LICENSE_INFORMATION.txt)
+  if [[ "$executable_suffix" == .exe ]]; then
+    hash_files+=(COPYING.MinGW-w64-runtime.txt)
+  fi
+  shasum -a 256 "${hash_files[@]}" > SHA256SUMS.txt
 )
 printf 'Built FFmpeg %s helper at %s\n' "$version" "$output_dir"

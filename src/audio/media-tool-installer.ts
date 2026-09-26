@@ -11,13 +11,13 @@ import {
   markExecutable,
 } from '../sidecar/sidecar-installer';
 
-export const MEDIA_TOOL_VERSION = '9.0.2-1';
+export const MEDIA_TOOL_VERSION = '9.0.2-2';
 const RELEASE_TAG = `media-ffmpeg-${MEDIA_TOOL_VERSION}`;
 const HASHES = {
   'linux-x86_64': 'ee0d6bbea587712185912cd6d7c042dd647012d14cfe6a0157ae787efe7cba72',
   'macos-arm64': '359fd6f6e04e79549114c534ee147300a11df6ff265c2485e1e21b587d9e3745',
   'macos-x86_64': 'ed49d46e372bb83dabf8b955edb2f57f53ce870645ff941c5732b3ef807e677c',
-  'windows-x86_64': 'ee33dcab2ba6a826a1a991cfe16dbefc844e68467dbc9731426d95c32f5316d9',
+  'windows-x86_64': 'f0fabeb95beb43c8e15dcf2566121a2725567fefb44d463773c44791a71f9205',
 } as const;
 
 export interface MediaToolInstallProgress {
