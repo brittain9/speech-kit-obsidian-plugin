@@ -61,7 +61,7 @@ class YouTubeTranscriptModal extends Modal {
   private mediaPresetRef: string | null;
   private optionsExpanded = false;
   private busy = false;
-  private completedUrl: string | null = null;
+  private completedVideoId: string | null = null;
   private cancelRequested = false;
   private progressRowEl: HTMLElement | null = null;
   private progressEl: HTMLElement | null = null;
@@ -117,7 +117,6 @@ class YouTubeTranscriptModal extends Modal {
       text.inputEl.addClass('local-stt-youtube-transcript-url');
       text.onChange((value) => {
         this.url = value;
-        if (this.completedUrl !== value.trim()) this.completedUrl = null;
         this.updatePrimaryButton();
       });
     });
@@ -267,18 +266,25 @@ class YouTubeTranscriptModal extends Modal {
 
   private updatePrimaryButton(): void {
     const blocker = this.busy ? null : this.startBlocker();
+    const alreadyAdded = this.completedVideoId !== null && this.completedVideoId === this.videoId();
     this.primaryButton?.setButtonText(
       this.busy
         ? t('media.modal.cancelJob')
-        : this.completedUrl === this.url.trim()
+        : alreadyAdded
           ? t('youtube.modal.alreadyAdded')
           : t('media.modal.start'),
     );
-    this.primaryButton?.setDisabled(
-      this.cancelRequested || blocker !== null || this.completedUrl === this.url.trim(),
-    );
+    this.primaryButton?.setDisabled(this.cancelRequested || blocker !== null || alreadyAdded);
     this.closeButton?.buttonEl.toggle(!this.busy);
     this.spinnerEl?.toggle(this.busy && !this.cancelRequested);
+  }
+
+  private videoId(): string | null {
+    try {
+      return parseYouTubeVideoUrl(this.url).videoId;
+    } catch {
+      return null;
+    }
   }
 
   private startBlocker(): string | null {
@@ -325,6 +331,8 @@ class YouTubeTranscriptModal extends Modal {
       return;
     }
     const interval = validateTimestampIntervalSeconds(this.timestampSparseIntervalSeconds);
+    const submittedUrl = this.url.trim();
+    const submittedVideoId = parseYouTubeVideoUrl(submittedUrl).videoId;
     const options: MediaTranscriptionJobOptions = {
       diarizationEnabled: false,
       language: this.language,
@@ -348,8 +356,8 @@ class YouTubeTranscriptModal extends Modal {
     this.updatePrimaryButton();
     this.renderProgress(this.dependencies.getProgress());
     try {
-      await this.dependencies.start(this.url.trim(), options);
-      this.completedUrl = this.url.trim();
+      await this.dependencies.start(submittedUrl, options);
+      this.completedVideoId = submittedVideoId;
       const source = this.dependencies.getResultSource();
       const aiOutcome = this.dependencies.getAiOutcome();
       this.progressEl?.setText(
