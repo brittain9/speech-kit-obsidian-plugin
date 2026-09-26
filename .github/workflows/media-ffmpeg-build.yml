@@ -1,0 +1,69 @@
+name: media FFmpeg helper builds
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/media-ffmpeg-build.yml
+      - scripts/build-media-ffmpeg.sh
+      - scripts/licenses/COPYING.MinGW-w64-runtime.txt
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            platform: macos-arm64
+          - runner: macos-15-intel
+            platform: macos-x86_64
+          - runner: ubuntu-24.04
+            platform: linux-x86_64
+          - runner: windows-2022
+            platform: windows-x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux assembler
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y nasm
+
+      - name: Install macOS Intel assembler
+        if: matrix.platform == 'macos-x86_64'
+        run: brew install nasm
+
+      - name: Set up Windows native build tools
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-nasm
+            make
+            perl
+            curl
+            tar
+
+      - name: Build macOS or Linux helper
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/build-media-ffmpeg.sh "dist/media-ffmpeg-9.0.2-${{ matrix.platform }}"
+
+      - name: Build Windows helper
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: bash scripts/build-media-ffmpeg.sh "dist/media-ffmpeg-9.0.2-${{ matrix.platform }}"
+
+      - name: Upload binaries, exact source, build configuration, notices, and hashes
+        uses: actions/upload-artifact@v7
+        with:
+          name: media-ffmpeg-9.0.2-${{ matrix.platform }}
+          path: dist/media-ffmpeg-9.0.2-${{ matrix.platform }}/
+          if-no-files-found: error

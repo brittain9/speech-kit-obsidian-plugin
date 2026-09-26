@@ -23,6 +23,8 @@ export function renderMediaProgressStatus(
 
 export function mediaProgressText(progress: MediaTranscriptionProgress): string {
   switch (progress.phase) {
+    case 'captions':
+      return t('media.progress.captions');
     case 'acquire':
       return t('media.progress.acquire');
     case 'decode':

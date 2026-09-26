@@ -31,6 +31,7 @@ interface CommandDependencies {
   readAloudFromCursor: (editor: Editor) => Promise<void>;
   stopReadAloud: () => void;
   transcribeAudioFile: () => Promise<void>;
+  transcribeYouTube?: () => Promise<void>;
   translateNote: (editor: Editor) => void;
   translateSelection: (editor: Editor) => void;
   toggleReadAloudPaused: () => Promise<void>;
@@ -94,6 +95,16 @@ export function registerCommands(dependencies: CommandDependencies): void {
     checkCallback: (checking) => {
       if (!Platform.isDesktopApp) return false;
       if (!checking) void dependencies.transcribeAudioFile();
+      return true;
+    },
+  });
+
+  dependencies.plugin.addCommand({
+    id: 'transcribe-youtube-video',
+    name: t('commands.transcribeYouTube'),
+    checkCallback: (checking) => {
+      if (!Platform.isDesktopApp) return false;
+      if (!checking) void dependencies.transcribeYouTube?.();
       return true;
     },
   });

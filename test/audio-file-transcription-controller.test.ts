@@ -2,11 +2,24 @@ import type { EditorView } from '@codemirror/view';
 import { Platform, type TFile } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
 import type { DecodedAudioFile } from '../src/audio/audio-file-decoder';
-import { AudioFileTranscriptionController } from '../src/dictation/audio-file-transcription-controller';
+import {
+  AudioFileTranscriptionController,
+  type AudioFileTranscriptionControllerDependencies,
+} from '../src/dictation/audio-file-transcription-controller';
 import type { NotePlacementOptions, SurfaceDesynchronization } from '../src/editor/note-surface';
+import { resolveLlmTransformSnapshot } from '../src/llm/transform-policy';
 import { LocalMediaSource } from '../src/media/local-media-source';
-import { MEDIA_ACQUISITION_LIMITS } from '../src/media/media-policy';
-import type { AcquisitionEvent, MediaAcquireRequest, MediaLease } from '../src/media/media-source';
+import { LOCAL_MEDIA_ACQUISITION_LIMITS } from '../src/media/media-policy';
+import type {
+  AcquisitionEvent,
+  LocalMediaAcquireRequest,
+  MediaAcquireRequest,
+  MediaAcquireRequestBase,
+  MediaLease,
+  MediaSource,
+  MediaTranscriptionEntry,
+} from '../src/media/media-source';
+import { parseYouTubeVideoUrl } from '../src/media/youtube-url';
 import type {
   EngineCapabilitiesRecord,
   SelectedModel,
@@ -239,11 +252,20 @@ function transcriptReady(sessionId: string, text: string): TranscriptReadyEvent 
   };
 }
 
-function createHarness(
-  overrides: Partial<ConstructorParameters<typeof AudioFileTranscriptionController>[0]> = {},
-) {
+type HarnessOverrides = Omit<
+  Partial<ConstructorParameters<typeof AudioFileTranscriptionController>[0]>,
+  'mediaEntry'
+> & {
+  readonly mediaEntry?: ConstructorParameters<
+    typeof AudioFileTranscriptionController
+  >[0]['mediaEntry'];
+  readonly mediaSource?: MediaSource;
+};
+
+function createHarness(overrides: HarnessOverrides = {}) {
   let target: SessionTarget | null = createTarget();
   const sessions: FakeSession[] = [];
+  const createSessionOptions: CreateSessionOptions[] = [];
   const feedback = { show: vi.fn() };
   const sidecarConnection = new FakeSidecarConnection();
   const sidecarLifecycleGate = new SidecarLifecycleGate();
@@ -283,10 +305,27 @@ function createHarness(
       ),
     );
   }
-  const mediaSource = overrides.mediaSource ?? new LocalMediaSource({ pickFile: pickAudioFile });
+  const {
+    mediaEntry: overrideMediaEntry,
+    mediaSource: overrideMediaSource,
+    ...dependencyOverrides
+  } = overrides;
+  const mediaSource = overrideMediaSource ?? new LocalMediaSource({ pickFile: pickAudioFile });
+  const mediaEntry: ConstructorParameters<
+    typeof AudioFileTranscriptionController
+  >[0]['mediaEntry'] = overrideMediaEntry ?? {
+    createRequest: (_context, request: MediaAcquireRequestBase) => ({
+      ...request,
+      provider: undefined,
+    }),
+    id: mediaSource.id,
+    isEnabled: () => true,
+    source: mediaSource,
+  };
   const dependencies: ConstructorParameters<typeof AudioFileTranscriptionController>[0] = {
     backpressureTimeoutMs: 100,
-    createSession: (_options: CreateSessionOptions) => {
+    createSession: (options: CreateSessionOptions) => {
+      createSessionOptions.push(options);
       const session = new FakeSession();
       sessions.push(session);
       return session;
@@ -302,20 +341,22 @@ function createHarness(
     sidecarConnection,
     sidecarLifecycleGate,
     stopConflictingSpeech: vi.fn(),
-    ...overrides,
+    ...dependencyOverrides,
     decoder: configuredDecoder,
-    mediaSource,
+    mediaEntry,
   };
   const controller = new AudioFileTranscriptionController(dependencies);
 
   return {
     controller,
+    createSessionOptions,
     decoder: configuredDecoder,
     feedback,
     pickAudioFile,
     sessions,
     sidecarConnection,
     sidecarLifecycleGate,
+    getSettings: () => settings,
     setCapabilities: (next: SelectedModelCapabilities) => {
       modelCapabilities = next;
     },
@@ -338,6 +379,266 @@ function createSettings(overrides: Partial<PluginSettings> = {}): PluginSettings
 }
 
 describe('AudioFileTranscriptionController', () => {
+  it('inserts complete YouTube captions without starting a speech model or sidecar', async () => {
+    const fetchYouTubeCaptions = vi.fn(async () => ({
+      cues: [
+        { startMs: 0, endMs: 1000, text: 'Beginning', speaker: null },
+        { startMs: 9000000, endMs: 9001000, text: 'Ending', speaker: null },
+      ],
+      language: 'en',
+      source: 'creator_captions' as const,
+      videoUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
+    }));
+    const harness = createHarness({ fetchYouTubeCaptions });
+    harness.setCapabilities({ status: 'none' });
+    await harness.controller.transcribeYouTubeCaptions(
+      {
+        canonicalUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
+        host: 'www.youtube.com',
+        inputUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
+        kind: 'youtube_video_id',
+        videoId: '8MxG6tOkdNY',
+      },
+      {
+        diarizationEnabled: false,
+        language: 'en',
+        timestampDensity: 'sparse',
+        timestampsEnabled: true,
+        transcriptFormatting: 'smart',
+        mediaLlmSnapshot: null,
+      },
+    );
+    expect(fetchYouTubeCaptions).toHaveBeenCalledOnce();
+    expect(harness.sidecarConnection.startSessionWithControl).not.toHaveBeenCalled();
+    expect(harness.sessions[0]?.accepted).toHaveLength(1);
+    expect(harness.sessions[0]?.accepted[0]?.text).toContain('Ending');
+    expect(harness.sessions[0]?.accepted[0]?.text).toContain(
+      '[2:30:00](https://www.youtube.com/watch?v=8MxG6tOkdNY&t=9000s) Ending',
+    );
+  });
+
+  it('sends plain YouTube caption text to the selected AI preset after insertion', async () => {
+    const settings = createSettings({
+      llmProviderConfigurations: {
+        ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations,
+        ollama: { model: 'fake-model' },
+      },
+      llmRoutingPolicy: { kind: 'fixed', providerId: 'ollama' },
+    });
+    const cleanup = vi.fn(async () => ({
+      model: 'fake-model',
+      providerId: 'ollama' as const,
+      text: 'Summary of the video.',
+    }));
+    const harness = createHarness({
+      createLlmRouter: () => createFakeLlmRouter({ cleanup }),
+      fetchYouTubeCaptions: async () => ({
+        cues: [
+          { startMs: 0, endMs: 1000, text: 'Beginning', speaker: null },
+          { startMs: 60000, endMs: 61000, text: 'Ending', speaker: null },
+        ],
+        language: 'en',
+        source: 'creator_captions',
+        videoUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
+      }),
+      getSettings: () => settings,
+    });
+    harness.setCapabilities({ status: 'none' });
+    await harness.controller.transcribeYouTubeCaptions(
+      parseYouTubeVideoUrl('https://www.youtube.com/watch?v=8MxG6tOkdNY'),
+      {
+        diarizationEnabled: false,
+        language: 'en',
+        timestampDensity: 'every_utterance',
+        timestampsEnabled: true,
+        transcriptFormatting: 'new_paragraph',
+        mediaLlmSnapshot: resolveLlmTransformSnapshot(settings),
+      },
+    );
+    expect(harness.sessions[0]?.accepted).toHaveLength(1);
+    expect(cleanup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: '<media_transcript>\nBeginning Ending\n</media_transcript>',
+      }),
+    );
+    expect(harness.controller.getLastMediaAiOutcome()).toBe('applied');
+    expect(harness.sidecarConnection.startSessionWithControl).not.toHaveBeenCalled();
+  });
+
+  it('inserts a long caption track once with the ending intact', async () => {
+    const cues = Array.from({ length: 5_000 }, (_, index) => ({
+      startMs: index * 2_000,
+      endMs: index * 2_000 + 1_500,
+      text: index === 4_999 ? 'Final words' : `Caption ${index}`,
+      speaker: null,
+    }));
+    const harness = createHarness({
+      fetchYouTubeCaptions: async () => ({
+        cues,
+        language: 'en',
+        source: 'automatic_captions',
+        videoUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
+      }),
+    });
+    await harness.controller.transcribeYouTubeCaptions(
+      parseYouTubeVideoUrl('https://www.youtube.com/watch?v=8MxG6tOkdNY'),
+      {
+        diarizationEnabled: false,
+        language: 'en',
+        timestampDensity: 'sparse',
+        timestampsEnabled: false,
+        transcriptFormatting: 'smart',
+        mediaLlmSnapshot: null,
+      },
+    );
+    expect(harness.sessions[0]?.accepted).toHaveLength(1);
+    expect(harness.sessions[0]?.accepted[0]?.text).toContain('Caption 0');
+    expect(harness.sessions[0]?.accepted[0]?.text).toContain('Caption 2500');
+    expect(harness.sessions[0]?.accepted[0]?.text).toContain('Final words');
+    const paragraphs = harness.sessions[0]?.accepted[0]?.text.split('\n\n') ?? [];
+    expect(paragraphs.length).toBeGreaterThan(20);
+    expect(Math.max(...paragraphs.map((paragraph) => paragraph.length))).toBeLessThan(2_000);
+  });
+
+  it('cancels caption retrieval cleanly without inserting into the note', async () => {
+    const fetchYouTubeCaptions = vi.fn(
+      async (
+        _ref: Parameters<
+          NonNullable<AudioFileTranscriptionControllerDependencies['fetchYouTubeCaptions']>
+        >[0],
+        _language: Parameters<
+          NonNullable<AudioFileTranscriptionControllerDependencies['fetchYouTubeCaptions']>
+        >[1],
+        signal: AbortSignal,
+      ) =>
+        await new Promise<never>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+    );
+    const harness = createHarness({ fetchYouTubeCaptions });
+    harness.setCapabilities({ status: 'none' });
+    const ref = {
+      canonicalUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
+      host: 'www.youtube.com',
+      inputUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
+      kind: 'youtube_video_id' as const,
+      videoId: '8MxG6tOkdNY',
+    };
+    const operation = harness.controller.transcribeYouTubeCaptions(ref, {
+      diarizationEnabled: false,
+      language: 'en',
+      timestampDensity: 'sparse',
+      timestampsEnabled: true,
+      transcriptFormatting: 'smart',
+      mediaLlmSnapshot: null,
+    });
+    const rejected = expect(operation).rejects.toMatchObject({ code: 'cancelled' });
+    await vi.waitFor(() => expect(fetchYouTubeCaptions).toHaveBeenCalledOnce());
+
+    await expect(harness.controller.cancelProvider('youtube_captions')).resolves.toBeUndefined();
+    await rejected;
+    expect(harness.sessions).toHaveLength(0);
+    expect(harness.controller.getMediaError()).toBeNull();
+  });
+
+  it('keeps speech text out of the note until the whole audio feed and sidecar finish', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    let releaseFrame!: () => void;
+    const frameHeld = new Promise<void>((resolve) => {
+      releaseFrame = resolve;
+    });
+    sidecarConnection.sendAudioFrameWithBackpressure.mockImplementation(async () => {
+      await frameHeld;
+    });
+    const harness = createHarness({ sidecarConnection });
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() => expect(sidecarConnection.startSessionWithControl).toHaveBeenCalled());
+    const sessionId = sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    if (sessionId === undefined) throw new Error('Expected speech session');
+    sidecarConnection.emit(transcriptReady(sessionId, 'First words'));
+    await vi.waitFor(() => expect(harness.sessions).toHaveLength(1));
+    expect(harness.sessions[0]?.accepted).toHaveLength(0);
+    releaseFrame();
+    await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalled());
+    expect(harness.sessions[0]?.accepted).toHaveLength(0);
+    sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await transcribing;
+    expect(harness.sessions[0]?.accepted).toHaveLength(1);
+    expect(harness.sessions[0]?.accepted[0]?.text).toContain('First words');
+  });
+  it('rechecks the provider kill switch before acquiring provider media', async () => {
+    const acquire = vi.fn();
+    const source: MediaSource = { acquire, adapterVersion: '1', id: 'provider' };
+    const harness = createHarness();
+    const entry = {
+      createRequest: (_context: undefined, request: MediaAcquireRequestBase) => ({
+        ...request,
+        provider: undefined,
+      }),
+      id: 'provider',
+      isEnabled: () => false,
+      source,
+    };
+
+    await harness.controller.transcribeProvider(entry, undefined);
+
+    expect(acquire).not.toHaveBeenCalled();
+  });
+
+  it('cancels a provider operation after media is ready without cancelling local work', async () => {
+    let resolveStarted: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      resolveStarted = resolve;
+    });
+    const release = vi.fn(async () => {});
+    const lease: MediaLease = {
+      encodedBytes: 1,
+      mediaId: 'provider-ready',
+      openReadStream: vi.fn(async () => new ReadableStream<Uint8Array>()),
+      provenance: {
+        acquiredAt: new Date(0).toISOString(),
+        adapterVersion: 'test',
+        sourceId: 'provider',
+        temporaryMedia: true,
+      },
+      release,
+    };
+    const source: MediaSource = {
+      acquire: async function* () {
+        yield { plan: { displayName: 'Provider', sourceId: 'provider' }, type: 'plan' };
+        yield { lease, type: 'ready' };
+      },
+      adapterVersion: 'test',
+      id: 'provider',
+    };
+    const decoder = {
+      decode: vi.fn(async () => createAudio()),
+      decodeMedia: vi.fn(async (_lease: MediaLease, signal: AbortSignal) => {
+        resolveStarted();
+        await new Promise<void>((resolve) =>
+          signal.addEventListener('abort', () => resolve(), { once: true }),
+        );
+        return createAudio();
+      }),
+    };
+    const harness = createHarness({ decoder, mediaSource: source });
+    const entry = {
+      createRequest: (_context: undefined, request: MediaAcquireRequestBase) => ({
+        ...request,
+        provider: undefined,
+      }),
+      id: 'test_provider',
+      isEnabled: () => true,
+      source,
+    };
+    const operation = harness.controller.transcribeProvider(entry, undefined);
+    await started;
+    await harness.controller.cancelProvider('test_provider');
+    await operation;
+    expect(release).toHaveBeenCalledOnce();
+    expect(harness.sidecarConnection.startSessionWithControl).not.toHaveBeenCalled();
+  });
+
   it('guards mobile before busy state, picker, and decoder work', async () => {
     const originalDesktop = Platform.isDesktopApp;
     Platform.isDesktopApp = false;
@@ -382,7 +683,7 @@ describe('AudioFileTranscriptionController', () => {
 
     expect(payload).toMatchObject({
       includeSystemAudio: false,
-      language: 'ja',
+      language: 'ja' as const,
       mode: 'always_on',
       modelSelection: selectedModel,
     });
@@ -408,6 +709,62 @@ describe('AudioFileTranscriptionController', () => {
       const lease = harness.sidecarLifecycleGate.acquireMutation();
       lease.release();
     }).not.toThrow();
+  });
+
+  it('snapshots media model and formatting options per job without mutating saved settings', async () => {
+    const harness = createHarness({
+      getMediaTranscriptionModels: () => [
+        {
+          capabilities: batchCapabilities,
+          label: 'Whisper batch',
+          selection: selectedModel,
+        },
+      ],
+    });
+    const originalSettings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      ...createSettings(),
+      diarizationEnabled: false,
+      timestampsEnabled: true,
+    };
+    harness.setSettings(originalSettings);
+    const entry: MediaTranscriptionEntry<undefined, LocalMediaAcquireRequest> = {
+      createRequest: (_context, request) => ({ ...request, provider: { file: null } }),
+      id: 'test-media',
+      isEnabled: () => true,
+      source: new LocalMediaSource({ pickFile: harness.pickAudioFile }),
+    };
+    const jobOptions = {
+      diarizationEnabled: true,
+      language: 'ja' as const,
+      modelSelection: selectedModel,
+      timestampDensity: 'paragraph' as const,
+      timestampsEnabled: false,
+      transcriptFormatting: 'space' as const,
+    };
+
+    const operation = harness.controller.transcribeProvider(entry, undefined, jobOptions);
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+    const payload = harness.sidecarConnection.startSessionWithControl.mock.calls[0]?.[0];
+    const sessionId = payload?.sessionId;
+    if (sessionId === undefined) throw new Error('Expected a media session to start.');
+    harness.sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await operation;
+
+    expect(payload).toMatchObject({
+      detailedTimestampsEnabled: false,
+      diarizationEnabled: true,
+      language: 'ja',
+      modelSelection: selectedModel,
+    });
+    expect(harness.createSessionOptions[0]?.rendererOptions).toMatchObject({
+      timestamps: { clock: 'elapsed', density: 'paragraph', enabled: false },
+      transcriptFormatting: 'space',
+    });
+    expect(harness.createSessionOptions[0]?.rendererOptions.timestamps.enabled).toBe(false);
+    expect(harness.getSettings()).toEqual(originalSettings);
   });
 
   it('holds a speech lease across picker and pending decode, then cancellation unwinds it', async () => {
@@ -1127,7 +1484,7 @@ describe('AudioFileTranscriptionController', () => {
     );
   });
 
-  it('cancels natively when backpressure reaches its finite deadline', async () => {
+  it('allows a slow batch queue to recover without cancelling the recording', async () => {
     const sidecarConnection = new FakeSidecarConnection();
     let writes = 0;
     sidecarConnection.sendAudioFrameWithBackpressure.mockImplementation(async () => {
@@ -1153,10 +1510,20 @@ describe('AudioFileTranscriptionController', () => {
     const transcribing = harness.controller.transcribe();
     await vi.waitFor(() => expect(writes).toBeGreaterThanOrEqual(1));
     await new Promise<void>((resolve) => window.setTimeout(resolve, 15));
+    expect(sidecarConnection.cancelSession).not.toHaveBeenCalled();
+    const sessionId = sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    if (sessionId === undefined) throw new Error('Expected a speech session');
+    sidecarConnection.emit({
+      queuedUtterances: 0,
+      sessionId,
+      tier: 'normal',
+      type: 'transcription_queue_changed',
+    });
+    await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalled());
+    sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
     await transcribing;
 
-    expect(sidecarConnection.requestStopSession).not.toHaveBeenCalled();
-    expect(sidecarConnection.cancelSession).toHaveBeenCalledOnce();
+    expect(sidecarConnection.cancelSession).not.toHaveBeenCalled();
   });
 
   it('localizes decoder, model-duration, and sidecar failures with actionable copy', async () => {
@@ -1204,17 +1571,17 @@ describe('AudioFileTranscriptionController', () => {
 
   it('adapts the local source lease into the provider-neutral pipeline and releases it', async () => {
     const release = vi.fn(async () => {});
-    const lease: MediaLease = {
+    const lease: MediaLease & { readonly youtubeProvenance: { readonly title: string } } = {
       encodedBytes: 44,
       mediaId: 'media-test',
       openReadStream: vi.fn(async () => new ReadableStream<Uint8Array>()),
       provenance: {
         acquiredAt: new Date(0).toISOString(),
         adapterVersion: '1',
-        rights: { kind: 'user_supplied_file' },
         sourceId: 'local_file',
         temporaryMedia: true,
       },
+      youtubeProvenance: { title: 'Private title' },
       release,
     };
     let acquisitionRequest: MediaAcquireRequest | null = null;
@@ -1233,7 +1600,7 @@ describe('AudioFileTranscriptionController', () => {
     };
     const progress: string[] = [];
     const decoded = createAudio();
-    const decodeMedia = vi.fn(async () => decoded);
+    const decodeMedia = vi.fn(async (_lease: MediaLease, _signal: AbortSignal) => decoded);
     const harness = createHarness({
       decoder: {
         decode: async () => decoded,
@@ -1261,10 +1628,18 @@ describe('AudioFileTranscriptionController', () => {
 
     expect(acquisitionRequest).toMatchObject({
       kind: 'interactive',
-      ...MEDIA_ACQUISITION_LIMITS,
+      ...LOCAL_MEDIA_ACQUISITION_LIMITS,
     });
     expect(harness.pickAudioFile).not.toHaveBeenCalled();
-    expect(decodeMedia).toHaveBeenCalledWith(lease, expect.any(AbortSignal));
+    expect(decodeMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        encodedBytes: lease.encodedBytes,
+        mediaId: lease.mediaId,
+        provenance: lease.provenance,
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(decodeMedia.mock.calls[0]?.[0]).not.toHaveProperty('youtubeProvenance');
     expect(release).toHaveBeenCalledOnce();
     expect(progress).toEqual(
       expect.arrayContaining(['acquire', 'decode', 'transcribe', 'format', 'insert']),
@@ -1288,17 +1663,15 @@ describe('AudioFileTranscriptionController', () => {
     expect(createLlmRouter).not.toHaveBeenCalled();
   });
 
-  it('keeps the raw media transcript until explicit LLM confirmation and records recovery', async () => {
+  it('applies media AI output automatically and records raw transcript recovery', async () => {
     const cleanup = vi.fn(async (_options: unknown) => ({
       model: 'fake-model',
       providerId: 'ollama' as const,
       text: 'Clean media transcript.',
     }));
-    const confirm = vi.fn(async () => true);
     const recoveries: unknown[] = [];
     const progress: string[] = [];
     const harness = createHarness({
-      confirmMediaLlm: confirm,
       createLlmRouter: () => createFakeLlmRouter({ cleanup }),
       getSettings: () =>
         createSettings({
@@ -1332,10 +1705,6 @@ describe('AudioFileTranscriptionController', () => {
           '<media_transcript>\nRaw media transcript.\n</media_transcript>',
         ),
       }),
-    );
-    expect(confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ output: 'replace', text: 'Clean media transcript.' }),
-      expect.any(AbortSignal),
     );
     expect(progress).toContain('ai_processing');
     expect(harness.sessions[0]?.replaceSessionRangeWithCleaned).toHaveBeenCalledWith(

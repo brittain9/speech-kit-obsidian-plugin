@@ -13,6 +13,7 @@ function request(signal = new AbortController().signal) {
     kind: 'interactive' as const,
     maxBytes: Number.MAX_SAFE_INTEGER,
     maxDurationMs: Number.MAX_SAFE_INTEGER,
+    provider: undefined,
     signal,
   };
 }

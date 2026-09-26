@@ -7,8 +7,8 @@ import {
 } from '../audio/audio-file-decoder';
 import type {
   AcquisitionEvent,
+  LocalMediaAcquireRequest,
   LocalMediaLease,
-  MediaAcquireRequest,
   MediaPlan,
   MediaProvenance,
   MediaReadStream,
@@ -21,15 +21,15 @@ export interface LocalMediaSourceDependencies {
 
 const LOCAL_MEDIA_ADAPTER_VERSION = '1';
 
-export class LocalMediaSource implements MediaSource {
+export class LocalMediaSource implements MediaSource<LocalMediaAcquireRequest> {
   readonly adapterVersion = LOCAL_MEDIA_ADAPTER_VERSION;
   readonly id = 'local_file' as const;
 
   constructor(private readonly dependencies: LocalMediaSourceDependencies) {}
 
-  async *acquire(request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent> {
+  async *acquire(request: LocalMediaAcquireRequest): AsyncIterable<AcquisitionEvent> {
     throwIfCancelled(request.signal);
-    const file = await this.dependencies.pickFile(request.signal);
+    const file = request.provider?.file ?? (await this.dependencies.pickFile(request.signal));
     throwIfCancelled(request.signal);
     if (file === null) return;
 
@@ -78,7 +78,6 @@ function createLocalMediaLease(args: {
   const provenance: MediaProvenance = {
     acquiredAt: args.acquiredAt,
     adapterVersion: args.adapterVersion,
-    rights: { kind: 'user_supplied_file' },
     sourceId: args.sourceId,
     temporaryMedia: true,
   };

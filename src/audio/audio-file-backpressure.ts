@@ -5,7 +5,7 @@ interface BackpressureWaiter {
   readonly reject: (error: Error) => void;
   readonly resolve: () => void;
   readonly signal: AbortSignal;
-  readonly timeoutHandle: number;
+  readonly timeoutHandle: number | null;
   readonly onAbort: () => void;
 }
 
@@ -20,8 +20,8 @@ export class AudioFileBackpressureGate {
   private tier: QueueBackpressureTier = 'normal';
   private readonly waiters = new Set<BackpressureWaiter>();
 
-  constructor(private readonly timeoutMs: number) {
-    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+  constructor(private readonly timeoutMs: number | null) {
+    if (timeoutMs !== null && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
       throw new Error('Audio-file backpressure timeout must be a positive number.');
     }
   }
@@ -53,11 +53,14 @@ export class AudioFileBackpressureGate {
         reject,
         resolve,
         signal,
-        timeoutHandle: window.setTimeout(() => {
-          this.settleWaiter(waiter, () =>
-            reject(new AudioFileBackpressureTimeoutError(this.timeoutMs)),
-          );
-        }, this.timeoutMs),
+        timeoutHandle:
+          this.timeoutMs === null
+            ? null
+            : window.setTimeout(() => {
+                this.settleWaiter(waiter, () =>
+                  reject(new AudioFileBackpressureTimeoutError(this.timeoutMs ?? 0)),
+                );
+              }, this.timeoutMs),
         onAbort: () => {
           this.settleWaiter(waiter, () => reject(abortReason(signal)));
         },
@@ -71,7 +74,7 @@ export class AudioFileBackpressureGate {
     if (!this.waiters.delete(waiter)) {
       return;
     }
-    window.clearTimeout(waiter.timeoutHandle);
+    if (waiter.timeoutHandle !== null) window.clearTimeout(waiter.timeoutHandle);
     waiter.signal.removeEventListener('abort', waiter.onAbort);
     settle();
   }

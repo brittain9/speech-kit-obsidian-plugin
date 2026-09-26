@@ -1,5 +1,5 @@
 import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-recovery';
-import { type MediaLlmDisclosure, mediaLlmIncludesNoteContext } from '../llm/media-llm-policy';
+import { mediaLlmIncludesNoteContext } from '../llm/media-llm-policy';
 import type { LlmPresetOutput } from '../llm/presets';
 import { ProviderError } from '../llm/provider';
 import type { LlmRouter, LlmRouterCleanupResult } from '../llm/router';
@@ -18,18 +18,12 @@ export interface MediaLlmProcessingPolicy {
 
 export type MediaLlmSnapshot = MediaLlmProcessingPolicy;
 
-export interface MediaLlmPreviewMetadata {
-  readonly disclosure?: MediaLlmDisclosure;
-  readonly model?: string;
-  readonly providerId?: string;
-}
-
-export interface MediaLlmPreview extends MediaLlmPreviewMetadata {
-  readonly output: LlmPresetOutput;
-  readonly text: string;
-}
-
-export type MediaLlmProcessingErrorCode = 'cancelled' | 'empty' | 'failed' | 'range_unavailable';
+export type MediaLlmProcessingErrorCode =
+  | 'cancelled'
+  | 'empty'
+  | 'failed'
+  | 'range_unavailable'
+  | 'refused';
 
 export class MediaLlmProcessingError extends Error {
   constructor(
@@ -43,13 +37,12 @@ export class MediaLlmProcessingError extends Error {
 }
 
 export interface MediaLlmProcessorDependencies {
-  readonly confirm: (preview: MediaLlmPreview, signal: AbortSignal) => Promise<boolean>;
   readonly isEnabled?: () => boolean;
   readonly onRawTranscriptRecoveryAvailable: (receipt: RawTranscriptRecoveryReceipt) => void;
-  readonly previewMetadata?: MediaLlmPreviewMetadata;
   readonly router: LlmRouter;
   readonly signal: AbortSignal;
   readonly snapshot: MediaLlmSnapshot;
+  readonly transcriptText?: string;
 }
 
 /**
@@ -59,8 +52,8 @@ export interface MediaLlmProcessorDependencies {
 export async function processMediaLlm(
   session: MediaLlmEditorSession,
   dependencies: MediaLlmProcessorDependencies,
-): Promise<{ readonly applied: boolean; readonly text: string }> {
-  const rawText = session.joinRawSessionText();
+): Promise<{ readonly text: string }> {
+  const rawText = dependencies.transcriptText ?? session.joinRawSessionText();
   if (rawText.trim().length === 0) {
     throw new MediaLlmProcessingError(
       'empty',
@@ -111,19 +104,11 @@ export async function processMediaLlm(
         'The configured AI provider returned no media transcript text. The raw transcript was kept.',
       );
     }
-
-    const confirmed = await dependencies.confirm(
-      {
-        ...dependencies.previewMetadata,
-        output: dependencies.snapshot.output,
-        text,
-      },
-      dependencies.signal,
-    );
-    assertEnabled(dependencies);
-    throwIfCancelled(dependencies.signal);
-    if (!confirmed) {
-      return { applied: false, text };
+    if (isBareProviderRefusal(text)) {
+      throw new MediaLlmProcessingError(
+        'refused',
+        'The AI model declined this transcript. The raw transcript was kept.',
+      );
     }
 
     assertEnabled(dependencies);
@@ -154,10 +139,17 @@ export async function processMediaLlm(
       }
     }
 
-    return { applied: true, text };
+    return { text };
   } finally {
     session.clearSessionProcessingMark();
   }
+}
+
+function isBareProviderRefusal(text: string): boolean {
+  if (text.length > 240) return false;
+  return /^(?:i(?:'m| am) sorry,? (?:but )?)?(?:i (?:cannot|can'?t|am unable to) (?:assist with|help with|comply with) (?:that|this|your) request|i (?:cannot|can'?t) (?:provide|fulfill) (?:that|this) request)[.!]?$/iu.test(
+    text.trim(),
+  );
 }
 
 function readBoundedNoteContext(

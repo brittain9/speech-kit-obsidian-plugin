@@ -100,4 +100,83 @@ describe('AudioFileTranscriptAdapter with the real Session', () => {
     adapter.disposeSession();
     expect(view.state.doc.toString()).toBe('Inserted through the real Session.');
   });
+
+  it('preserves caption paragraph breaks in the actual note projection', async () => {
+    const file = { path: 'captions.md' } as TFile;
+    const view = new StateBackedEditorView('', {
+      extensions: [dictationAnchorExtension(), provisionalTranscriptExtension()],
+      selectionHead: 0,
+    });
+    const workspaceEvents = new EventSink();
+    const vaultEvents = new EventSink();
+    const app = {
+      vault: {
+        offref: (ref: EventRef) => vaultEvents.offref(ref),
+        on: (name: string, handler: (...args: never[]) => void) => vaultEvents.on(name, handler),
+      },
+      workspace: {
+        activeEditor: { editor: { cm: view }, file },
+        getActiveFile: () => file,
+        getLeavesOfType: () => [{ view: { editor: { cm: view }, file } }],
+        offref: (ref: EventRef) => workspaceEvents.offref(ref),
+        on: (name: string, handler: (...args: never[]) => void) =>
+          workspaceEvents.on(name, handler),
+      },
+    } as unknown as Pick<App, 'vault' | 'workspace'>;
+    const session = new Session({
+      app,
+      callbacks: {
+        onLockedNoteClosed: vi.fn(),
+        onLockedNoteDeleted: vi.fn(),
+        onSurfaceDesynchronized: vi.fn(),
+      },
+      leafPinManager: new TemporaryLeafPinLeaseManager(),
+      lockedFile: file,
+      placement: { anchor: 'at_cursor' },
+      rendererOptions: { ...renderOptions(), transcriptFormatting: 'space' },
+      sessionId: 'caption-session',
+      view: view as unknown as EditorView,
+    });
+    const options = {
+      ...renderOptions(),
+      maxSmartParagraphChars: 120,
+      transcriptFormatting: 'smart' as const,
+    };
+    const adapter = new AudioFileTranscriptAdapter(
+      session,
+      options.timestamps,
+      vi.fn(),
+      undefined,
+      true,
+      options,
+    );
+    for (let index = 0; index < 100; index += 1) {
+      const text = `Caption ${index} ends.`;
+      adapter.handleTranscript({
+        ...transcriptEvent('caption-session'),
+        pauseMsBeforeUtterance: index === 0 ? null : 500,
+        segments: [
+          {
+            endMs: index * 2_000 + 1_500,
+            speaker: null,
+            startMs: index * 2_000,
+            text,
+            timestampGranularity: 'segment',
+            timestampSource: 'engine',
+          },
+        ],
+        text,
+        utteranceEndMsInSession: index * 2_000 + 1_500,
+        utteranceId: `caption-${index}`,
+        utteranceIndex: index,
+        utteranceStartMsInSession: index * 2_000,
+      });
+    }
+    await adapter.commitStaged();
+    const note = view.state.doc.toString();
+    expect(note.split('\n\n').length).toBeGreaterThan(5);
+    expect(note).toContain('Caption 0 ends.');
+    expect(note).toContain('Caption 99 ends.');
+    adapter.disposeSession();
+  });
 });

@@ -1,5 +1,4 @@
 import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-recovery';
-import { resolveMediaLlmDisclosure } from '../llm/media-llm-policy';
 import { type LlmReadinessIssueCode, resolveLlmReadiness } from '../llm/readiness';
 import type { LlmRouter } from '../llm/router';
 import { llmSettingsFingerprint } from '../llm/settings-fingerprint';
@@ -11,14 +10,12 @@ import type { PluginLogger } from '../shared/plugin-logger';
 import type { UserFeedback } from '../shared/user-feedback';
 import type { MediaLlmEditorSession } from './audio-file-transcript-adapter';
 import {
-  type MediaLlmPreview,
   MediaLlmProcessingError,
   type MediaLlmSnapshot,
   processMediaLlm,
 } from './media-llm-processor';
 
 export interface MediaLlmCoordinatorDependencies {
-  readonly confirm?: (preview: MediaLlmPreview, signal: AbortSignal) => Promise<boolean>;
   readonly createRouter?: (settings: PluginSettings) => LlmRouter | null;
   readonly feedback: Pick<UserFeedback, 'show'>;
   readonly getSecret?: (secretId: string) => string;
@@ -30,36 +27,51 @@ export interface MediaLlmCoordinatorDependencies {
 
 export type MediaLlmReadinessFailureCode = LlmReadinessIssueCode | 'provider_unavailable';
 
+export interface MediaLlmJob {
+  readonly settings: PluginSettings;
+  readonly snapshot: MediaLlmSnapshot;
+}
+
+export type MediaLlmRunOutcome = 'skipped' | 'applied' | 'failed' | 'cancelled';
+
 export class MediaLlmCoordinator {
   private activeAbortController: AbortController | null = null;
 
   constructor(private readonly dependencies: MediaLlmCoordinatorDependencies) {}
 
-  preflight(settings = this.dependencies.getSettings()): boolean {
-    if (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled) return true;
-    if (this.dependencies.createRouter === undefined || this.dependencies.confirm === undefined) {
+  preflight(settings = this.dependencies.getSettings(), job?: MediaLlmJob | null): boolean {
+    if (job === null) return true;
+    if (job === undefined && (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled)) {
+      return true;
+    }
+    if (this.dependencies.createRouter === undefined) {
       this.reportReadiness('provider_unavailable');
       return false;
     }
     return this.readinessIsValid(settings);
   }
 
-  async run(session: MediaLlmEditorSession): Promise<void> {
-    const settings = this.dependencies.getSettings();
-    if (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled) return;
-    if (!this.preflight(settings)) return;
+  async run(
+    session: MediaLlmEditorSession,
+    job?: MediaLlmJob | null,
+    transcriptText?: string,
+  ): Promise<MediaLlmRunOutcome> {
+    if (job === null) return 'skipped';
+    const settings = job?.settings ?? this.dependencies.getSettings();
+    if (job === undefined && (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled))
+      return 'skipped';
+    if (!this.preflight(settings, job)) return 'failed';
     const router = this.dependencies.createRouter?.(settings) ?? null;
     if (router === null) {
       this.reportReadiness('provider_unavailable');
-      return;
+      return 'failed';
     }
-    const rawText = session.joinRawSessionText();
+    const rawText = transcriptText ?? session.joinRawSessionText();
     if (rawText.trim().length === 0) {
       this.feedback('media-llm-empty');
-      return;
+      return 'failed';
     }
-    const transform = resolveLlmTransformSnapshot(settings);
-    const disclosure = resolveMediaLlmDisclosure(settings, router, rawText.length, transform);
+    const transform = job?.snapshot ?? resolveLlmTransformSnapshot(settings);
     const snapshot: MediaLlmSnapshot = {
       noteContextChars: transform.noteContextChars,
       output: transform.output,
@@ -69,41 +81,41 @@ export class MediaLlmCoordinator {
       totalContextCap: transform.totalContextCap,
       useNoteContext: transform.useNoteContext,
     };
-    const confirm = this.dependencies.confirm;
-    if (confirm === undefined) return;
     const abortController = new AbortController();
     this.activeAbortController = abortController;
     this.dependencies.onProgress?.('ai_processing');
     try {
       await processMediaLlm(session, {
-        confirm,
-        isEnabled: () => this.isCurrentConfiguration(settings),
+        isEnabled: () =>
+          job === undefined
+            ? this.isCurrentConfiguration(settings)
+            : this.isCurrentProviderConfiguration(settings),
         onRawTranscriptRecoveryAvailable: (receipt) =>
           this.dependencies.onRawTranscriptRecoveryAvailable?.(receipt),
-        previewMetadata: {
-          disclosure,
-          model: disclosure.model,
-          providerId: disclosure.providerId,
-        },
         router,
         signal: abortController.signal,
         snapshot,
+        transcriptText: rawText,
       });
+      return 'applied';
     } catch (error) {
       if (error instanceof MediaLlmProcessingError) {
-        if (error.code === 'cancelled') return;
+        if (error.code === 'cancelled') return 'cancelled';
         this.feedback(
           error.code === 'empty'
             ? 'media-llm-empty'
             : error.code === 'range_unavailable'
               ? 'media-llm-range-unavailable'
-              : 'media-llm-failed',
+              : error.code === 'refused'
+                ? 'media-llm-refused'
+                : 'media-llm-failed',
         );
-        return;
+        return 'failed';
       }
-      if (abortController.signal.aborted) return;
+      if (abortController.signal.aborted) return 'cancelled';
       this.dependencies.logger?.warn('llm', 'media transcript post-completion failed', error);
       this.feedback('media-llm-failed');
+      return 'failed';
     } finally {
       if (this.activeAbortController === abortController) this.activeAbortController = null;
     }
@@ -132,6 +144,15 @@ export class MediaLlmCoordinator {
     );
   }
 
+  private isCurrentProviderConfiguration(settings: PluginSettings): boolean {
+    const current = this.dependencies.getSettings();
+    return (
+      JSON.stringify(current.llmRoutingPolicy) === JSON.stringify(settings.llmRoutingPolicy) &&
+      JSON.stringify(current.llmProviderConfigurations) ===
+        JSON.stringify(settings.llmProviderConfigurations)
+    );
+  }
+
   private readinessIsValid(settings: PluginSettings): boolean {
     const readiness = resolveLlmReadiness({
       configurations: settings.llmProviderConfigurations,
@@ -151,6 +172,7 @@ export class MediaLlmCoordinator {
     key:
       | 'media-llm-empty'
       | 'media-llm-failed'
+      | 'media-llm-refused'
       | 'media-llm-range-unavailable'
       | 'media-llm-readiness',
     issue?: MediaLlmReadinessFailureCode,

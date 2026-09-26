@@ -10,7 +10,7 @@ export async function pickLocalAudioFile(
 
   const input = ownerDocument.body.createEl('input');
   input.type = 'file';
-  input.accept = 'audio/*';
+  input.accept = 'audio/*,video/*,.mkv,.webm,.mov,.mp4';
   input.hidden = true;
   input.setAttribute('aria-hidden', 'true');
 

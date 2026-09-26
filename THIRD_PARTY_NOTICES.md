@@ -4,6 +4,35 @@ Speech Kit embeds or downloads the following model artifacts so speech
 processing works offline. Downloaded catalog artifacts are verified against
 pinned sizes and SHA-256 hashes before activation.
 
+## FFmpeg media decoder (separate helper build)
+
+- Work: FFmpeg 9.0.2 command-line executables, `ffmpeg` and `ffprobe`
+- Source: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+- Source SHA-256: `8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e`
+- License guidance: https://ffmpeg.org/legal.html
+- Build recipe: `scripts/build-media-ffmpeg.sh`
+
+The helper build disables GPL and nonfree components and automatic external
+library detection. Each platform artifact must include the exact source archive,
+build configuration, LGPL license files, and SHA-256 manifest produced by the
+recipe. The plugin invokes the executables as separate processes for local
+media decoding; it does not link FFmpeg libraries. Publish the source alongside
+any distributed binaries and retain its license notices.
+
+## yt-dlp helper (optional download)
+
+- Work: yt-dlp standalone release helper, version `2026.08.19`
+- Source and release assets: https://github.com/yt-dlp/yt-dlp/releases/tag/2026.08.19
+- Upstream license details: https://github.com/yt-dlp/yt-dlp#licensing
+- Hashes: SHA-256 values are pinned in `src/media/youtube-helper-installer.ts`.
+
+The user may install the platform-specific executable from the official upstream
+release in Settings. The app verifies the downloaded bytes against the pinned
+SHA-256 before writing the helper. yt-dlp's upstream licensing notice says its
+standalone PyInstaller executables include GPLv3-or-later components; see the
+upstream notice for the bundled components and their terms. The helper is a
+separate process and is not linked into the plugin.
+
 ## Silero voice-activity-detection model
 
 - Work: Silero VAD

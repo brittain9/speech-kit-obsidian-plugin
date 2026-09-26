@@ -3,6 +3,7 @@ import type { MediaLlmEditorSession } from '../src/dictation/audio-file-transcri
 import { MediaLlmCoordinator } from '../src/dictation/media-llm-coordinator';
 import { ProviderError } from '../src/llm/provider';
 import type { LlmRouter } from '../src/llm/router';
+import { resolveLlmTransformSnapshot } from '../src/llm/transform-policy';
 import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
 
 function settings(overrides: Partial<PluginSettings> = {}): PluginSettings {
@@ -32,10 +33,40 @@ function session(): MediaLlmEditorSession {
 }
 
 describe('MediaLlmCoordinator', () => {
+  it('runs an explicitly selected media preset while the legacy global media toggle is off', async () => {
+    const current = settings({ llmFeaturesEnabled: false, mediaLlmProcessing: false });
+    const cleanup = vi.fn(async () => ({
+      model: 'local-model',
+      providerId: 'ollama' as const,
+      text: 'Summary.',
+    }));
+    const editor = session();
+    const coordinator = new MediaLlmCoordinator({
+      createRouter: () => ({ cleanup, selectProviderId: () => 'ollama' }),
+      feedback: { show: vi.fn() },
+      getSettings: () => current,
+    });
+    const snapshot = resolveLlmTransformSnapshot({
+      ...current,
+      llmPostprocessActivePresetRef: 'builtin:tldr',
+    });
+
+    await coordinator.run(editor, { settings: current, snapshot });
+
+    expect(cleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: expect.stringContaining('TLDR summary') }),
+    );
+    expect(editor.insertAdjacentToSessionRange).toHaveBeenCalledWith('Summary.', 'above', {
+      rejectUserEdits: true,
+    });
+    expect(current.llmPostprocessActivePresetRef).toBe(
+      DEFAULT_PLUGIN_SETTINGS.llmPostprocessActivePresetRef,
+    );
+  });
+
   it('preflights missing remote credentials with a typed localized readiness failure', () => {
     const feedback = { show: vi.fn() };
     const coordinator = new MediaLlmCoordinator({
-      confirm: vi.fn(),
       createRouter: vi.fn(),
       feedback,
       getSettings: () =>
@@ -73,7 +104,6 @@ describe('MediaLlmCoordinator', () => {
     const feedback = { show: vi.fn() };
     const editor = session();
     const coordinator = new MediaLlmCoordinator({
-      confirm: vi.fn(async () => true),
       createRouter: () => router,
       feedback,
       getSettings: () => current,
@@ -92,21 +122,16 @@ describe('MediaLlmCoordinator', () => {
     );
   });
 
-  it('rechecks settings after confirmation before applying an old provider result', async () => {
+  it('rechecks settings after the provider returns before applying its result', async () => {
     let current = settings();
     const feedback = { show: vi.fn() };
     const editor = session();
     const coordinator = new MediaLlmCoordinator({
-      confirm: vi.fn(async () => {
-        current = settings({ mediaLlmProcessing: false });
-        return true;
-      }),
       createRouter: () => ({
-        cleanup: vi.fn(async () => ({
-          model: 'local-model',
-          providerId: 'ollama' as const,
-          text: 'Clean.',
-        })),
+        cleanup: vi.fn(async () => {
+          current = settings({ mediaLlmProcessing: false });
+          return { model: 'local-model', providerId: 'ollama' as const, text: 'Clean.' };
+        }),
         selectProviderId: vi.fn(() => 'ollama' as const),
       }),
       feedback,

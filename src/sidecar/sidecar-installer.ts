@@ -351,11 +351,12 @@ const PROGRESS_REPORT_BYTE_DELTA = 256 * 1024;
 const PROGRESS_REPORT_INTERVAL_MS = 100;
 const DOWNLOAD_IDLE_TIMEOUT_MS = 60_000;
 
-async function downloadToFile(
+export async function downloadToFile(
   url: string,
   destPath: string,
   onProgress: (bytesDownloaded: number, totalBytes: number | null) => void,
   signal?: AbortSignal,
+  maxBytes?: number,
 ): Promise<string> {
   const stream = await openHttpsStream(url, signal, 0);
   const contentLengthHeader = stream.headers['content-length'];
@@ -363,6 +364,10 @@ async function downloadToFile(
     typeof contentLengthHeader === 'string' && /^\d+$/.test(contentLengthHeader)
       ? Number.parseInt(contentLengthHeader, 10)
       : null;
+  if (maxBytes !== undefined && totalBytes !== null && totalBytes > maxBytes) {
+    stream.destroy();
+    throw new Error('Download exceeds the allowed size.');
+  }
 
   const fileStream = createWriteStream(destPath);
   const hash: Hash = createHash('sha256');
@@ -406,6 +411,10 @@ async function downloadToFile(
       throwIfWriteFailed();
       const buffer = chunk as Buffer;
       bytesDownloaded += buffer.length;
+      if (maxBytes !== undefined && bytesDownloaded > maxBytes) {
+        stream.destroy();
+        throw new Error('Download exceeds the allowed size.');
+      }
       hash.update(buffer);
 
       const now = Date.now();
@@ -439,7 +448,7 @@ async function downloadToFile(
   return hash.digest('hex');
 }
 
-async function markExecutable(path: string): Promise<void> {
+export async function markExecutable(path: string): Promise<void> {
   if (process.platform === 'win32') return;
   await chmod(path, 0o755);
 }
@@ -478,7 +487,7 @@ function resolveSidecarExecutableName(): string {
   return formatSidecarExecutableName(process.platform === 'win32');
 }
 
-async function extractTarGz(
+export async function extractTarGz(
   archivePath: string,
   destDir: string,
   signal?: AbortSignal,

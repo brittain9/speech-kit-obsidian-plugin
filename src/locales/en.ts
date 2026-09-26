@@ -23,11 +23,13 @@ export const en = {
   'audio-file-read-failed':
     'Speech Kit could not read the selected file. Check that the file still exists and is accessible, then try again.',
   'audio-file-decode-failed':
-    'Obsidian could not decode this audio file. Convert it to a format your Obsidian version can play (often WAV), then try again.',
+    'FFmpeg could not read the audio track, or decoding stopped before the recording ended. Check the media file and try again.',
+  'audio-file-decoder-missing':
+    'Install the media decoder in Speech Kit settings, then try the file again.',
   'audio-file-encoded-size':
-    'This encoded audio file is too large for safe in-app decoding. Choose a shorter or lower-bitrate file (maximum 64 MiB), then try again.',
+    'This media file exceeds the size limit. Choose a smaller file or reduce its bitrate, then try again.',
   'audio-file-duration':
-    'This audio file is longer than the 30-minute safety limit. Split it into shorter files, then transcribe each part.',
+    'This recording is longer than the 4-hour limit. Split it into shorter files, then transcribe each part.',
   'audio-file-model-duration':
     'This audio file is longer than the selected model can transcribe in one file. Split it into shorter files or choose a model with a longer audio limit.',
   'audio-file-decoded-memory':
@@ -52,10 +54,62 @@ export const en = {
     'Audio-file transcription stopped because its target note was deleted. Restore or recreate the note, then run the command again.',
   'audio-file-surface-changed':
     'Audio-file transcription stopped because the note changed in a way Speech Kit could not safely track. Restore the intended note and run the command again.',
+  'youtube.modal.title': 'Get YouTube transcript',
+  'youtube.modal.captionDescription': 'Import the video’s available captions into this note.',
+  'youtube.modal.captionLanguage': 'Language',
+  'youtube.modal.originalLanguage': 'Original language',
+  'youtube.modal.timestamps': 'Linked timestamps',
+  'youtube.modal.timeGrouping': 'Group passages about every',
+  'youtube.modal.interval30': '30 seconds',
+  'youtube.modal.interval60': '1 minute',
+  'youtube.modal.interval120': '2 minutes',
+  'youtube.modal.interval300': '5 minutes',
+  'youtube.modal.aiPreset': 'AI preset',
+  'youtube.modal.urlName': 'YouTube link',
+  'youtube.modal.urlPlaceholder': 'https://www.youtube.com/watch?v=…',
+  'youtube.modal.enterUrl': 'Paste a YouTube video link to continue.',
+  'youtube.modal.noCaptions': 'This video has no usable captions. The note was not changed.',
+  'youtube.modal.captionServiceUnavailable':
+    'The YouTube caption service is unavailable. Restart Speech Kit and try again.',
+  'youtube.modal.completedCreatorCaptions': 'Creator captions were added to the active note.',
+  'youtube.modal.completedAutomaticCaptions':
+    'YouTube automatic captions were added to the active note.',
+  'youtube.modal.aiFailedRawKept':
+    'The transcript was added, but the optional AI step failed: {reason}',
+  'youtube.modal.aiCouldNotFinish':
+    'The transcript was added, but the optional AI step could not finish. The original text is in your note.',
+  'youtube.caption.checkFailed':
+    'Could not check YouTube captions. Check your connection and try again.',
+  'youtube.caption.restricted': 'This video is restricted.',
+  'youtube.caption.unavailable': 'This video is unavailable.',
+  'youtube.caption.languageUnavailable':
+    'This video does not have {language} captions. The note was not changed.',
+  'youtube.caption.availableLanguages': 'Available: {languages}.',
+  'youtube.caption.readFailed':
+    'YouTube captions were unavailable or could not be read. Try again later.',
+  'youtube.caption.chooseLanguage': 'Choose a caption language above.',
+  'youtube.caption.cancelled': 'Caption retrieval was cancelled.',
+  'media.tools.title': 'Media decoder',
+  'media.tools.description':
+    'Install the verified media decoder to transcribe audio and video files. This is a one-time download.',
+  'media.tools.ready': 'The media decoder is installed for audio and video files.',
+  'media.tools.install': 'Install decoder',
+  'media.tools.reinstall': 'Reinstall decoder',
+  'media.tools.cancel': 'Cancel download',
+  'media.tools.failed': 'The media decoder could not be installed. Try again.',
+  'media.tools.phase.download': 'Downloading media decoder…',
+  'media.tools.phase.verify': 'Verifying media decoder…',
+  'media.tools.phase.install': 'Installing media decoder…',
+  'media.tools.settingsDesc':
+    'Required for audio and video file transcription. Downloads verified FFmpeg executables for this computer.',
+  'media.tools.busy':
+    'Finish or cancel the current transcription before installing the media decoder.',
   'media-llm-empty':
     'The media transcript is empty or the AI provider returned no text. The raw transcript was kept; record a non-empty transcript or check the provider and try again.',
   'media-llm-failed':
     'AI media processing failed, so the raw transcript was kept. Check the configured provider and try again.',
+  'media-llm-refused':
+    'The AI model declined this transcript. The raw transcript is still in your note. Try another preset or model.',
   'media-llm-cancelled': 'AI media processing was cancelled; the raw transcript was kept.',
   'media-llm-range-unavailable':
     'The media transcript changed while AI processing was pending, so the raw transcript was kept.',
@@ -84,6 +138,8 @@ export const en = {
   'llm.mediaPayload.transcriptOnly': 'transcript text only',
   'llm.mediaPayload.transcriptAndBoundedNoteContext': 'transcript text and bounded note context',
   'media.progress.acquire': 'Preparing media…',
+  'media.progress.captions': 'Checking YouTube captions…',
+  'media.progress.download': 'Downloading video audio…',
   'media.progress.decode': 'Decoding media…',
   'media.progress.transcribe': 'Transcribing media…',
   'media.progress.format': 'Formatting transcript…',
@@ -100,10 +156,6 @@ export const en = {
   'notice.lastUtteranceReinserted': 'Reinserted the last finalized utterance.',
   'notice.lastUtteranceUnavailable': 'No finalized utterance is available.',
   'notice.llmTransformEmpty': 'LLM transform returned nothing to add.',
-  'llm.mediaPreview.title': 'Preview media transcript transformation',
-  'llm.mediaPreview.description':
-    'Review the text result before applying it. The raw media transcript remains available for recovery.',
-  'llm.mediaPreview.apply': 'Apply result',
   'notice.microphoneDisconnected':
     'Microphone disconnected. Dictation stopped and will finish processing audio already captured. Reconnect the microphone, then start dictation again.',
   'notice.rawTranscriptChanged':
@@ -212,6 +264,39 @@ export const en = {
   'commands.checkSidecarHealth': 'Check sidecar health',
   'commands.restartSidecar': 'Restart sidecar',
   'commands.transcribeAudioFile': 'Transcribe local audio file',
+  'commands.transcribeYouTube': 'Transcribe YouTube video',
+  'media.modal.title': 'Transcribe media',
+  'media.modal.dropLabel': 'Choose an audio or video file',
+  'media.modal.dropDescription': 'Drop an audio or video file here, or browse to choose one.',
+  'media.modal.browse': 'Browse files',
+  'media.modal.fileSelected': '{name} · {size}',
+  'media.modal.optionsTitle': 'Transcript options',
+  'media.modal.model': 'Batch model',
+  'media.modal.partialAvailable': 'A partial transcript is available. It is incomplete.',
+  'media.modal.copyPartial': 'Copy partial transcript',
+  'media.modal.insertPartial': 'Insert partial transcript',
+  'media.modal.partialTargetChanged':
+    'Return to the original note to insert the partial transcript, or copy it instead.',
+  'media.modal.language': 'Language',
+  'media.modal.noBatchModel': 'Install a compatible batch transcription model to continue.',
+  'media.modal.manageModels': 'Manage models',
+  'media.modal.invalidYouTubeUrl': 'Enter a link to one YouTube video.',
+  'media.modal.selectFile': 'Choose an audio or video file to continue.',
+  'media.modal.aiPreset': 'After transcription',
+  'media.modal.aiPresetNone': 'Transcript only',
+  'media.modal.aiPresetDesc': 'Optional: apply the selected AI preset to the complete transcript.',
+  'media.modal.aiProviderRequired': 'Choose an AI provider in Settings or select Transcript only.',
+  'media.modal.aiPresetMissing': 'The selected AI preset is no longer available. Choose another.',
+  'media.modal.aiNotReady':
+    'The selected AI preset could not start. Check your AI provider settings.',
+  'media.modal.start': 'Get transcript',
+  'media.modal.cancelJob': 'Cancel transcription',
+  'media.modal.completed': 'Transcription finished. The transcript was added to the active note.',
+  'media.modal.cancelled': 'Transcription cancelled.',
+  'media.modal.alreadyRunning':
+    'A media transcription is already running. Finish or cancel it before starting another.',
+  'media.modal.recoverableError': 'Could not complete transcription: {detail}',
+  'media.modal.unknownFailure': 'An unexpected error occurred.',
   'commands.cancelAudioFile': 'Cancel local audio-file transcription',
   'commands.readAloud': 'Read aloud from selection or note start',
   'commands.readAloudFromCursor': 'Read aloud from cursor',

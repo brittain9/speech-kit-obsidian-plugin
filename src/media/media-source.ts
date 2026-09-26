@@ -1,8 +1,4 @@
-export type MediaSourceId = 'local_file' | (string & {});
-
-export type MediaRights =
-  | { readonly kind: 'user_supplied_file' }
-  | { readonly kind: 'declared_by_source'; readonly policyVersion: string };
+export type MediaSourceId = string;
 
 export interface MediaPlan {
   readonly displayName: string;
@@ -13,7 +9,6 @@ export interface MediaPlan {
 export interface MediaProvenance {
   readonly acquiredAt: string;
   readonly adapterVersion: string;
-  readonly rights: MediaRights;
   readonly sourceId: MediaSourceId;
   readonly temporaryMedia: boolean;
 }
@@ -29,10 +24,9 @@ export interface MediaLease {
   release(): Promise<void>;
 }
 
-/** The local adapter's concrete lease type; consumers depend on MediaLease. */
 export type LocalMediaLease = MediaLease;
 
-export type AcquisitionEvent =
+export type AcquisitionEvent<TLease extends MediaLease = MediaLease> =
   | { readonly type: 'plan'; readonly plan: MediaPlan }
   | {
       readonly type: 'progress';
@@ -40,26 +34,46 @@ export type AcquisitionEvent =
       readonly phase: string;
       readonly totalBytes?: number;
     }
-  | { readonly type: 'ready'; readonly lease: MediaLease }
+  | { readonly type: 'ready'; readonly lease: TLease }
   | { readonly type: 'warning'; readonly code: string; readonly message: string };
 
-export interface MediaAcquireRequest {
+export interface MediaAcquireRequest<TProvider = never> {
   readonly kind: 'interactive';
   readonly maxBytes: number;
   readonly maxDurationMs: number;
+  readonly provider: TProvider;
   readonly signal: AbortSignal;
 }
 
-export interface MediaAcquisition {
-  acquire(request: MediaAcquireRequest): AsyncIterable<AcquisitionEvent>;
+export type LocalMediaAcquireRequest = MediaAcquireRequest<
+  { readonly file: File | null } | undefined
+>;
+
+export type MediaAcquireRequestBase = Omit<MediaAcquireRequest, 'provider'>;
+export type MediaAcquireRequestLike = MediaAcquireRequestBase & { readonly provider: unknown };
+
+export interface MediaTranscriptionEntry<TContext, TRequest extends MediaAcquireRequestLike> {
+  readonly createRequest: (context: TContext, request: MediaAcquireRequestBase) => TRequest;
+  readonly id: string;
+  readonly isEnabled: () => boolean;
+  readonly source: MediaSource<TRequest>;
 }
 
-export interface MediaSource extends MediaAcquisition {
+export interface MediaAcquisition<
+  TRequest extends MediaAcquireRequestLike = MediaAcquireRequest<undefined>,
+> {
+  acquire(request: TRequest): AsyncIterable<AcquisitionEvent>;
+}
+
+export interface MediaSource<
+  TRequest extends MediaAcquireRequestLike = MediaAcquireRequest<undefined>,
+> extends MediaAcquisition<TRequest> {
   readonly adapterVersion: string;
   readonly id: MediaSourceId;
 }
 
 export type MediaTranscriptionProgressPhase =
+  | 'captions'
   | 'acquire'
   | 'decode'
   | 'transcribe'
@@ -69,6 +83,7 @@ export type MediaTranscriptionProgressPhase =
 
 export interface MediaTranscriptionProgress {
   readonly phase: MediaTranscriptionProgressPhase;
+  readonly captionSource?: 'creator_captions' | 'automatic_captions';
   readonly bytes?: number;
   readonly totalBytes?: number;
 }

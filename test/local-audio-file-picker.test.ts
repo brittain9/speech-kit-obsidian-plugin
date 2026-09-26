@@ -72,7 +72,7 @@ describe('pickLocalAudioFile', () => {
     }
 
     expect(input.type).toBe('file');
-    expect(input.accept).toBe('audio/*');
+    expect(input.accept).toBe('audio/*,video/*,.mkv,.webm,.mov,.mp4');
     expect(input.hidden).toBe(true);
     expect(input.click).toHaveBeenCalledOnce();
 

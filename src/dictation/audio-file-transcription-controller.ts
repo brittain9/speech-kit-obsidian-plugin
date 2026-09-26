@@ -17,8 +17,23 @@ import type { NotePlacementOptions, SurfaceDesynchronization } from '../editor/n
 import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-recovery';
 import { dictationLanguageLabel, languageSupportIncludes } from '../language/dictation-language';
 import type { LlmRouter } from '../llm/router';
-import { MEDIA_ACQUISITION_LIMITS } from '../media/media-policy';
-import type { MediaLease, MediaSource, MediaTranscriptionProgress } from '../media/media-source';
+import { LOCAL_MEDIA_ACQUISITION_LIMITS, MEDIA_ACQUISITION_LIMITS } from '../media/media-policy';
+import type {
+  LocalMediaAcquireRequest,
+  MediaAcquireRequestLike,
+  MediaLease,
+  MediaSource,
+  MediaTranscriptionEntry,
+  MediaTranscriptionProgress,
+} from '../media/media-source';
+import {
+  chooseDefaultMediaTranscriptionModel,
+  type MediaTranscriptionJobOptions,
+  type MediaTranscriptionModelOptions,
+} from '../media/media-transcription-options';
+import { formatYouTubeCaptions } from '../media/youtube-caption-format';
+import { CaptionAcquisitionError, type CaptionResult } from '../media/youtube-captions';
+import type { YouTubeVideoRef } from '../media/youtube-url';
 import {
   type SelectedModel,
   type SelectedModelCapabilities,
@@ -26,9 +41,10 @@ import {
 } from '../models/model-management-types';
 import { Session, type SessionTarget } from '../session/session';
 import type { PluginSettings } from '../settings/plugin-settings';
+import { t } from '../shared/i18n';
 import type { PluginLogger } from '../shared/plugin-logger';
 import type { UserFeedback } from '../shared/user-feedback';
-import type { ContextRequestEvent, SidecarEvent } from '../sidecar/protocol';
+import type { ContextRequestEvent, SidecarEvent, TranscriptReadyEvent } from '../sidecar/protocol';
 import type {
   CancelSessionResult,
   SidecarConnection,
@@ -44,6 +60,7 @@ import {
   AudioFileFailureMapper,
   AudioFileWorkflowError,
   type FileWorkflowTranslationKey,
+  type MediaFailureAdapter,
 } from './audio-file-failure';
 import {
   type AudioFileSessionPhase,
@@ -53,8 +70,11 @@ import {
   type AudioFileEditorSession,
   AudioFileTranscriptAdapter,
 } from './audio-file-transcript-adapter';
-import { MediaLlmCoordinator } from './media-llm-coordinator';
-import type { MediaLlmPreview } from './media-llm-processor';
+import {
+  MediaLlmCoordinator,
+  type MediaLlmJob,
+  type MediaLlmRunOutcome,
+} from './media-llm-coordinator';
 
 export type AudioFileTranscriptionState =
   | 'idle'
@@ -84,11 +104,13 @@ interface AudioFileModelConfiguration {
   readonly accelerationPreference: PluginSettings['accelerationPreference'];
   readonly diarizationEnabled: boolean;
   readonly diarizationMaxSpeakers: number | null;
+  readonly detailedTimestampsEnabled: boolean;
   readonly language: PluginSettings['dictationLanguage'];
   readonly maxModelDurationMs: number | null;
   readonly modelSelection: SelectedModel;
   readonly modelStorePathOverride: string;
   readonly speakingStyle: PluginSettings['speakingStyle'];
+  readonly useJobSnapshot: boolean;
 }
 
 interface PendingAudioFileStart {
@@ -96,19 +118,34 @@ interface PendingAudioFileStart {
   readonly speechLease: SidecarLifecycleLease;
 }
 
+interface ActiveMediaProvider {
+  readonly abortController: AbortController;
+  readonly id: string;
+}
+
 interface QuarantinedAudioFileSession {
   readonly lease: SidecarLifecycleLease;
   readonly sessionId: string;
 }
 
+interface PartialTranscriptRecovery {
+  readonly target: SessionTarget;
+  readonly text: string;
+}
+
 export interface AudioFileTranscriptionControllerDependencies {
   readonly backpressureTimeoutMs: number;
-  readonly confirmMediaLlm?: (preview: MediaLlmPreview, signal: AbortSignal) => Promise<boolean>;
   readonly createLlmRouter?: (settings: PluginSettings) => LlmRouter | null;
   readonly createSession: (options: CreateAudioFileSessionOptions) => AudioFileEditorSession;
   readonly decoder: AudioFileDecoder;
   readonly feedback: Pick<UserFeedback, 'show'>;
+  readonly fetchYouTubeCaptions?: (
+    ref: YouTubeVideoRef,
+    language: PluginSettings['dictationLanguage'],
+    signal: AbortSignal,
+  ) => Promise<CaptionResult | null>;
   readonly getModelCapabilities: () => SelectedModelCapabilities;
+  readonly getMediaTranscriptionModels?: MediaTranscriptionModelOptions;
   readonly getSecret?: (secretId: string) => string;
   readonly getSettings: () => PluginSettings;
   readonly getTarget: () => SessionTarget | null;
@@ -117,7 +154,11 @@ export interface AudioFileTranscriptionControllerDependencies {
   readonly onModelMissing?: () => void;
   readonly onRawTranscriptRecoveryAvailable?: (receipt: RawTranscriptRecoveryReceipt) => void;
   readonly onSidecarMissing?: () => void;
-  readonly mediaSource: MediaSource;
+  readonly mediaEntry: MediaTranscriptionEntry<
+    { readonly file: File | null },
+    LocalMediaAcquireRequest
+  >;
+  readonly mediaFailureAdapters?: readonly MediaFailureAdapter[];
   readonly mediaLlmCoordinator?: MediaLlmCoordinator;
   readonly onMediaProgress?: (progress: MediaTranscriptionProgress | null) => void;
   readonly sessionStopTimeoutMs: number;
@@ -139,16 +180,30 @@ export class AudioFileTranscriptionController {
   private readonly failureMapper: AudioFileFailureMapper;
   private pendingStart: PendingAudioFileStart | null = null;
   private mediaProgress: MediaTranscriptionProgress | null = null;
+  private mediaError: unknown = null;
+  private lastMediaResultSource: 'creator_captions' | 'automatic_captions' | 'local_audio' | null =
+    null;
+  private lastMediaAiOutcome: MediaLlmRunOutcome | null = null;
+  private readonly progressListeners = new Set<
+    (progress: MediaTranscriptionProgress | null) => void
+  >();
   private readonly quarantinedSessions = new Map<string, QuarantinedAudioFileSession>();
   private readonly userCancelledSessions = new WeakSet<ManagedAudioFileSession>();
   private readonly releaseSidecarSubscription: () => void;
   private readonly mediaLlmCoordinator: MediaLlmCoordinator;
   private activeTranscribeCompletion: Promise<void> | null = null;
+  private readonly completedFeeds = new WeakSet<ManagedAudioFileSession>();
+  private readonly sessionTargets = new WeakMap<ManagedAudioFileSession, SessionTarget>();
+  private partialRecovery: PartialTranscriptRecovery | null = null;
+  private activeMediaProvider: ActiveMediaProvider | null = null;
   private state: AudioFileTranscriptionState = 'idle';
 
   constructor(private readonly dependencies: AudioFileTranscriptionControllerDependencies) {
     this.failureMapper = new AudioFileFailureMapper({
       feedback: dependencies.feedback,
+      ...(dependencies.mediaFailureAdapters === undefined
+        ? {}
+        : { mediaFailureAdapters: dependencies.mediaFailureAdapters }),
       ...(dependencies.onModelMissing !== undefined
         ? { onModelMissing: dependencies.onModelMissing }
         : {}),
@@ -159,9 +214,6 @@ export class AudioFileTranscriptionController {
     this.mediaLlmCoordinator =
       dependencies.mediaLlmCoordinator ??
       new MediaLlmCoordinator({
-        ...(dependencies.confirmMediaLlm === undefined
-          ? {}
-          : { confirm: dependencies.confirmMediaLlm }),
         ...(dependencies.createLlmRouter === undefined
           ? {}
           : { createRouter: dependencies.createLlmRouter }),
@@ -189,6 +241,86 @@ export class AudioFileTranscriptionController {
     return this.mediaProgress;
   }
 
+  getMediaError(): unknown {
+    return this.mediaError;
+  }
+
+  getLastMediaResultSource(): 'creator_captions' | 'automatic_captions' | 'local_audio' | null {
+    return this.lastMediaResultSource;
+  }
+
+  getLastMediaAiOutcome(): MediaLlmRunOutcome | null {
+    return this.lastMediaAiOutcome;
+  }
+
+  clearMediaError(): void {
+    this.mediaError = null;
+  }
+
+  getPartialTranscript(): string | null {
+    return this.partialRecovery?.text ?? null;
+  }
+
+  insertPartialTranscript(): boolean {
+    const recovery = this.partialRecovery;
+    if (recovery === null) return false;
+    const target = this.dependencies.getTarget();
+    if (target === null || !Session.targetsEqual(target, recovery.target)) return false;
+    const settings = this.dependencies.getSettings();
+    const sessionId = randomUUID();
+    const session = this.dependencies.createSession({
+      callbacks: {
+        onLockedNoteClosed: () => {},
+        onLockedNoteDeleted: () => {},
+        onSurfaceDesynchronized: () => {},
+      },
+      placement: { anchor: settings.dictationAnchor },
+      rendererOptions: {
+        ...createRendererOptions(settings, Date.now()),
+        timestamps: {
+          ...createRendererOptions(settings, Date.now()).timestamps,
+          enabled: false,
+          header: false,
+        },
+        transcriptFormatting: 'space',
+      },
+      sessionId,
+      target,
+    });
+    try {
+      const text = `Partial transcript (incomplete)\n\n${recovery.text}`;
+      const result = session.acceptTranscript({
+        isFinal: true,
+        llmPostprocessRawText: null,
+        pauseMsBeforeUtterance: null,
+        revision: 0,
+        segments: [],
+        sessionId,
+        speakerIndex: null,
+        spans: [{ speakerIndex: null, text }],
+        stageResults: [],
+        text,
+        utteranceEndMsInSession: 0,
+        utteranceId: randomUUID(),
+        utteranceIndex: 0,
+        utteranceStartMsInSession: 0,
+      });
+      if (result.kind !== 'accepted') return false;
+      this.partialRecovery = null;
+      return true;
+    } finally {
+      session.dispose();
+    }
+  }
+
+  subscribeMediaProgress(
+    listener: (progress: MediaTranscriptionProgress | null) => void,
+  ): () => void {
+    this.progressListeners.add(listener);
+    listener(this.mediaProgress);
+    return () => this.progressListeners.delete(listener);
+  }
+
   isBusy(): boolean {
     return this.state !== 'idle';
   }
@@ -198,8 +330,60 @@ export class AudioFileTranscriptionController {
   }
 
   async transcribe(): Promise<void> {
+    await this.startTranscription(this.dependencies.mediaEntry, { file: null });
+  }
+
+  async transcribeProvider<TContext, TRequest extends MediaAcquireRequestLike>(
+    entry: MediaTranscriptionEntry<TContext, TRequest>,
+    context: TContext,
+    options?: MediaTranscriptionJobOptions,
+  ): Promise<void> {
+    if (!entry.isEnabled()) return;
+    await this.startTranscription(entry, context, options);
+  }
+
+  async transcribeYouTubeCaptions(
+    ref: YouTubeVideoRef,
+    options: MediaTranscriptionJobOptions,
+  ): Promise<void> {
+    if (this.activeTranscribeCompletion !== null) {
+      throw new Error(t('media.modal.alreadyRunning'));
+    }
+    const operation = this.runYouTubeCaptionImport(ref, options);
+    this.activeTranscribeCompletion = operation;
+    try {
+      await operation;
+    } finally {
+      if (this.activeTranscribeCompletion === operation) this.activeTranscribeCompletion = null;
+    }
+  }
+
+  async cancelProvider(providerId: string): Promise<void> {
+    const active = this.activeMediaProvider;
+    if (active === null || active.id !== providerId) return;
+    active.abortController.abort(createAudioFileCancellationError());
+    this.mediaLlmCoordinator.cancel();
+    const pending = this.pendingStart;
+    if (pending?.abortController === active.abortController) {
+      pending.speechLease.release();
+      await this.awaitActiveTranscription();
+      return;
+    }
+    const session = this.activeSession;
+    if (session !== null) {
+      this.userCancelledSessions.add(session);
+      await this.cancelManagedSession(session);
+    }
+    await this.awaitActiveTranscription();
+  }
+
+  private async startTranscription<TContext, TRequest extends MediaAcquireRequestLike>(
+    entry: MediaTranscriptionEntry<TContext, TRequest>,
+    context: TContext,
+    options?: MediaTranscriptionJobOptions,
+  ): Promise<void> {
     if (this.activeTranscribeCompletion !== null) return;
-    const operation = this.runTranscribe();
+    const operation = this.runTranscribe(entry, context, options);
     this.activeTranscribeCompletion = operation;
     try {
       await operation;
@@ -212,7 +396,11 @@ export class AudioFileTranscriptionController {
     this.mediaLlmCoordinator.settingsChanged();
   }
 
-  private async runTranscribe(): Promise<void> {
+  private async runTranscribe<TContext, TRequest extends MediaAcquireRequestLike>(
+    entry: MediaTranscriptionEntry<TContext, TRequest>,
+    context: TContext,
+    options?: MediaTranscriptionJobOptions,
+  ): Promise<void> {
     // Keep this guard before the busy check: mobile callers must not mutate a
     // running desktop workflow or open a native-only picker accidentally.
     if (!Platform.isDesktopApp) {
@@ -225,7 +413,11 @@ export class AudioFileTranscriptionController {
     }
 
     this.applyState('selecting');
+    this.partialRecovery = null;
+    this.lastMediaResultSource = null;
+    this.lastMediaAiOutcome = null;
     const abortController = new AbortController();
+    this.activeMediaProvider = { abortController, id: entry.id };
     let decodedAudio: DecodedAudioFile | null = null;
     let mediaLease: MediaLease | null = null;
     let pending: PendingAudioFileStart | null = null;
@@ -241,8 +433,19 @@ export class AudioFileTranscriptionController {
       if (this.dependencies.isDictationBusy()) {
         throw new AudioFileWorkflowError('audio-file-busy');
       }
-      const initialConfiguration = this.resolveModelConfiguration();
-      if (!this.mediaLlmCoordinator.preflight(this.dependencies.getSettings())) return;
+      const mediaSettings = this.dependencies.getSettings();
+      const mediaLlmJob: MediaLlmJob | null | undefined =
+        options?.mediaLlmSnapshot === undefined
+          ? undefined
+          : options.mediaLlmSnapshot === null
+            ? null
+            : { settings: mediaSettings, snapshot: options.mediaLlmSnapshot };
+      if (!this.mediaLlmCoordinator.preflight(mediaSettings, mediaLlmJob)) {
+        this.mediaError = new Error(t('media.modal.aiNotReady'));
+        return;
+      }
+
+      const initialConfiguration = this.resolveModelConfiguration(options);
 
       try {
         speechLease = this.dependencies.sidecarLifecycleGate.acquireSpeech();
@@ -255,34 +458,33 @@ export class AudioFileTranscriptionController {
       this.pendingStart = pending;
 
       this.emitProgress('acquire');
-      mediaLease = await this.acquireMediaLease(abortController.signal);
+      const request = entry.createRequest(context, {
+        ...(entry.id === 'local_file' ? LOCAL_MEDIA_ACQUISITION_LIMITS : MEDIA_ACQUISITION_LIMITS),
+        kind: 'interactive',
+        signal: abortController.signal,
+      });
+      mediaLease = await this.acquireMediaLease(abortController.signal, entry.source, request);
       if (mediaLease === null) return;
       this.throwIfCancelled(abortController.signal);
 
-      this.revalidateSelection(
-        target,
-        initialConfiguration.modelSelection,
-        initialConfiguration.language,
-        abortController.signal,
-      );
+      this.revalidateTarget(target, abortController.signal);
+      this.revalidateModelBeforeDecode(initialConfiguration);
       this.dependencies.stopConflictingSpeech();
       this.throwIfCancelled(abortController.signal);
       this.applyState('preparing');
 
       this.emitProgress('decode');
-      decodedAudio = await this.decodeMediaLease(mediaLease, abortController.signal);
-      const configuration = this.resolveModelConfiguration();
-      if (!selectedModelEquals(initialConfiguration.modelSelection, configuration.modelSelection)) {
-        throw new AudioFileWorkflowError('audio-file-model-changed');
-      }
-      if (configuration.language !== initialConfiguration.language) {
-        throw new AudioFileWorkflowError('audio-file-language-changed');
-      }
+      decodedAudio = await this.decodeMediaLease(
+        createProviderNeutralDecoderLease(mediaLease),
+        abortController.signal,
+      );
+      this.ensureMediaModelAvailable(initialConfiguration);
       try {
         assertDecodedAudioWithinBudget(decodedAudio, {
-          maxModelDurationMs: configuration.maxModelDurationMs,
+          maxModelDurationMs: initialConfiguration.maxModelDurationMs,
         });
       } catch (error) {
+        await decodedAudio.dispose();
         decodedAudio = null;
         throw error;
       }
@@ -291,7 +493,7 @@ export class AudioFileTranscriptionController {
       const sessionId = randomUUID();
       const sessionStartUnixMs = Date.now();
       const settings = this.dependencies.getSettings();
-      const rendererOptions = createRendererOptions(settings, sessionStartUnixMs);
+      const rendererOptions = createRendererOptions(settings, sessionStartUnixMs, options);
       let session: AudioFileEditorSession;
       try {
         session = this.dependencies.createSession({
@@ -301,7 +503,11 @@ export class AudioFileTranscriptionController {
             onSurfaceDesynchronized: () => this.failTarget('audio-file-surface-changed', sessionId),
           },
           placement: { anchor: settings.dictationAnchor },
-          rendererOptions,
+          rendererOptions: {
+            ...rendererOptions,
+            timestamps: { ...rendererOptions.timestamps, enabled: false, header: false },
+            transcriptFormatting: 'space',
+          },
           sessionId,
           target,
         });
@@ -314,11 +520,16 @@ export class AudioFileTranscriptionController {
         rendererOptions.timestamps,
         (error) => this.handleProjectionFailure(managed, error),
         (phase) => this.emitProgress(phase),
+        true,
+        rendererOptions,
       );
       managed = ManagedAudioFileSession.create(
         {
           abortController,
-          backpressure: new AudioFileBackpressureGate(this.dependencies.backpressureTimeoutMs),
+          // Batch Whisper can legitimately take longer than an arbitrary 30-second
+          // queue timeout. Cancellation, worker errors, and the overall decode
+          // deadline still bound this wait.
+          backpressure: new AudioFileBackpressureGate(null),
           sessionId,
           speechLease,
           useNoteAsContext: settings.useNoteAsContext,
@@ -326,30 +537,33 @@ export class AudioFileTranscriptionController {
         transcript,
       );
       this.activeSession = managed;
+      this.sessionTargets.set(managed, target);
       managed.setMediaLease(mediaLease);
       const managedSession = managed;
       managedSession.setPostCompletion(async () => {
+        if (!this.completedFeeds.has(managedSession)) {
+          throw new Error('The media source stopped before all audio was delivered.');
+        }
+        await transcript.commitStaged();
+        this.partialRecovery = null;
+        this.lastMediaResultSource = 'local_audio';
         const mediaLlmSession = transcript.getMediaLlmSession();
-        if (mediaLlmSession !== null) await this.mediaLlmCoordinator.run(mediaLlmSession);
+        if (mediaLlmSession !== null) {
+          await this.mediaLlmCoordinator.run(mediaLlmSession, mediaLlmJob);
+        }
       });
       if (this.pendingStart === pending) this.pendingStart = null;
 
       try {
         this.throwIfCancelled(abortController.signal);
-        this.revalidateSelection(
-          target,
-          initialConfiguration.modelSelection,
-          initialConfiguration.language,
-          abortController.signal,
-        );
-        const finalConfiguration = this.resolveModelConfiguration();
+        this.revalidateTarget(target, abortController.signal);
+        this.ensureMediaModelAvailable(initialConfiguration);
 
         const startOperation = this.startManagedSession(
           managed,
-          finalConfiguration,
+          initialConfiguration,
           sessionStartUnixMs,
           target,
-          initialConfiguration.modelSelection,
         );
         managed.setStartOperation(startOperation);
         await startOperation;
@@ -396,18 +610,21 @@ export class AudioFileTranscriptionController {
           );
         }
 
+        this.completedFeeds.add(managed);
         this.requestGracefulStop(managed);
         this.applyState('draining');
         await managed.getCompletion();
       } catch (error) {
+        if (!this.failureMapper.isCancellation(error)) this.mediaError = error;
         await this.handleManagedFailure(managed, error);
       }
     } catch (error) {
+      if (!this.failureMapper.isCancellation(error)) this.mediaError = error;
       if (managed === null && !this.failureMapper.isCancellation(error)) {
         this.failureMapper.reportFailure(error);
       }
     } finally {
-      decodedAudio?.dispose();
+      await decodedAudio?.dispose();
       if (managed === null) {
         await mediaLease?.release();
       } else {
@@ -416,34 +633,199 @@ export class AudioFileTranscriptionController {
       if (this.pendingStart === pending && pending !== null) this.pendingStart = null;
       if (managed === null) speechLease?.release();
       releaseStartOperation?.();
+      if (this.activeMediaProvider?.abortController === abortController) {
+        this.activeMediaProvider = null;
+      }
       if (this.activeSession === null && this.pendingStart === null) {
         this.applyState('idle');
       }
     }
   }
 
+  private async insertCaptionResult(
+    captions: CaptionResult,
+    target: SessionTarget,
+    options: MediaTranscriptionJobOptions | undefined,
+    mediaLlmJob: MediaLlmJob | null | undefined,
+    signal: AbortSignal,
+  ): Promise<void> {
+    this.revalidateTarget(target, signal);
+    const settings = this.dependencies.getSettings();
+    const sessionId = randomUUID();
+    const baseRendererOptions = createRendererOptions(settings, Date.now(), options);
+    const rendererOptions = {
+      ...baseRendererOptions,
+      timestamps: {
+        ...baseRendererOptions.timestamps,
+        enabled: false,
+        header: false,
+      },
+      transcriptFormatting: 'space' as const,
+    };
+    const session = this.dependencies.createSession({
+      callbacks: {
+        onLockedNoteClosed: () => {},
+        onLockedNoteDeleted: () => {},
+        onSurfaceDesynchronized: () => {},
+      },
+      placement: { anchor: settings.dictationAnchor },
+      rendererOptions,
+      sessionId,
+      target,
+    });
+    const transcript = new AudioFileTranscriptAdapter(
+      session,
+      rendererOptions.timestamps,
+      (error) => {
+        throw error;
+      },
+      (phase) => this.emitProgress(phase),
+      true,
+      rendererOptions,
+    );
+    let transcriptCommitted = false;
+    try {
+      const rendered = formatYouTubeCaptions(captions.cues, {
+        ...(options?.timestampSparseIntervalMs === undefined
+          ? {}
+          : { intervalMs: options.timestampSparseIntervalMs }),
+        showTimestamps: options?.timestampsEnabled ?? false,
+        videoUrl: captions.videoUrl,
+      });
+      const firstCue = captions.cues[0];
+      const lastCue = captions.cues.at(-1);
+      if (rendered.length === 0 || firstCue === undefined || lastCue === undefined) {
+        throw new Error('The caption response contained no text.');
+      }
+      this.throwIfCancelled(signal);
+      const event: TranscriptReadyEvent = {
+        type: 'transcript_ready',
+        isFinal: true,
+        pauseMsBeforeUtterance: null,
+        processingDurationMs: 0,
+        revision: 0,
+        segments: [],
+        sessionId,
+        speakerIndex: null,
+        stageResults: [],
+        text: rendered,
+        utteranceDurationMs: lastCue.endMs - firstCue.startMs,
+        utteranceEndMsInSession: lastCue.endMs,
+        utteranceId: `${sessionId}-captions`,
+        utteranceIndex: 0,
+        utteranceStartMsInSession: firstCue.startMs,
+        warnings: [],
+      };
+      transcript.handleTranscript(event);
+      this.revalidateTarget(target, signal);
+      await transcript.commitStaged();
+      transcriptCommitted = true;
+      this.lastMediaResultSource = captions.source;
+      const mediaLlmSession = transcript.getMediaLlmSession();
+      this.lastMediaAiOutcome =
+        mediaLlmSession === null
+          ? 'skipped'
+          : await this.mediaLlmCoordinator.run(
+              mediaLlmSession,
+              mediaLlmJob,
+              captions.cues.map((cue) => cue.text).join(' '),
+            );
+    } catch (error) {
+      if (!transcriptCommitted) {
+        const text = transcript.getPartialText();
+        if (text.length > 0) this.partialRecovery = { target, text };
+      }
+      throw error;
+    } finally {
+      transcript.disposeSession();
+    }
+  }
+
+  private async runYouTubeCaptionImport(
+    ref: YouTubeVideoRef,
+    options: MediaTranscriptionJobOptions,
+  ): Promise<void> {
+    if (!Platform.isDesktopApp) throw new Error(t('audio-file-desktop-only'));
+    if (this.isBusy()) throw new Error(t('media.modal.alreadyRunning'));
+    if (this.dependencies.fetchYouTubeCaptions === undefined) {
+      throw new Error(t('youtube.modal.captionServiceUnavailable'));
+    }
+
+    this.applyState('selecting');
+    this.mediaError = null;
+    this.partialRecovery = null;
+    this.lastMediaResultSource = null;
+    this.lastMediaAiOutcome = null;
+    const abortController = new AbortController();
+    this.activeMediaProvider = { abortController, id: 'youtube_captions' };
+
+    try {
+      if (this.dependencies.isDictationBusy()) throw new Error(t('media.modal.alreadyRunning'));
+      const target = this.dependencies.getTarget();
+      if (target === null) throw new AudioFileWorkflowError('audio-file-target-required');
+      const settings = this.dependencies.getSettings();
+      const mediaLlmJob =
+        options.mediaLlmSnapshot === undefined
+          ? undefined
+          : options.mediaLlmSnapshot === null
+            ? null
+            : { settings, snapshot: options.mediaLlmSnapshot };
+      if (!this.mediaLlmCoordinator.preflight(settings, mediaLlmJob)) {
+        throw new Error(t('media.modal.aiNotReady'));
+      }
+
+      this.emitProgress('captions');
+      const captions = await this.dependencies.fetchYouTubeCaptions(
+        ref,
+        options.language,
+        abortController.signal,
+      );
+      this.throwIfCancelled(abortController.signal);
+      if (captions === null) {
+        throw new CaptionAcquisitionError('unavailable', t('youtube.modal.noCaptions'));
+      }
+      await this.insertCaptionResult(
+        captions,
+        target,
+        options,
+        mediaLlmJob,
+        abortController.signal,
+      );
+    } catch (error) {
+      if (!this.isMediaCancellation(error)) this.mediaError = error;
+      throw error;
+    } finally {
+      if (this.activeMediaProvider?.abortController === abortController) {
+        this.activeMediaProvider = null;
+      }
+      this.applyState('idle');
+    }
+  }
+
   async cancel(): Promise<void> {
     this.mediaLlmCoordinator.cancel();
+    this.activeMediaProvider?.abortController.abort(createAudioFileCancellationError());
     const pending = this.pendingStart;
     if (pending !== null) {
       pending.abortController.abort(createAudioFileCancellationError());
       pending.speechLease.release();
-      await this.activeTranscribeCompletion;
+      await this.awaitActiveTranscription();
       return;
     }
     const active = this.activeSession;
     if (active === null) {
-      await this.activeTranscribeCompletion;
+      await this.awaitActiveTranscription();
       return;
     }
     this.userCancelledSessions.add(active);
     active.abortController.abort(createAudioFileCancellationError());
     await this.cancelManagedSession(active);
-    await this.activeTranscribeCompletion;
+    await this.awaitActiveTranscription();
   }
 
   async dispose(): Promise<void> {
     void this.mediaLlmCoordinator.dispose();
+    this.activeMediaProvider?.abortController.abort(createAudioFileCancellationError());
     const pending = this.pendingStart;
     if (pending !== null) {
       pending.abortController.abort(createAudioFileCancellationError());
@@ -456,18 +838,18 @@ export class AudioFileTranscriptionController {
       await this.cancelManagedSession(active);
       await startCompletion;
     }
-    await this.activeTranscribeCompletion;
+    await this.awaitActiveTranscription();
+    this.partialRecovery = null;
     this.releaseSidecarSubscription();
     if (this.activeSession === null) this.applyState('idle');
   }
 
-  private async acquireMediaLease(signal: AbortSignal): Promise<MediaLease | null> {
-    const source = this.dependencies.mediaSource;
-    for await (const event of source.acquire({
-      ...MEDIA_ACQUISITION_LIMITS,
-      kind: 'interactive',
-      signal,
-    })) {
+  private async acquireMediaLease<TRequest extends MediaAcquireRequestLike>(
+    signal: AbortSignal,
+    source: MediaSource<TRequest>,
+    request: TRequest,
+  ): Promise<MediaLease | null> {
+    for await (const event of source.acquire(request)) {
       if (event.type === 'ready') {
         if (signal.aborted) {
           await event.lease.release();
@@ -494,6 +876,21 @@ export class AudioFileTranscriptionController {
     return null;
   }
 
+  private isMediaCancellation(error: unknown): boolean {
+    return (
+      this.failureMapper.isCancellation(error) ||
+      (error instanceof CaptionAcquisitionError && error.code === 'cancelled')
+    );
+  }
+
+  private async awaitActiveTranscription(): Promise<void> {
+    try {
+      await this.activeTranscribeCompletion;
+    } catch (error) {
+      if (!this.isMediaCancellation(error)) throw error;
+    }
+  }
+
   private async decodeMediaLease(
     lease: MediaLease,
     signal: AbortSignal,
@@ -510,6 +907,7 @@ export class AudioFileTranscriptionController {
   ): void {
     this.mediaProgress = { phase, ...details };
     this.dependencies.onMediaProgress?.(this.mediaProgress);
+    for (const listener of this.progressListeners) listener(this.mediaProgress);
   }
 
   private async startManagedSession(
@@ -517,23 +915,17 @@ export class AudioFileTranscriptionController {
     configuration: AudioFileModelConfiguration,
     sessionStartUnixMs: number,
     target: SessionTarget,
-    initialSelection: SelectedModel,
   ): Promise<void> {
     const options: StartSessionControlOptions = {
       abortSignal: managed.abortController.signal,
       beforeCommandWrite: () =>
-        this.revalidateSelection(
-          target,
-          initialSelection,
-          configuration.language,
-          managed.abortController.signal,
-        ),
+        this.revalidateMediaSelection(target, configuration, managed.abortController.signal),
       onCommandIssued: () => managed.markStartIssued(),
     };
     await this.dependencies.sidecarConnection.startSessionWithControl(
       {
         accelerationPreference: configuration.accelerationPreference,
-        detailedTimestampsEnabled: false,
+        detailedTimestampsEnabled: configuration.detailedTimestampsEnabled,
         diarizationEnabled: configuration.diarizationEnabled,
         diarizationMaxSpeakers: configuration.diarizationMaxSpeakers,
         includeSystemAudio: false,
@@ -552,46 +944,61 @@ export class AudioFileTranscriptionController {
     managed.markStartAcknowledged();
   }
 
-  private resolveModelConfiguration(): AudioFileModelConfiguration {
+  private resolveModelConfiguration(
+    options?: MediaTranscriptionJobOptions,
+  ): AudioFileModelConfiguration {
     const settings = this.dependencies.getSettings();
-    const selection = settings.selectedModel;
-    const capabilities = this.dependencies.getModelCapabilities();
-    if (
-      selection === null ||
-      capabilities.status !== 'ready' ||
-      !selectedModelEquals(selection, capabilities.selection)
-    ) {
+    const language = options?.language ?? settings.dictationLanguage;
+    const availableModels = this.dependencies.getMediaTranscriptionModels?.(language) ?? [];
+    const defaultModel = chooseDefaultMediaTranscriptionModel(
+      availableModels,
+      settings.selectedModel,
+    );
+    const selection = options?.modelSelection ?? defaultModel?.selection ?? settings.selectedModel;
+    if (selection === null) throw new AudioFileWorkflowError('audio-file-model-required');
+    const selectedOption = availableModels.find((option) =>
+      selectedModelEquals(option.selection, selection),
+    );
+    const currentCapabilities = this.dependencies.getModelCapabilities();
+    const capabilities =
+      selectedOption?.capabilities ??
+      (currentCapabilities.status === 'ready' &&
+      selectedModelEquals(selection, currentCapabilities.selection)
+        ? currentCapabilities.capabilities
+        : null);
+    if (capabilities === null || capabilities.family.task !== 'stt') {
       throw new AudioFileWorkflowError('audio-file-model-required');
     }
-    if (capabilities.capabilities.family.task !== 'stt') {
-      throw new AudioFileWorkflowError('audio-file-model-required');
-    }
-    if (capabilities.capabilities.family.supportsStreaming) {
+    if (capabilities.family.supportsStreaming) {
       throw new AudioFileWorkflowError('audio-file-model-not-batch');
     }
     if (
       !languageSupportIncludes(
-        capabilities.capabilities.family.supportedLanguages,
-        settings.dictationLanguage,
-        capabilities.capabilities.family.supportsAutomaticLanguageDetection,
+        capabilities.family.supportedLanguages,
+        language,
+        capabilities.family.supportsAutomaticLanguageDetection,
       )
     ) {
       throw new AudioFileWorkflowError('audio-file-language-unsupported', {
-        language: dictationLanguageLabel(settings.dictationLanguage),
+        language: dictationLanguageLabel(language),
       });
     }
     return {
       accelerationPreference: settings.accelerationPreference,
-      diarizationEnabled: settings.diarizationEnabled,
+      diarizationEnabled: options?.diarizationEnabled ?? settings.diarizationEnabled,
       diarizationMaxSpeakers: settings.diarizationMaxSpeakers,
-      language: settings.dictationLanguage,
+      detailedTimestampsEnabled:
+        (options?.timestampsEnabled ?? settings.timestampsEnabled) &&
+        capabilities.family.supportsSegmentTimestamps,
+      language,
       maxModelDurationMs:
-        capabilities.capabilities.family.maxAudioDurationSecs === null
+        capabilities.family.maxAudioDurationSecs === null
           ? null
-          : capabilities.capabilities.family.maxAudioDurationSecs * 1_000,
+          : capabilities.family.maxAudioDurationSecs * 1_000,
       modelSelection: selection,
       modelStorePathOverride: settings.modelStorePathOverride,
       speakingStyle: settings.speakingStyle,
+      useJobSnapshot: options !== undefined,
     };
   }
 
@@ -603,26 +1010,90 @@ export class AudioFileTranscriptionController {
     }
   }
 
-  private revalidateSelection(
-    target: SessionTarget,
-    initialSelection: SelectedModel,
-    initialLanguage: PluginSettings['dictationLanguage'],
-    signal: AbortSignal,
-  ): void {
-    this.revalidateTarget(target, signal);
-    const currentSelection = this.dependencies.getSettings().selectedModel;
-    const currentCapabilities = this.dependencies.getModelCapabilities();
+  private ensureMediaModelAvailable(configuration: AudioFileModelConfiguration): void {
+    if (this.dependencies.getMediaTranscriptionModels === undefined) {
+      if (configuration.useJobSnapshot) return;
+      const settings = this.dependencies.getSettings();
+      if (
+        settings.dictationLanguage !== configuration.language ||
+        settings.selectedModel === null ||
+        !selectedModelEquals(settings.selectedModel, configuration.modelSelection)
+      ) {
+        throw new AudioFileWorkflowError('audio-file-model-changed');
+      }
+      const capabilities = this.dependencies.getModelCapabilities();
+      if (
+        capabilities.status !== 'ready' ||
+        !selectedModelEquals(capabilities.selection, configuration.modelSelection)
+      ) {
+        throw new AudioFileWorkflowError('audio-file-model-required');
+      }
+      return;
+    }
+    const available = this.dependencies.getMediaTranscriptionModels(configuration.language);
     if (
-      currentSelection === null ||
-      currentCapabilities.status !== 'ready' ||
-      !selectedModelEquals(initialSelection, currentSelection) ||
-      !selectedModelEquals(initialSelection, currentCapabilities.selection)
+      !available.some((option) =>
+        selectedModelEquals(option.selection, configuration.modelSelection),
+      )
     ) {
       throw new AudioFileWorkflowError('audio-file-model-changed');
     }
-    const currentConfiguration = this.resolveModelConfiguration();
-    if (currentConfiguration.language !== initialLanguage) {
-      throw new AudioFileWorkflowError('audio-file-language-changed');
+  }
+
+  private revalidateMediaSelection(
+    target: SessionTarget,
+    configuration: AudioFileModelConfiguration,
+    signal: AbortSignal,
+  ): void {
+    this.revalidateTarget(target, signal);
+    if (
+      this.dependencies.getMediaTranscriptionModels !== undefined ||
+      configuration.useJobSnapshot
+    ) {
+      this.ensureMediaModelAvailable(configuration);
+      return;
+    }
+    const settings = this.dependencies.getSettings();
+    const capabilities = this.dependencies.getModelCapabilities();
+    if (
+      settings.dictationLanguage !== configuration.language ||
+      settings.selectedModel === null ||
+      !selectedModelEquals(settings.selectedModel, configuration.modelSelection) ||
+      capabilities.status !== 'ready' ||
+      !selectedModelEquals(capabilities.selection, configuration.modelSelection) ||
+      !languageSupportIncludes(
+        capabilities.capabilities.family.supportedLanguages,
+        configuration.language,
+        capabilities.capabilities.family.supportsAutomaticLanguageDetection,
+      )
+    ) {
+      throw new AudioFileWorkflowError('audio-file-model-changed');
+    }
+  }
+
+  private revalidateModelBeforeDecode(configuration: AudioFileModelConfiguration): void {
+    if (
+      this.dependencies.getMediaTranscriptionModels !== undefined ||
+      configuration.useJobSnapshot
+    ) {
+      this.ensureMediaModelAvailable(configuration);
+      return;
+    }
+    const settings = this.dependencies.getSettings();
+    const capabilities = this.dependencies.getModelCapabilities();
+    if (
+      settings.dictationLanguage !== configuration.language ||
+      settings.selectedModel === null ||
+      !selectedModelEquals(settings.selectedModel, configuration.modelSelection) ||
+      capabilities.status !== 'ready' ||
+      !selectedModelEquals(capabilities.selection, configuration.modelSelection) ||
+      !languageSupportIncludes(
+        capabilities.capabilities.family.supportedLanguages,
+        configuration.language,
+        capabilities.capabilities.family.supportsAutomaticLanguageDetection,
+      )
+    ) {
+      throw new AudioFileWorkflowError('audio-file-model-changed');
     }
   }
 
@@ -753,10 +1224,16 @@ export class AudioFileTranscriptionController {
     }
     await managed.transcript.drainPendingProjections();
     await managed.releaseMediaLease();
+    if (!runPostCompletion || !this.completedFeeds.has(managed)) {
+      const text = managed.transcript.getPartialText();
+      const target = this.sessionTargets.get(managed);
+      if (text.length > 0 && target !== undefined) this.partialRecovery = { target, text };
+    }
     if (runPostCompletion && !quarantined) {
       try {
         await managed.runPostCompletion();
       } catch (error) {
+        this.mediaError = error;
         this.dependencies.logger?.warn('llm', 'media transcript post-completion failed', error);
       }
     }
@@ -902,13 +1379,25 @@ export class AudioFileTranscriptionController {
     if (state === 'idle') {
       this.mediaProgress = null;
       this.dependencies.onMediaProgress?.(null);
+      for (const listener of this.progressListeners) listener(null);
     }
   }
+}
+
+function createProviderNeutralDecoderLease(lease: MediaLease): MediaLease {
+  return {
+    encodedBytes: lease.encodedBytes,
+    mediaId: lease.mediaId,
+    openReadStream: () => lease.openReadStream(),
+    provenance: lease.provenance,
+    release: () => lease.release(),
+  };
 }
 
 function createRendererOptions(
   settings: PluginSettings,
   sessionStartUnixMs: number,
+  options?: MediaTranscriptionJobOptions,
 ): TranscriptRenderOptions {
   return {
     smartParagraphPauses: {
@@ -916,14 +1405,14 @@ function createRendererOptions(
       paragraphPauseMs: settings.smartParagraphParagraphPauseMs,
     },
     timestamps: {
-      clock: settings.timestampClock,
-      density: settings.timestampDensity,
-      enabled: settings.timestampsEnabled,
+      clock: options === undefined ? settings.timestampClock : 'elapsed',
+      density: options?.timestampDensity ?? settings.timestampDensity,
+      enabled: options?.timestampsEnabled ?? settings.timestampsEnabled,
       header: settings.timestampSessionHeader,
       sessionStartUnixMs,
-      sparseIntervalMs: settings.timestampSparseIntervalMs,
+      sparseIntervalMs: options?.timestampSparseIntervalMs ?? settings.timestampSparseIntervalMs,
     },
-    transcriptFormatting: settings.transcriptFormatting,
+    transcriptFormatting: options?.transcriptFormatting ?? settings.transcriptFormatting,
   };
 }
 

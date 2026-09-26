@@ -9,6 +9,7 @@ export type FileWorkflowTranslationKey =
   | 'audio-file-busy'
   | 'audio-file-decoded-memory'
   | 'audio-file-decode-failed'
+  | 'audio-file-decoder-missing'
   | 'audio-file-desktop-only'
   | 'audio-file-duration'
   | 'audio-file-empty'
@@ -33,6 +34,18 @@ export type FileWorkflowTranslationKey =
   | 'audio-file-transcript-write-failed'
   | 'audio-file-surface-changed';
 
+export interface ExternalFailureFeedback {
+  readonly intent: FeedbackRequest['intent'];
+  readonly key: string;
+  readonly message: string;
+}
+
+export interface MediaFailureAdapter {
+  readonly isCancellation: (error: unknown) => boolean;
+  readonly map: (error: unknown) => ExternalFailureFeedback | null;
+  readonly sanitize?: (error: unknown) => unknown;
+}
+
 export class AudioFileWorkflowError extends Error {
   constructor(
     readonly translationKey: FileWorkflowTranslationKey,
@@ -50,6 +63,7 @@ interface FeedbackClaim {
 
 interface AudioFileFailureMapperDependencies {
   readonly feedback: Pick<UserFeedback, 'show'>;
+  readonly mediaFailureAdapters?: readonly MediaFailureAdapter[];
   readonly onModelMissing?: () => void;
   readonly onSidecarMissing?: () => void;
 }
@@ -58,6 +72,13 @@ export class AudioFileFailureMapper {
   constructor(private readonly dependencies: AudioFileFailureMapperDependencies) {}
 
   reportFailure(error: unknown, claim?: FeedbackClaim): void {
+    for (const adapter of this.dependencies.mediaFailureAdapters ?? []) {
+      const externalFeedback = adapter.map(error);
+      if (externalFeedback !== null) {
+        this.reportExternal(externalFeedback, adapter.sanitize?.(error) ?? error, claim);
+        return;
+      }
+    }
     if (error instanceof SidecarNotInstalledError) {
       this.report('audio-file-sidecar-missing', error, claim);
       return;
@@ -74,7 +95,12 @@ export class AudioFileFailureMapper {
   }
 
   isCancellation(error: unknown): boolean {
-    return isAudioFileCancellation(error);
+    return (
+      isAudioFileCancellation(error) ||
+      (this.dependencies.mediaFailureAdapters ?? []).some((adapter) =>
+        adapter.isCancellation(error),
+      )
+    );
   }
 
   isQueueAbort(error: unknown): boolean {
@@ -87,6 +113,22 @@ export class AudioFileFailureMapper {
       error.code === 'no_active_session' &&
       (expectedSessionId === undefined || error.sessionId === expectedSessionId)
     );
+  }
+
+  private reportExternal(
+    feedback: ExternalFailureFeedback,
+    cause: unknown,
+    claim?: FeedbackClaim,
+  ): void {
+    if (claim !== undefined && !claim.claimFeedback()) {
+      return;
+    }
+    this.dependencies.feedback.show({
+      cause,
+      intent: feedback.intent,
+      key: feedback.key,
+      message: feedback.message,
+    });
   }
 
   private report(
@@ -130,6 +172,8 @@ function resolveWorkflowTranslationKey(error: unknown): FileWorkflowTranslationK
       case 'decode_failed':
       case 'invalid_decode':
         return 'audio-file-decode-failed';
+      case 'decoder_missing':
+        return 'audio-file-decoder-missing';
       case 'duration':
         return 'audio-file-duration';
       case 'encoded_size':
