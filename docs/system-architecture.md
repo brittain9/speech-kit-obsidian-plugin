@@ -146,55 +146,26 @@ AbortSignal propagation; model discovery retains the existing requestUrl probe.
 The setting defaults to off, so file behavior is unchanged unless the user opts
 in.
 
-1. The command captures the exact active/fallback Markdown target and validates
-   a validated non-streaming speech-to-text model, configured dictation language,
-   speech lease, and absence of conflicting capture. It opens the picker only
-   after this preflight.
-2. The same target, model selection, and language are revalidated after the
-   picker and again immediately before `start_session`. A target that merely
-   still has *some* Markdown editor open is not considered the same target: the
-   `(file, CodeMirror view, target kind)` identity must match.
-3. The selected file is encoded-size checked before its bytes are read. The
-   encoded read, Web Audio decode wrapper, frame source, and drain-aware sidecar
-   write share one `AbortSignal`. Every created `AudioContext` is closed on
-   success, failure, and cancellation. Cancellation before `start_session` is
-   written prevents issuance of that command and never sends a cancellation that
-   could respawn the sidecar.
-4. A whole-buffer decode is accepted only within these conservative guardrails:
-
-   | Guardrail | Limit |
-   |---|---:|
-   | Encoded `File.size` | 64 MiB |
-   | Logical decoded PCM (`channels × frames × 4`) | 192 MiB |
-   | Decoded duration | 30 minutes |
-   | Selected model duration | Model's shorter declared limit |
-
-   These checks happen immediately after decode and before any sidecar session.
-   They are product guardrails, not a promise that Web Audio's transient native
-   decoder allocations are zero. The plugin does not create a second whole-file
-   mono buffer: channel slices are mixed, resampled, and released incrementally.
-5. Each output frame is exactly 16 kHz mono signed PCM16, 320 samples / 640
-   bytes. `SidecarProcess.writeAudioFrame` is required and waits for Node stdin
-   `drain` when a write returns false. The source awaits that bounded write;
-   `falling_behind` and `saturated` queue tiers pause it, while
-   `utterance_queue_overload` and the finite backpressure deadline abort the
-   source and issue native `cancel_session`, never graceful stop.
-6. Normal completion requests `stop_session` after all accepted frames. The
-   `ManagedAudioFileSession` lifecycle owns start issuance, start acknowledgement,
-   stop/cancel requests, feedback arbitration, and lease disposition. A local
-   projection adapter tracks only insertion promises; it never waits for native
-   cancellation while a transcript event is being inserted.
-7. `transcript_ready` is projected through the existing `Session` surface. A
-   complete final revision is one atomic insertion; a rejected projection
-   reports actionable copy and starts cancellation without deadlocking the
-   transcript drain. The session is disposed only after its projection work and
-   editor resources finish.
-8. A failed or unacknowledged cancellation retains the speech lease in quarantine
-   while the sidecar process remains alive. Only a correlated `session_stopped`
-   result, a `no_active_session` acknowledgement, or an observed forced process
-   exit releases that lease. This keeps mutations blocked without allowing a
-   late native session to overlap maintenance. Terminal workflow errors clear
-   local state and are retryable through a new command invocation.
+1. The command captures the exact active Markdown target, selects an installed
+   compatible batch model, and opens the file picker. Model and target identity
+   are checked again before the sidecar session starts.
+2. The selected file has a 2 GiB encoded-size limit. The pinned FFmpeg helper
+   probes its audio stream and duration, then decodes at most four hours into
+   16 kHz mono PCM. Missing audio, unsupported codecs, corrupt data, and a
+   material decoded/probed duration mismatch produce typed, recoverable errors.
+   The full decoded recording is never held in JavaScript memory.
+3. PCM frames are sent through the drain-aware sidecar pipe. Batch flow control
+   pauses the decoder while the speech queue catches up and resumes below its
+   low-water mark. Cancellation and unload unblock waiting work, terminate owned
+   processes, and release the media lease.
+4. Normal decoder exit allows stdout and queued consumers to drain. The job
+   succeeds only after every frame is delivered, the sidecar completes, and the
+   transcript is safely inserted once. A subprocess failure uses a bounded
+   termination deadline; it is not reported as a codec error.
+5. An uncertain native cancellation keeps the speech lease quarantined until a
+   correlated acknowledgement or process exit. The editor target is rechecked
+   before insertion, and failed jobs retain recoverable partial text outside the
+   note.
 
 The file workflow keeps the existing microphone LLM behavior separate. With
 `mediaLlmProcessing` off, media transcription never invokes a provider and
