@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { isAbsolute, resolve } from 'node:path';
 import {
   DEFAULT_DICTATION_LANGUAGE,
   type DictationLanguage,
@@ -192,7 +191,7 @@ export interface PluginSettings {
   modelStorePathOverride: string;
   readAloudLanguage: DictationLanguage;
   retainLastUtterance: boolean;
-  schemaVersion: 10;
+  schemaVersion: 11;
   selectedModel: SelectedModel | null;
   // Last-known-good capabilities for `selectedModel`, captured on a successful
   // probe. Lets startup skip re-probing the sidecar (which forces a full
@@ -223,9 +222,6 @@ export interface PluginSettings {
   ttsSpeed: number;
   useLlmNoteContext: boolean;
   useNoteAsContext: boolean;
-  youtubeHelperPath: string;
-  youtubeMediaSourceEnabled: boolean;
-  youtubePolicyVersion: string | null;
 }
 
 export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
@@ -268,7 +264,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   modelStorePathOverride: '',
   readAloudLanguage: 'auto',
   retainLastUtterance: true,
-  schemaVersion: 10,
+  schemaVersion: 11,
   selectedModel: null,
   selectedModelCapabilitiesSnapshot: null,
   selectedTtsModel: null,
@@ -296,9 +292,6 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   ttsSpeed: 1,
   useLlmNoteContext: false,
   useNoteAsContext: true,
-  youtubeHelperPath: '',
-  youtubeMediaSourceEnabled: false,
-  youtubePolicyVersion: null,
 };
 
 export function resolvePluginSettings(data: unknown): PluginSettings {
@@ -398,12 +391,6 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.mediaLlmProcessing,
       DEFAULT_PLUGIN_SETTINGS.mediaLlmProcessing,
     ),
-    youtubeHelperPath: readAbsolutePath(raw.youtubeHelperPath),
-    youtubeMediaSourceEnabled: readBoolean(
-      raw.youtubeMediaSourceEnabled,
-      DEFAULT_PLUGIN_SETTINGS.youtubeMediaSourceEnabled,
-    ),
-    youtubePolicyVersion: readPolicyVersion(raw.youtubePolicyVersion),
     modelStorePathOverride: readString(
       raw.modelStorePathOverride,
       DEFAULT_PLUGIN_SETTINGS.modelStorePathOverride,
@@ -416,7 +403,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       DEFAULT_PLUGIN_SETTINGS.retainLastUtterance,
     ),
     // Bump `schemaVersion` and add a migration step when renaming a key or changing default semantics.
-    schemaVersion: 10,
+    schemaVersion: 11,
     selectedModel: readSelectedModel(raw.selectedModel),
     // Automatic detection became a capability separate from language tags in
     // schema 4. Older snapshots cannot prove that exact-model behavior, so
@@ -428,7 +415,8 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.schemaVersion === 7 ||
       raw.schemaVersion === 8 ||
       raw.schemaVersion === 9 ||
-      raw.schemaVersion === 10
+      raw.schemaVersion === 10 ||
+      raw.schemaVersion === 11
         ? readSelectedModelCapabilitiesSnapshot(raw.selectedModelCapabilitiesSnapshot)
         : null,
     selectedTtsModel: readSelectedModel(raw.selectedTtsModel),
@@ -437,7 +425,8 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.schemaVersion === 7 ||
       raw.schemaVersion === 8 ||
       raw.schemaVersion === 9 ||
-      raw.schemaVersion === 10
+      raw.schemaVersion === 10 ||
+      raw.schemaVersion === 11
         ? readSelectedModelCapabilitiesSnapshot(raw.selectedTtsModelCapabilitiesSnapshot)
         : null,
     selectedTtsVoice:
@@ -607,16 +596,6 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 
 function readString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value.trim() : fallback;
-}
-
-function readAbsolutePath(value: unknown): string {
-  if (typeof value !== 'string') return '';
-  const path = value.trim();
-  return path.length > 0 && isAbsolute(path) ? resolve(path) : '';
-}
-
-function readPolicyVersion(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
 export function normalizeTranslationStyleInstruction(value: unknown): string {

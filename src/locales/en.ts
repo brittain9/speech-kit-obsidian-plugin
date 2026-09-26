@@ -23,7 +23,7 @@ export const en = {
   'audio-file-read-failed':
     'Speech Kit could not read the selected file. Check that the file still exists and is accessible, then try again.',
   'audio-file-decode-failed':
-    'Obsidian could not decode this audio file. Convert it to a format your Obsidian version can play (often WAV), then try again.',
+    'FFmpeg could not read the audio track, or decoding stopped before the recording ended. Check the media file and try again.',
   'audio-file-encoded-size':
     'This media file exceeds the size limit. Choose a smaller file or reduce its bitrate, then try again.',
   'audio-file-duration':
@@ -52,91 +52,33 @@ export const en = {
     'Audio-file transcription stopped because its target note was deleted. Restore or recreate the note, then run the command again.',
   'audio-file-surface-changed':
     'Audio-file transcription stopped because the note changed in a way Speech Kit could not safely track. Restore the intended note and run the command again.',
-  'youtube.error.invalid_url': 'Enter one valid YouTube VOD watch, youtu.be, or Shorts URL.',
-  'youtube.error.helper_unavailable':
-    'The selected yt-dlp helper is missing or could not be started. Select a supported absolute path in Settings.',
-  'youtube.error.helper_version_unsupported':
-    'The selected yt-dlp helper is too old. Select version 2026.08.19 or newer.',
-  'youtube.error.not_found_private':
-    'This YouTube video is unavailable or private. Use a video you own or are authorized to process.',
-  'youtube.error.authentication_required':
-    'This YouTube video requires login. Speech Kit does not use cookies or authenticated access.',
-  'youtube.error.age_restricted': 'This YouTube video is age-restricted and is not supported.',
-  'youtube.error.membership_required':
-    'This YouTube video requires membership and is not supported.',
-  'youtube.error.purchase_required':
-    'This YouTube video requires a purchase or rental and is not supported.',
-  'youtube.error.region_restricted':
-    'This YouTube video is unavailable in this region and is not supported.',
-  'youtube.error.drm_protected': 'This YouTube video is DRM-protected and is not supported.',
-  'youtube.error.rate_limited':
-    'YouTube rate-limited the helper request. Wait and try again later.',
-  'youtube.error.network_failed':
-    'The helper could not reach YouTube. Check the network and try again.',
-  'youtube.error.extractor_changed':
-    'The YouTube extractor changed or returned incomplete metadata. Try again later.',
-  'youtube.error.integrity_failed':
-    'The downloaded YouTube media failed integrity checks and was discarded. Try again or choose another video.',
-  'youtube.error.helper_probe_failed':
-    'The selected yt-dlp helper probe failed. Check that the absolute executable can run, then try again.',
-  'youtube.error.live_stream':
-    'This is an active or non-VOD YouTube stream. Live content is not supported.',
-  'youtube.error.rights_not_established':
-    'Confirm that you own or are authorized to process this video. Public visibility is not permission.',
-  'youtube.error.resource_limit':
-    'The YouTube video or helper output exceeded a safety limit. Choose a shorter or smaller video.',
-  'youtube.error.tool_failed':
-    'YouTube audio download failed. Retry, or reinstall yt-dlp from Settings if it keeps failing.',
-  'youtube.error.cancelled': 'The YouTube acquisition was cancelled.',
-  'youtube.error.unsupported_platform':
-    'The experimental YouTube source is not supported on Windows. Use macOS or Linux; the command and helper are disabled here.',
-  'youtube.modal.experimentalBadge': 'Experimental',
-  'youtube.modal.disclosure':
-    'Unofficial helper disclosure: yt-dlp contacts YouTube using an external executable and may stop working when YouTube changes. Speech Kit does not bundle or update it.',
-  'youtube.modal.urlDescription':
-    'Enter exactly one public YouTube VOD watch, youtu.be, or Shorts URL. Playlists, channels, live streams, and arbitrary URLs are not supported.',
-  'youtube.modal.helperName': 'yt-dlp executable',
-  'youtube.modal.helperPlaceholder': '/absolute/path/to/yt-dlp',
-  'youtube.modal.checkHelper': 'Check helper',
-  'youtube.modal.suggestions':
-    'Existing PATH suggestions (not executed during discovery): {suggestions}',
-  'youtube.modal.policyAccepted':
-    'Rights confirmation already accepted for policy {policy}; no repeated prompt will be shown.',
-  'youtube.modal.policyRequired': 'Confirm once before downloading video audio.',
-  'youtube.modal.rightsLabel': 'I have permission to transcribe this video',
+  'youtube.modal.title': 'Get YouTube transcript',
+  'youtube.modal.captionDescription':
+    'Fetches the video’s available captions and adds the transcript to the active note. No video download or speech model is needed.',
   'youtube.modal.urlName': 'YouTube link',
   'youtube.modal.urlPlaceholder': 'https://www.youtube.com/watch?v=…',
-  'youtube.modal.summary': 'Canonical video: {canonicalUrl} · Host: {host} · ID: {videoId}',
-  'youtube.modal.invalidSummary': 'Enter one valid YouTube VOD URL.',
-  'youtube.modal.transcribe': 'Transcribe',
-  'youtube.modal.displayName': 'YouTube video {videoId}',
-  'youtube.modal.pathRequired': 'Choose an absolute helper path.',
-  'youtube.modal.helperReady': 'Helper ready: {version}',
-  'youtube.modal.helperError': 'The selected helper is missing, unsupported, or could not be run.',
-  'youtube.modal.submitError':
-    'Enter a valid single VOD URL, select a supported absolute helper, and confirm rights.',
-  'youtube.settings.enableName': 'YouTube transcripts',
-  'youtube.settings.enableDesc':
-    'Create a fresh local transcript from video audio. Experimental on macOS and Linux.',
-  'youtube.settings.helperName': 'YouTube downloader',
-  'youtube.settings.helperDesc': 'Install the verified yt-dlp helper once to download audio.',
-  'youtube.settings.suggestions': 'Existing PATH suggestions: {suggestions}',
-  'youtube.settings.policyAccepted': 'Rights confirmation: accepted for {policy}.',
-  'youtube.settings.policyRequired': 'Rights confirmation: required before the first YouTube job.',
-  'youtube.settings.checkHelper': 'Check helper',
-  'youtube.settings.installHelper': 'Install yt-dlp',
-  'youtube.settings.installingHelper': 'Downloading and verifying yt-dlp…',
-  'youtube.settings.installFailed': 'Could not install yt-dlp. Try again.',
-  'youtube.settings.installFailedDetail': 'Could not install yt-dlp: {reason}',
-  'youtube.settings.helperMissing': 'Helper not installed.',
-  'youtube.settings.checkingHelper': 'Checking installed helper…',
-  'youtube.settings.pathRequired': 'Choose an absolute executable path. No path was saved.',
-  'youtube.settings.pathSaved': 'Selected helper path saved. Check the version explicitly.',
-  'youtube.settings.helperReady': 'Ready · yt-dlp {version}',
-  'youtube.settings.helperError':
-    'The selected helper could not be run or is not a supported version.',
-  'youtube.settings.unsupportedPlatform':
-    'Not available on Windows. The experimental YouTube source and yt-dlp helper are disabled here; use macOS or Linux.',
+  'youtube.modal.enterUrl': 'Paste a YouTube video link to continue.',
+  'youtube.modal.noCaptions': 'This video has no usable captions. The note was not changed.',
+  'youtube.modal.captionServiceUnavailable':
+    'The YouTube caption service is unavailable. Restart Speech Kit and try again.',
+  'youtube.modal.completedCreatorCaptions': 'Creator captions were added to the active note.',
+  'youtube.modal.completedAutomaticCaptions':
+    'YouTube automatic captions were added to the active note.',
+  'youtube.modal.alreadyAdded': 'Added to note',
+  'youtube.modal.aiFailedRawKept':
+    'The transcript was added, but the optional AI step failed: {reason}',
+  'youtube.modal.aiCouldNotFinish':
+    'The transcript was added, but the optional AI step could not finish. The original text is in your note.',
+  'youtube.caption.checkFailed':
+    'Could not check YouTube captions. Check your connection and try again.',
+  'youtube.caption.restricted': 'This video is restricted.',
+  'youtube.caption.unavailable': 'This video is unavailable.',
+  'youtube.caption.languageUnavailable':
+    'This video does not have captions in the selected language.',
+  'youtube.caption.readFailed':
+    'YouTube captions were unavailable or could not be read. Try again later.',
+  'youtube.caption.chooseLanguage': 'Choose a caption language in Transcript options.',
+  'youtube.caption.cancelled': 'Caption retrieval was cancelled.',
   'media-llm-empty':
     'The media transcript is empty or the AI provider returned no text. The raw transcript was kept; record a non-empty transcript or check the provider and try again.',
   'media-llm-failed':
@@ -169,6 +111,7 @@ export const en = {
   'llm.mediaPayload.transcriptOnly': 'transcript text only',
   'llm.mediaPayload.transcriptAndBoundedNoteContext': 'transcript text and bounded note context',
   'media.progress.acquire': 'Preparing media…',
+  'media.progress.captions': 'Checking YouTube captions…',
   'media.progress.download': 'Downloading video audio…',
   'media.progress.decode': 'Decoding media…',
   'media.progress.transcribe': 'Transcribing media…',
@@ -300,23 +243,21 @@ export const en = {
   'commands.transcribeAudioFile': 'Transcribe local audio file',
   'commands.transcribeYouTube': 'Transcribe YouTube video',
   'media.modal.title': 'Transcribe media',
-  'media.modal.fileTab': 'File',
-  'media.modal.youtubeTab': 'YouTube',
   'media.modal.dropLabel': 'Choose an audio or video file',
   'media.modal.dropDescription': 'Drop an audio or video file here, or browse to choose one.',
   'media.modal.browse': 'Browse files',
   'media.modal.fileSelected': '{name} · {size}',
   'media.modal.optionsTitle': 'Transcript options',
   'media.modal.model': 'Batch model',
+  'media.modal.partialAvailable': 'A partial transcript is available. It is incomplete.',
+  'media.modal.copyPartial': 'Copy partial transcript',
+  'media.modal.insertPartial': 'Insert partial transcript',
+  'media.modal.partialTargetChanged':
+    'Return to the original note to insert the partial transcript, or copy it instead.',
   'media.modal.language': 'Language',
   'media.modal.noBatchModel': 'Install a compatible batch transcription model to continue.',
   'media.modal.manageModels': 'Manage models',
-  'media.modal.youtubeFreshTranscript':
-    'Creates a fresh local transcript from the video audio. This may take a while for long videos.',
-  'media.modal.configureYouTubeHelper': 'Configure yt-dlp in Settings before starting.',
-  'media.modal.enterYouTubeUrl': 'Paste a YouTube video link to continue.',
   'media.modal.invalidYouTubeUrl': 'Enter a link to one YouTube video.',
-  'media.modal.confirmRights': 'Confirm that you have permission to transcribe this video.',
   'media.modal.selectFile': 'Choose an audio or video file to continue.',
   'media.modal.aiPreset': 'After transcription',
   'media.modal.aiPresetNone': 'Transcript only',
@@ -325,8 +266,6 @@ export const en = {
   'media.modal.aiPresetMissing': 'The selected AI preset is no longer available. Choose another.',
   'media.modal.aiNotReady':
     'The selected AI preset could not start. Check your AI provider settings.',
-  'media.modal.youtubeDisabled':
-    'YouTube transcription is disabled or unsupported on this platform.',
   'media.modal.start': 'Get transcript',
   'media.modal.cancelJob': 'Cancel transcription',
   'media.modal.completed': 'Transcription finished. The transcript was added to the active note.',

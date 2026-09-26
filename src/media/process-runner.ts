@@ -83,6 +83,7 @@ async function collectProcessOutput(
   let cleanupFailed = false;
   let settled = false;
   let observedExitCode: number | null = null;
+  let processErrored = false;
   let closeDeadlineTimer: number | undefined;
   let forceTimer: number | undefined;
   let timeoutTimer: number | undefined;
@@ -240,6 +241,7 @@ async function collectProcessOutput(
     limits.onStderr?.(stderr);
   };
   const onError = (): void => {
+    processErrored = true;
     // A process error can arrive while stdout/stderr pipes are still open.
     // Keep the close listener and bounded deadline alive so callers never
     // mistake an error event for completed process-tree cleanup.
@@ -253,7 +255,14 @@ async function collectProcessOutput(
     if (settled) return;
     observedExitCode = code;
     if (terminationPromise !== null) return;
-    armCloseDeadline();
+    // A paused stdout consumer may still be feeding a slow speech engine.
+    // Wait for that consumer before treating the open pipe as a hung child.
+    const afterConsumer = (): void => {
+      if (settled || terminationPromise !== null) return;
+      armCloseDeadline();
+      armForceTimer(false);
+    };
+    void stdoutCallbackQueue.then(afterConsumer, afterConsumer);
     if (platform === 'win32') {
       exitCleanupPromise = Promise.resolve(true);
       return;
@@ -270,10 +279,9 @@ async function collectProcessOutput(
       cleanupFailed ||= !succeeded;
       return succeeded;
     });
-    armForceTimer(false);
   };
   const onClose = (code: number | null): void =>
-    finish(observedExitCode ?? code, observedExitCode !== 0);
+    finish(observedExitCode ?? code, processErrored || (observedExitCode ?? code) !== 0);
   timeoutTimer = window.setTimeout(
     () => {
       timedOut = true;

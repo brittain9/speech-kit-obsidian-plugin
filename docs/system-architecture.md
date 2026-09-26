@@ -72,14 +72,10 @@ it into fixed 640-byte frames at 50 fps.
   `AudioWorklet` runs on a dedicated real-time thread; `PcmFrameProcessor` does
   linear-interpolation resampling from the browser's native rate (44.1/48 kHz)
   down to 16 kHz.
-- **Local audio files** are selected through a renderer-local file input,
-  encoded-size checked before reading, and decoded by the running Obsidian
-  Web Audio implementation. A conservative 192 MiB / 30-minute decoded budget
-  (plus the selected model's own duration limit) is enforced before the sidecar
-  session starts. Decoded channels are sliced, mixed, resampled, and written
-  with sidecar-queue backpressure; the bytes never leave the local stdin pipe.
-  The accepted-format contract is successful decode by the active desktop
-  runtime, not a promised extension-to-codec mapping.
+- **Local audio and video files** are selected through a renderer-local file
+  input. A bounded FFmpeg process extracts 16 kHz mono PCM from the audio
+  stream and writes frames to the sidecar with backpressure and cancellation.
+  The decoded recording is not loaded into Web Audio memory.
 - **System audio** (this computer's output) is captured natively by the sidecar
   on Windows (WASAPI loopback), Linux (the default PulseAudio/PipeWire monitor),
   and macOS 14.2+ (CoreAudio process taps attached to a private aggregate
@@ -115,24 +111,14 @@ immediately after decode/VAD/ASR transcript projection and before optional
 post-completion AI work, with an idempotent cleanup promise covering success,
 failure, cancellation, and disposal. The ASR, renderer, and LLM layers never
 receive a provider URL, path, credential, subprocess, or remote response body.
-The local-file acquisition remains the stable default. An optional, explicitly
-selected YouTube VOD adapter is experimental and uses the same contract. Its
-unofficial `yt-dlp` helper is never bundled or auto-updated, accepts only a
-validated canonical video ID, and returns a temporary path-backed `MediaLease`.
-The adapter requires a current typed consent grant, rejects helper metadata
-that is not an exact non-live VOD identity match, and keeps YouTube-specific
-metadata outside the shared media contract. This experimental adapter is
-supported only on macOS and Linux; Windows hides the command, shows an
-unsupported-platform message in settings, and never spawns the helper or
-cleanup child. A typed provider entry carries the YouTube context, typed
-acquisition request factory, enablement predicate, and stable provider id into
-the shared coordinator; the request and source generic are checked together
-end-to-end, with runtime validation at the provider boundary. The coordinator
-has no YouTube setting dependency and can cancel only the matching active
-provider operation. The adapter does not pass its URL, helper, path, or
-provenance to the decoder, ASR, renderer, or optional LLM.
+The YouTube command is a separate caption import. It fetches player metadata
+and timed captions through Obsidian's `requestUrl`, then validates, formats,
+and inserts the complete result once. It needs no media lease, speech model,
+sidecar, or helper executable. If suitable captions are unavailable, the note
+is unchanged. The optional LLM preset receives caption text only after the
+raw transcript is safely inserted. See ADR 0010 for this text-source boundary.
 
-The shared media transcription coordinator owns the provider-neutral sequence:
+The local-file transcription coordinator owns the sequence:
 acquire → local decode
 → the existing VAD/batch-ASR `Session` → timestamps, diarization, and smart
 formatting → safe editor insertion. Progress exposes `acquire`, `decode`,

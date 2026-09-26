@@ -10,12 +10,6 @@ import {
   type MediaTranscriptionJobOptions,
   type MediaTranscriptionModelOption,
 } from '../media/media-transcription-options';
-import { youtubeMediaFailureAdapter } from '../media/youtube-failure-mapper';
-import {
-  explicitYouTubeRightsConfirmation,
-  hasYouTubeRightsConfirmation,
-} from '../media/youtube-media-source';
-import { parseYouTubeVideoUrl } from '../media/youtube-url';
 import type {
   PluginSettings,
   TimestampDensity,
@@ -25,25 +19,17 @@ import { validateTimestampIntervalSeconds } from '../settings/plugin-settings';
 import { t } from '../shared/i18n';
 import { mediaProgressText } from './media-progress-presenter';
 
-export type MediaTranscriptionTab = 'file' | 'youtube';
-
 export interface MediaTranscriptionModalDependencies {
   readonly cancel: () => Promise<void>;
   readonly getModels: (language: DictationLanguage) => readonly MediaTranscriptionModelOption[];
   readonly getLastError: () => unknown;
+  readonly getPartialTranscript: () => string | null;
+  readonly insertPartialTranscript: () => boolean;
   readonly getProgress: () => MediaTranscriptionProgress | null;
   readonly getSettings: () => PluginSettings;
-  readonly getYouTubeHelperPath: () => string;
-  readonly getYouTubePolicyVersion: () => string | null;
   readonly isTranscribing: () => boolean;
-  readonly isYouTubeEnabled: () => boolean;
   readonly onManageModels: () => void;
   readonly startFile: (file: File, options: MediaTranscriptionJobOptions) => Promise<void>;
-  readonly startYouTube: (
-    url: string,
-    options: MediaTranscriptionJobOptions,
-    consent: ReturnType<typeof explicitYouTubeRightsConfirmation>,
-  ) => Promise<void>;
   readonly subscribeProgress: (
     listener: (progress: MediaTranscriptionProgress | null) => void,
   ) => () => void;
@@ -52,13 +38,9 @@ export interface MediaTranscriptionModalDependencies {
 export class MediaTranscriptionModalRegistry {
   private modal: MediaTranscriptionModal | null = null;
 
-  open(
-    app: App,
-    dependencies: MediaTranscriptionModalDependencies,
-    initialTab: MediaTranscriptionTab,
-  ): void {
+  open(app: App, dependencies: MediaTranscriptionModalDependencies): void {
     if (this.modal !== null) return;
-    const modal = new MediaTranscriptionModal(app, dependencies, initialTab, () => {
+    const modal = new MediaTranscriptionModal(app, dependencies, () => {
       if (this.modal === modal) this.modal = null;
     });
     this.modal = modal;
@@ -74,10 +56,7 @@ export class MediaTranscriptionModalRegistry {
 class MediaTranscriptionModal extends Modal {
   private readonly lifecycle = new AbortController();
   private readonly releaseProgress: () => void;
-  private tab: MediaTranscriptionTab;
   private file: File | null = null;
-  private url = '';
-  private rightsConfirmed: boolean;
   private timestampEnabled: boolean;
   private timestampDensity: TimestampDensity;
   private timestampSparseIntervalSeconds: string;
@@ -93,6 +72,7 @@ class MediaTranscriptionModal extends Modal {
   private progressRowEl: HTMLElement | null = null;
   private progressSpinnerEl: HTMLElement | null = null;
   private errorEl: HTMLElement | null = null;
+  private partialEl: HTMLElement | null = null;
   private requirementEl: HTMLElement | null = null;
   private fileNameEl: HTMLElement | null = null;
   private primaryButton: ButtonComponent | null = null;
@@ -101,13 +81,10 @@ class MediaTranscriptionModal extends Modal {
   constructor(
     app: App,
     private readonly dependencies: MediaTranscriptionModalDependencies,
-    initialTab: MediaTranscriptionTab,
     private readonly onClosed: () => void,
   ) {
     super(app);
     const settings = dependencies.getSettings();
-    this.tab = initialTab;
-    this.rightsConfirmed = hasYouTubeRightsConfirmation(dependencies.getYouTubePolicyVersion());
     this.timestampEnabled = settings.timestampsEnabled;
     this.timestampSparseIntervalSeconds = String(settings.timestampSparseIntervalMs / 1_000);
     this.timestampDensity =
@@ -143,16 +120,8 @@ class MediaTranscriptionModal extends Modal {
     this.contentEl.empty();
     this.primaryButton = null;
     this.closeButton = null;
-    const tabs = this.contentEl.createDiv({ cls: 'local-stt-media-source-tabs' });
-    tabs.setAttribute('role', 'tablist');
-    this.addTab(tabs, 'file', t('media.modal.fileTab'));
-    if (this.dependencies.isYouTubeEnabled()) {
-      this.addTab(tabs, 'youtube', t('media.modal.youtubeTab'));
-    }
-
     const source = this.contentEl.createDiv({ cls: 'local-stt-media-source' });
-    if (this.tab === 'file') this.renderFileSource(source);
-    else this.renderYouTubeSource(source);
+    this.renderFileSource(source);
     this.renderAiPreset();
     this.renderJobOptions();
 
@@ -175,6 +144,7 @@ class MediaTranscriptionModal extends Modal {
       cls: 'local-stt-media-error',
       attr: { role: 'alert' },
     });
+    this.partialEl = this.contentEl.createDiv({ cls: 'local-stt-media-partial-actions' });
     this.renderProgress(this.dependencies.getProgress());
 
     const footer = this.contentEl.createDiv({ cls: 'local-stt-media-footer' });
@@ -194,17 +164,6 @@ class MediaTranscriptionModal extends Modal {
         });
     });
     this.updatePrimaryButton();
-  }
-
-  private addTab(parent: HTMLElement, tab: MediaTranscriptionTab, label: string): void {
-    const button = parent.createEl('button', { text: label, attr: { role: 'tab' } });
-    button.setAttribute('aria-selected', String(this.tab === tab));
-    button.toggleClass('is-active', this.tab === tab);
-    button.addEventListener('click', () => {
-      if (this.busy) return;
-      this.tab = tab;
-      this.render();
-    });
   }
 
   private renderFileSource(parent: HTMLElement): void {
@@ -240,28 +199,6 @@ class MediaTranscriptionModal extends Modal {
       }
     });
     this.updateFileName();
-  }
-
-  private renderYouTubeSource(parent: HTMLElement): void {
-    new Setting(parent).setName(t('youtube.modal.urlName')).addText((text) => {
-      text.setPlaceholder(t('youtube.modal.urlPlaceholder')).setValue(this.url);
-      text.onChange((value) => {
-        this.url = value;
-        this.updatePrimaryButton();
-      });
-    });
-    parent.createEl('p', {
-      text: t('media.modal.youtubeFreshTranscript'),
-      cls: 'local-stt-media-source-hint',
-    });
-    if (!this.rightsConfirmed) {
-      new Setting(parent).setName(t('youtube.modal.rightsLabel')).addToggle((toggle) => {
-        toggle.setValue(false).onChange((value) => {
-          this.rightsConfirmed = value;
-          this.updatePrimaryButton();
-        });
-      });
-    }
   }
 
   private renderJobOptions(): void {
@@ -309,20 +246,21 @@ class MediaTranscriptionModal extends Modal {
       );
       return;
     }
-    new Setting(grid).setName(t('media.modal.model')).addDropdown((dropdown) => {
-      models.forEach((option) => {
-        dropdown.addOption(modelKey(option), option.label);
+    if (models.length > 0)
+      new Setting(grid).setName(t('media.modal.model')).addDropdown((dropdown) => {
+        models.forEach((option) => {
+          dropdown.addOption(modelKey(option), option.label);
+        });
+        dropdown.setValue(this.modelSelectionKey);
+        dropdown.onChange((value) => {
+          this.modelSelectionKey = value;
+          const chosen = models.find((option) => modelKey(option) === value);
+          summaryDetail.setText(
+            `${selectedLanguage?.label ?? this.language} · ${chosen?.label ?? ''}`,
+          );
+          this.updatePrimaryButton();
+        });
       });
-      dropdown.setValue(this.modelSelectionKey);
-      dropdown.onChange((value) => {
-        this.modelSelectionKey = value;
-        const chosen = models.find((option) => modelKey(option) === value);
-        summaryDetail.setText(
-          `${selectedLanguage?.label ?? this.language} · ${chosen?.label ?? ''}`,
-        );
-        this.updatePrimaryButton();
-      });
-    });
     new Setting(grid).setName(t('settings.timestamps.enable.name')).addToggle((toggle) => {
       toggle.setValue(this.timestampEnabled).onChange((value) => {
         this.timestampEnabled = value;
@@ -446,16 +384,7 @@ class MediaTranscriptionModal extends Modal {
     if (this.dependencies.isTranscribing()) return t('media.modal.alreadyRunning');
     if (this.dependencies.getModels(this.language).length === 0)
       return t('media.modal.noBatchModel');
-    if (this.tab === 'file') {
-      if (this.file === null) return t('media.modal.selectFile');
-    } else {
-      if (this.url.trim().length === 0) return t('media.modal.enterYouTubeUrl');
-      if (!isValidYouTubeUrl(this.url)) return t('media.modal.invalidYouTubeUrl');
-      if (this.dependencies.getYouTubeHelperPath().trim().length === 0) {
-        return t('media.modal.configureYouTubeHelper');
-      }
-      if (!this.rightsConfirmed) return t('media.modal.confirmRights');
-    }
+    if (this.file === null) return t('media.modal.selectFile');
     if (this.mediaPresetRef !== null && this.dependencies.getSettings().llmRoutingPolicy === null) {
       return t('media.modal.aiProviderRequired');
     }
@@ -487,7 +416,7 @@ class MediaTranscriptionModal extends Modal {
   }
 
   private acquisitionProgressText(): string {
-    return this.tab === 'youtube' ? t('media.progress.download') : t('media.progress.acquire');
+    return t('media.progress.acquire');
   }
 
   private async startJob(): Promise<void> {
@@ -501,9 +430,7 @@ class MediaTranscriptionModal extends Modal {
     const model = this.dependencies
       .getModels(this.language)
       .find((option) => modelKey(option) === this.modelSelectionKey);
-    if (model === undefined) return;
-    if (this.tab === 'file' && this.file === null) return;
-    if (this.tab === 'youtube' && (!this.rightsConfirmed || !isValidYouTubeUrl(this.url))) return;
+    if (model === undefined || this.file === null) return;
     const settings = this.dependencies.getSettings();
     const preset = resolvePresetEntry(this.mediaPresetRef, settings.llmPostprocessUserPresets);
     if (this.mediaPresetRef !== null && preset === null) {
@@ -514,7 +441,7 @@ class MediaTranscriptionModal extends Modal {
     const options: MediaTranscriptionJobOptions = {
       diarizationEnabled: this.diarizationEnabled,
       language: this.language,
-      modelSelection: model.selection,
+      ...(model === undefined ? {} : { modelSelection: model.selection }),
       timestampDensity: this.timestampDensity,
       timestampSparseIntervalMs: interval.valid
         ? interval.milliseconds
@@ -532,16 +459,11 @@ class MediaTranscriptionModal extends Modal {
     this.busy = true;
     this.cancelRequested = false;
     this.errorEl?.setText('');
+    this.partialEl?.empty();
     this.updatePrimaryButton();
     this.renderProgress(this.dependencies.getProgress());
     try {
-      if (this.tab === 'file') await this.dependencies.startFile(this.file as File, options);
-      else
-        await this.dependencies.startYouTube(
-          this.url.trim(),
-          options,
-          explicitYouTubeRightsConfirmation(),
-        );
+      await this.dependencies.startFile(this.file, options);
       if (!this.lifecycle.signal.aborted && !this.cancelRequested) {
         const error = this.dependencies.getLastError();
         if (error !== null) {
@@ -568,6 +490,23 @@ class MediaTranscriptionModal extends Modal {
         detail: errorDetail(error),
       }),
     );
+    this.renderPartialRecovery();
+  }
+
+  private renderPartialRecovery(): void {
+    this.partialEl?.empty();
+    const partial = this.dependencies.getPartialTranscript();
+    if (partial === null || this.partialEl === null) return;
+    this.partialEl.createEl('p', { text: t('media.modal.partialAvailable') });
+    const copy = this.partialEl.createEl('button', { text: t('media.modal.copyPartial') });
+    copy.addEventListener('click', () => {
+      void navigator.clipboard.writeText(partial);
+    });
+    const insert = this.partialEl.createEl('button', { text: t('media.modal.insertPartial') });
+    insert.addEventListener('click', () => {
+      if (this.dependencies.insertPartialTranscript()) this.partialEl?.empty();
+      else this.errorEl?.setText(t('media.modal.partialTargetChanged'));
+    });
   }
 
   private async cancelJob(): Promise<void> {
@@ -577,6 +516,7 @@ class MediaTranscriptionModal extends Modal {
     this.busy = false;
     this.progressEl?.setText(t('media.modal.cancelled'));
     this.progressRowEl?.toggle(true);
+    this.renderPartialRecovery();
     this.updatePrimaryButton();
   }
 }
@@ -585,23 +525,12 @@ function modelKey(option: MediaTranscriptionModelOption | null | undefined): str
   return option === null || option === undefined ? '' : JSON.stringify(option.selection);
 }
 
-function isValidYouTubeUrl(value: string): boolean {
-  try {
-    parseYouTubeVideoUrl(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function errorDetail(error: unknown): string {
-  const youtubeFailure = youtubeMediaFailureAdapter.map(error);
-  if (youtubeFailure !== null) return youtubeFailure.message;
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
   return t('media.modal.unknownFailure');

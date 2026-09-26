@@ -21,8 +21,6 @@ interface CommandDependencies {
   copyRawTranscript: () => void;
   hasRawTranscriptRecovery: () => boolean;
   isAudioFileTranscriptionActive: () => boolean;
-  isYouTubeMediaSourceEnabled?: () => boolean;
-  isYouTubePlatformSupported?: () => boolean;
   isReadAloudActive: () => boolean;
   plugin: Plugin;
   hasLastUtterance: () => boolean;
@@ -106,8 +104,6 @@ export function registerCommands(dependencies: CommandDependencies): void {
     name: t('commands.transcribeYouTube'),
     checkCallback: (checking) => {
       if (!Platform.isDesktopApp) return false;
-      if (dependencies.isYouTubePlatformSupported?.() === false) return false;
-      if (dependencies.isYouTubeMediaSourceEnabled?.() === false) return false;
       if (!checking) void dependencies.transcribeYouTube?.();
       return true;
     },

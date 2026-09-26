@@ -16,7 +16,7 @@ export interface MediaTranscriptionModelOption {
 export interface MediaTranscriptionJobOptions {
   readonly diarizationEnabled: boolean;
   readonly language: DictationLanguage;
-  readonly modelSelection: SelectedModel;
+  readonly modelSelection?: SelectedModel;
   readonly timestampDensity: TimestampDensity;
   readonly timestampSparseIntervalMs?: number;
   readonly timestampsEnabled: boolean;

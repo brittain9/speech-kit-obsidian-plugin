@@ -35,6 +35,8 @@ export interface MediaLlmJob {
   readonly snapshot: MediaLlmSnapshot;
 }
 
+export type MediaLlmRunOutcome = 'skipped' | 'applied' | 'declined' | 'failed' | 'cancelled';
+
 export class MediaLlmCoordinator {
   private activeAbortController: AbortController | null = null;
 
@@ -52,20 +54,25 @@ export class MediaLlmCoordinator {
     return this.readinessIsValid(settings);
   }
 
-  async run(session: MediaLlmEditorSession, job?: MediaLlmJob | null): Promise<void> {
-    if (job === null) return;
+  async run(
+    session: MediaLlmEditorSession,
+    job?: MediaLlmJob | null,
+    transcriptText?: string,
+  ): Promise<MediaLlmRunOutcome> {
+    if (job === null) return 'skipped';
     const settings = job?.settings ?? this.dependencies.getSettings();
-    if (job === undefined && (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled)) return;
-    if (!this.preflight(settings, job)) return;
+    if (job === undefined && (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled))
+      return 'skipped';
+    if (!this.preflight(settings, job)) return 'failed';
     const router = this.dependencies.createRouter?.(settings) ?? null;
     if (router === null) {
       this.reportReadiness('provider_unavailable');
-      return;
+      return 'failed';
     }
-    const rawText = session.joinRawSessionText();
+    const rawText = transcriptText ?? session.joinRawSessionText();
     if (rawText.trim().length === 0) {
       this.feedback('media-llm-empty');
-      return;
+      return 'failed';
     }
     const transform = job?.snapshot ?? resolveLlmTransformSnapshot(settings);
     const disclosure = resolveMediaLlmDisclosure(settings, router, rawText.length, transform);
@@ -79,12 +86,12 @@ export class MediaLlmCoordinator {
       useNoteContext: transform.useNoteContext,
     };
     const confirm = this.dependencies.confirm;
-    if (confirm === undefined) return;
+    if (confirm === undefined) return 'failed';
     const abortController = new AbortController();
     this.activeAbortController = abortController;
     this.dependencies.onProgress?.('ai_processing');
     try {
-      await processMediaLlm(session, {
+      const result = await processMediaLlm(session, {
         confirm,
         isEnabled: () =>
           job === undefined
@@ -100,10 +107,12 @@ export class MediaLlmCoordinator {
         router,
         signal: abortController.signal,
         snapshot,
+        transcriptText: rawText,
       });
+      return result.applied ? 'applied' : 'declined';
     } catch (error) {
       if (error instanceof MediaLlmProcessingError) {
-        if (error.code === 'cancelled') return;
+        if (error.code === 'cancelled') return 'cancelled';
         this.feedback(
           error.code === 'empty'
             ? 'media-llm-empty'
@@ -111,11 +120,12 @@ export class MediaLlmCoordinator {
               ? 'media-llm-range-unavailable'
               : 'media-llm-failed',
         );
-        return;
+        return 'failed';
       }
-      if (abortController.signal.aborted) return;
+      if (abortController.signal.aborted) return 'cancelled';
       this.dependencies.logger?.warn('llm', 'media transcript post-completion failed', error);
       this.feedback('media-llm-failed');
+      return 'failed';
     } finally {
       if (this.activeAbortController === abortController) this.activeAbortController = null;
     }

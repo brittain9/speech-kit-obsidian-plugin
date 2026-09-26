@@ -73,6 +73,7 @@ export interface MediaSource<
 }
 
 export type MediaTranscriptionProgressPhase =
+  | 'captions'
   | 'acquire'
   | 'decode'
   | 'transcribe'
@@ -82,6 +83,7 @@ export type MediaTranscriptionProgressPhase =
 
 export interface MediaTranscriptionProgress {
   readonly phase: MediaTranscriptionProgressPhase;
+  readonly captionSource?: 'creator_captions' | 'automatic_captions';
   readonly bytes?: number;
   readonly totalBytes?: number;
 }

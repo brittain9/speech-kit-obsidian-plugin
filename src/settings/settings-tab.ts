@@ -8,8 +8,6 @@ import {
   isDictationLanguage,
   languageFeatureCoverage,
 } from '../language/dictation-language';
-import { isYouTubeSupportedPlatform } from '../media/youtube-helper';
-import { installPinnedYouTubeHelper } from '../media/youtube-helper-installer';
 import type { ModelPickerOptions } from '../models/manage-models-modal';
 import type { ModelInstallManager } from '../models/model-install-manager';
 import {
@@ -75,7 +73,6 @@ import {
   renderTranslationSettings,
   type TranslationSettingsDependencies,
 } from './translation-settings-section';
-import { renderYouTubeHelperSettings } from './youtube-helper-settings';
 
 interface SettingsTabDependencies {
   feedback: Pick<UserFeedback, 'show'>;
@@ -566,14 +563,6 @@ export class LocalSttSettingTab extends PluginSettingTab {
         },
       },
     );
-
-    renderYouTubeHelperSettings(advancedSection, {
-      access: this.access,
-      getSettings: this.dependencies.getSettings,
-      installPinnedHelper: async () =>
-        installPinnedYouTubeHelper(await this.dependencies.resolvePluginDirectory()),
-      isPlatformSupported: isYouTubeSupportedPlatform,
-    });
 
     addToggleSetting(advancedSection, this.access, {
       name: t('settings.recoveryMemory.name'),

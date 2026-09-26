@@ -1618,30 +1618,33 @@
   padding-bottom: 0;
 }
 
-.local-stt-media-source-tabs {
-  display: flex;
-  width: max-content;
-  gap: 2px;
-  margin: 0 0 18px;
-  padding: 3px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m);
-  background: var(--background-secondary);
+.local-stt-youtube-transcript-modal {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(640px, calc(100vh - 32px));
 }
 
-.local-stt-media-source-tabs button {
-  padding: 5px 14px;
+.local-stt-youtube-transcript-modal .modal-content {
+  padding-bottom: 0;
+}
+
+.local-stt-youtube-transcript-modal .modal-content > .setting-item:first-child {
+  display: block;
+  padding: 0;
   border: 0;
-  border-radius: var(--radius-s);
-  background: transparent;
-  color: var(--text-muted);
-  box-shadow: none;
 }
 
-.local-stt-media-source-tabs button.is-active {
-  background: var(--background-primary);
-  color: var(--text-normal);
-  box-shadow: var(--shadow-s);
+.local-stt-youtube-transcript-modal
+  .modal-content
+  > .setting-item:first-child
+  .setting-item-control {
+  display: block;
+  margin-top: 8px;
+}
+
+.local-stt-youtube-transcript-url {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
 }
 
 .local-stt-media-source-hint {

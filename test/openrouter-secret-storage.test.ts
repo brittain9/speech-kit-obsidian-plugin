@@ -54,27 +54,29 @@ describe('LLM Secret Storage integration', () => {
     expect(result.shouldPersist).toBe(true);
   });
 
-  it('requests one normalized rewrite for settings schemas before version 10', () => {
+  it('requests one normalized rewrite for settings schemas before version 11', () => {
     const result = loadPluginSettings(
       { schemaVersion: 6 },
       { getSecret: () => null, setSecret: vi.fn() },
     );
 
-    expect(result.settings.schemaVersion).toBe(10);
+    expect(result.settings.schemaVersion).toBe(11);
     expect(result.shouldPersist).toBe(true);
   });
 
-  it('migrates schema 10 data that predates the media LLM opt-in', () => {
+  it('migrates schema 10 data and drops obsolete YouTube helper settings', () => {
     const result = loadPluginSettings(
       { schemaVersion: 10 },
       { getSecret: () => null, setSecret: vi.fn() },
     );
 
+    expect(result.settings.schemaVersion).toBe(11);
     expect(result.settings.mediaLlmProcessing).toBe(false);
+    expect('youtubeHelperPath' in result.settings).toBe(false);
     expect(result.shouldPersist).toBe(true);
   });
 
-  it('does not rewrite already-normalized schema 10 settings', () => {
+  it('does not rewrite already-normalized schema 11 settings', () => {
     const result = loadPluginSettings(DEFAULT_PLUGIN_SETTINGS, {
       getSecret: () => null,
       setSecret: vi.fn(),

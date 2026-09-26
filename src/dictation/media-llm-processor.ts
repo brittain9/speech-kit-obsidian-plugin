@@ -50,6 +50,7 @@ export interface MediaLlmProcessorDependencies {
   readonly router: LlmRouter;
   readonly signal: AbortSignal;
   readonly snapshot: MediaLlmSnapshot;
+  readonly transcriptText?: string;
 }
 
 /**
@@ -60,7 +61,7 @@ export async function processMediaLlm(
   session: MediaLlmEditorSession,
   dependencies: MediaLlmProcessorDependencies,
 ): Promise<{ readonly applied: boolean; readonly text: string }> {
-  const rawText = session.joinRawSessionText();
+  const rawText = dependencies.transcriptText ?? session.joinRawSessionText();
   if (rawText.trim().length === 0) {
     throw new MediaLlmProcessingError(
       'empty',

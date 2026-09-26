@@ -21,6 +21,34 @@ afterEach(() => {
 });
 
 describe('managed process runner', () => {
+  it('lets a slow stdout consumer finish after the process exits', async () => {
+    vi.useFakeTimers();
+    const child = new FakeChild();
+    child.pid = 4331;
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const spawnProcess = vi.fn(() => child) as unknown as typeof spawn;
+    let releaseConsumer!: () => void;
+    const consumer = new Promise<void>((resolve) => {
+      releaseConsumer = resolve;
+    });
+    const resultPromise = runManagedProcess(
+      '/private/helper',
+      [],
+      { platform: 'linux', shell: false, spawnProcess },
+      { closeTimeoutMs: 20, maxOutputBytes: 100, onStdoutChunk: () => consumer, timeoutMs: 1_000 },
+    );
+    child.stdout.emit('data', Buffer.from('pcm'));
+    child.emit('exit', 0);
+    await vi.advanceTimersByTimeAsync(25);
+    expect(child.stdout.resume).not.toHaveBeenCalled();
+    releaseConsumer();
+    await vi.advanceTimersByTimeAsync(0);
+    child.emit('close', 0);
+    const result = await resultPromise;
+    expect(result.failed).toBe(false);
+    expect(result.cleanupFailed).toBe(false);
+    kill.mockRestore();
+  });
   it('pauses stdout while a chunk consumer applies backpressure', async () => {
     const child = new FakeChild();
     child.pid = 4319;

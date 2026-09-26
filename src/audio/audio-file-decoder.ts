@@ -206,10 +206,9 @@ export class FfmpegAudioFileDecoder implements AudioFileDecoder {
       );
     }
     const durationSeconds =
-      parsePositiveSeconds(parsed.format?.duration) ??
       audioStreams
         .map((stream) => parsePositiveSeconds(stream.duration))
-        .find((value) => value !== null);
+        .find((value) => value !== null) ?? parsePositiveSeconds(parsed.format?.duration);
     if (durationSeconds === undefined || durationSeconds === null) {
       throw new AudioFileError('decode_failed', 'The media duration could not be determined.');
     }
@@ -295,7 +294,15 @@ export class FfmpegAudioFileDecoder implements AudioFileDecoder {
 
     if (streamError !== undefined) throw normalizeDecodeError(streamError, options.signal);
     if (result.streamError !== undefined) {
-      throw normalizeDecodeError(result.streamError, options.signal);
+      if (options.signal.aborted) throw cancellationError(options.signal);
+      if (result.streamError instanceof AudioFileError) throw result.streamError;
+      throw new AudioFileError(
+        'sidecar_failed',
+        result.streamError instanceof Error
+          ? result.streamError.message
+          : 'The speech engine stopped accepting decoded audio.',
+        { cause: result.streamError },
+      );
     }
     assertSuccessfulProcess(result, 'FFmpeg could not decode the selected media.', options.signal);
     if (durationMs > AUDIO_FILE_MAX_DURATION_MS) {
@@ -306,6 +313,14 @@ export class FfmpegAudioFileDecoder implements AudioFileDecoder {
     }
     if (frameCount === 0) {
       throw new AudioFileError('empty', 'The decoded audio is shorter than one complete frame.');
+    }
+    const decodedDurationMs = (outputBytes / 2 / PCM_SAMPLE_RATE_HZ) * 1_000;
+    const allowedShortfallMs = Math.max(10_000, durationMs * 0.05);
+    if (durationMs - decodedDurationMs > allowedShortfallMs) {
+      throw new AudioFileError(
+        'decode_failed',
+        'Decoding stopped before the end of the audio track. No transcript was inserted.',
+      );
     }
   }
 }

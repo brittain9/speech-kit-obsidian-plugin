@@ -1,7 +1,15 @@
 import { dirname, join } from 'node:path';
 import { IS_PRODUCTION_BUILD } from 'virtual:build-mode';
 import { shell } from 'electron';
-import { FileSystemAdapter, getLanguage, Menu, Platform, Plugin, setIcon } from 'obsidian';
+import {
+  FileSystemAdapter,
+  getLanguage,
+  Menu,
+  Platform,
+  Plugin,
+  requestUrl,
+  setIcon,
+} from 'obsidian';
 
 import { AudioCaptureStream } from './audio/audio-capture-stream';
 import { FfmpegAudioFileDecoder } from './audio/audio-file-decoder';
@@ -28,15 +36,7 @@ import { createConfiguredLlmRouter } from './llm/runtime';
 import { LocalMediaSource } from './media/local-media-source';
 import type { LocalMediaAcquireRequest, MediaTranscriptionEntry } from './media/media-source';
 import { getMediaTranscriptionModelOptions } from './media/media-transcription-options';
-import { youtubeMediaFailureAdapter } from './media/youtube-failure-mapper';
-import { isYouTubeSupportedPlatform, probeYtDlpVersion } from './media/youtube-helper';
-import {
-  sweepAbandonedYouTubeJobs,
-  YOUTUBE_POLICY_VERSION,
-  type YouTubeAcquisitionContext,
-  type YouTubeMediaAcquireRequest,
-  YouTubeMediaSource,
-} from './media/youtube-media-source';
+import { fetchDirectYouTubeCaptions } from './media/youtube-captions';
 import { parseYouTubeVideoUrl } from './media/youtube-url';
 import { ManageModelsModal, type ModelPickerOptions } from './models/manage-models-modal';
 import { ModelInstallManager } from './models/model-install-manager';
@@ -107,12 +107,13 @@ import { LOCAL_DICTATION_VIEW_TYPE, LocalDictationView } from './ui/local-dictat
 import { confirmMediaLlmPreview } from './ui/media-llm-preview-modal';
 import { renderMediaProgressStatus } from './ui/media-progress-presenter';
 import { MediaTranscriptionModalRegistry } from './ui/media-transcription-modal';
+import { YouTubeTranscriptModalRegistry } from './ui/youtube-transcript-modal';
 
 export default class LocalSttPlugin extends Plugin {
   private audioCaptureStream: AudioCaptureStream | null = null;
   private audioFileTranscriptionController: AudioFileTranscriptionController | null = null;
-  private youtubeMediaSource: YouTubeMediaSource | null = null;
   private readonly mediaTranscriptionModals = new MediaTranscriptionModalRegistry();
+  private readonly youtubeTranscriptModals = new YouTubeTranscriptModalRegistry();
   private audioLevelMeter: SidecarAudioLevelMeter | null = null;
   private dictationController: DictationSessionController | null = null;
   /**
@@ -167,7 +168,6 @@ export default class LocalSttPlugin extends Plugin {
       getLanguage(),
     );
     this.settings = languageSync.settings;
-    void sweepAbandonedYouTubeJobs();
     this.lastUtteranceRecovery.setEnabled(this.settings.retainLastUtterance);
     this.rawTranscriptRecovery.setEnabled(this.settings.retainLastUtterance);
     if (loadedSettings.shouldPersist || languageSync.shouldPersist) {
@@ -353,9 +353,6 @@ export default class LocalSttPlugin extends Plugin {
     const localMediaSource = new LocalMediaSource({
       pickFile: (signal) => pickLocalAudioFile(signal),
     });
-    this.youtubeMediaSource = new YouTubeMediaSource({
-      getHelperPath: () => this.settings.youtubeHelperPath,
-    });
     const localMediaEntry: MediaTranscriptionEntry<
       { readonly file: File | null },
       LocalMediaAcquireRequest
@@ -365,72 +362,30 @@ export default class LocalSttPlugin extends Plugin {
       isEnabled: () => true,
       source: localMediaSource,
     };
-    const youtubeMediaSource = this.youtubeMediaSource;
-    const youtubeMediaEntry: MediaTranscriptionEntry<
-      YouTubeAcquisitionContext,
-      YouTubeMediaAcquireRequest
-    > = {
-      createRequest: (context, request) => youtubeMediaSource.createRequest(context, request),
-      id: youtubeMediaSource.id,
-      isEnabled: () => isYouTubeSupportedPlatform() && this.settings.youtubeMediaSourceEnabled,
-      source: youtubeMediaSource,
-    };
-    const openMediaModal = (initialTab: 'file' | 'youtube'): void => {
-      this.mediaTranscriptionModals.open(
-        this.app,
-        {
-          cancel: () => this.requireAudioFileTranscriptionController().cancel(),
-          getModels: (language) =>
-            getMediaTranscriptionModelOptions(
-              this.requireModelInstallManager().getState(),
-              language,
-            ),
-          getProgress: () => this.requireAudioFileTranscriptionController().getMediaProgress(),
-          getLastError: () => this.requireAudioFileTranscriptionController().getMediaError(),
-          getSettings: () => this.settings,
-          getYouTubeHelperPath: () => this.settings.youtubeHelperPath,
-          getYouTubePolicyVersion: () => this.settings.youtubePolicyVersion,
-          isTranscribing: () => this.requireAudioFileTranscriptionController().isBusy(),
-          isYouTubeEnabled: () =>
-            isYouTubeSupportedPlatform() && this.settings.youtubeMediaSourceEnabled,
-          onManageModels: () => void this.openModelPicker(),
-          startFile: async (file, options) => {
-            const controller = this.requireAudioFileTranscriptionController();
-            if (controller.isBusy()) throw new Error(t('media.modal.alreadyRunning'));
-            controller.clearMediaError();
-            await controller.transcribeProvider(localMediaEntry, { file }, options);
-            rethrowMediaError(controller.getMediaError());
-          },
-          startYouTube: async (url, options, consent) => {
-            if (!isYouTubeSupportedPlatform() || !this.settings.youtubeMediaSourceEnabled) {
-              throw new Error(t('media.modal.youtubeDisabled'));
-            }
-            const helper = await probeYtDlpVersion(this.settings.youtubeHelperPath);
-            await this.updateSettings({
-              ...this.settings,
-              youtubePolicyVersion: YOUTUBE_POLICY_VERSION,
-            });
-            if (!this.settings.youtubeMediaSourceEnabled) return;
-            const controller = this.requireAudioFileTranscriptionController();
-            if (controller.isBusy()) throw new Error(t('media.modal.alreadyRunning'));
-            controller.clearMediaError();
-            await controller.transcribeProvider(
-              youtubeMediaEntry,
-              {
-                consent,
-                helperVersion: helper.version,
-                inputUrl: url,
-                ref: parseYouTubeVideoUrl(url),
-              },
-              options,
-            );
-            rethrowMediaError(controller.getMediaError());
-          },
-          subscribeProgress: (listener) =>
-            this.requireAudioFileTranscriptionController().subscribeMediaProgress(listener),
+    const openAudioFileModal = (): void => {
+      this.mediaTranscriptionModals.open(this.app, {
+        cancel: () => this.requireAudioFileTranscriptionController().cancel(),
+        getModels: (language) =>
+          getMediaTranscriptionModelOptions(this.requireModelInstallManager().getState(), language),
+        getProgress: () => this.requireAudioFileTranscriptionController().getMediaProgress(),
+        getLastError: () => this.requireAudioFileTranscriptionController().getMediaError(),
+        getPartialTranscript: () =>
+          this.requireAudioFileTranscriptionController().getPartialTranscript(),
+        insertPartialTranscript: () =>
+          this.requireAudioFileTranscriptionController().insertPartialTranscript(),
+        getSettings: () => this.settings,
+        isTranscribing: () => this.requireAudioFileTranscriptionController().isBusy(),
+        onManageModels: () => void this.openModelPicker(),
+        startFile: async (file, options) => {
+          const controller = this.requireAudioFileTranscriptionController();
+          if (controller.isBusy()) throw new Error(t('media.modal.alreadyRunning'));
+          controller.clearMediaError();
+          await controller.transcribeProvider(localMediaEntry, { file }, options);
+          rethrowMediaError(controller.getMediaError());
         },
-        initialTab,
-      );
+        subscribeProgress: (listener) =>
+          this.requireAudioFileTranscriptionController().subscribeMediaProgress(listener),
+      });
     };
     this.audioFileTranscriptionController = new AudioFileTranscriptionController({
       backpressureTimeoutMs: 30_000,
@@ -438,7 +393,6 @@ export default class LocalSttPlugin extends Plugin {
       createLlmRouter: (settings) =>
         createConfiguredLlmRouter(settings, (secretId) => this.getSecret(secretId)),
       mediaEntry: localMediaEntry,
-      mediaFailureAdapters: [youtubeMediaFailureAdapter],
       createSession: ({ callbacks, placement, rendererOptions, sessionId, target }) =>
         Session.createFromTarget(this.app, target, {
           callbacks,
@@ -465,6 +419,17 @@ export default class LocalSttPlugin extends Plugin {
         logger: this.logger,
       }),
       feedback: this.feedback,
+      fetchYouTubeCaptions: async (context, language, signal) => {
+        const http = {
+          request: async (input: {
+            url: string;
+            method: 'GET' | 'POST';
+            headers?: Record<string, string>;
+            body?: string;
+          }) => (await requestUrl(input)).text,
+        };
+        return await fetchDirectYouTubeCaptions(context, language, http, signal);
+      },
       getModelCapabilities: () =>
         this.requireModelInstallManager().getState().selectedModelCapabilities,
       getMediaTranscriptionModels: (language) =>
@@ -566,8 +531,6 @@ export default class LocalSttPlugin extends Plugin {
       hasRawTranscriptRecovery: () => this.rawTranscriptRecovery.hasRecovery(),
       isAudioFileTranscriptionActive: () =>
         this.audioFileTranscriptionController?.isCaptureActive() ?? false,
-      isYouTubeMediaSourceEnabled: () => this.settings.youtubeMediaSourceEnabled,
-      isYouTubePlatformSupported: isYouTubeSupportedPlatform,
       isReadAloudActive: () => this.requireReadAloudController().isActive(),
       plugin: this,
       readAloud: (editor) => this.requireReadAloudController().read(editor),
@@ -583,10 +546,32 @@ export default class LocalSttPlugin extends Plugin {
       startDictation: async () => this.requireDictationController().startDictation(),
       stopReadAloud: () => this.requireReadAloudController().stop(),
       stopDictation: async () => this.requireDictationController().stopDictation(),
-      transcribeAudioFile: async () => openMediaModal('file'),
+      transcribeAudioFile: async () => openAudioFileModal(),
       transcribeYouTube: async () => {
-        if (!isYouTubeSupportedPlatform() || !this.settings.youtubeMediaSourceEnabled) return;
-        openMediaModal('youtube');
+        this.youtubeTranscriptModals.open(this.app, {
+          cancel: () =>
+            this.requireAudioFileTranscriptionController().cancelProvider('youtube_captions'),
+          getProgress: () => this.requireAudioFileTranscriptionController().getMediaProgress(),
+          getPartialTranscript: () =>
+            this.requireAudioFileTranscriptionController().getPartialTranscript(),
+          getResultSource: () => {
+            const source =
+              this.requireAudioFileTranscriptionController().getLastMediaResultSource();
+            return source === 'local_audio' ? null : source;
+          },
+          getAiOutcome: () =>
+            this.requireAudioFileTranscriptionController().getLastMediaAiOutcome(),
+          getSettings: () => this.settings,
+          isBusy: () => this.requireAudioFileTranscriptionController().isBusy(),
+          insertPartialTranscript: () =>
+            this.requireAudioFileTranscriptionController().insertPartialTranscript(),
+          start: async (url, options) => {
+            const controller = this.requireAudioFileTranscriptionController();
+            await controller.transcribeYouTubeCaptions(parseYouTubeVideoUrl(url), options);
+          },
+          subscribeProgress: (listener) =>
+            this.requireAudioFileTranscriptionController().subscribeMediaProgress(listener),
+        });
       },
       translateNote: (editor) => this.requireTranslationController().translateNote(editor),
       translateSelection: (editor) =>
@@ -785,7 +770,7 @@ export default class LocalSttPlugin extends Plugin {
 
   private async disposeAll(): Promise<void> {
     this.mediaTranscriptionModals.closeAll();
-    this.youtubeMediaSource?.cancel();
+    this.youtubeTranscriptModals.closeAll();
     this.finalizedUtteranceAutoCopy.dispose();
     this.lastUtteranceRecovery.clear();
     this.rawTranscriptRecovery.clear();
@@ -938,12 +923,6 @@ export default class LocalSttPlugin extends Plugin {
   ): Promise<void> {
     const previousSettings = this.settings;
     this.settings = resolvePluginSettings(nextSettings);
-    const youtubeWasDisabled =
-      previousSettings.youtubeMediaSourceEnabled && !this.settings.youtubeMediaSourceEnabled;
-    if (youtubeWasDisabled) {
-      this.youtubeMediaSource?.cancel();
-      void this.audioFileTranscriptionController?.cancelProvider('youtube_yt_dlp');
-    }
     const llmWasDisabled = previousSettings.llmFeaturesEnabled && !this.settings.llmFeaturesEnabled;
     if (llmWasDisabled) {
       this.dictationController?.disableLlmForActiveSessions();

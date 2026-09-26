@@ -54,7 +54,7 @@ describe('resolvePluginSettings', () => {
   });
 
   it('defaults missing schemaVersion to the current settings schema', () => {
-    expect(resolvePluginSettings({}).schemaVersion).toBe(10);
+    expect(resolvePluginSettings({}).schemaVersion).toBe(11);
   });
 
   it('defaults and normalizes HY-MT2 translation styles', () => {
@@ -186,7 +186,7 @@ describe('resolvePluginSettings', () => {
     expect(
       resolvePluginSettings({ autoCopyFinalizedUtterances: 'yes' }).autoCopyFinalizedUtterances,
     ).toBe(false);
-    expect(resolvePluginSettings({ autoCopyFinalizedUtterances: true }).schemaVersion).toBe(10);
+    expect(resolvePluginSettings({ autoCopyFinalizedUtterances: true }).schemaVersion).toBe(11);
   });
 
   it('migrates legacy speaker label setting to diarization', () => {

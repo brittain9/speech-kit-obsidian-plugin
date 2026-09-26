@@ -54,4 +54,23 @@ describe('AudioFileBackpressureGate', () => {
       vi.useRealTimers();
     }
   });
+
+  it('allows a batch worker more than 30 seconds to drain without aborting the source', async () => {
+    vi.useFakeTimers();
+    try {
+      const gate = new AudioFileBackpressureGate(null);
+      gate.update('falling_behind');
+      let resumed = false;
+      const waiting = gate.waitUntilNormal(new AbortController().signal).then(() => {
+        resumed = true;
+      });
+      await vi.advanceTimersByTimeAsync(31_000);
+      expect(resumed).toBe(false);
+      gate.update('normal');
+      await waiting;
+      expect(resumed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

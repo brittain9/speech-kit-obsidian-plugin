@@ -1,0 +1,417 @@
+import { type App, type ButtonComponent, Modal, Setting } from 'obsidian';
+import type { MediaLlmRunOutcome } from '../dictation/media-llm-coordinator';
+import { DICTATION_LANGUAGE_OPTIONS, type DictationLanguage } from '../language/dictation-language';
+import { describeMediaLlmConfiguration } from '../llm/media-llm-policy';
+import { listPresetEntries, resolvePresetEntry } from '../llm/presets';
+import { resolveLlmTransformSnapshot } from '../llm/transform-policy';
+import type { MediaTranscriptionProgress } from '../media/media-source';
+import type { MediaTranscriptionJobOptions } from '../media/media-transcription-options';
+import { CaptionAcquisitionError } from '../media/youtube-captions';
+import { parseYouTubeVideoUrl } from '../media/youtube-url';
+import type {
+  PluginSettings,
+  TimestampDensity,
+  TranscriptFormattingMode,
+} from '../settings/plugin-settings';
+import { validateTimestampIntervalSeconds } from '../settings/plugin-settings';
+import { t } from '../shared/i18n';
+import { mediaProgressText } from './media-progress-presenter';
+
+export interface YouTubeTranscriptModalDependencies {
+  readonly cancel: () => Promise<void>;
+  readonly getProgress: () => MediaTranscriptionProgress | null;
+  readonly getPartialTranscript: () => string | null;
+  readonly getResultSource: () => 'creator_captions' | 'automatic_captions' | null;
+  readonly getAiOutcome: () => MediaLlmRunOutcome | null;
+  readonly getSettings: () => PluginSettings;
+  readonly insertPartialTranscript: () => boolean;
+  readonly isBusy: () => boolean;
+  readonly start: (url: string, options: MediaTranscriptionJobOptions) => Promise<void>;
+  readonly subscribeProgress: (
+    listener: (progress: MediaTranscriptionProgress | null) => void,
+  ) => () => void;
+}
+
+export class YouTubeTranscriptModalRegistry {
+  private modal: YouTubeTranscriptModal | null = null;
+
+  open(app: App, dependencies: YouTubeTranscriptModalDependencies): void {
+    if (this.modal !== null) return;
+    const modal = new YouTubeTranscriptModal(app, dependencies, () => {
+      if (this.modal === modal) this.modal = null;
+    });
+    this.modal = modal;
+    modal.open();
+  }
+
+  closeAll(): void {
+    this.modal?.close();
+    this.modal = null;
+  }
+}
+
+class YouTubeTranscriptModal extends Modal {
+  private readonly releaseProgress: () => void;
+  private url = '';
+  private language: DictationLanguage;
+  private timestampsEnabled: boolean;
+  private timestampDensity: TimestampDensity;
+  private timestampSparseIntervalSeconds: string;
+  private transcriptFormatting: TranscriptFormattingMode;
+  private mediaPresetRef: string | null;
+  private optionsExpanded = false;
+  private busy = false;
+  private completedUrl: string | null = null;
+  private cancelRequested = false;
+  private progressRowEl: HTMLElement | null = null;
+  private progressEl: HTMLElement | null = null;
+  private spinnerEl: HTMLElement | null = null;
+  private errorEl: HTMLElement | null = null;
+  private partialEl: HTMLElement | null = null;
+  private primaryButton: ButtonComponent | null = null;
+  private closeButton: ButtonComponent | null = null;
+
+  constructor(
+    app: App,
+    private readonly dependencies: YouTubeTranscriptModalDependencies,
+    private readonly onClosed: () => void,
+  ) {
+    super(app);
+    const settings = dependencies.getSettings();
+    this.language = settings.dictationLanguage;
+    this.timestampsEnabled = settings.timestampsEnabled;
+    this.timestampDensity =
+      settings.timestampDensity === 'paragraph' && settings.transcriptFormatting !== 'smart'
+        ? 'sparse'
+        : settings.timestampDensity;
+    this.timestampSparseIntervalSeconds = String(settings.timestampSparseIntervalMs / 1_000);
+    this.transcriptFormatting = settings.transcriptFormatting;
+    this.mediaPresetRef = settings.mediaLlmProcessing
+      ? settings.llmPostprocessActivePresetRef
+      : null;
+    this.releaseProgress = dependencies.subscribeProgress((progress) =>
+      this.renderProgress(progress),
+    );
+  }
+
+  override onOpen(): void {
+    this.modalEl.addClass('local-stt-youtube-transcript-modal');
+    this.setTitle(t('youtube.modal.title'));
+    this.render();
+  }
+
+  override onClose(): void {
+    this.releaseProgress();
+    if (this.busy) void this.dependencies.cancel();
+    this.contentEl.empty();
+    this.onClosed();
+  }
+
+  private render(): void {
+    this.contentEl.empty();
+    this.primaryButton = null;
+    this.closeButton = null;
+
+    new Setting(this.contentEl).setName(t('youtube.modal.urlName')).addText((text) => {
+      text.setPlaceholder(t('youtube.modal.urlPlaceholder')).setValue(this.url);
+      text.inputEl.addClass('local-stt-youtube-transcript-url');
+      text.onChange((value) => {
+        this.url = value;
+        if (this.completedUrl !== value.trim()) this.completedUrl = null;
+        this.updatePrimaryButton();
+      });
+    });
+    this.contentEl.createEl('p', {
+      text: t('youtube.modal.captionDescription'),
+      cls: 'local-stt-media-source-hint',
+    });
+    this.renderAiPreset();
+    this.renderOptions();
+
+    const progressRow = this.contentEl.createDiv({ cls: 'local-stt-media-progress' });
+    this.progressRowEl = progressRow;
+    this.spinnerEl = progressRow.createSpan({
+      cls: 'local-stt-media-spinner',
+      attr: { 'aria-hidden': 'true' },
+    });
+    this.progressEl = progressRow.createSpan({
+      cls: 'local-stt-media-progress-text',
+      attr: { role: 'status', 'aria-live': 'polite' },
+    });
+    this.errorEl = this.contentEl.createDiv({
+      cls: 'local-stt-media-error',
+      attr: { role: 'alert' },
+    });
+    this.partialEl = this.contentEl.createDiv({ cls: 'local-stt-media-partial-actions' });
+    this.renderProgress(this.dependencies.getProgress());
+
+    const footer = this.contentEl.createDiv({ cls: 'local-stt-media-footer' });
+    const actions = new Setting(footer);
+    actions.addButton((button) => {
+      this.closeButton = button;
+      button.setButtonText(t('common.close')).onClick(() => this.close());
+    });
+    actions.addButton((button) => {
+      this.primaryButton = button;
+      button
+        .setButtonText(t('media.modal.start'))
+        .setCta()
+        .onClick(() => {
+          if (this.busy) void this.cancelJob();
+          else void this.startJob();
+        });
+    });
+    this.updatePrimaryButton();
+  }
+
+  private renderAiPreset(): void {
+    const settings = this.dependencies.getSettings();
+    const presets = listPresetEntries(settings.llmPostprocessUserPresets);
+    if (
+      this.mediaPresetRef !== null &&
+      !presets.some((entry) => entry.ref === this.mediaPresetRef)
+    ) {
+      this.mediaPresetRef = null;
+    }
+    new Setting(this.contentEl)
+      .setName(t('media.modal.aiPreset'))
+      .setDesc(t('media.modal.aiPresetDesc'))
+      .addDropdown((dropdown) => {
+        dropdown.addOption('', t('media.modal.aiPresetNone'));
+        for (const entry of presets) dropdown.addOption(entry.ref, entry.preset.label);
+        dropdown.setValue(this.mediaPresetRef ?? '');
+        dropdown.onChange((value) => {
+          this.mediaPresetRef = value || null;
+          this.render();
+        });
+      });
+    if (this.mediaPresetRef !== null) {
+      this.contentEl.createEl('p', {
+        text: describeMediaLlmConfiguration({
+          ...settings,
+          llmPostprocessActivePresetRef: this.mediaPresetRef,
+        }),
+        cls: 'local-stt-media-source-hint',
+      });
+    }
+  }
+
+  private renderOptions(): void {
+    const section = this.contentEl.createEl('details', { cls: 'local-stt-media-options' });
+    section.open = this.optionsExpanded;
+    section.addEventListener('toggle', () => {
+      this.optionsExpanded = section.open;
+    });
+    section.createEl('summary', { text: t('media.modal.optionsTitle') });
+    const grid = section.createDiv({ cls: 'local-stt-media-options-grid' });
+
+    new Setting(grid).setName(t('media.modal.language')).addDropdown((dropdown) => {
+      for (const option of DICTATION_LANGUAGE_OPTIONS)
+        dropdown.addOption(option.value, option.label);
+      dropdown.setValue(this.language).onChange((value) => {
+        this.language = value as DictationLanguage;
+        this.optionsExpanded = true;
+      });
+    });
+    new Setting(grid).setName(t('settings.timestamps.enable.name')).addToggle((toggle) => {
+      toggle.setValue(this.timestampsEnabled).onChange((value) => {
+        this.timestampsEnabled = value;
+        this.optionsExpanded = true;
+        this.render();
+      });
+    });
+    if (this.timestampsEnabled) {
+      new Setting(grid).setName(t('settings.timestamps.frequency.name')).addDropdown((dropdown) => {
+        dropdown.addOption('sparse', t('settings.timestamps.frequency.atIntervals'));
+        dropdown.addOption('every_utterance', t('settings.timestamps.frequency.everyPhrase'));
+        if (this.transcriptFormatting === 'smart') {
+          dropdown.addOption('paragraph', t('settings.timestamps.frequency.atParagraphBreaks'));
+        }
+        dropdown.setValue(this.timestampDensity).onChange((value) => {
+          this.timestampDensity = value as TimestampDensity;
+          this.optionsExpanded = true;
+          this.render();
+        });
+      });
+      if (this.timestampDensity === 'sparse') {
+        new Setting(grid)
+          .setName(t('settings.timestamps.interval.name'))
+          .setDesc(t('settings.timestamps.interval.desc', { min: 10, max: 600 }))
+          .addText((text) => {
+            text.inputEl.type = 'number';
+            text.inputEl.min = '10';
+            text.inputEl.max = '600';
+            text.inputEl.step = '1';
+            text.setValue(this.timestampSparseIntervalSeconds);
+            text.onChange((value) => {
+              this.timestampSparseIntervalSeconds = value;
+            });
+          });
+      }
+    }
+    new Setting(grid).setName(t('settings.transcriptFormatting.name')).addDropdown((dropdown) => {
+      dropdown.addOption('smart', t('settings.transcriptFormatting.smartParagraphs'));
+      dropdown.addOption('space', t('settings.transcriptFormatting.space'));
+      dropdown.addOption('new_line', t('settings.transcriptFormatting.newLine'));
+      dropdown.addOption('new_paragraph', t('settings.transcriptFormatting.newParagraph'));
+      dropdown.setValue(this.transcriptFormatting).onChange((value) => {
+        this.transcriptFormatting = value as TranscriptFormattingMode;
+        if (this.transcriptFormatting !== 'smart' && this.timestampDensity === 'paragraph') {
+          this.timestampDensity = 'sparse';
+        }
+        this.optionsExpanded = true;
+        this.render();
+      });
+    });
+  }
+
+  private updatePrimaryButton(): void {
+    const blocker = this.busy ? null : this.startBlocker();
+    this.primaryButton?.setButtonText(
+      this.busy
+        ? t('media.modal.cancelJob')
+        : this.completedUrl === this.url.trim()
+          ? t('youtube.modal.alreadyAdded')
+          : t('media.modal.start'),
+    );
+    this.primaryButton?.setDisabled(
+      this.cancelRequested || blocker !== null || this.completedUrl === this.url.trim(),
+    );
+    this.closeButton?.buttonEl.toggle(!this.busy);
+    this.spinnerEl?.toggle(this.busy && !this.cancelRequested);
+  }
+
+  private startBlocker(): string | null {
+    if (this.dependencies.isBusy()) return t('media.modal.alreadyRunning');
+    if (this.url.trim().length === 0) return t('youtube.modal.enterUrl');
+    try {
+      parseYouTubeVideoUrl(this.url);
+    } catch {
+      return t('media.modal.invalidYouTubeUrl');
+    }
+    if (this.mediaPresetRef !== null && this.dependencies.getSettings().llmRoutingPolicy === null) {
+      return t('media.modal.aiProviderRequired');
+    }
+    if (this.timestampsEnabled && this.timestampDensity === 'sparse') {
+      const interval = validateTimestampIntervalSeconds(this.timestampSparseIntervalSeconds);
+      if (!interval.valid) return interval.message;
+    }
+    return null;
+  }
+
+  private renderProgress(progress: MediaTranscriptionProgress | null): void {
+    if (this.progressEl === null) return;
+    const message =
+      progress === null
+        ? this.busy
+          ? t('media.progress.captions')
+          : ''
+        : mediaProgressText(progress);
+    this.progressEl.setText(message);
+    this.progressRowEl?.toggle(message.length > 0 || this.busy);
+    this.updatePrimaryButton();
+  }
+
+  private async startJob(): Promise<void> {
+    const blocker = this.startBlocker();
+    if (blocker !== null) {
+      this.errorEl?.setText(blocker);
+      return;
+    }
+    const settings = this.dependencies.getSettings();
+    const preset = resolvePresetEntry(this.mediaPresetRef, settings.llmPostprocessUserPresets);
+    if (this.mediaPresetRef !== null && preset === null) {
+      this.errorEl?.setText(t('media.modal.aiPresetMissing'));
+      return;
+    }
+    const interval = validateTimestampIntervalSeconds(this.timestampSparseIntervalSeconds);
+    const options: MediaTranscriptionJobOptions = {
+      diarizationEnabled: false,
+      language: this.language,
+      timestampDensity: this.timestampDensity,
+      timestampSparseIntervalMs: interval.valid
+        ? interval.milliseconds
+        : settings.timestampSparseIntervalMs,
+      timestampsEnabled: this.timestampsEnabled,
+      transcriptFormatting: this.transcriptFormatting,
+      mediaLlmSnapshot:
+        preset === null
+          ? null
+          : resolveLlmTransformSnapshot({
+              ...settings,
+              llmPostprocessActivePresetRef: preset.ref,
+            }),
+    };
+    this.busy = true;
+    this.cancelRequested = false;
+    this.errorEl?.setText('');
+    this.updatePrimaryButton();
+    this.renderProgress(this.dependencies.getProgress());
+    try {
+      await this.dependencies.start(this.url.trim(), options);
+      this.completedUrl = this.url.trim();
+      const source = this.dependencies.getResultSource();
+      const aiOutcome = this.dependencies.getAiOutcome();
+      this.progressEl?.setText(
+        source === 'creator_captions'
+          ? t('youtube.modal.completedCreatorCaptions')
+          : t('youtube.modal.completedAutomaticCaptions'),
+      );
+      this.progressEl?.toggle(true);
+      if (aiOutcome === 'failed' || aiOutcome === 'cancelled') {
+        this.errorEl?.setText(t('youtube.modal.aiCouldNotFinish'));
+      }
+    } catch (error) {
+      if (!this.cancelRequested) {
+        const detail = errorMessage(error);
+        this.errorEl?.setText(
+          this.dependencies.getResultSource() === null
+            ? detail
+            : t('youtube.modal.aiFailedRawKept', { reason: detail }),
+        );
+        this.renderPartialRecovery();
+      }
+    } finally {
+      this.busy = false;
+      this.cancelRequested = false;
+      this.updatePrimaryButton();
+    }
+  }
+
+  private async cancelJob(): Promise<void> {
+    this.cancelRequested = true;
+    this.updatePrimaryButton();
+    await this.dependencies.cancel();
+    this.busy = false;
+    this.progressEl?.setText(t('media.modal.cancelled'));
+    this.progressEl?.toggle(true);
+    this.renderPartialRecovery();
+    this.updatePrimaryButton();
+  }
+
+  private renderPartialRecovery(): void {
+    this.partialEl?.empty();
+    const partial = this.dependencies.getPartialTranscript();
+    if (partial === null || this.partialEl === null) return;
+    this.partialEl.createEl('p', { text: t('media.modal.partialAvailable') });
+    this.partialEl
+      .createEl('button', { text: t('media.modal.copyPartial') })
+      .addEventListener('click', () => {
+        void navigator.clipboard.writeText(partial);
+      });
+    this.partialEl
+      .createEl('button', { text: t('media.modal.insertPartial') })
+      .addEventListener('click', () => {
+        if (this.dependencies.insertPartialTranscript()) this.partialEl?.empty();
+        else this.errorEl?.setText(t('media.modal.partialTargetChanged'));
+      });
+  }
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof CaptionAcquisitionError && error.availableLanguages.length > 0) {
+    return `${error.message} Available: ${error.availableLanguages.join(', ')}`;
+  }
+  if (error instanceof Error && error.message.length > 0) return error.message;
+  return t('media.modal.unknownFailure');
+}
