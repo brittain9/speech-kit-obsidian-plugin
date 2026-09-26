@@ -248,20 +248,27 @@ class YouTubeTranscriptModal extends Modal {
           });
       }
     }
-    new Setting(grid).setName(t('settings.transcriptFormatting.name')).addDropdown((dropdown) => {
-      dropdown.addOption('smart', t('settings.transcriptFormatting.smartParagraphs'));
-      dropdown.addOption('space', t('settings.transcriptFormatting.space'));
-      dropdown.addOption('new_line', t('settings.transcriptFormatting.newLine'));
-      dropdown.addOption('new_paragraph', t('settings.transcriptFormatting.newParagraph'));
-      dropdown.setValue(this.transcriptFormatting).onChange((value) => {
-        this.transcriptFormatting = value as TranscriptFormattingMode;
-        if (this.transcriptFormatting !== 'smart' && this.timestampDensity === 'paragraph') {
-          this.timestampDensity = 'sparse';
-        }
-        this.optionsExpanded = true;
-        this.render();
+    new Setting(grid)
+      .setName(t('settings.transcriptFormatting.name'))
+      .setDesc(
+        this.transcriptFormatting === 'smart'
+          ? t('youtube.modal.smartParagraphDesc')
+          : t('settings.transcriptFormatting.desc'),
+      )
+      .addDropdown((dropdown) => {
+        dropdown.addOption('smart', t('settings.transcriptFormatting.smartParagraphs'));
+        dropdown.addOption('space', t('settings.transcriptFormatting.space'));
+        dropdown.addOption('new_line', t('settings.transcriptFormatting.newLine'));
+        dropdown.addOption('new_paragraph', t('settings.transcriptFormatting.newParagraph'));
+        dropdown.setValue(this.transcriptFormatting).onChange((value) => {
+          this.transcriptFormatting = value as TranscriptFormattingMode;
+          if (this.transcriptFormatting !== 'smart' && this.timestampDensity === 'paragraph') {
+            this.timestampDensity = 'sparse';
+          }
+          this.optionsExpanded = true;
+          this.render();
+        });
       });
-    });
   }
 
   private updatePrimaryButton(): void {

@@ -55,6 +55,8 @@ export const en = {
   'youtube.modal.title': 'Get YouTube transcript',
   'youtube.modal.captionDescription':
     'Fetches the video’s available captions and adds the transcript to the active note. No video download or speech model is needed.',
+  'youtube.modal.smartParagraphDesc':
+    'Break at pauses and sentence endings. Continuous captions form paragraphs of roughly 1,200–1,800 characters.',
   'youtube.modal.urlName': 'YouTube link',
   'youtube.modal.urlPlaceholder': 'https://www.youtube.com/watch?v=…',
   'youtube.modal.enterUrl': 'Paste a YouTube video link to continue.',
