@@ -283,7 +283,7 @@ export function parseJson3Captions(payload: string): CaptionCue[] {
     if (cues.at(-1) !== undefined && startMs < (cues.at(-1)?.startMs ?? 0)) {
       throw new Error('Caption cues are out of order.');
     }
-    appendCue(cues, { startMs, endMs, text, speaker: null });
+    appendCue(cues, { startMs, endMs, text: normalizeCaptionSpeechMarkers(text), speaker: null });
   }
   if (cues.length === 0) throw new Error('The caption response contained no timed text.');
   return cues;
@@ -324,14 +324,21 @@ export function parseVttCaptions(payload: string): CaptionCue[] {
       .replace(/\s+/gu, ' ')
       .trim();
     if (text.length === 0) continue;
+    const normalizedText = normalizeCaptionSpeechMarkers(text);
     appendCue(cues, {
       startMs,
       endMs,
-      text: speaker === null ? text : `${speaker}: ${text}`,
+      text: speaker === null ? normalizedText : `${speaker}: ${normalizedText}`,
       speaker,
     });
   }
   return cues;
+}
+
+function normalizeCaptionSpeechMarkers(text: string): string {
+  // Automatic captions use >> for a speaker turn. At the start of a Markdown
+  // paragraph that becomes a nested blockquote, so render a neutral dash.
+  return text.replace(/(^|\s)>>(?=\s|$)/gu, '$1—');
 }
 
 function decodeCaptionEntities(text: string): string {

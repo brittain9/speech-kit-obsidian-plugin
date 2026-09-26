@@ -91,6 +91,18 @@ describe('YouTube captions', () => {
     expect(cues.map(({ text }) => text)).toEqual(['Yes, exactly', 'Yes, exactly']);
   });
 
+  it('renders automatic speaker-turn markers as plain transcript punctuation', () => {
+    const cues = parseJson3Captions(
+      JSON.stringify({
+        events: [{ tStartMs: 0, dDurationMs: 800, segs: [{ utf8: '>> Hello >> world' }] }],
+      }),
+    );
+    expect(cues[0]?.text).toBe('— Hello — world');
+    expect(parseVttCaptions('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n>> Hi')).toMatchObject([
+      { text: '— Hi', speaker: null },
+    ]);
+  });
+
   it('drops an identical cue with the same timing while retaining later speech', () => {
     const cues = parseJson3Captions(
       JSON.stringify({
