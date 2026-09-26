@@ -656,7 +656,10 @@ export class AudioFileTranscriptionController {
     this.revalidateTarget(target, signal);
     const settings = this.dependencies.getSettings();
     const sessionId = randomUUID();
-    const rendererOptions = createRendererOptions(settings, Date.now(), options);
+    const rendererOptions = {
+      ...createRendererOptions(settings, Date.now(), options),
+      maxSmartParagraphChars: 1_200,
+    };
     const session = this.dependencies.createSession({
       callbacks: {
         onLockedNoteClosed: () => {},

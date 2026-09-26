@@ -493,6 +493,9 @@ describe('AudioFileTranscriptionController', () => {
     expect(harness.sessions[0]?.accepted[0]?.text).toContain('Caption 0');
     expect(harness.sessions[0]?.accepted[0]?.text).toContain('Caption 2500');
     expect(harness.sessions[0]?.accepted[0]?.text).toContain('Final words');
+    const paragraphs = harness.sessions[0]?.accepted[0]?.text.split('\n\n') ?? [];
+    expect(paragraphs.length).toBeGreaterThan(20);
+    expect(Math.max(...paragraphs.map((paragraph) => paragraph.length))).toBeLessThan(2_000);
   });
 
   it('cancels caption retrieval cleanly without inserting into the note', async () => {

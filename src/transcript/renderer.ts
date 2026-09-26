@@ -16,6 +16,8 @@ const DEFAULT_SMART_PARAGRAPH_PAUSES: SmartParagraphPauseSettings = {
 };
 
 export interface TranscriptRenderOptions {
+  /** Optional length cap for smart paragraphs when a source has no meaningful pauses. */
+  readonly maxSmartParagraphChars?: number;
   readonly smartParagraphPauses?: SmartParagraphPauseSettings;
   readonly timestamps: TranscriptTimestampRenderOptions;
   readonly transcriptFormatting: TranscriptFormattingMode;
@@ -64,6 +66,7 @@ export interface TranscriptInsertProjection {
 
 export class TranscriptRenderer {
   private hasRenderedText = false;
+  private currentParagraphChars = 0;
   private lastRenderedSpeakerIndex: number | null = null;
   private lastTimestampMsInSession: number | null = null;
   private readonly smartParagraphPauses: SmartParagraphPauseSettings;
@@ -81,7 +84,7 @@ export class TranscriptRenderer {
     const sessionHeader = this.shouldEmitSessionHeader()
       ? `${formatSessionHeader(this.options.timestamps.sessionStartUnixMs)}\n`
       : '';
-    const emittedTimestamp = this.shouldEmitTimestamp(input)
+    const emittedTimestamp = this.shouldEmitTimestamp(input, boundary)
       ? {
           elapsedMs: input.utteranceStartMsInSession,
           text: formatLandmark(
@@ -146,6 +149,11 @@ export class TranscriptRenderer {
 
   commitAppend(projection: TranscriptInsertProjection): void {
     this.hasRenderedText = true;
+    const lastParagraphBreak = projection.projectedText.lastIndexOf('\n\n');
+    this.currentParagraphChars =
+      lastParagraphBreak >= 0
+        ? projection.projectedText.length - lastParagraphBreak - 2
+        : this.currentParagraphChars + projection.projectedText.length;
 
     if (projection.emittedTimestamp !== null) {
       this.lastTimestampMsInSession = projection.emittedTimestamp.elapsedMs;
@@ -165,7 +173,7 @@ export class TranscriptRenderer {
       return spaceIfTailAbutsText(context.tailContent);
     }
 
-    switch (this.resolveFormattingMode(input.pauseMsBeforeUtterance)) {
+    switch (this.resolveFormattingMode(input.pauseMsBeforeUtterance, context.tailContent)) {
       case 'space':
         return spaceIfTailAbutsText(context.tailContent);
       case 'new_line':
@@ -177,6 +185,7 @@ export class TranscriptRenderer {
 
   private resolveFormattingMode(
     pauseMsBeforeUtterance: number | null,
+    tailContent = '',
   ): Exclude<TranscriptFormattingMode, 'smart'> {
     if (this.options.transcriptFormatting !== 'smart') {
       return this.options.transcriptFormatting;
@@ -186,6 +195,14 @@ export class TranscriptRenderer {
       pauseMsBeforeUtterance === null ||
       pauseMsBeforeUtterance < this.smartParagraphPauses.lineBreakPauseMs
     ) {
+      const limit = this.options.maxSmartParagraphChars;
+      if (
+        limit !== undefined &&
+        (this.currentParagraphChars >= limit * 1.5 ||
+          (this.currentParagraphChars >= limit && /[.!?]["'”’)?\]]?\s*$/u.test(tailContent)))
+      ) {
+        return 'new_paragraph';
+      }
       return 'space';
     }
 
@@ -196,7 +213,7 @@ export class TranscriptRenderer {
     return 'new_paragraph';
   }
 
-  private shouldEmitTimestamp(input: TranscriptAppendInput): boolean {
+  private shouldEmitTimestamp(input: TranscriptAppendInput, boundary: string): boolean {
     if (!this.options.timestamps.enabled) {
       return false;
     }
@@ -212,10 +229,7 @@ export class TranscriptRenderer {
         return true;
       }
 
-      return (
-        this.options.transcriptFormatting === 'smart' &&
-        this.resolveFormattingMode(input.pauseMsBeforeUtterance) === 'new_paragraph'
-      );
+      return this.options.transcriptFormatting === 'smart' && boundary.includes('\n\n');
     }
 
     if (this.lastTimestampMsInSession === null) {
