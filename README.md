@@ -46,9 +46,11 @@ The setup wizard installs the native engine and your first speech model. From th
 
 **Dictate.** Streaming words appear and revise in place while you speak. Finished text lands as Markdown at your cursor. Switch to a batch model when accuracy after each pause matters more than immediacy.
 
-**Transcribe.** Run **Transcribe local audio file** to decode a local recording with your selected batch speech model and insert its transcript into the current note. Or combine your microphone with system audio to capture meetings, calls, interviews, and videos. Add timestamps and optional on-device speaker labels.
+**Transcribe files.** Run **Transcribe local audio file** to turn an audio or video recording into text in the current note. Speech Kit extracts the audio with its media decoder and transcribes it with an installed batch speech model. Choose a language, model, timestamps, speaker labels, and paragraph style for that job. Your media stays on your computer.
 
-Audio-file input is accepted only when the running Obsidian desktop runtime can decode its actual container and codec; this is not a fixed extension promise. To keep whole-buffer Web Audio decoding safe, encoded files are limited to 64 MiB, decoded audio to 192 MiB and 30 minutes (or the selected model's shorter limit). See [the local audio-file workflow](docs/system-architecture.md#local-audio-file-workflow). Audio files are read locally and sent only to the local speech sidecar; they are never uploaded.
+**Import YouTube captions.** Run **Transcribe YouTube video**, paste a video link, and add its available captions to the current note. Choose the caption language and optional linked timestamps. This fast path needs an internet connection, but no speech model or video download. Videos without usable captions leave the note unchanged.
+
+Both commands can optionally run one of your AI presets on the complete transcript. AI is separate from transcription; if you choose a remote provider, transcript text is sent to that provider. See the [media transcription guide](docs/guides/media-transcription.md) for setup and options.
 
 **Translate.** Translate a selection or a whole note between English and seven other languages. Preview the result before replacing your text, inserting it into the note, or copying it. One local model pack covers every supported direction.
 
@@ -74,7 +76,7 @@ Choose your platform. Choose your models. Keep one workflow inside Obsidian.
 2. Follow the setup wizard to install the native engine and a speech model.
 3. Select **Try dictation now**, or start from the ribbon, command palette, or a hotkey.
 
-Dictation, transcription, translation, and read aloud require no account, API key, usage credits, or cloud service. Once their models are installed, they continue working offline.
+Dictation, local file transcription, translation, and read aloud require no account, API key, usage credits, or cloud service. Once their models are installed, they continue working offline. YouTube caption import requires a connection to YouTube.
 
 Optional LLM text tools are separate. You can connect a local or remote provider when you choose to use them.
 
@@ -96,7 +98,7 @@ Transcription coverage also depends on the model you select: multilingual models
 
 Speech Kit works without accounts, subscriptions, or required cloud services.
 
-* **Your work stays on your machine.** Dictation, transcription, read aloud, and translation run locally and continue working offline once their models are installed.
+* **Your media stays on your machine.** Dictation, local file transcription, read aloud, and translation run locally and continue working offline once their models are installed. YouTube caption import retrieves text from YouTube without downloading the video.
 * **No account, telemetry, or metered usage.** No API key, credit card, subscription, or usage credits to monitor.
 * **LLM tools are optional.** Add flexible language processing to your workflow using a local model or a remote provider you choose. Text leaves your device only when you explicitly use a remote provider, and audio is never uploaded.
 * **Choose what works for you.** Install high-quality models suited to your language, hardware, and workflow.

@@ -99,6 +99,10 @@ class YouTubeTranscriptModal extends Modal {
   private render(): void {
     this.contentEl.empty();
     this.primaryButton = null;
+    this.contentEl.createEl('p', {
+      text: t('youtube.modal.captionDescription'),
+      cls: 'local-stt-media-intro',
+    });
 
     const urlSetting = new Setting(this.contentEl)
       .setName(t('youtube.modal.urlName'))
@@ -111,13 +115,9 @@ class YouTubeTranscriptModal extends Modal {
         });
       });
     urlSetting.settingEl.addClass('local-stt-youtube-url-setting');
-    this.contentEl.createEl('p', {
-      text: t('youtube.modal.captionDescription'),
-      cls: 'local-stt-media-source-hint',
-    });
     const controls = this.contentEl.createDiv({ cls: 'local-stt-youtube-controls' });
     this.renderOptions(controls);
-    this.renderAiPreset(controls);
+    this.renderAiPreset(controls.createDiv({ cls: 'local-stt-media-preset' }));
 
     const progressRow = this.contentEl.createDiv({ cls: 'local-stt-media-progress' });
     this.progressRowEl = progressRow;
@@ -163,6 +163,7 @@ class YouTubeTranscriptModal extends Modal {
     }
     new Setting(parent)
       .setName(t('youtube.modal.aiPreset'))
+      .setDesc(t('media.modal.aiPresetShortDesc'))
       .addDropdown((dropdown) => {
         dropdown.addOption('', t('media.modal.aiPresetNone'));
         for (const entry of presets) dropdown.addOption(entry.ref, entry.preset.label);
@@ -196,6 +197,7 @@ class YouTubeTranscriptModal extends Modal {
 
   private renderOptions(parent: HTMLElement): void {
     const grid = parent.createDiv({ cls: 'local-stt-youtube-options' });
+    grid.createDiv({ cls: 'local-stt-media-panel-title', text: t('youtube.modal.optionsTitle') });
 
     new Setting(grid).setName(t('youtube.modal.captionLanguage')).addDropdown((dropdown) => {
       for (const option of DICTATION_LANGUAGE_OPTIONS)
