@@ -65,5 +65,6 @@ function escapeCaptionMarkdown(text: string): string {
     .replace(/([*_`[\]])/gu, '\\$1')
     .replace(/^([#>+-])(?=\s)/u, '\\$1')
     .replace(/^(\d+)([.)])(?=\s)/u, '$1\\$2')
-    .replace(/^(-{3,})(?=\s|$)/u, '\\$1');
+    .replace(/^(-{3,})(?=\s|$)/u, '\\$1')
+    .replace(/[<>]/gu, (character) => (character === '<' ? '&lt;' : '&gt;'));
 }

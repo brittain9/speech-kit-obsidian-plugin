@@ -357,9 +357,9 @@ export function parseVttCaptions(payload: string): CaptionCue[] {
     if (cues.at(-1) !== undefined && startMs < (cues.at(-1)?.startMs ?? 0)) {
       throw new Error('Caption cues are out of order.');
     }
-    const raw = lines.slice(timingIndex + 1).join(' ');
-    const speaker = /<v\s+([^>]+)>/iu.exec(raw)?.[1]?.trim() ?? null;
-    const text = decodeCaptionEntities(raw.replace(/<[^>]*>/gu, ''))
+    const raw = stripVttCueMarkup(lines.slice(timingIndex + 1).join(' '));
+    const speaker = raw.speaker === null ? null : decodeCaptionEntities(raw.speaker);
+    const text = decodeCaptionEntities(raw.text)
       .replace(/\p{Cc}/gu, ' ')
       .replace(/\s+/gu, ' ')
       .trim();
@@ -373,6 +373,44 @@ export function parseVttCaptions(payload: string): CaptionCue[] {
     });
   }
   return cues;
+}
+
+interface StrippedVttCueMarkup {
+  readonly speaker: string | null;
+  readonly text: string;
+}
+
+function stripVttCueMarkup(raw: string): StrippedVttCueMarkup {
+  const textParts: string[] = [];
+  let speaker: string | null = null;
+  let textStart = 0;
+  let index = 0;
+  while (index < raw.length) {
+    if (raw[index] !== '<') {
+      index += 1;
+      continue;
+    }
+
+    let tokenEnd = index + 1;
+    while (tokenEnd < raw.length && raw[tokenEnd] !== '<' && raw[tokenEnd] !== '>') {
+      tokenEnd += 1;
+    }
+    if (tokenEnd >= raw.length || raw[tokenEnd] !== '>') {
+      // Keep malformed or nested markup as text for downstream consumers.
+      index += 1;
+      continue;
+    }
+
+    if (index > textStart) textParts.push(raw.slice(textStart, index));
+    const tag = raw.slice(index, tokenEnd + 1);
+    const voice = /^<v\s+([^<>]+)>$/iu.exec(tag)?.[1]?.trim();
+    if (speaker === null && voice !== undefined && voice.length > 0) speaker = voice;
+    index = tokenEnd + 1;
+    textStart = index;
+  }
+  if (textStart < raw.length) textParts.push(raw.slice(textStart));
+
+  return { speaker, text: textParts.join('') };
 }
 
 function normalizeCaptionSpeechMarkers(text: string): string {
