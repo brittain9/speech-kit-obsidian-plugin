@@ -358,14 +358,13 @@ export function parseVttCaptions(payload: string): CaptionCue[] {
       throw new Error('Caption cues are out of order.');
     }
     const raw = stripVttCueMarkup(lines.slice(timingIndex + 1).join(' '));
-    const speaker =
-      raw.speaker === null ? null : escapeCaptionMarkup(decodeCaptionEntities(raw.speaker));
+    const speaker = raw.speaker === null ? null : decodeCaptionEntities(raw.speaker);
     const text = decodeCaptionEntities(raw.text)
       .replace(/\p{Cc}/gu, ' ')
       .replace(/\s+/gu, ' ')
       .trim();
     if (text.length === 0) continue;
-    const normalizedText = escapeCaptionMarkup(normalizeCaptionSpeechMarkers(text));
+    const normalizedText = normalizeCaptionSpeechMarkers(text);
     appendCue(cues, {
       startMs,
       endMs,
@@ -397,8 +396,7 @@ function stripVttCueMarkup(raw: string): StrippedVttCueMarkup {
       tokenEnd += 1;
     }
     if (tokenEnd >= raw.length || raw[tokenEnd] !== '>') {
-      // Keep a malformed or nested opener as text. It is escaped after entity
-      // decoding so it cannot become an HTML tag in the transcript note.
+      // Keep malformed or nested markup as text for downstream consumers.
       index += 1;
       continue;
     }
@@ -413,10 +411,6 @@ function stripVttCueMarkup(raw: string): StrippedVttCueMarkup {
   if (textStart < raw.length) textParts.push(raw.slice(textStart));
 
   return { speaker, text: textParts.join('') };
-}
-
-function escapeCaptionMarkup(text: string): string {
-  return text.replace(/[<>]/gu, (character) => (character === '<' ? '&lt;' : '&gt;'));
 }
 
 function normalizeCaptionSpeechMarkers(text: string): string {

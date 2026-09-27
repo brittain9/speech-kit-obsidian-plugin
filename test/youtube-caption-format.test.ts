@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatYouTubeCaptions } from '../src/media/youtube-caption-format';
+import { parseJson3Captions, parseVttCaptions } from '../src/media/youtube-captions';
 
 const videoUrl = 'https://www.youtube.com/watch?v=8MxG6tOkdNY';
 
@@ -40,6 +41,32 @@ describe('YouTube caption formatting', () => {
         videoUrl,
       }),
     ).toBe('1\\. First point');
+  });
+
+  it('keeps parser text literal for AI and escapes HTML only in rendered Markdown', () => {
+    const json3Cues = parseJson3Captions(
+      JSON.stringify({
+        events: [
+          {
+            tStartMs: 0,
+            dDurationMs: 1_000,
+            segs: [{ utf8: '<script>alert(1)</script>' }],
+          },
+        ],
+      }),
+    );
+    const vttCues = parseVttCaptions(
+      'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n<v Alice>&lt;script&gt;alert(1)&lt;/script&gt;</v>',
+    );
+
+    expect(json3Cues[0]?.text).toBe('<script>alert(1)</script>');
+    expect(vttCues[0]?.text).toBe('Alice: <script>alert(1)</script>');
+    expect(formatYouTubeCaptions(json3Cues, { showTimestamps: false, videoUrl })).toBe(
+      '&lt;script&gt;alert(1)&lt;/script&gt;',
+    );
+    expect(formatYouTubeCaptions(vttCues, { showTimestamps: false, videoUrl })).toBe(
+      'Alice: &lt;script&gt;alert(1)&lt;/script&gt;',
+    );
   });
 
   it('waits briefly for a sentence ending before splitting a timed passage', () => {
