@@ -5,7 +5,8 @@ interface BackpressureWaiter {
   readonly reject: (error: Error) => void;
   readonly resolve: () => void;
   readonly signal: AbortSignal;
-  readonly timeoutHandle: number | null;
+  timeoutHandle: number | null;
+  timeoutKind: 'file-progress' | 'queue' | null;
   readonly onAbort: () => void;
 }
 
@@ -68,30 +69,19 @@ export class AudioFileBackpressureGate {
     }
 
     return new Promise<void>((resolve, reject) => {
-      const waitingForProgress = this.tier === 'normal';
-      const timeoutMs = waitingForProgress ? FILE_PROGRESS_TIMEOUT_MS : this.timeoutMs;
       const waiter: BackpressureWaiter = {
         reject,
         resolve,
         signal,
-        timeoutHandle:
-          timeoutMs === null
-            ? null
-            : window.setTimeout(() => {
-                this.settleWaiter(waiter, () =>
-                  reject(
-                    waitingForProgress
-                      ? new AudioFileFlowControlTimeoutError()
-                      : new AudioFileBackpressureTimeoutError(timeoutMs),
-                  ),
-                );
-              }, timeoutMs),
+        timeoutHandle: null,
+        timeoutKind: null,
         onAbort: () => {
           this.settleWaiter(waiter, () => reject(abortReason(signal)));
         },
       };
       signal.addEventListener('abort', waiter.onAbort, { once: true });
       this.waiters.add(waiter);
+      this.refreshWaiterTimeout(waiter);
     });
   }
 
@@ -102,10 +92,37 @@ export class AudioFileBackpressureGate {
   }
 
   private resumeIfReady(): void {
-    if (!this.canSendFrame()) return;
     for (const waiter of [...this.waiters]) {
-      this.settleWaiter(waiter, () => waiter.resolve());
+      if (this.canSendFrame()) {
+        this.settleWaiter(waiter, () => waiter.resolve());
+      } else {
+        this.refreshWaiterTimeout(waiter);
+      }
     }
+  }
+
+  private refreshWaiterTimeout(waiter: BackpressureWaiter): void {
+    const timeoutKind =
+      this.tier === 'normal' ? 'file-progress' : this.timeoutMs === null ? null : 'queue';
+    if (waiter.timeoutKind === timeoutKind) return;
+
+    if (waiter.timeoutHandle !== null) window.clearTimeout(waiter.timeoutHandle);
+    waiter.timeoutHandle = null;
+    waiter.timeoutKind = timeoutKind;
+    if (timeoutKind === null) return;
+
+    const timeoutMs = timeoutKind === 'file-progress' ? FILE_PROGRESS_TIMEOUT_MS : this.timeoutMs;
+    if (timeoutMs === null) return;
+
+    waiter.timeoutHandle = window.setTimeout(() => {
+      this.settleWaiter(waiter, () => {
+        waiter.reject(
+          timeoutKind === 'file-progress'
+            ? new AudioFileFlowControlTimeoutError()
+            : new AudioFileBackpressureTimeoutError(timeoutMs),
+        );
+      });
+    }, timeoutMs);
   }
 
   private settleWaiter(waiter: BackpressureWaiter, settle: () => void): void {
@@ -113,6 +130,8 @@ export class AudioFileBackpressureGate {
       return;
     }
     if (waiter.timeoutHandle !== null) window.clearTimeout(waiter.timeoutHandle);
+    waiter.timeoutHandle = null;
+    waiter.timeoutKind = null;
     waiter.signal.removeEventListener('abort', waiter.onAbort);
     settle();
   }

@@ -61,6 +61,7 @@ class MediaTranscriptionModal extends Modal {
   private readonly lifecycle = new AbortController();
   private readonly releaseProgress: () => void;
   private file: File | null = null;
+  private completedFile: File | null = null;
   private timestampEnabled: boolean;
   private timestampDensity: TimestampDensity;
   private timestampSparseIntervalSeconds: string;
@@ -384,6 +385,7 @@ class MediaTranscriptionModal extends Modal {
   }
 
   private setFile(file: File | null): void {
+    if (file !== this.file) this.completedFile = null;
     this.file = file;
     this.updateFileName();
     this.updatePrimaryButton();
@@ -403,10 +405,12 @@ class MediaTranscriptionModal extends Modal {
 
   private updatePrimaryButton(): void {
     const blocker = this.busy ? null : this.startBlocker();
+    const completed = this.file !== null && this.file === this.completedFile;
     this.primaryButton?.setButtonText(
       this.busy ? t('media.modal.cancelJob') : t('media.modal.start'),
     );
-    this.primaryButton?.setDisabled(this.cancelRequested || blocker !== null);
+    this.primaryButton?.setDisabled(this.cancelRequested || blocker !== null || completed);
+    this.primaryButton?.buttonEl.toggle(!completed);
     this.closeButton?.buttonEl.toggle(!this.busy);
     this.progressSpinnerEl?.toggle(this.busy && !this.cancelRequested);
     const decoderBlocks = this.decoderStatus !== 'installed';
@@ -466,7 +470,8 @@ class MediaTranscriptionModal extends Modal {
     const model = this.dependencies
       .getModels(this.language)
       .find((option) => modelKey(option) === this.modelSelectionKey);
-    if (model === undefined || this.file === null) return;
+    const file = this.file;
+    if (model === undefined || file === null || file === this.completedFile) return;
     const settings = this.dependencies.getSettings();
     const preset = resolvePresetEntry(this.mediaPresetRef, settings.llmPostprocessUserPresets);
     if (this.mediaPresetRef !== null && preset === null) {
@@ -499,12 +504,13 @@ class MediaTranscriptionModal extends Modal {
     this.updatePrimaryButton();
     this.renderProgress(this.dependencies.getProgress());
     try {
-      await this.dependencies.startFile(this.file, options);
+      await this.dependencies.startFile(file, options);
       if (!this.lifecycle.signal.aborted && !this.cancelRequested) {
         const error = this.dependencies.getLastError();
         if (error !== null) {
           this.showError(error);
         } else {
+          this.completedFile = file;
           this.progressEl?.setText(t('media.modal.completed'));
           this.progressRowEl?.toggle(true);
         }

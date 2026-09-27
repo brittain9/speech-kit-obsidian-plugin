@@ -67,6 +67,29 @@ describe('AudioFileBackpressureGate', () => {
     }
   });
 
+  it('starts the file-progress timeout when the queue recovers with a full frame window', async () => {
+    vi.useFakeTimers();
+    try {
+      const gate = new AudioFileBackpressureGate(null);
+      for (let index = 0; index < 50; index += 1) gate.markFrameSent();
+      gate.update('catching_up');
+      const outcomes: unknown[] = [];
+      const waiting = gate.waitUntilNormal(new AbortController().signal).then(
+        () => outcomes.push('resolved'),
+        (error: unknown) => outcomes.push(error),
+      );
+
+      gate.update('normal');
+      await vi.advanceTimersByTimeAsync(30_000);
+      await Promise.resolve();
+
+      expect(outcomes[0]).toBeInstanceOf(AudioFileFlowControlTimeoutError);
+      await waiting;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('aborts a pending backpressure wait through the shared source signal', async () => {
     const gate = new AudioFileBackpressureGate(5_000);
     const abortController = new AbortController();
