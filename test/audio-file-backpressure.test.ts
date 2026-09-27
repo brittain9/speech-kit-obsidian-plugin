@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AudioFileBackpressureGate,
   AudioFileBackpressureTimeoutError,
+  AudioFileFlowControlTimeoutError,
 } from '../src/audio/audio-file-backpressure';
 import { createAudioFileCancellationError } from '../src/audio/audio-file-decoder';
 
@@ -21,11 +22,49 @@ describe('AudioFileBackpressureGate', () => {
     expect(order).toEqual(['waiting', 'normal']);
   });
 
-  it('catching_up does not pause a bounded file source', async () => {
+  it('pauses file audio at catching_up and resumes when the worker recovers', async () => {
     const gate = new AudioFileBackpressureGate(5_000);
     gate.update('catching_up');
+    let resumed = false;
+    const waiting = gate.waitUntilNormal(new AbortController().signal).then(() => {
+      resumed = true;
+    });
+    await Promise.resolve();
+    expect(resumed).toBe(false);
+    gate.update('normal');
+    await waiting;
+    expect(resumed).toBe(true);
+  });
 
-    await expect(gate.waitUntilNormal(new AbortController().signal)).resolves.toBeUndefined();
+  it('limits file audio ahead of consumed-frame acknowledgments', async () => {
+    const gate = new AudioFileBackpressureGate(null);
+    for (let index = 0; index < 50; index += 1) {
+      await gate.waitUntilNormal(new AbortController().signal);
+      gate.markFrameSent();
+    }
+    let resumed = false;
+    const waiting = gate.waitUntilNormal(new AbortController().signal).then(() => {
+      resumed = true;
+    });
+    await Promise.resolve();
+    expect(resumed).toBe(false);
+    gate.acknowledgeFramesConsumed(25);
+    await waiting;
+    expect(resumed).toBe(true);
+  });
+
+  it('fails clearly if an older sidecar never acknowledges file audio', async () => {
+    vi.useFakeTimers();
+    try {
+      const gate = new AudioFileBackpressureGate(null);
+      for (let index = 0; index < 50; index += 1) gate.markFrameSent();
+      const waiting = gate.waitUntilNormal(new AbortController().signal);
+      const assertion = expect(waiting).rejects.toBeInstanceOf(AudioFileFlowControlTimeoutError);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('aborts a pending backpressure wait through the shared source signal', async () => {

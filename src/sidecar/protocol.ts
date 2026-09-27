@@ -123,6 +123,8 @@ export type ProbeSystemAudioCommand = EnvelopeBase<'probe_system_audio'>;
 
 export interface StartSessionCommand extends EnvelopeBase<'start_session'> {
   accelerationPreference: AccelerationPreference;
+  /** Request consumed-frame progress for bounded file-audio delivery. */
+  fileAudioFlowControl?: boolean;
   /** Opt in to adapter work needed for dense word alignment. */
   detailedTimestampsEnabled: boolean;
   diarizationEnabled: boolean;
@@ -400,6 +402,11 @@ export interface TranscriptionQueueChangedEvent
   tier: QueueBackpressureTier;
 }
 
+export interface FileAudioProgressEvent extends EnvelopeBase<'file_audio_progress'> {
+  framesConsumed: number;
+  sessionId: string;
+}
+
 export interface ContextRequestEvent extends EnvelopeBase<'context_request'> {
   budgetChars: number;
   correlationId: string;
@@ -430,6 +437,7 @@ export type SidecarEvent =
   | AudioLevelEvent
   | ContextRequestEvent
   | ErrorEvent
+  | FileAudioProgressEvent
   | HealthOkEvent
   | InstalledModelsEvent
   | ModelCatalogEvent
@@ -661,6 +669,7 @@ const SIDECAR_EVENT_TYPE_FLAGS = {
   audio_level: 1,
   context_request: 1,
   error: 1,
+  file_audio_progress: 1,
   health_ok: 1,
   installed_models: 1,
   model_catalog: 1,
