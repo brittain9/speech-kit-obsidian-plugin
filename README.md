@@ -3,7 +3,7 @@
   <img src="https://raw.githubusercontent.com/brittain9/speech-kit-obsidian-plugin/main/docs/media/hero-light.png" alt="Speech Kit — Speech and language toolkit for Obsidian" width="100%">
 </picture>
 
-Dictate live. Transcribe meetings. Translate text. Listen to notes. One plugin inside the editor where your notes already live.
+Dictate live. Transcribe audio and video files. Bring YouTube captions into your notes. Translate text. Listen to notes. One plugin inside the editor where your notes already live.
 
 > **Local Dictation is now Speech Kit.** It is the same plugin with the same local-first foundation, now with a name that fits what it has become. Existing installs, settings, and hotkeys carry over automatically.
 
@@ -11,10 +11,11 @@ Dictate live. Transcribe meetings. Translate text. Listen to notes. One plugin i
 
 ## What it does
 
-- 🎤 **Speech:** Dictate with live streaming text, or capture higher-accuracy transcripts from meetings, calls, and other audio.
-- 🔊 **Voice:** Listen to your notes with natural voices.
-- 🌍 **Language:** Dictate in ten languages and translate notes locally across eight.
-- 🧠 **Models:** Choose from a managed catalog of speech, voice, and translation models, with optional LLM text tools.
+- **Dictate:** Capture long sessions with live text and a choice of speech models.
+- **Transcribe files:** Drop in audio or video and turn its audio into a local transcript.
+- **Import YouTube captions:** Paste a link and bring available captions into your note without downloading the video.
+- **Translate and listen:** Translate notes locally and hear them read aloud with natural voices.
+- **Refine with AI:** Run a custom preset on a complete transcript or note using a local model or your chosen provider.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/brittain9/speech-kit-obsidian-plugin/main/docs/media/speech-kit-translation-demo.gif" alt="Speech Kit translating an Obsidian note from English to Spanish and replacing the original text" width="560">
