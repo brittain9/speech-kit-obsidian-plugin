@@ -124,10 +124,15 @@ class MediaTranscriptionModal extends Modal {
     this.contentEl.empty();
     this.primaryButton = null;
     this.closeButton = null;
+    this.contentEl.createEl('p', {
+      cls: 'local-stt-media-intro',
+      text: t('media.modal.intro'),
+    });
     const source = this.contentEl.createDiv({ cls: 'local-stt-media-source' });
     this.renderFileSource(source);
-    this.renderAiPreset();
-    this.renderJobOptions();
+    const configuration = this.contentEl.createDiv({ cls: 'local-stt-media-configuration' });
+    this.renderJobOptions(configuration);
+    this.renderAiPreset(configuration);
 
     this.requirementEl = this.contentEl.createDiv({
       cls: 'local-stt-media-requirement',
@@ -205,14 +210,14 @@ class MediaTranscriptionModal extends Modal {
     this.updateFileName();
   }
 
-  private renderJobOptions(): void {
+  private renderJobOptions(parent: HTMLElement): void {
     const models = this.dependencies.getModels(this.language);
     const settings = this.dependencies.getSettings();
     const defaultModel = chooseDefaultMediaTranscriptionModel(models, settings.selectedModel);
     if (!models.some((option) => modelKey(option) === this.modelSelectionKey)) {
       this.modelSelectionKey = modelKey(defaultModel ?? models[0]);
     }
-    const section = this.contentEl.createEl('details', { cls: 'local-stt-media-options' });
+    const section = parent.createEl('details', { cls: 'local-stt-media-options' });
     section.open = this.optionsExpanded;
     section.addEventListener('toggle', () => {
       this.optionsExpanded = section.open;
@@ -324,10 +329,10 @@ class MediaTranscriptionModal extends Modal {
     });
   }
 
-  private renderAiPreset(): void {
+  private renderAiPreset(parent: HTMLElement): void {
     const settings = this.dependencies.getSettings();
     const presets = listPresetEntries(settings.llmPostprocessUserPresets);
-    const container = this.contentEl.createDiv({ cls: 'local-stt-media-preset' });
+    const container = parent.createDiv({ cls: 'local-stt-media-preset' });
     if (
       this.mediaPresetRef !== null &&
       !presets.some((entry) => entry.ref === this.mediaPresetRef)
@@ -338,8 +343,8 @@ class MediaTranscriptionModal extends Modal {
       .setName(t('media.modal.aiPreset'))
       .setDesc(
         this.mediaPresetRef === null
-          ? t('media.modal.aiPresetDesc')
-          : `${t('media.modal.aiPresetDesc')} ${describeMediaLlmConfiguration({
+          ? t('media.modal.aiPresetShortDesc')
+          : `${t('media.modal.aiPresetShortDesc')} · ${describeMediaLlmConfiguration({
               ...settings,
               llmPostprocessActivePresetRef: this.mediaPresetRef,
             })}`,
@@ -392,7 +397,7 @@ class MediaTranscriptionModal extends Modal {
     this.primaryButton?.setDisabled(this.cancelRequested || blocker !== null);
     this.closeButton?.buttonEl.toggle(!this.busy);
     this.progressSpinnerEl?.toggle(this.busy && !this.cancelRequested);
-    this.requirementEl?.setText(blocker ?? '');
+    this.requirementEl?.setText(blocker === t('media.modal.selectFile') ? '' : (blocker ?? ''));
   }
 
   private startBlocker(): string | null {
