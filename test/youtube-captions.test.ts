@@ -158,6 +158,29 @@ describe('YouTube captions', () => {
     ]);
   });
 
+  it('preserves nested and malformed caption text without exposing HTML markup', () => {
+    const cues = parseVttCaptions(
+      'WEBVTT\n\n00:00:01.000 --> 00:00:02.500\n<v Alice>Keep <b>this</b> &amp; read &lt;script&gt;safe&lt;/script&gt; <<script> and &lt;unfinished',
+    );
+
+    expect(cues).toEqual([
+      {
+        startMs: 1000,
+        endMs: 2500,
+        speaker: 'Alice',
+        text: 'Alice: Keep this & read &lt;script&gt;safe&lt;/script&gt; &lt; and &lt;unfinished',
+      },
+    ]);
+    expect(cues[0]?.text).not.toContain('<script>');
+  });
+
+  it('handles a long run of malformed tag openers as caption text', () => {
+    const malformedText = '<'.repeat(20_000);
+    const cues = parseVttCaptions(`WEBVTT\n\n00:00:01.000 --> 00:00:02.500\n${malformedText}`);
+
+    expect(cues[0]?.text).toBe('&lt;'.repeat(20_000));
+  });
+
   it('rejects malformed caption payloads instead of accepting a short transcript', () => {
     expect(() => parseJson3Captions('{"events":[')).toThrow();
     expect(() => parseVttCaptions('not captions')).toThrow();
