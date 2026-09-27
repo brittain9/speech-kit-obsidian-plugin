@@ -30,6 +30,7 @@ import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
 import { changeHardwareAcceleration } from './hardware-acceleration-action';
 import { renderHardwareAccelerationSetting } from './hardware-acceleration-setting';
+import { renderMediaToolSetting } from './media-tool-setting';
 import { renderMicrophonePicker } from './microphone-picker';
 import { renderModelSection } from './model-settings-section';
 import { openFilteredHotkeySettings } from './open-hotkey-settings';
@@ -145,6 +146,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
   private disposeDiarizationDesc: (() => void) | null = null;
   private disposeEngineSection: (() => void) | null = null;
   private disposeMicrophoneSection: (() => void) | null = null;
+  private disposeMediaToolSetting: (() => void) | null = null;
   private disposeModelSection: (() => void) | null = null;
   private disposeReadAloudSection: (() => void) | null = null;
   private disposeSidecarSurfaces: (() => void) | null = null;
@@ -565,32 +567,14 @@ export class LocalSttSettingTab extends PluginSettingTab {
       },
     );
 
-    new Setting(advancedSection)
-      .setName(t('media.tools.title'))
-      .setDesc(t('media.tools.settingsDesc'))
-      .addButton((button) => {
-        button.setButtonText(t('media.tools.install')).onClick(() => {
-          if (this.dependencies.isDictationBusy()) {
-            this.dependencies.feedback.show({
-              intent: 'action-required',
-              message: t('media.tools.busy'),
-            });
-            return;
-          }
-          void this.dependencies
-            .resolvePluginDirectory()
-            .then((pluginDirectory) => {
-              new MediaToolInstallModal(this.app, pluginDirectory).open();
-            })
-            .catch((error: unknown) => {
-              this.dependencies.feedback.show({
-                cause: error,
-                intent: 'error',
-                message: t('media.tools.failed'),
-              });
-            });
-        });
-      });
+    this.disposeMediaToolSetting = renderMediaToolSetting(advancedSection, {
+      feedback: this.dependencies.feedback,
+      isDictationBusy: this.dependencies.isDictationBusy,
+      openInstaller: (pluginDirectory, callbacks) => {
+        new MediaToolInstallModal(this.app, pluginDirectory, callbacks).open();
+      },
+      resolvePluginDirectory: this.dependencies.resolvePluginDirectory,
+    });
 
     addToggleSetting(advancedSection, this.access, {
       name: t('settings.recoveryMemory.name'),
@@ -646,6 +630,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
     this.disposeEngineSection = null;
     this.disposeMicrophoneSection?.();
     this.disposeMicrophoneSection = null;
+    this.disposeMediaToolSetting?.();
+    this.disposeMediaToolSetting = null;
     this.disposeSidecarSurfaces?.();
     this.disposeSidecarSurfaces = null;
   }

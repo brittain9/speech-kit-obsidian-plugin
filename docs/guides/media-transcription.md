@@ -4,7 +4,7 @@ Speech Kit has two commands for adding a transcript to the active Obsidian note.
 
 ## Audio or video file
 
-1. Install a compatible batch speech model and the **Media decoder** in **Settings → Speech Kit → Advanced**. The decoder is a one-time download.
+1. Install a compatible batch speech model. If the **Media decoder** is missing, the file dialog offers **Install decoder**; you can also install it from **Settings → Speech Kit → Advanced**. This is a one-time download.
 2. Run **Speech Kit: Transcribe local audio file**. Drop an audio or video file into the dialog, or choose **Browse files**.
 3. Open **Transcript options** if you want to change the language, batch model, timestamps, speaker labels, or paragraph formatting for this job. These choices do not change your saved dictation settings.
 4. Optionally choose an AI preset, then select **Get transcript**. The complete transcript is added to the active note after processing finishes.

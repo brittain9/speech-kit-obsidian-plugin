@@ -1,5 +1,8 @@
 import type { DictationLanguage } from '../language/dictation-language';
-import { languageSupportIncludes } from '../language/dictation-language';
+import {
+  catalogModelSupportsLanguage,
+  languageSupportIncludes,
+} from '../language/dictation-language';
 import type { LlmTransformSnapshot } from '../llm/transform-policy';
 import { resolveEngineCapabilities } from '../models/capability-view';
 import type { ModelManagerState } from '../models/model-install-manager';
@@ -35,13 +38,6 @@ export function getMediaTranscriptionModelOptions(
 ): MediaTranscriptionModelOption[] {
   const options: MediaTranscriptionModelOption[] = [];
   for (const installed of state.installedModels) {
-    const capabilities = resolveEngineCapabilities(
-      state.compiledRuntimes,
-      state.compiledAdapters,
-      installed.runtimeId,
-      installed.familyId,
-    );
-    if (!isCompatibleBatchModel(capabilities, language)) continue;
     const selection: SelectedModel = {
       familyId: installed.familyId,
       kind: 'catalog_model',
@@ -56,9 +52,18 @@ export function getMediaTranscriptionModelOptions(
         runtimeId: candidate.runtimeId,
       }),
     );
+    if (model === undefined || !catalogModelSupportsLanguage(model, language)) continue;
+
+    const capabilities = resolveEngineCapabilities(
+      state.compiledRuntimes,
+      state.compiledAdapters,
+      installed.runtimeId,
+      installed.familyId,
+    );
+    if (!isCompatibleBatchModel(capabilities, language)) continue;
     options.push({
       capabilities,
-      label: model?.displayName ?? installed.modelId,
+      label: model.displayName,
       selection,
     });
   }

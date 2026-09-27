@@ -1,5 +1,6 @@
 import { type App, type ButtonComponent, Modal, Setting } from 'obsidian';
 
+import { AudioFileError } from '../audio/audio-file-decoder';
 import { DICTATION_LANGUAGE_OPTIONS, type DictationLanguage } from '../language/dictation-language';
 import { describeMediaLlmConfiguration } from '../llm/media-llm-policy';
 import { listPresetEntries, resolvePresetEntry } from '../llm/presets';
@@ -28,6 +29,8 @@ export interface MediaTranscriptionModalDependencies {
   readonly getProgress: () => MediaTranscriptionProgress | null;
   readonly getSettings: () => PluginSettings;
   readonly isTranscribing: () => boolean;
+  readonly isDecoderInstalled: () => Promise<boolean>;
+  readonly openDecoderInstaller: (onInstalled: () => void) => void;
   readonly onManageModels: () => void;
   readonly onManagePresets: (onClosed: () => void) => void;
   readonly startFile: (file: File, options: MediaTranscriptionJobOptions) => Promise<void>;
@@ -70,12 +73,14 @@ class MediaTranscriptionModal extends Modal {
   private busy = false;
   private closed = false;
   private cancelRequested = false;
+  private decoderStatus: 'checking' | 'missing' | 'installed' | 'unknown' = 'checking';
   private progressEl: HTMLElement | null = null;
   private progressRowEl: HTMLElement | null = null;
   private progressSpinnerEl: HTMLElement | null = null;
   private errorEl: HTMLElement | null = null;
   private partialEl: HTMLElement | null = null;
   private requirementEl: HTMLElement | null = null;
+  private decoderRequirementEl: HTMLElement | null = null;
   private fileNameEl: HTMLElement | null = null;
   private primaryButton: ButtonComponent | null = null;
   private closeButton: ButtonComponent | null = null;
@@ -109,6 +114,7 @@ class MediaTranscriptionModal extends Modal {
     this.modalEl.addClass('local-stt-media-modal');
     this.setTitle(t('media.modal.title'));
     this.render();
+    void this.refreshDecoderStatus();
   }
 
   override onClose(): void {
@@ -133,6 +139,12 @@ class MediaTranscriptionModal extends Modal {
     const configuration = this.contentEl.createDiv({ cls: 'local-stt-media-configuration' });
     this.renderJobOptions(configuration);
     this.renderAiPreset(configuration);
+
+    this.decoderRequirementEl = this.contentEl.createDiv({
+      cls: 'local-stt-media-decoder-requirement',
+      attr: { role: 'status', 'aria-live': 'polite' },
+    });
+    this.renderDecoderRequirement();
 
     this.requirementEl = this.contentEl.createDiv({
       cls: 'local-stt-media-requirement',
@@ -397,11 +409,15 @@ class MediaTranscriptionModal extends Modal {
     this.primaryButton?.setDisabled(this.cancelRequested || blocker !== null);
     this.closeButton?.buttonEl.toggle(!this.busy);
     this.progressSpinnerEl?.toggle(this.busy && !this.cancelRequested);
-    this.requirementEl?.setText(blocker === t('media.modal.selectFile') ? '' : (blocker ?? ''));
+    const decoderBlocks = this.decoderStatus !== 'installed';
+    this.requirementEl?.setText(
+      blocker === t('media.modal.selectFile') || decoderBlocks ? '' : (blocker ?? ''),
+    );
   }
 
   private startBlocker(): string | null {
     if (this.dependencies.isTranscribing()) return t('media.modal.alreadyRunning');
+    if (this.decoderStatus !== 'installed') return t('media.tools.description');
     if (this.dependencies.getModels(this.language).length === 0)
       return t('media.modal.noBatchModel');
     if (this.file === null) return t('media.modal.selectFile');
@@ -503,6 +519,11 @@ class MediaTranscriptionModal extends Modal {
   }
 
   private showError(error: unknown): void {
+    if (error instanceof AudioFileError && error.code === 'decoder_missing') {
+      this.decoderStatus = 'missing';
+      this.renderDecoderRequirement();
+      this.updatePrimaryButton();
+    }
     this.progressEl?.setText('');
     this.progressRowEl?.toggle(false);
     this.errorEl?.setText(
@@ -511,6 +532,46 @@ class MediaTranscriptionModal extends Modal {
       }),
     );
     this.renderPartialRecovery();
+  }
+
+  private async refreshDecoderStatus(): Promise<void> {
+    try {
+      const installed = await this.dependencies.isDecoderInstalled();
+      if (this.closed) return;
+      this.decoderStatus = installed ? 'installed' : 'missing';
+    } catch {
+      if (this.closed) return;
+      this.decoderStatus = 'unknown';
+    }
+    this.renderDecoderRequirement();
+    this.updatePrimaryButton();
+  }
+
+  private renderDecoderRequirement(): void {
+    const container = this.decoderRequirementEl;
+    if (container === null) return;
+    container.empty();
+    if (this.decoderStatus === 'installed') {
+      container.hide();
+      return;
+    }
+    container.show();
+    if (this.decoderStatus === 'checking') {
+      container.setText(t('settings.model.checking'));
+      return;
+    }
+
+    container.createEl('p', { text: t('media.tools.description') });
+    new Setting(container).addButton((button) => {
+      button
+        .setButtonText(t('media.tools.install'))
+        .setCta()
+        .onClick(() => {
+          this.dependencies.openDecoderInstaller(() => {
+            void this.refreshDecoderStatus();
+          });
+        });
+    });
   }
 
   private renderPartialRecovery(): void {

@@ -7,6 +7,11 @@ import {
 } from '../audio/media-tool-installer';
 import { t } from '../shared/i18n';
 
+export interface MediaToolInstallModalCallbacks {
+  onClosed?(): void;
+  onInstalled?(): void;
+}
+
 export class MediaToolInstallModal extends Modal {
   private abortController: AbortController | null = null;
   private closed = false;
@@ -17,6 +22,7 @@ export class MediaToolInstallModal extends Modal {
   constructor(
     app: App,
     private readonly pluginDirectory: string,
+    private readonly callbacks: MediaToolInstallModalCallbacks = {},
   ) {
     super(app);
   }
@@ -35,6 +41,7 @@ export class MediaToolInstallModal extends Modal {
     this.closed = true;
     this.abortController?.abort();
     this.contentEl.empty();
+    this.callbacks.onClosed?.();
   }
 
   private render(): void {
@@ -93,6 +100,7 @@ export class MediaToolInstallModal extends Modal {
         },
       });
       this.installed = true;
+      this.callbacks.onInstalled?.();
     } catch (error) {
       if (!controller.signal.aborted) {
         this.error = error instanceof Error ? error.message : t('media.tools.failed');
