@@ -77,6 +77,7 @@ pub struct AppState {
 
 struct ActiveSession {
     audio_mixer: AudioMixer,
+    file_audio_frames_consumed: Option<u64>,
     context_required: bool,
     context_budget_chars: u32,
     cancel_tx: watch::Sender<bool>,
@@ -272,7 +273,19 @@ impl AppState {
                     code: error.code.to_string(),
                     details: error.details,
                     message: error.message.to_string(),
-                    session_id: Some(session_id),
+                    session_id: Some(session_id.clone()),
+                });
+            }
+        }
+
+        if let Some(active_session) = self.active_sessions.get_mut(&session_id)
+            && let Some(frames_consumed) = active_session.file_audio_frames_consumed.as_mut()
+        {
+            *frames_consumed += 1;
+            if *frames_consumed % 25 == 0 {
+                events.push(Event::FileAudioProgress {
+                    frames_consumed: *frames_consumed,
+                    session_id: session_id.clone(),
                 });
             }
         }
@@ -817,6 +830,7 @@ impl AppState {
                 diarization_enabled,
                 diarization_max_speakers,
                 include_system_audio,
+                file_audio_flow_control,
                 language,
                 mode,
                 model_selection,
@@ -961,6 +975,7 @@ impl AppState {
                                 } else {
                                     AudioMixer::microphone_only(session_id.clone())
                                 },
+                                file_audio_frames_consumed: file_audio_flow_control.then_some(0),
                                 cancel_tx,
                                 context_budget_chars,
                                 context_required,
@@ -3527,6 +3542,45 @@ mod tests {
     }
 
     #[test]
+    fn file_audio_reports_consumed_frames_without_changing_live_sessions() {
+        let model_file_path = create_model_file();
+        let mut app = test_app();
+        let mut file_command = start_session_command("file-session", &model_file_path);
+        if let Command::StartSession {
+            file_audio_flow_control,
+            ..
+        } = &mut file_command
+        {
+            *file_audio_flow_control = true;
+        }
+        let _ = app.handle_command(file_command);
+        let _ = app.handle_command(start_session_command("live-session", &model_file_path));
+
+        let mut file_events = Vec::new();
+        let mut live_events = Vec::new();
+        for _ in 0..25 {
+            file_events.extend(app.handle_audio_frame(AudioFrame {
+                frame_bytes: vec![0; PCM_BYTES_PER_FRAME],
+                session_id: "file-session".to_string(),
+            }));
+            live_events.extend(app.handle_audio_frame(AudioFrame {
+                frame_bytes: vec![0; PCM_BYTES_PER_FRAME],
+                session_id: "live-session".to_string(),
+            }));
+        }
+
+        assert!(file_events.iter().any(|event| matches!(event,
+            Event::FileAudioProgress { frames_consumed: 25, session_id }
+                if session_id == "file-session"
+        )));
+        assert!(
+            !live_events
+                .iter()
+                .any(|event| matches!(event, Event::FileAudioProgress { .. }))
+        );
+    }
+
+    #[test]
     fn enqueue_emits_catching_up_when_queue_reaches_three() {
         let model_file_path = create_model_file();
         let mut app = test_app();
@@ -4164,6 +4218,7 @@ mod tests {
             diarization_enabled: false,
             diarization_max_speakers: None,
             include_system_audio,
+            file_audio_flow_control: false,
             language: "en".to_string(),
             mode: ListeningMode::AlwaysOn,
             model_selection: SelectedModel::ExternalFile {

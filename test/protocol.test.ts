@@ -731,6 +731,18 @@ describe('event parsing', () => {
     });
   });
 
+  it('parses file audio consumption progress', () => {
+    expect(
+      parseEventFrame(
+        JSON.stringify({
+          framesConsumed: 25,
+          sessionId: 'session-1',
+          type: 'file_audio_progress',
+        }),
+      ),
+    ).toEqual({ framesConsumed: 25, sessionId: 'session-1', type: 'file_audio_progress' });
+  });
+
   it('parses context_request preserving correlation and budget', () => {
     expect(
       parseEventFrame(

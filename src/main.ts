@@ -14,6 +14,7 @@ import {
 import { AudioCaptureStream } from './audio/audio-capture-stream';
 import { FfmpegAudioFileDecoder } from './audio/audio-file-decoder';
 import { pickLocalAudioFile } from './audio/local-audio-file-picker';
+import { isMediaToolInstalled } from './audio/media-tool-installer';
 import { SidecarAudioLevelMeter } from './audio/sidecar-audio-level-meter';
 import { registerCommands } from './commands/register-commands';
 import { AudioFileTranscriptionController } from './dictation/audio-file-transcription-controller';
@@ -105,6 +106,7 @@ import { didReadAloudSettingsChange, resolveReadAloudVoiceId } from './tts/read-
 import { DictationRibbonController } from './ui/dictation-ribbon';
 import { LOCAL_DICTATION_VIEW_TYPE, LocalDictationView } from './ui/local-dictation-view';
 import { renderMediaProgressStatus } from './ui/media-progress-presenter';
+import { MediaToolInstallModal } from './ui/media-tool-install-modal';
 import { MediaTranscriptionModalRegistry } from './ui/media-transcription-modal';
 import { PresetManagerModal } from './ui/preset-manager-modal';
 import { YouTubeTranscriptModalRegistry } from './ui/youtube-transcript-modal';
@@ -375,6 +377,20 @@ export default class LocalSttPlugin extends Plugin {
           this.requireAudioFileTranscriptionController().insertPartialTranscript(),
         getSettings: () => this.settings,
         isTranscribing: () => this.requireAudioFileTranscriptionController().isBusy(),
+        isDecoderInstalled: async () =>
+          isMediaToolInstalled(await this.resolvePluginDirectoryPath()),
+        openDecoderInstaller: (onInstalled) => {
+          void this.resolvePluginDirectoryPath()
+            .then((pluginDirectory) =>
+              new MediaToolInstallModal(this.app, pluginDirectory, { onInstalled }).open(),
+            )
+            .catch(() => {
+              this.feedback.show({
+                intent: 'error',
+                message: t('media.tools.failed'),
+              });
+            });
+        },
         onManageModels: () => void this.openModelPicker(),
         onManagePresets: (onClosed) => void this.openMediaPresetManager(onClosed),
         startFile: async (file, options) => {

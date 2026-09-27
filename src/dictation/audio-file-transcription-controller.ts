@@ -5,6 +5,7 @@ import { Platform } from 'obsidian';
 import {
   AudioFileBackpressureGate,
   AudioFileBackpressureTimeoutError,
+  AudioFileFlowControlTimeoutError,
 } from '../audio/audio-file-backpressure';
 import {
   AudioFileError,
@@ -599,6 +600,7 @@ export class AudioFileTranscriptionController {
               frame,
               signal,
             );
+            managed.backpressure.markFrameSent();
             frameCount += 1;
           },
         });
@@ -929,6 +931,7 @@ export class AudioFileTranscriptionController {
         diarizationEnabled: configuration.diarizationEnabled,
         diarizationMaxSpeakers: configuration.diarizationMaxSpeakers,
         includeSystemAudio: false,
+        fileAudioFlowControl: true,
         language: configuration.language,
         mode: 'always_on',
         modelSelection: configuration.modelSelection,
@@ -1121,6 +1124,14 @@ export class AudioFileTranscriptionController {
       return;
     }
 
+    if (error instanceof AudioFileFlowControlTimeoutError) {
+      this.mediaError = error;
+      this.failureMapper.reportTranslation('audio-file-sidecar-failed', error, managed);
+      managed.abortController.abort(error);
+      await this.cancelManagedSession(managed);
+      return;
+    }
+
     this.failureMapper.reportFailure(error, managed);
     await this.cancelManagedSession(managed);
   }
@@ -1269,6 +1280,9 @@ export class AudioFileTranscriptionController {
       this.releaseQuarantinedLease(event.sessionId);
       const active = this.activeSession;
       if (active === null || active.sessionId !== event.sessionId) return;
+      if (event.reason === 'queue_overload' && this.mediaError === null) {
+        this.mediaError = new AudioFileError('queue_overload', 'Queue overload.');
+      }
       active.abortController.abort(createAudioFileCancellationError());
       await this.finishManagedSession(
         active,
@@ -1294,6 +1308,9 @@ export class AudioFileTranscriptionController {
     if ('sessionId' in event && event.sessionId !== active.sessionId) return;
 
     switch (event.type) {
+      case 'file_audio_progress':
+        active.backpressure.acknowledgeFramesConsumed(event.framesConsumed);
+        return;
       case 'transcription_queue_changed':
         active.backpressure.update(event.tier);
         return;
@@ -1306,7 +1323,9 @@ export class AudioFileTranscriptionController {
       case 'error':
         if (event.code === 'utterance_queue_overload') {
           this.failureMapper.reportTranslation('audio-file-queue-overload', event, active);
-          active.abortController.abort(new AudioFileError('queue_overload', 'Queue overload.'));
+          const error = new AudioFileError('queue_overload', 'Queue overload.');
+          this.mediaError = error;
+          active.abortController.abort(error);
           void this.cancelManagedSession(active);
           return;
         }

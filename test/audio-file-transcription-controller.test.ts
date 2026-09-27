@@ -1019,6 +1019,7 @@ describe('AudioFileTranscriptionController', () => {
     expect(harness.feedback.show).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'audio-file-queue-overload' }),
     );
+    expect(harness.controller.getMediaError()).toMatchObject({ code: 'queue_overload' });
   });
 
   it('releases the session locally when cancellation is acknowledged without a subscription callback', async () => {
@@ -1524,6 +1525,42 @@ describe('AudioFileTranscriptionController', () => {
     await transcribing;
 
     expect(sidecarConnection.cancelSession).not.toHaveBeenCalled();
+  });
+
+  it('bounds file delivery by sidecar consumed-frame progress', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const decoded = new FakeDecodedAudio(16_000, 1, 51 * 320, [new Float32Array(51 * 320)]);
+    const harness = createHarness({
+      decoder: { decode: async () => decoded },
+      sidecarConnection,
+    });
+
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() =>
+      expect(sidecarConnection.sendAudioFrameWithBackpressure).toHaveBeenCalledTimes(50),
+    );
+    const payload = sidecarConnection.startSessionWithControl.mock.calls[0]?.[0];
+    if (payload === undefined) throw new Error('Expected a file session.');
+    expect(payload.fileAudioFlowControl).toBe(true);
+    expect(sidecarConnection.requestStopSession).not.toHaveBeenCalled();
+
+    sidecarConnection.emit({
+      framesConsumed: 25,
+      sessionId: payload.sessionId,
+      type: 'file_audio_progress',
+    });
+    await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalledOnce());
+    expect(sidecarConnection.sendAudioFrameWithBackpressure).toHaveBeenCalledTimes(51);
+    sidecarConnection.emit(transcriptReady(payload.sessionId, 'Complete file transcript.'));
+    sidecarConnection.emit({
+      reason: 'user_stop',
+      sessionId: payload.sessionId,
+      type: 'session_stopped',
+    });
+    await transcribing;
+
+    expect(harness.controller.getMediaError()).toBeNull();
+    expect(harness.sessions[0]?.acceptTranscript).toHaveBeenCalledOnce();
   });
 
   it('localizes decoder, model-duration, and sidecar failures with actionable copy', async () => {
