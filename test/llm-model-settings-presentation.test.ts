@@ -1,16 +1,25 @@
 import { describe, expect, it } from 'vitest';
-
 import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import {
   describeAdvancedModelSettings,
   resolveModelSettingsPresentation,
 } from '../src/ui/llm-model-settings-presentation';
+import { createUserPreset } from './fixtures/llm';
+
+const INHERITING_SETTINGS = {
+  ...DEFAULT_PLUGIN_SETTINGS,
+  llmPostprocessActivePresetRef: 'user:inherit',
+  llmPostprocessUserPresets: [
+    createUserPreset({ id: 'inherit' }),
+    ...DEFAULT_PLUGIN_SETTINGS.llmPostprocessUserPresets,
+  ],
+};
 
 describe('resolveModelSettingsPresentation', () => {
   it('shows only temperature for fixed Ollama routing', () => {
     expect(
       resolveModelSettingsPresentation({
-        ...DEFAULT_PLUGIN_SETTINGS,
+        ...INHERITING_SETTINGS,
         llmPostprocessTemperature: 0.4,
         llmRoutingPolicy: { kind: 'fixed', providerId: 'ollama' },
       }),
@@ -25,7 +34,7 @@ describe('resolveModelSettingsPresentation', () => {
     (providerId) => {
       expect(
         resolveModelSettingsPresentation({
-          ...DEFAULT_PLUGIN_SETTINGS,
+          ...INHERITING_SETTINGS,
           llmNetworkTimeoutSec: 91,
           llmRoutingPolicy: { kind: 'fixed', providerId },
         }),
@@ -36,7 +45,7 @@ describe('resolveModelSettingsPresentation', () => {
   it('shows timeout when either size-routing leg uses the network', () => {
     expect(
       resolveModelSettingsPresentation({
-        ...DEFAULT_PLUGIN_SETTINGS,
+        ...INHERITING_SETTINGS,
         llmNetworkTimeoutSec: 91,
         llmRoutingPolicy: {
           defaultProviderId: 'ollama',
@@ -50,7 +59,7 @@ describe('resolveModelSettingsPresentation', () => {
 
   it('explains that temperature is shared without repeating routing policy', () => {
     const description = describeAdvancedModelSettings({
-      ...DEFAULT_PLUGIN_SETTINGS,
+      ...INHERITING_SETTINGS,
       llmPostprocessTemperature: 0.3,
       llmRoutingPolicy: {
         defaultProviderId: 'ollama',
@@ -67,7 +76,7 @@ describe('resolveModelSettingsPresentation', () => {
   it('does not mention provider sharing for a fixed route', () => {
     expect(
       describeAdvancedModelSettings({
-        ...DEFAULT_PLUGIN_SETTINGS,
+        ...INHERITING_SETTINGS,
         llmPostprocessTemperature: 0.3,
         llmRoutingPolicy: { kind: 'fixed', providerId: 'openai_compatible' },
       }),

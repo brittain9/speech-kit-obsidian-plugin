@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LLM_BUILTIN_PRESETS, type LlmPresetEntry } from '../src/llm/presets';
+import { getLlmBuiltinPreset, type LlmPresetEntry } from '../src/llm/presets';
 import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import { PresetManagerModal } from '../src/ui/preset-manager-modal';
 import type { PresetSearchHit } from '../src/ui/preset-search';
@@ -21,7 +21,7 @@ describe('PresetManagerModal row interaction', () => {
 
     expect(row.infoEl.tabIndex).toBe(0);
     expect(row.infoEl.getAttribute('role')).toBe('button');
-    expect(row.infoEl.getAttribute('aria-label')).toBe('View preset: Clean up');
+    expect(row.infoEl.getAttribute('aria-label')).toBe('Edit preset: Summary');
 
     await row.settingEl.click();
     expect(openEntry).not.toHaveBeenCalled();
@@ -48,8 +48,8 @@ function renderPresetRow(): {
 } {
   const entry: LlmPresetEntry = {
     isBuiltin: true,
-    preset: LLM_BUILTIN_PRESETS[0],
-    ref: 'builtin:clean-up',
+    preset: getLlmBuiltinPreset('summary'),
+    ref: 'user:default:summary',
   };
   const hit: PresetSearchHit = {
     description: entry.preset.description ?? '',
@@ -77,5 +77,5 @@ function renderPresetRow(): {
     'builtin:not-active',
   );
 
-  return { entry, openEntry, row: Setting.named('Clean up') };
+  return { entry, openEntry, row: Setting.named('Summary') };
 }

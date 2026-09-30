@@ -470,31 +470,16 @@ export const fr = {
     'La dictée insère la transcription locale brute. Activez Transformer lorsque vous souhaitez un nettoyage, une réécriture ou des résumés.',
   'llm.sidebar.off.summary': 'Transcription brute',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Nettoyer',
-  'llm.preset.builtin.cleanUp.description':
-    'Corrigez les artefacts de transcription, les remplissages, la ponctuation et les majuscules tout en préservant la voix et le sens.',
-  'llm.preset.builtin.cleanUp.prompt':
-    "Nettoyez le texte dicté. Corrigez les mots de remplissage, les faux départs, les répétitions, la ponctuation, les majuscules et les erreurs de reconnaissance évidentes. Préservez la voix et le sens du locuteur. Utilisez le contexte de référence uniquement pour l'orthographe. Écrivez dans la langue d'origine de la transcription. Ne traduisez pas sauf si l'utilisateur le demande explicitement. Renvoyez uniquement le texte nettoyé, sans préambule ni commentaire.",
-  'llm.preset.builtin.professionalWriting.label': 'Écriture professionnelle',
-  'llm.preset.builtin.professionalWriting.description':
-    'Réécrivez dans une prose professionnelle concise et soignée tout en préservant les faits, les noms, les décisions et les termes techniques.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    "Réécrivez le texte dicté en une prose professionnelle concise. Utilisez la voix active, sans mots de remplissage ni formulations évasives. Préservez chaque fait, nom et terme. Utilisez le contexte de référence pour l'orthographe. Écrivez dans la langue d'origine de la transcription. Ne traduisez pas sauf si l'utilisateur le demande explicitement. Renvoyez uniquement le texte réécrit, sans préambule ni commentaire.",
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Ajoutez un court résumé TLDR au-dessus de votre transcription intacte.',
   'llm.preset.builtin.tldr.prompt':
-    "Rédigez un résumé TLDR de la transcription dictée : un en-tête « TLDR » suivi de 1 à 3 puces courtes couvrant les points clés. Écrivez dans la langue d'origine de la transcription. Ne traduisez jamais à moins que l'utilisateur ne demande explicitement une traduction. Ne renvoyez que le titre et les puces — ne répétez pas la transcription, pas de préambule, pas de commentaire.",
+    "Rédigez un résumé TLDR de la transcription dictée : un en-tête « TLDR » suivi de puces courtes dont le nombre est adapté au contenu substantiel, pour en saisir rapidement l’essentiel. Écrivez dans la langue d'origine de la transcription. Ne traduisez jamais à moins que l'utilisateur ne demande explicitement une traduction. Ne renvoyez que le titre et les puces — ne répétez pas la transcription, pas de préambule, pas de commentaire.",
   'llm.preset.builtin.markdownFormatting.label': 'Formatage Markdown',
   'llm.preset.builtin.markdownFormatting.description':
     'Reformatez la transcription de la session sous la forme structurée Markdown avec des titres, des listes et une emphase.',
   'llm.preset.builtin.markdownFormatting.prompt':
     "Reformatez le texte dicté en Markdown bien structuré. Ajoutez des titres, des listes à puces ou numérotées, du gras, de l'emphase et des blocs de code délimités lorsque le contenu l'exige. Corrigez légèrement les mots de remplissage, les faux départs, la ponctuation et les majuscules ; préservez la formulation du locuteur ainsi que chaque fait, nom et terme. Écrivez dans la langue d'origine de la transcription. Ne traduisez pas sauf si l'utilisateur le demande explicitement. Renvoyez uniquement le Markdown, sans préambule ni commentaire.",
-  'llm.preset.builtin.actionItems.label': "Éléments d'action",
-  'llm.preset.builtin.actionItems.description':
-    "Ajoutez une liste de contrôle d'éléments d'action sous votre transcription intacte.",
-  'llm.preset.builtin.actionItems.prompt':
-    "Extrayez les éléments d’action de la transcription dictée. Affichez un en-tête « Éléments d'action » suivi d'une liste de contrôle Markdown de tâches concrètes, nommant un propriétaire lorsque l'orateur en mentionne un. Si la transcription ne contient aucune action, ne renvoyez rien. Écrivez dans la langue originale de la transcription. Ne traduisez jamais à moins que l’utilisateur ne demande explicitement une traduction. Renvoyez uniquement le titre et la liste de contrôle – ne répétez pas la transcription, pas de préambule, pas de commentaire.",
   'llm.preset.timing.perUtterance': "S'exécute après chaque phrase",
   'llm.preset.timing.batch': "Fonctionne une fois à l'arrêt",
   'llm.preset.timing.either': 'Fonctionne dans les deux modes',

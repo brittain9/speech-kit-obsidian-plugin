@@ -142,6 +142,7 @@ describe('LlmPresetStateStore.synchronize', () => {
   it('normalizes invalid external preset data before applying it', async () => {
     const fixture = createStore({
       loadData: async () => ({
+        llmPostprocessPresetsInitialized: true,
         llmPostprocessActivePresetRef: 'user:valid',
         llmPostprocessUserPresets: [
           { id: '', label: 'Invalid', output: 'replace', prompt: 'Drop me' },
@@ -254,7 +255,8 @@ describe('LlmPresetStateStore.mutate', () => {
       current: settings(),
       loadData: async () => ({
         ...DEFAULT_PLUGIN_SETTINGS,
-        llmPostprocessUserPresets: [external],
+        llmPostprocessActivePresetRef: 'user:other',
+        llmPostprocessUserPresets: [createUserPreset({ id: 'other' }), external],
       }),
     });
 
@@ -265,7 +267,7 @@ describe('LlmPresetStateStore.mutate', () => {
 
     expect(readLlmPresetState(fixture.getCurrent())).toEqual({
       activePresetRef: 'user:external',
-      userPresets: [external],
+      userPresets: [createUserPreset({ id: 'other' }), external],
     });
     expect(fixture.commit).toHaveBeenLastCalledWith(expect.any(Object), { persist: true });
   });

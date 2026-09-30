@@ -156,11 +156,7 @@ describe('applyPresetDraftSave', () => {
     ]);
   });
 
-  it('rejects names colliding with built-ins or other user presets', () => {
-    const builtinClash = applyPresetDraftSave(stateWith([]), { ...draft, label: 'clean up' }, null);
-    expect(builtinClash.error).toMatch(/built-in/);
-    expect(builtinClash.state.userPresets).toEqual([]);
-
+  it('rejects names colliding with other saved presets', () => {
     const existing = createUserPreset({ id: 'p1', label: 'Mine' });
     const userClash = applyPresetDraftSave(
       stateWith([existing]),
@@ -172,6 +168,21 @@ describe('applyPresetDraftSave', () => {
     // Keeping your own name while editing is not a collision.
     const selfEdit = applyPresetDraftSave(stateWith([existing]), draft, 'p1');
     expect(selfEdit.error).toBeNull();
+  });
+
+  it('keeps a custom Summary editable when a built-in now uses its name', () => {
+    const existing = createUserPreset({ id: 'my-summary', label: 'Summary' });
+    const state = { ...stateWith([existing]), activePresetRef: 'user:my-summary' };
+    const edited = { ...draftFromPreset(existing), prompt: 'My revised summary instructions.' };
+
+    const result = applyPresetDraftSave(state, edited, existing.id);
+
+    expect(result.error).toBeNull();
+    expect(result.state.activePresetRef).toBe('user:my-summary');
+    expect(result.state.userPresets).toEqual([
+      { ...existing, prompt: 'My revised summary instructions.' },
+    ]);
+    expect(applyPresetDraftSave(state, edited, null).error).toMatch(/already exists/);
   });
 
   it('enforces the preset cap for new presets', () => {

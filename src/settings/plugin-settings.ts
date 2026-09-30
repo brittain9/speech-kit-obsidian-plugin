@@ -5,8 +5,10 @@ import {
   isDictationLanguage,
 } from '../language/dictation-language';
 import {
+  createDefaultPresets,
   DEFAULT_LLM_BUILTIN_PRESET_ID,
   formatStyleRef,
+  isDefaultPreset,
   isLlmPostprocessMode,
   isLlmPresetOutput,
   isLlmPresetTiming,
@@ -18,6 +20,7 @@ import {
   listPresetEntries,
   resolveActivePresetEntry,
   resolvePresetEntry,
+  restoreDefaultPresets,
 } from '../llm/presets';
 import type { LlmProviderConfigurations, LlmRoutingPolicy } from '../llm/provider';
 import { normalizeLlmRoutingPolicy } from '../llm/routing-policy';
@@ -114,8 +117,8 @@ const TRANSLATION_STYLE_INSTRUCTIONS: Readonly<Record<TranslationStyle, string>>
 };
 
 export const DEFAULT_LLM_ACTIVE_PRESET_REF = formatStyleRef({
-  kind: 'builtin',
-  id: DEFAULT_LLM_BUILTIN_PRESET_ID,
+  kind: 'user',
+  id: `default:${DEFAULT_LLM_BUILTIN_PRESET_ID}`,
 });
 
 export const DEFAULT_LLM_POSTPROCESS_CONTEXT = {
@@ -183,6 +186,7 @@ export interface PluginSettings {
   llmPostprocessTemperature: number;
   llmPostprocessTotalContextCap: number;
   llmPostprocessUserPresets: LlmPreset[];
+  llmPostprocessPresetsInitialized: boolean;
   llmProviderConfigurations: LlmProviderConfigurations;
   llmRoutingPolicy: LlmRoutingPolicy | null;
   lastObsidianLanguage: string | null;
@@ -247,7 +251,8 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   llmPostprocessSkipMinWords: DEFAULT_LLM_POSTPROCESS_SKIP.minWords,
   llmPostprocessTemperature: DEFAULT_LLM_POSTPROCESS_GENERATION.temperature,
   llmPostprocessTotalContextCap: DEFAULT_LLM_POSTPROCESS_CONTEXT.totalContextCap,
-  llmPostprocessUserPresets: [],
+  llmPostprocessUserPresets: createDefaultPresets(),
+  llmPostprocessPresetsInitialized: true,
   llmProviderConfigurations: {
     ollama: { model: '' },
     openrouter: { model: '', secretId: '' },
@@ -301,10 +306,20 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
     lineBreakPauseMs: raw.smartParagraphLineBreakPauseMs,
     paragraphPauseMs: raw.smartParagraphParagraphPauseMs,
   });
+  const savedPresets = readUserPresets(raw.llmPostprocessUserPresets);
+  const initializedPresets =
+    raw.llmPostprocessPresetsInitialized === true
+      ? savedPresets
+      : [
+          ...savedPresets,
+          ...createDefaultPresets().filter(
+            (preset) => !savedPresets.some((saved) => saved.id === preset.id),
+          ),
+        ];
   const { activeRef, userPresets } = migrateLlmPresetState({
     legacyPrompt: raw.llmPostprocessPrompt,
     storedRef: raw.llmPostprocessActivePresetRef,
-    userPresets: readUserPresets(raw.llmPostprocessUserPresets),
+    userPresets: initializedPresets,
   });
   const legacyModel =
     typeof raw.llmPostprocessModel === 'string' ? raw.llmPostprocessModel.trim() : '';
@@ -344,7 +359,8 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.llmPostprocessLastEnabledMode,
       raw.llmPostprocessMode,
     ),
-    llmPostprocessMode: readLlmPostprocessMode(raw.llmPostprocessMode),
+    llmPostprocessMode:
+      userPresets.length === 0 ? 'off' : readLlmPostprocessMode(raw.llmPostprocessMode),
     llmPostprocessNoteContextChars: readClampedInteger(
       raw.llmPostprocessNoteContextChars,
       DEFAULT_PLUGIN_SETTINGS.llmPostprocessNoteContextChars,
@@ -380,6 +396,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       LLM_TOTAL_CONTEXT_CAP_MAX,
     ),
     llmPostprocessUserPresets: userPresets,
+    llmPostprocessPresetsInitialized: true,
     llmProviderConfigurations,
     llmRoutingPolicy: resolveLlmRoutingPolicy(raw, isFreshInstall),
     lastObsidianLanguage: readLastObsidianLanguage(raw.lastObsidianLanguage),
@@ -536,6 +553,8 @@ export function normalizeSmartParagraphPauseSettings(value: {
 export function resetLlmPostprocessDefaults(settings: PluginSettings): PluginSettings {
   return {
     ...settings,
+    llmPostprocessUserPresets: restoreDefaultPresets(settings.llmPostprocessUserPresets),
+    llmPostprocessPresetsInitialized: true,
     llmPostprocessLastEnabledMode: 'per_utterance',
     // Resetting configuration must not change whether transformation is enabled.
     llmPostprocessMode:
@@ -687,19 +706,16 @@ function migrateLlmPresetState(args: {
   const storedRef = typeof args.storedRef === 'string' ? args.storedRef : null;
   const resolvedRef = resolvePresetEntry(storedRef, args.userPresets)?.ref ?? null;
   const fallbackRef = resolveActivePresetEntry(null, args.userPresets).ref;
+  // A stored built-in ref made the old prompt a mirror, including removed defaults.
+  if (storedRef?.startsWith('builtin:')) {
+    return { activeRef: resolvedRef ?? fallbackRef, userPresets: args.userPresets };
+  }
   const prompt = typeof args.legacyPrompt === 'string' ? args.legacyPrompt.trim() : '';
 
   if (prompt.length === 0) {
     return { activeRef: resolvedRef ?? fallbackRef, userPresets: args.userPresets };
   }
   if (resolvedRef !== null) {
-    // Pre-redesign code nulled the ref whenever the prompt diverged from the
-    // selected preset, so a stored builtin ref is an explicit user choice and
-    // the legacy prompt is just a stale mirror of that builtin's old text —
-    // trust the ref even when the builtin's prompt changed across versions.
-    if (resolvedRef.startsWith('builtin:')) {
-      return { activeRef: resolvedRef, userPresets: args.userPresets };
-    }
     const active = resolveActivePresetEntry(resolvedRef, args.userPresets);
     if (active.preset.prompt === prompt) {
       return { activeRef: resolvedRef, userPresets: args.userPresets };
@@ -711,7 +727,10 @@ function migrateLlmPresetState(args: {
   if (matching !== undefined) {
     return { activeRef: matching.ref, userPresets: args.userPresets };
   }
-  if (args.userPresets.length >= LLM_USER_PRESET_MAX_COUNT) {
+  if (
+    args.userPresets.filter((preset) => !isDefaultPreset(preset)).length >=
+    LLM_USER_PRESET_MAX_COUNT
+  ) {
     console.warn(
       '[Speech Kit] Custom LLM prompt could not be migrated into a preset: the preset limit is reached. The prompt was dropped.',
     );
@@ -858,10 +877,6 @@ function readUserPresets(value: unknown): LlmPreset[] {
   const seenIds = new Set<string>();
 
   for (const entry of value) {
-    if (accepted.length >= LLM_USER_PRESET_MAX_COUNT) {
-      break;
-    }
-
     if (!isRecord(entry)) {
       continue;
     }
@@ -911,6 +926,12 @@ function readUserPresets(value: unknown): LlmPreset[] {
       ...(useNoteContext !== undefined ? { useNoteContext } : {}),
     };
 
+    if (
+      !isDefaultPreset({ id, label, prompt, output }) &&
+      accepted.filter((preset) => !isDefaultPreset(preset)).length >= LLM_USER_PRESET_MAX_COUNT
+    ) {
+      continue;
+    }
     accepted.push({
       ...(description.length > 0
         ? { description: description.slice(0, LLM_USER_PRESET_MAX_DESCRIPTION_CHARS) }

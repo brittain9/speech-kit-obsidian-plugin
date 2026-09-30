@@ -467,31 +467,16 @@ export const nl = {
     'Bij dicteren wordt het onbewerkte lokale transcript ingevoegd. Schakel Transformeren in als u wilt opschonen, herschrijven of samenvattingen wilt maken.',
   'llm.sidebar.off.summary': 'Ruwe transcriptie',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Opruimen',
-  'llm.preset.builtin.cleanUp.description':
-    'Corrigeer transcriptieartefacten, opvullingen, interpunctie en hoofdlettergebruik met behoud van stem en betekenis.',
-  'llm.preset.builtin.cleanUp.prompt':
-    'Schoon gedicteerde spraak-naar-tekst op. Corrigeer stopwoorden, valse starts, herhalingen, interpunctie, hoofdlettergebruik en duidelijke herkenningsfouten. Behoud de toon en betekenis van de spreker. Gebruik de referentiecontext alleen voor spelling. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker daar expliciet om vraagt. Geef alleen de opgeschoonde tekst terug, zonder inleiding of commentaar.',
-  'llm.preset.builtin.professionalWriting.label': 'Professioneel schrijven',
-  'llm.preset.builtin.professionalWriting.description':
-    'Herschrijf in beknopt, gepolijst professioneel proza, met behoud van feiten, namen, beslissingen en technische termen.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    'Herschrijf gedicteerde spraak als beknopte, professionele tekst. Gebruik de actieve vorm en verwijder stopwoorden en afzwakkingen. Behoud elk feit, elke naam en elke term. Gebruik de referentiecontext voor spelling. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker daar expliciet om vraagt. Geef alleen de herschreven tekst terug, zonder inleiding of commentaar.',
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Voeg een korte TLDR-samenvatting toe boven uw onaangeroerde transcript.',
   'llm.preset.builtin.tldr.prompt':
-    "Schrijf een TLDR-samenvatting van het gedicteerde transcript: een kop 'TLDR' gevolgd door 1-3 korte opsommingen die de belangrijkste punten bestrijken. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker expliciet om vertaling vraagt. Geef alleen de kop en de opsommingen terug; herhaal de transcriptie niet, geen preambule, geen commentaar.",
+    "Schrijf een TLDR-samenvatting van het gedicteerde transcript: een kop 'TLDR' gevolgd door korte opsommingen waarvan het aantal past bij de inhoud, zodat de kern snel te overzien is. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker expliciet om vertaling vraagt. Geef alleen de kop en de opsommingen terug; herhaal de transcriptie niet, geen preambule, geen commentaar.",
   'llm.preset.builtin.markdownFormatting.label': 'Markdown-opmaak',
   'llm.preset.builtin.markdownFormatting.description':
     'Formatteer het transcript van de sessie opnieuw als gestructureerd Markdown met kopjes, lijsten en nadruk.',
   'llm.preset.builtin.markdownFormatting.prompt':
     'Formatteer gedicteerde spraak opnieuw als goed gestructureerde Markdown. Voeg waar nodig koppen, lijsten met opsommingstekens of nummers, vetgedrukte tekst, nadruk en afgeschermde codeblokken toe. Schoon stopwoorden, valse starts, interpunctie en hoofdlettergebruik licht op; behoud de formulering van de spreker, elk feit, elke naam en elke term. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker daar expliciet om vraagt. Geef alleen de Markdown terug, zonder inleiding of commentaar.',
-  'llm.preset.builtin.actionItems.label': 'Actiepunten',
-  'llm.preset.builtin.actionItems.description':
-    'Voeg een checklist met actiepunten toe onder uw onaangeroerde transcript.',
-  'llm.preset.builtin.actionItems.prompt':
-    "Haal actiepunten uit het gedicteerde transcript. Geef de kop 'Actiepunten', gevolgd door een Markdown-checklist met concrete taken. Vermeld een verantwoordelijke als de spreker die noemt. Geef niets terug als het transcript geen actiepunten bevat. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker daar expliciet om vraagt. Geef alleen de kop en de checklist terug; herhaal het transcript niet en voeg geen inleiding of commentaar toe.",
   'llm.preset.timing.perUtterance': 'Loopt na elke zin',
   'llm.preset.timing.batch': 'Loopt 1 keer bij stop',
   'llm.preset.timing.either': 'Werkt in beide modi',

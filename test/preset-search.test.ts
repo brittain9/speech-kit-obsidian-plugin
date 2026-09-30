@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { describePresetBehavior, listPresetEntries } from '../src/llm/presets';
+import {
+  createDefaultPresets,
+  describePresetBehavior,
+  listPresetEntries,
+} from '../src/llm/presets';
 import { searchPresetEntries } from '../src/ui/preset-search';
 import { createUserPreset } from './fixtures/llm';
 
@@ -34,9 +38,12 @@ describe('searchPresetEntries', () => {
   });
 
   it('matches on description when the label does not match', () => {
-    const hits = searchPresetEntries(listPresetEntries([]), substringSearch('checklist'));
+    const hits = searchPresetEntries(
+      listPresetEntries(createDefaultPresets()),
+      substringSearch('reference guide'),
+    );
     expect(hits).toHaveLength(1);
-    expect(hits[0]?.entry.preset.id).toBe('action-items');
+    expect(hits[0]?.entry.preset.id).toBe('default:cheat-sheet');
     expect(hits[0]?.labelMatches).toBeNull();
     expect(hits[0]?.descriptionMatches).not.toBeNull();
   });
