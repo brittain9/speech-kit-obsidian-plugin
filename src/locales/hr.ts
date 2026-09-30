@@ -678,31 +678,16 @@ export const hr = {
     'Diktiranje umeće izvorni lokalni transkript. Uključite transformaciju kada želite čišćenje, prepisivanje ili sažetke.',
   'llm.sidebar.off.summary': 'Izvorni transkript',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Čišćenje',
-  'llm.preset.builtin.cleanUp.description':
-    'Ispravlja artefakte transkripcije, poštapalice, interpunkciju i velika slova uz očuvanje stila izražavanja i značenja.',
-  'llm.preset.builtin.cleanUp.prompt':
-    'Očisti diktirani tekst dobiven pretvorbom govora u tekst. Ispravi poštapalice, prekinute započete rečenice, ponavljanja, interpunkciju, velika slova i očite pogreške prepoznavanja. Sačuvaj govornikov stil izražavanja i značenje. Referentni kontekst upotrijebi samo za pravopis. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo očišćeni tekst — bez uvoda, bez komentara.',
-  'llm.preset.builtin.professionalWriting.label': 'Profesionalno pisanje',
-  'llm.preset.builtin.professionalWriting.description':
-    'Prepisuje tekst u sažetu, dotjeranu profesionalnu prozu uz očuvanje činjenica, imena, odluka i tehničkih pojmova.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    'Prepiši diktirani govor kao sažetu profesionalnu prozu. Upotrebljavaj aktiv, bez poštapalica i suzdržanih formulacija. Sačuvaj svaku činjenicu, ime i pojam. Referentni kontekst upotrijebi za pravopis. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo prepisani tekst — bez uvoda, bez komentara.',
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Dodaje kratak TLDR sažetak iznad vašeg netaknutog transkripta.',
   'llm.preset.builtin.tldr.prompt':
-    'Napiši TLDR sažetak diktiranog transkripta: naslov „TLDR” nakon kojeg slijedi jedna do tri kratke natuknice s ključnim točkama. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo naslov i natuknice — nemoj ponavljati transkript, bez uvoda, bez komentara.',
+    'Napiši TLDR sažetak diktiranog transkripta: naslov „TLDR” nakon kojeg slijedi kratke natuknice čiji broj odgovara količini bitnog sadržaja i omogućuje brz pregled. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo naslov i natuknice — nemoj ponavljati transkript, bez uvoda, bez komentara.',
   'llm.preset.builtin.markdownFormatting.label': 'Markdown oblikovanje',
   'llm.preset.builtin.markdownFormatting.description':
     'Preoblikuje transkript sesije u strukturirani Markdown s naslovima, popisima i isticanjem.',
   'llm.preset.builtin.markdownFormatting.prompt':
     'Preoblikuj diktirani govor u dobro strukturirani Markdown. Dodaj naslove, natuknice ili numerirane popise, podebljanje, isticanje i ograđene blokove koda ondje gdje sadržaj to opravdava. Lagano očisti poštapalice, prekinute započete rečenice, interpunkciju i velika slova; sačuvaj govornikov izričaj, svaku činjenicu, ime i pojam. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo Markdown — bez uvoda, bez komentara.',
-  'llm.preset.builtin.actionItems.label': 'Zadaci za izvršenje',
-  'llm.preset.builtin.actionItems.description':
-    'Dodaje kontrolni popis zadataka ispod vašeg netaknutog transkripta.',
-  'llm.preset.builtin.actionItems.prompt':
-    'Izdvoji zadatke za izvršenje iz diktiranog transkripta. Ispiši naslov „Zadaci za izvršenje” nakon kojeg slijedi Markdown kontrolni popis konkretnih zadataka, uz navođenje odgovorne osobe kada je govornik spomene. Ako transkript ne sadrži nijedan zadatak za izvršenje, ne vraćaj ništa. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo naslov i kontrolni popis — nemoj ponavljati transkript, bez uvoda, bez komentara.',
   'llm.preset.timing.perUtterance': 'Izvodi se nakon svake fraze',
   'llm.preset.timing.batch': 'Izvodi se jednom pri zaustavljanju',
   'llm.preset.timing.either': 'Izvodi se u oba načina rada',

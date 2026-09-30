@@ -336,6 +336,10 @@ export class LocalDictationView extends ItemView {
       .setName(t('llm.sidebar.activePreset'))
       .setDesc(description)
       .addDropdown((dropdown) => {
+        if (entries.length === 0) {
+          dropdown.addOption('', t('llm.preset.none'));
+          dropdown.setDisabled(true);
+        }
         for (const entry of entries) {
           dropdown.addOption(entry.ref, formatPresetOptionLabel(entry.preset));
         }

@@ -40,11 +40,29 @@ export interface LlmPreset {
 }
 
 export type LlmBuiltinPresetId =
-  | 'clean-up'
-  | 'professional-writing'
   | 'tldr'
   | 'markdown-formatting'
-  | 'action-items';
+  | 'summary'
+  | 'key-takeaways'
+  | 'explain-simply'
+  | 'outline'
+  | 'study-notes'
+  | 'meeting-notes'
+  | 'flashcards'
+  | 'claims-and-evidence'
+  | 'cheat-sheet'
+  | 'step-by-step-guide'
+  | 'faq'
+  | 'timeline'
+  | 'story-version'
+  | 'podcast-show-notes'
+  | 'social-post'
+  | 'memorable-quotes'
+  | 'ideas-to-try'
+  | 'one-page-briefing'
+  | 'explain-with-analogies'
+  | 'youtube-notes'
+  | 'comedy-recap';
 
 export interface LlmPresetEntry {
   isBuiltin: boolean;
@@ -52,30 +70,19 @@ export interface LlmPresetEntry {
   ref: string;
 }
 
-const CLEAN_UP_PROMPT = t('llm.preset.builtin.cleanUp.prompt');
-
-const PROFESSIONAL_WRITING_PROMPT = t('llm.preset.builtin.professionalWriting.prompt');
-
 const TLDR_PROMPT = t('llm.preset.builtin.tldr.prompt');
 
 const MARKDOWN_FORMATTING_PROMPT = t('llm.preset.builtin.markdownFormatting.prompt');
 
-const ACTION_ITEMS_PROMPT = t('llm.preset.builtin.actionItems.prompt');
-
 export const LLM_BUILTIN_PRESETS = [
   {
-    id: 'clean-up',
-    label: t('llm.preset.builtin.cleanUp.label'),
-    description: t('llm.preset.builtin.cleanUp.description'),
+    id: 'summary',
+    label: t('llm.preset.builtin.summary.label'),
+    description: t('llm.preset.builtin.summary.description'),
     output: 'replace',
-    prompt: CLEAN_UP_PROMPT,
-  },
-  {
-    id: 'professional-writing',
-    label: t('llm.preset.builtin.professionalWriting.label'),
-    description: t('llm.preset.builtin.professionalWriting.description'),
-    output: 'replace',
-    prompt: PROFESSIONAL_WRITING_PROMPT,
+    prompt: t('llm.preset.builtin.summary.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
   },
   {
     id: 'tldr',
@@ -84,6 +91,187 @@ export const LLM_BUILTIN_PRESETS = [
     output: 'add_above',
     prompt: TLDR_PROMPT,
     timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'key-takeaways',
+    label: t('llm.preset.builtin.keyTakeaways.label'),
+    description: t('llm.preset.builtin.keyTakeaways.description'),
+    output: 'replace',
+    prompt: t('llm.preset.builtin.keyTakeaways.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'explain-simply',
+    label: t('llm.preset.builtin.explainSimply.label'),
+    description: t('llm.preset.builtin.explainSimply.description'),
+    output: 'replace',
+    prompt: t('llm.preset.builtin.explainSimply.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'outline',
+    label: t('llm.preset.builtin.outline.label'),
+    description: t('llm.preset.builtin.outline.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.outline.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'youtube-notes',
+    label: t('llm.preset.builtin.youtubeNotes.label'),
+    description: t('llm.preset.builtin.youtubeNotes.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.youtubeNotes.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'podcast-show-notes',
+    label: t('llm.preset.builtin.podcastShowNotes.label'),
+    description: t('llm.preset.builtin.podcastShowNotes.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.podcastShowNotes.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'study-notes',
+    label: t('llm.preset.builtin.studyNotes.label'),
+    description: t('llm.preset.builtin.studyNotes.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.studyNotes.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'meeting-notes',
+    label: t('llm.preset.builtin.meetingNotes.label'),
+    description: t('llm.preset.builtin.meetingNotes.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.meetingNotes.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'flashcards',
+    label: t('llm.preset.builtin.flashcards.label'),
+    description: t('llm.preset.builtin.flashcards.description'),
+    output: 'add_below',
+    prompt: t('llm.preset.builtin.flashcards.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'claims-and-evidence',
+    label: t('llm.preset.builtin.claimsAndEvidence.label'),
+    description: t('llm.preset.builtin.claimsAndEvidence.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.claimsAndEvidence.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'cheat-sheet',
+    label: t('llm.preset.builtin.cheatSheet.label'),
+    description: t('llm.preset.builtin.cheatSheet.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.cheatSheet.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'step-by-step-guide',
+    label: t('llm.preset.builtin.stepByStepGuide.label'),
+    description: t('llm.preset.builtin.stepByStepGuide.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.stepByStepGuide.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'faq',
+    label: t('llm.preset.builtin.faq.label'),
+    description: t('llm.preset.builtin.faq.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.faq.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'timeline',
+    label: t('llm.preset.builtin.timeline.label'),
+    description: t('llm.preset.builtin.timeline.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.timeline.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'story-version',
+    label: t('llm.preset.builtin.storyVersion.label'),
+    description: t('llm.preset.builtin.storyVersion.description'),
+    output: 'replace',
+    prompt: t('llm.preset.builtin.storyVersion.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.4, useNoteContext: false },
+  },
+  {
+    id: 'social-post',
+    label: t('llm.preset.builtin.socialPost.label'),
+    description: t('llm.preset.builtin.socialPost.description'),
+    output: 'add_below',
+    prompt: t('llm.preset.builtin.socialPost.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.4, useNoteContext: false },
+  },
+  {
+    id: 'memorable-quotes',
+    label: t('llm.preset.builtin.memorableQuotes.label'),
+    description: t('llm.preset.builtin.memorableQuotes.description'),
+    output: 'add_below',
+    prompt: t('llm.preset.builtin.memorableQuotes.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'ideas-to-try',
+    label: t('llm.preset.builtin.ideasToTry.label'),
+    description: t('llm.preset.builtin.ideasToTry.description'),
+    output: 'add_below',
+    prompt: t('llm.preset.builtin.ideasToTry.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.4, useNoteContext: false },
+  },
+  {
+    id: 'one-page-briefing',
+    label: t('llm.preset.builtin.onePageBriefing.label'),
+    description: t('llm.preset.builtin.onePageBriefing.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.onePageBriefing.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'explain-with-analogies',
+    label: t('llm.preset.builtin.explainWithAnalogies.label'),
+    description: t('llm.preset.builtin.explainWithAnalogies.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.explainWithAnalogies.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.4, useNoteContext: false },
+  },
+  {
+    id: 'comedy-recap',
+    label: t('llm.preset.builtin.comedyRecap.label'),
+    description: t('llm.preset.builtin.comedyRecap.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.comedyRecap.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.5, useNoteContext: false },
   },
   {
     id: 'markdown-formatting',
@@ -93,17 +281,9 @@ export const LLM_BUILTIN_PRESETS = [
     prompt: MARKDOWN_FORMATTING_PROMPT,
     timing: 'batch',
   },
-  {
-    id: 'action-items',
-    label: t('llm.preset.builtin.actionItems.label'),
-    description: t('llm.preset.builtin.actionItems.description'),
-    output: 'add_below',
-    prompt: ACTION_ITEMS_PROMPT,
-    timing: 'batch',
-  },
 ] as const satisfies readonly (LlmPreset & { id: LlmBuiltinPresetId })[];
 
-export const DEFAULT_LLM_BUILTIN_PRESET_ID: LlmBuiltinPresetId = 'clean-up';
+export const DEFAULT_LLM_BUILTIN_PRESET_ID: LlmBuiltinPresetId = 'summary';
 
 export function getLlmBuiltinPreset(id: LlmBuiltinPresetId): LlmPreset {
   const preset = LLM_BUILTIN_PRESETS.find((entry) => entry.id === id);
@@ -151,56 +331,60 @@ export function parseStyleRef(value: unknown): LlmStyleRef | null {
   return null;
 }
 
-export function listPresetEntries(userPresets: readonly LlmPreset[]): LlmPresetEntry[] {
-  return [
-    ...LLM_BUILTIN_PRESETS.map((preset) => ({
-      isBuiltin: true,
-      preset,
-      ref: formatStyleRef({ kind: 'builtin', id: preset.id }),
-    })),
-    ...userPresets.map((preset) => ({
-      isBuiltin: false,
-      preset,
-      ref: formatStyleRef({ kind: 'user', id: preset.id }),
-    })),
-  ];
+export function createDefaultPresets(): LlmPreset[] {
+  return LLM_BUILTIN_PRESETS.map((preset: LlmPreset) => ({
+    ...preset,
+    id: `default:${preset.id}`,
+    ...(preset.overrides !== undefined ? { overrides: { ...preset.overrides } } : {}),
+  }));
+}
+
+export function isDefaultPreset(preset: LlmPreset): boolean {
+  return LLM_BUILTIN_PRESETS.some((entry) => preset.id === `default:${entry.id}`);
+}
+
+export function restoreDefaultPresets(presets: readonly LlmPreset[]): LlmPreset[] {
+  return [...createDefaultPresets(), ...presets.filter((preset) => !isDefaultPreset(preset))];
+}
+
+export function listPresetEntries(presets: readonly LlmPreset[]): LlmPresetEntry[] {
+  return presets.map((preset) => ({
+    isBuiltin: isDefaultPreset(preset),
+    preset,
+    ref: formatStyleRef({ kind: 'user', id: preset.id }),
+  }));
 }
 
 export function resolvePresetEntry(
   ref: string | null,
-  userPresets: readonly LlmPreset[],
+  presets: readonly LlmPreset[],
 ): LlmPresetEntry | null {
   const parsed = parseStyleRef(ref);
-  if (parsed === null) {
-    return null;
-  }
-  if (parsed.kind === 'builtin') {
-    return {
-      isBuiltin: true,
-      preset: getLlmBuiltinPreset(parsed.id),
-      ref: formatStyleRef(parsed),
-    };
-  }
-  const preset = userPresets.find((entry) => entry.id === parsed.id);
-  if (preset === undefined) {
-    return null;
-  }
-  return { isBuiltin: false, preset, ref: formatStyleRef(parsed) };
+  if (parsed === null) return null;
+  // Old builtin refs point to the saved, editable copy during migration.
+  const id = parsed.kind === 'builtin' ? `default:${parsed.id}` : parsed.id;
+  return listPresetEntries(presets).find((entry) => entry.preset.id === id) ?? null;
 }
 
 export function resolveActivePresetEntry(
   ref: string | null,
-  userPresets: readonly LlmPreset[],
+  presets: readonly LlmPreset[],
 ): LlmPresetEntry {
-  const resolved = resolvePresetEntry(ref, userPresets);
-  if (resolved !== null) {
-    return resolved;
-  }
-  return {
-    isBuiltin: true,
-    preset: getLlmBuiltinPreset(DEFAULT_LLM_BUILTIN_PRESET_ID),
-    ref: formatStyleRef({ kind: 'builtin', id: DEFAULT_LLM_BUILTIN_PRESET_ID }),
-  };
+  return (
+    resolvePresetEntry(ref, presets) ??
+    resolvePresetEntry(`user:default:${DEFAULT_LLM_BUILTIN_PRESET_ID}`, presets) ??
+    listPresetEntries(presets)[0] ?? {
+      isBuiltin: false,
+      preset: {
+        id: '',
+        label: t('llm.preset.none'),
+        output: 'replace',
+        prompt: '',
+        timing: 'batch',
+      },
+      ref: '',
+    }
+  );
 }
 
 export interface LlmTransformGlobals {

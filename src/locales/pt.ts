@@ -468,31 +468,16 @@ export const pt = {
     'O ditado insere a transcrição local original. Ative Transformar quando pretender fazer limpeza, reescrever ou resumir.',
   'llm.sidebar.off.summary': 'Transcrição original',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Limpeza',
-  'llm.preset.builtin.cleanUp.description':
-    'Corrigir artefactos da transcrição, palavras de preenchimento, pontuação e maiúsculas, preservando o estilo e o significado.',
-  'llm.preset.builtin.cleanUp.prompt':
-    'Limpa o texto ditado. Corrige palavras de preenchimento, falsos arranques, repetições, pontuação, maiúsculas e erros óbvios de reconhecimento. Preserva o estilo e o significado do orador. Utiliza o contexto de referência apenas para a ortografia. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o texto limpo — sem introdução nem comentários.',
-  'llm.preset.builtin.professionalWriting.label': 'Escrita profissional',
-  'llm.preset.builtin.professionalWriting.description':
-    'Reescrever como prosa profissional, concisa e cuidada, preservando factos, nomes, decisões e termos técnicos.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    'Reescreve o discurso ditado como prosa profissional concisa. Utiliza a voz ativa, sem palavras de preenchimento nem linguagem evasiva. Preserva todos os factos, nomes e termos. Utiliza o contexto de referência para a ortografia. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o texto reescrito — sem introdução nem comentários.',
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Adicionar um breve resumo TLDR acima da transcrição sem a alterar.',
   'llm.preset.builtin.tldr.prompt':
-    'Escreve um resumo TLDR da transcrição ditada: um título «TLDR» seguido de 1 a 3 pontos curtos que abranjam os aspetos principais. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o título e os pontos — não repitas a transcrição, não incluas introdução nem comentários.',
+    'Escreve um resumo TLDR da transcrição ditada: um título «TLDR» seguido de pontos curtos, em número proporcional ao conteúdo relevante, que permitam captar rapidamente os aspetos principais. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o título e os pontos — não repitas a transcrição, não incluas introdução nem comentários.',
   'llm.preset.builtin.markdownFormatting.label': 'Formatação Markdown',
   'llm.preset.builtin.markdownFormatting.description':
     'Reformatar a transcrição da sessão como Markdown estruturado, com títulos, listas e ênfase.',
   'llm.preset.builtin.markdownFormatting.prompt':
     'Reformata o discurso ditado como Markdown bem estruturado. Adiciona títulos, listas com marcadores ou numeradas, negrito, ênfase e blocos de código delimitados onde o conteúdo o justificar. Corrige ligeiramente as palavras de preenchimento, os falsos arranques, a pontuação e as maiúsculas; preserva as palavras do orador e todos os factos, nomes e termos. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o Markdown — sem introdução nem comentários.',
-  'llm.preset.builtin.actionItems.label': 'Tarefas',
-  'llm.preset.builtin.actionItems.description':
-    'Adicionar uma lista de tarefas abaixo da transcrição sem a alterar.',
-  'llm.preset.builtin.actionItems.prompt':
-    'Extrai tarefas da transcrição ditada. Produz um título «Tarefas» seguido de uma lista de verificação Markdown com tarefas concretas, indicando um responsável quando o orador mencionar um. Se a transcrição não contiver tarefas, não devolvas nada. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o título e a lista de verificação — não repitas a transcrição, não incluas introdução nem comentários.',
   'llm.preset.timing.perUtterance': 'É executada após cada frase',
   'llm.preset.timing.batch': 'É executada uma vez ao parar',
   'llm.preset.timing.either': 'É executada em qualquer dos modos',

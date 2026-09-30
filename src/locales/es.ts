@@ -472,31 +472,16 @@ export const es = {
     'El dictado inserta la transcripción local sin procesar. Active Transformar cuando desee realizar limpieza, reescritura o resúmenes.',
   'llm.sidebar.off.summary': 'Transcripción sin procesar',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Limpiar',
-  'llm.preset.builtin.cleanUp.description':
-    'Corrija los artefactos de transcripción, el relleno, la puntuación y el uso de mayúsculas, preservando al mismo tiempo la voz y el significado.',
-  'llm.preset.builtin.cleanUp.prompt':
-    'Limpie el texto dictado. Corrija muletillas, comienzos en falso, repeticiones, puntuación, mayúsculas y errores evidentes de reconocimiento. Preserve la voz y el significado del hablante. Utilice el contexto de referencia solo para la ortografía. Escriba en el idioma original de la transcripción. No traduzca a menos que el usuario lo solicite explícitamente. Devuelva únicamente el texto limpio, sin preámbulo ni comentarios.',
-  'llm.preset.builtin.professionalWriting.label': 'Escritura profesional',
-  'llm.preset.builtin.professionalWriting.description':
-    'Reescriba en prosa profesional concisa y pulida preservando hechos, nombres, decisiones y términos técnicos.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    'Reescriba el texto dictado como prosa profesional y concisa. Use la voz activa, sin muletillas ni evasivas. Preserve todos los hechos, nombres y términos. Utilice el contexto de referencia para la ortografía. Escriba en el idioma original de la transcripción. No traduzca a menos que el usuario lo solicite explícitamente. Devuelva únicamente el texto reescrito, sin preámbulo ni comentarios.',
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Agregue un breve resumen de TLDR encima de su transcripción intacta.',
   'llm.preset.builtin.tldr.prompt':
-    "Escriba un resumen TLDR de la transcripción dictada: un título 'TLDR' seguido de entre 1 y 3 viñetas breves que cubran los puntos clave. Escriba en el idioma original de la transcripción. No traduzca a menos que el usuario lo solicite explícitamente. Devuelva únicamente el título y las viñetas; no repita la transcripción ni añada un preámbulo o comentarios.",
+    "Escriba un resumen TLDR de la transcripción dictada: un título 'TLDR' seguido de viñetas breves cuya cantidad se ajuste al contenido sustancial y permita captar rápidamente lo esencial. Escriba en el idioma original de la transcripción. No traduzca a menos que el usuario lo solicite explícitamente. Devuelva únicamente el título y las viñetas; no repita la transcripción ni añada un preámbulo o comentarios.",
   'llm.preset.builtin.markdownFormatting.label': 'Formato Markdown',
   'llm.preset.builtin.markdownFormatting.description':
     'Vuelva a formatear la transcripción de la sesión como estructurada Markdown con títulos, listas y énfasis.',
   'llm.preset.builtin.markdownFormatting.prompt':
     'Reformatee el texto dictado como Markdown bien estructurado. Añada encabezados, listas numeradas o con viñetas, negrita, énfasis y bloques de código delimitados donde el contenido lo requiera. Corrija ligeramente las muletillas, los comienzos en falso, la puntuación y las mayúsculas; preserve la redacción del hablante y todos los hechos, nombres y términos. Escriba en el idioma original de la transcripción. No traduzca a menos que el usuario lo solicite explícitamente. Devuelva únicamente el Markdown, sin preámbulo ni comentarios.',
-  'llm.preset.builtin.actionItems.label': 'Elementos de acción',
-  'llm.preset.builtin.actionItems.description':
-    'Agregue una lista de verificación de elementos de acción debajo de su transcripción intacta.',
-  'llm.preset.builtin.actionItems.prompt':
-    "Extraiga elementos de acción de la transcripción dictada. Genere un encabezado 'Elementos de acción' seguido de una lista de verificación Markdown con tareas concretas e indique al responsable cuando el hablante lo mencione. Si la transcripción no contiene elementos de acción, no devuelva nada. Escriba en el idioma original de la transcripción. No traduzca a menos que el usuario lo solicite explícitamente. Devuelva únicamente el título y la lista de verificación; no repita la transcripción ni añada un preámbulo o comentarios.",
   'llm.preset.timing.perUtterance': 'Se ejecuta después de cada frase.',
   'llm.preset.timing.batch': 'Se ejecuta una vez al detenerse',
   'llm.preset.timing.either': 'Se ejecuta en cualquier modo',

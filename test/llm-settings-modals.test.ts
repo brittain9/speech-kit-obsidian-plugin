@@ -8,6 +8,15 @@ import { LlmTimingSettingsModal } from '../src/ui/llm-timing-settings-modal';
 import { Setting as MockSetting } from './__mocks__/obsidian';
 import { createUserPreset } from './fixtures/llm';
 
+const INHERITING_SETTINGS = {
+  ...DEFAULT_PLUGIN_SETTINGS,
+  llmPostprocessActivePresetRef: 'user:inherit',
+  llmPostprocessUserPresets: [
+    createUserPreset({ id: 'inherit' }),
+    ...DEFAULT_PLUGIN_SETTINGS.llmPostprocessUserPresets,
+  ],
+};
+
 describe('LLM transform settings modals', () => {
   beforeEach(() => {
     MockSetting.reset();
@@ -16,7 +25,7 @@ describe('LLM transform settings modals', () => {
   it('does not persist a fractional minimum-word value', async () => {
     const saveSettings = vi.fn(async () => {});
     const modal = new LlmTimingSettingsModal({} as App, {
-      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      getSettings: () => INHERITING_SETTINGS,
       saveSettings,
     });
 
@@ -37,7 +46,7 @@ describe('LLM transform settings modals', () => {
   });
 
   it('persists a valid minimum-word value when it changes', async () => {
-    let settings = DEFAULT_PLUGIN_SETTINGS;
+    let settings = INHERITING_SETTINGS;
     const saveSettings = vi.fn(async (next) => {
       settings = next;
     });
@@ -60,7 +69,7 @@ describe('LLM transform settings modals', () => {
 
   it('uses preset-pinned timing to disable phrase-only context fields', async () => {
     const settings = {
-      ...DEFAULT_PLUGIN_SETTINGS,
+      ...INHERITING_SETTINGS,
       llmPostprocessActivePresetRef: 'builtin:tldr',
       llmPostprocessMode: 'per_utterance' as const,
     };
@@ -89,7 +98,7 @@ describe('LLM transform settings modals', () => {
       overrides: { minWords: 12, temperature: 1.2 },
     });
     const settings = {
-      ...DEFAULT_PLUGIN_SETTINGS,
+      ...INHERITING_SETTINGS,
       llmPostprocessActivePresetRef: `user:${preset.id}`,
       llmPostprocessUserPresets: [preset],
     };
@@ -114,7 +123,7 @@ describe('LLM transform settings modals', () => {
 
   it('persists each applicable advanced model setting when it changes', async () => {
     let settings = {
-      ...DEFAULT_PLUGIN_SETTINGS,
+      ...INHERITING_SETTINGS,
       llmRoutingPolicy: {
         defaultProviderId: 'ollama' as const,
         kind: 'transcript_size' as const,
@@ -145,7 +154,7 @@ describe('LLM transform settings modals', () => {
 
   it('hides network settings for fixed Ollama routing', () => {
     const settings = {
-      ...DEFAULT_PLUGIN_SETTINGS,
+      ...INHERITING_SETTINGS,
       llmRoutingPolicy: { kind: 'fixed' as const, providerId: 'ollama' as const },
     };
 

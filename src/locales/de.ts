@@ -473,31 +473,16 @@ export const de = {
     'Diktat fügt das rohe lokale Transkript ein. Aktivieren Sie Transformieren, wenn Sie Bereinigungen, Neuschreibungen oder Zusammenfassungen wünschen.',
   'llm.sidebar.off.summary': 'Rohes Transkript',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Bereinigung',
-  'llm.preset.builtin.cleanUp.description':
-    'Beheben Sie Transkriptionsartefakte, Füller, Zeichensetzung und Großschreibung, während Stimme und Bedeutung erhalten bleiben.',
-  'llm.preset.builtin.cleanUp.prompt':
-    'Bereinigen Sie den diktierten Text. Korrigieren Sie Füllwörter, Fehlstarts, Wiederholungen, Zeichensetzung, Groß- und Kleinschreibung sowie offensichtliche Erkennungsfehler. Bewahren Sie Stimme und Bedeutung des Sprechers. Verwenden Sie den Referenzkontext nur für die Rechtschreibung. Schreiben Sie in der Originalsprache des Transkripts. Übersetzen Sie nur auf ausdrücklichen Wunsch des Benutzers. Geben Sie ausschließlich den bereinigten Text zurück, ohne Einleitung oder Kommentar.',
-  'llm.preset.builtin.professionalWriting.label': 'Berufliches Texten',
-  'llm.preset.builtin.professionalWriting.description':
-    'Schreiben Sie Ihre Texte in prägnante, ausgefeilte Fachprosa um und behalten Sie dabei Fakten, Namen, Entscheidungen und Fachbegriffe bei.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    'Schreiben Sie den diktierten Text als prägnante professionelle Prosa um. Verwenden Sie aktive Formulierungen ohne Füllwörter oder Relativierungen. Bewahren Sie alle Fakten, Namen und Begriffe. Verwenden Sie den Referenzkontext für die Rechtschreibung. Schreiben Sie in der Originalsprache des Transkripts. Übersetzen Sie nur auf ausdrücklichen Wunsch des Benutzers. Geben Sie ausschließlich den umgeschriebenen Text zurück, ohne Einleitung oder Kommentar.',
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Fügen Sie über Ihrem unberührten Transkript eine kurze TLDR-Zusammenfassung hinzu.',
   'llm.preset.builtin.tldr.prompt':
-    'Schreiben Sie eine TLDR-Zusammenfassung des diktierten Transkripts: eine „TLDR“-Überschrift, gefolgt von 1–3 kurzen Aufzählungszeichen, die die wichtigsten Punkte abdecken. Schreiben Sie in der Originalsprache des Transkripts. Übersetzen Sie niemals, es sei denn, der Benutzer fordert ausdrücklich eine Übersetzung an. Geben Sie nur die Überschrift und die Aufzählungszeichen zurück – wiederholen Sie nicht das Transkript, keine Einleitung, keinen Kommentar.',
+    'Schreiben Sie eine TLDR-Zusammenfassung des diktierten Transkripts: eine „TLDR“-Überschrift, gefolgt von kurzen Stichpunkten, deren Anzahl sich nach dem wesentlichen Inhalt richtet und die einen schnellen Überblick geben. Schreiben Sie in der Originalsprache des Transkripts. Übersetzen Sie niemals, es sei denn, der Benutzer fordert ausdrücklich eine Übersetzung an. Geben Sie nur die Überschrift und die Aufzählungszeichen zurück – wiederholen Sie nicht das Transkript, keine Einleitung, keinen Kommentar.',
   'llm.preset.builtin.markdownFormatting.label': 'Markdown-Formatierung',
   'llm.preset.builtin.markdownFormatting.description':
     'Formatieren Sie das Sitzungsprotokoll als strukturiertes Markdown mit Überschriften, Listen und Hervorhebungen neu.',
   'llm.preset.builtin.markdownFormatting.prompt':
     'Formatieren Sie den diktierten Text als gut strukturiertes Markdown. Fügen Sie bei Bedarf Überschriften, Aufzählungen oder nummerierte Listen, Fettdruck, Hervorhebungen und umschlossene Codeblöcke hinzu. Bereinigen Sie Füllwörter, Fehlstarts, Zeichensetzung und Großschreibung behutsam; bewahren Sie den Wortlaut des Sprechers sowie alle Fakten, Namen und Begriffe. Schreiben Sie in der Originalsprache des Transkripts. Übersetzen Sie nur auf ausdrücklichen Wunsch des Benutzers. Geben Sie ausschließlich Markdown zurück, ohne Einleitung oder Kommentar.',
-  'llm.preset.builtin.actionItems.label': 'Aktionselemente',
-  'llm.preset.builtin.actionItems.description':
-    'Fügen Sie unter Ihrem unberührten Transkript eine Checkliste mit Aktionspunkten hinzu.',
-  'llm.preset.builtin.actionItems.prompt':
-    'Extrahieren Sie Aktionselemente aus dem diktierten Transkript. Geben Sie eine Überschrift „Aktionspunkte“ aus, gefolgt von einer Markdown-Checkliste mit konkreten Aufgaben, und nennen Sie einen Eigentümer, wenn der Sprecher einen erwähnt. Wenn das Transkript keine Aktionselemente enthält, wird nichts zurückgegeben. Schreiben Sie in der Originalsprache des Transkripts. Übersetzen Sie niemals, es sei denn, der Benutzer fordert ausdrücklich eine Übersetzung an. Geben Sie nur die Überschrift und die Checkliste zurück – wiederholen Sie nicht das Transkript, keine Einleitung, keinen Kommentar.',
   'llm.preset.timing.perUtterance': 'Läuft nach jeder Phrase',
   'llm.preset.timing.batch': 'Läuft einmal bei Stopp',
   'llm.preset.timing.either': 'Läuft in beiden Modi',

@@ -470,31 +470,16 @@ export const it = {
     'La dettatura inserisce la trascrizione locale grezza. Attiva Trasformazione quando vuoi ripulire o riscrivere il testo oppure creare riepiloghi.',
   'llm.sidebar.off.summary': 'Trascrizione grezza',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Pulizia',
-  'llm.preset.builtin.cleanUp.description':
-    'Corregge artefatti di trascrizione, intercalari, punteggiatura e maiuscole mantenendo la voce e il significato originali.',
-  'llm.preset.builtin.cleanUp.prompt':
-    'Ripulisci il testo dettato convertito da voce a testo. Correggi intercalari, false partenze, ripetizioni, punteggiatura, uso delle maiuscole ed evidenti errori di riconoscimento. Mantieni la voce e il significato di chi parla. Usa il contesto di riferimento solo per l’ortografia. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto il testo ripulito, senza introduzioni né commenti.',
-  'llm.preset.builtin.professionalWriting.label': 'Scrittura professionale',
-  'llm.preset.builtin.professionalWriting.description':
-    'Riscrive il testo in una prosa professionale concisa e curata, mantenendo fatti, nomi, decisioni e termini tecnici.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    'Riscrivi il testo dettato come prosa professionale concisa. Usa la forma attiva ed elimina intercalari ed espressioni esitanti. Mantieni ogni fatto, nome e termine. Usa il contesto di riferimento per l’ortografia. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto il testo riscritto, senza introduzioni né commenti.',
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Aggiunge un breve riepilogo TLDR sopra la trascrizione inalterata.',
   'llm.preset.builtin.tldr.prompt':
-    'Scrivi un riepilogo TLDR della trascrizione dettata: un’intestazione “TLDR” seguita da 1-3 brevi punti elenco che illustrino gli aspetti principali. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto l’intestazione e i punti elenco: non ripetere la trascrizione e non aggiungere introduzioni o commenti.',
+    'Scrivi un riepilogo TLDR della trascrizione dettata: un’intestazione “TLDR” seguita da brevi punti elenco, in numero proporzionato al contenuto sostanziale, che permettano di cogliere rapidamente gli aspetti principali. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto l’intestazione e i punti elenco: non ripetere la trascrizione e non aggiungere introduzioni o commenti.',
   'llm.preset.builtin.markdownFormatting.label': 'Formattazione Markdown',
   'llm.preset.builtin.markdownFormatting.description':
     'Riformatta la trascrizione della sessione come Markdown strutturato, con intestazioni, elenchi ed enfasi.',
   'llm.preset.builtin.markdownFormatting.prompt':
     'Riformatta il testo dettato come Markdown ben strutturato. Aggiungi intestazioni, elenchi puntati o numerati, grassetto, corsivo e blocchi di codice delimitati quando il contenuto lo richiede. Correggi con moderazione intercalari, false partenze, punteggiatura e uso delle maiuscole; mantieni le parole di chi parla e ogni fatto, nome e termine. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto il Markdown, senza introduzioni né commenti.',
-  'llm.preset.builtin.actionItems.label': 'Attività',
-  'llm.preset.builtin.actionItems.description':
-    'Aggiunge sotto la trascrizione inalterata una checklist delle attività.',
-  'llm.preset.builtin.actionItems.prompt':
-    'Estrai le attività dalla trascrizione dettata. Produci un’intestazione “Attività” seguita da una checklist Markdown di compiti concreti, indicando il responsabile quando viene menzionato. Se la trascrizione non contiene attività, non restituire nulla. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto l’intestazione e la checklist: non ripetere la trascrizione e non aggiungere introduzioni o commenti.',
   'llm.preset.timing.perUtterance': 'Viene eseguito dopo ogni frase',
   'llm.preset.timing.batch': 'Viene eseguito una volta all’interruzione',
   'llm.preset.timing.either': 'Viene eseguito in entrambe le modalità',

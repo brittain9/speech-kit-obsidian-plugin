@@ -32,8 +32,10 @@ export function withLlmPresetState(
 ): PluginSettings {
   return {
     ...settings,
+    llmPostprocessMode: state.userPresets.length === 0 ? 'off' : settings.llmPostprocessMode,
     llmPostprocessActivePresetRef: state.activePresetRef,
     llmPostprocessUserPresets: state.userPresets,
+    llmPostprocessPresetsInitialized: true,
   };
 }
 

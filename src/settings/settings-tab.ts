@@ -488,7 +488,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
 
     new Setting(llmCard)
       .setName(t('settings.llm.restoreDefaults.name'))
-      .setDesc(t('settings.llm.restoreDefaults.desc'))
+      .setDesc(t('settings.llm.restoreDefaults.editableDesc'))
       .addButton((button) => {
         styleDestructiveButton(
           button.setButtonText(t('settings.llm.restoreDefaults.button')),
@@ -496,7 +496,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
           new ConfirmModal(this.app, {
             confirmLabel: t('settings.llm.restoreDefaults.button'),
             destructive: true,
-            message: t('settings.llm.restoreDefaults.confirmMessage'),
+            message: t('settings.llm.restoreDefaults.confirmEditableMessage'),
             onConfirm: async () => {
               await this.dependencies.resetLlmTransformation();
               this.refreshSettingsTab();

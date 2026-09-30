@@ -2439,7 +2439,7 @@ describe('DictationSessionController', () => {
       getSettings: () =>
         createSettings({
           llmFeaturesEnabled: true,
-          llmPostprocessActivePresetRef: 'builtin:action-items',
+          llmPostprocessActivePresetRef: 'builtin:tldr',
           llmPostprocessMode: 'batch',
           selectedModel: createExternalModelSelection(),
         }),
@@ -3429,6 +3429,11 @@ interface CreateSessionOptions {
 function createSettings(overrides: Partial<PluginSettings> = {}): PluginSettings {
   return {
     ...DEFAULT_PLUGIN_SETTINGS,
+    llmPostprocessActivePresetRef: 'user:unrestricted',
+    llmPostprocessUserPresets: [
+      ...DEFAULT_PLUGIN_SETTINGS.llmPostprocessUserPresets,
+      createUserPreset({ id: 'unrestricted' }),
+    ],
     ...overrides,
   };
 }

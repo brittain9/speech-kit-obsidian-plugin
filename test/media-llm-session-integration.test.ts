@@ -8,7 +8,9 @@ import { noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
 import { RawTranscriptRecovery } from '../src/editor/raw-transcript-recovery';
 import { sessionProcessingExtension } from '../src/editor/session-processing-extension';
 import { TemporaryLeafPinLeaseManager } from '../src/editor/temporary-leaf-pin';
+import { resolveLlmTransformSnapshot } from '../src/llm/transform-policy';
 import { Session } from '../src/session/session';
+import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import { createFakeLlmRouter } from './fixtures/llm';
 import { StateBackedEditorView } from './fixtures/state-backed-editor-view';
 import { transcript } from './fixtures/transcript';
@@ -136,6 +138,57 @@ describe('media LLM with the real Session', () => {
     expect(view.state.doc.toString()).toBe('Existing note\nRaw media words');
     session.dispose();
   });
+
+  it.each([
+    ['summary', 'replace'],
+    ['tldr', 'above'],
+    ['key-takeaways', 'replace'],
+    ['explain-simply', 'replace'],
+    ['outline', 'above'],
+    ['story-version', 'replace'],
+    ['claims-and-evidence', 'above'],
+    ['youtube-notes', 'above'],
+    ['podcast-show-notes', 'above'],
+  ] as const)(
+    'applies the built-in %s to the intended transcript region',
+    async (id, placement) => {
+      const { session, view } = createMediaSession();
+      const snapshot = resolveLlmTransformSnapshot({
+        ...DEFAULT_PLUGIN_SETTINGS,
+        llmPostprocessActivePresetRef: `builtin:${id}`,
+        useLlmNoteContext: true,
+      });
+      const cleanup = vi.fn(async () => ({
+        model: 'm',
+        providerId: 'ollama' as const,
+        text: 'Generated result',
+      }));
+      const onRecovery = vi.fn();
+
+      await processMediaLlm(session, {
+        onRawTranscriptRecoveryAvailable: onRecovery,
+        router: createFakeLlmRouter({ cleanup }),
+        signal: new AbortController().signal,
+        snapshot,
+      });
+
+      expect(cleanup).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userMessage: '<media_transcript>\nRaw media words\n</media_transcript>',
+          prompt: snapshot.prompt,
+        }),
+      );
+      expect(view.state.doc.toString()).toBe(
+        placement === 'replace'
+          ? 'Existing note\nGenerated result'
+          : 'Existing note\nGenerated result\n\nRaw media words',
+      );
+      expect(onRecovery).toHaveBeenCalledTimes(placement === 'replace' ? 1 : 0);
+      expect(view.undo()).toBe(true);
+      expect(view.state.doc.toString()).toBe('Existing note\nRaw media words');
+      session.dispose();
+    },
+  );
 
   it('keeps raw adjacency and applies additive output in one undoable transaction', async () => {
     for (const placement of ['add_above', 'add_below'] as const) {

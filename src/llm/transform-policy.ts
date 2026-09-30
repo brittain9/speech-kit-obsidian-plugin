@@ -48,7 +48,7 @@ export function resolveLlmPostprocessMode(
   settings: PluginSettings,
   activePreset: ReturnType<typeof resolveActivePresetEntry>['preset'],
 ): LlmPostprocessMode {
-  return settings.llmPostprocessMode === 'off'
+  return settings.llmPostprocessMode === 'off' || settings.llmPostprocessUserPresets.length === 0
     ? 'off'
     : (activePreset.timing ?? settings.llmPostprocessMode);
 }
