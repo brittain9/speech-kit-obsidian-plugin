@@ -69,7 +69,9 @@ class YouTubeTranscriptModal extends Modal {
   private observingJob = false;
   private startedByThisModal = false;
   private closed = false;
+  // Only a job observed by this modal can turn its start action into Done.
   private completedVideoId: string | null = null;
+  private lastResultVideoId: string | null;
   private cancelRequested = false;
   private progressRowEl: HTMLElement | null = null;
   private progressEl: HTMLElement | null = null;
@@ -91,10 +93,10 @@ class YouTubeTranscriptModal extends Modal {
       ? settings.llmPostprocessActivePresetRef
       : null;
     this.busy = dependencies.isJobActive();
-    this.completedVideoId = dependencies.getCompletedVideoId();
+    this.lastResultVideoId = dependencies.getCompletedVideoId();
     this.observingJob =
       this.busy ||
-      (this.completedVideoId !== null &&
+      (this.lastResultVideoId !== null &&
         dependencies.getResultSource() !== null &&
         dependencies.getAiResult()?.outcome === 'failed');
     this.releaseProgress = dependencies.subscribeProgress((progress) =>
@@ -293,12 +295,14 @@ class YouTubeTranscriptModal extends Modal {
     if (this.dependencies.isJobActive()) {
       this.observingJob = true;
       this.busy = true;
-    } else if (this.observingJob && !this.startedByThisModal) {
+    } else if (this.busy && !this.startedByThisModal) {
       this.busy = false;
       this.completedVideoId = this.dependencies.getCompletedVideoId();
+      this.lastResultVideoId = this.completedVideoId;
     }
     const showingPreviousResult =
-      this.url.trim().length === 0 || this.completedVideoId === this.videoId();
+      this.url.trim().length === 0 ||
+      (this.completedVideoId ?? this.lastResultVideoId) === this.videoId();
     const message = !this.busy
       ? this.observingJob && showingPreviousResult
         ? this.completedMessage()
