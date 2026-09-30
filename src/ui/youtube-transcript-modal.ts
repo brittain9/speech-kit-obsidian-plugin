@@ -1,5 +1,9 @@
 import { type App, type ButtonComponent, Modal, Setting } from 'obsidian';
-import type { MediaLlmRunOutcome } from '../dictation/media-llm-coordinator';
+import {
+  formatMediaLlmCompletion,
+  formatMediaLlmFailureForModal,
+  type MediaLlmRunResult,
+} from '../dictation/media-llm-coordinator';
 import { DICTATION_LANGUAGE_OPTIONS, type DictationLanguage } from '../language/dictation-language';
 import { describeMediaLlmConfiguration } from '../llm/media-llm-policy';
 import { listPresetEntries, resolvePresetEntry } from '../llm/presets';
@@ -15,12 +19,16 @@ import { mediaProgressText } from './media-progress-presenter';
 export interface YouTubeTranscriptModalDependencies {
   readonly cancel: () => Promise<void>;
   readonly getProgress: () => MediaTranscriptionProgress | null;
+  readonly getError: () => unknown;
   readonly getPartialTranscript: () => string | null;
   readonly getResultSource: () => 'creator_captions' | 'automatic_captions' | null;
-  readonly getAiOutcome: () => MediaLlmRunOutcome | null;
+  readonly getAiResult: () => MediaLlmRunResult | null;
+  readonly getCompletedVideoId: () => string | null;
   readonly getSettings: () => PluginSettings;
   readonly insertPartialTranscript: () => boolean;
   readonly isBusy: () => boolean;
+  readonly isJobActive: () => boolean;
+  readonly wasLastJobCancelled: () => boolean;
   readonly onManagePresets: (onClosed: () => void) => void;
   readonly start: (url: string, options: MediaTranscriptionJobOptions) => Promise<void>;
   readonly subscribeProgress: (
@@ -44,6 +52,10 @@ export class YouTubeTranscriptModalRegistry {
     this.modal?.close();
     this.modal = null;
   }
+
+  isOpen(): boolean {
+    return this.modal !== null;
+  }
 }
 
 class YouTubeTranscriptModal extends Modal {
@@ -54,6 +66,8 @@ class YouTubeTranscriptModal extends Modal {
   private timestampIntervalSeconds = 60;
   private mediaPresetRef: string | null;
   private busy = false;
+  private observingJob = false;
+  private startedByThisModal = false;
   private closed = false;
   private completedVideoId: string | null = null;
   private cancelRequested = false;
@@ -76,6 +90,9 @@ class YouTubeTranscriptModal extends Modal {
     this.mediaPresetRef = settings.mediaLlmProcessing
       ? settings.llmPostprocessActivePresetRef
       : null;
+    this.busy = dependencies.isJobActive();
+    this.observingJob = this.busy;
+    this.completedVideoId = dependencies.getCompletedVideoId();
     this.releaseProgress = dependencies.subscribeProgress((progress) =>
       this.renderProgress(progress),
     );
@@ -91,7 +108,6 @@ class YouTubeTranscriptModal extends Modal {
   override onClose(): void {
     this.closed = true;
     this.releaseProgress();
-    if (this.busy) void this.dependencies.cancel();
     this.contentEl.empty();
     this.onClosed();
   }
@@ -139,6 +155,9 @@ class YouTubeTranscriptModal extends Modal {
     const footer = this.contentEl.createDiv({ cls: 'local-stt-media-footer' });
     const actions = new Setting(footer);
     actions.addButton((button) => {
+      button.setButtonText(t('common.close')).onClick(() => this.close());
+    });
+    actions.addButton((button) => {
       this.primaryButton = button;
       button
         .setButtonText(t('media.modal.start'))
@@ -161,7 +180,7 @@ class YouTubeTranscriptModal extends Modal {
     ) {
       this.mediaPresetRef = null;
     }
-    new Setting(parent)
+    const aiPreset = new Setting(parent)
       .setName(t('youtube.modal.aiPreset'))
       .setDesc(t('media.modal.aiPresetShortDesc'))
       .addDropdown((dropdown) => {
@@ -184,6 +203,7 @@ class YouTubeTranscriptModal extends Modal {
           });
         button.extraSettingsEl.setAttribute('aria-label', t('llm.preset.manager.title'));
       });
+    aiPreset.settingEl.addClass('local-stt-youtube-ai-preset');
     if (this.mediaPresetRef !== null) {
       parent.createEl('p', {
         text: describeMediaLlmConfiguration({
@@ -266,13 +286,27 @@ class YouTubeTranscriptModal extends Modal {
 
   private renderProgress(progress: MediaTranscriptionProgress | null): void {
     if (this.progressEl === null) return;
+    if (this.dependencies.isJobActive()) {
+      this.observingJob = true;
+      this.busy = true;
+    } else if (this.observingJob && !this.startedByThisModal) {
+      this.busy = false;
+      this.completedVideoId = this.dependencies.getCompletedVideoId();
+    }
     const message = !this.busy
-      ? ''
+      ? this.observingJob
+        ? this.completedMessage()
+        : ''
       : progress === null
         ? t('media.progress.captions')
         : mediaProgressText(progress);
     this.progressEl.setText(message);
     this.progressRowEl?.toggle(message.length > 0 || this.busy);
+    if (!this.busy && this.observingJob) {
+      const error = this.dependencies.getError();
+      if (error !== null) this.errorEl?.setText(errorMessage(error));
+      else this.showAiResult();
+    }
     this.updatePrimaryButton();
   }
 
@@ -306,6 +340,8 @@ class YouTubeTranscriptModal extends Modal {
             }),
     };
     this.busy = true;
+    this.observingJob = true;
+    this.startedByThisModal = true;
     this.cancelRequested = false;
     this.errorEl?.setText('');
     this.updatePrimaryButton();
@@ -314,16 +350,13 @@ class YouTubeTranscriptModal extends Modal {
       await this.dependencies.start(submittedUrl, options);
       this.completedVideoId = submittedVideoId;
       const source = this.dependencies.getResultSource();
-      const aiOutcome = this.dependencies.getAiOutcome();
       this.progressEl?.setText(
         source === 'creator_captions'
           ? t('youtube.modal.completedCreatorCaptions')
           : t('youtube.modal.completedAutomaticCaptions'),
       );
       this.progressEl?.toggle(true);
-      if (aiOutcome === 'failed' || aiOutcome === 'cancelled') {
-        this.errorEl?.setText(t('youtube.modal.aiCouldNotFinish'));
-      }
+      this.showAiResult();
     } catch (error) {
       if (!this.cancelRequested) {
         this.progressEl?.setText('');
@@ -370,6 +403,25 @@ class YouTubeTranscriptModal extends Modal {
         if (this.dependencies.insertPartialTranscript()) this.partialEl?.empty();
         else this.errorEl?.setText(t('media.modal.partialTargetChanged'));
       });
+  }
+
+  private completedMessage(): string {
+    if (this.dependencies.wasLastJobCancelled()) return t('media.modal.cancelled');
+    const source = this.dependencies.getResultSource();
+    if (source === null) return '';
+    return source === 'creator_captions'
+      ? t('youtube.modal.completedCreatorCaptions')
+      : t('youtube.modal.completedAutomaticCaptions');
+  }
+
+  private showAiResult(): void {
+    const result = this.dependencies.getAiResult();
+    if (result === null || result.outcome === 'applied' || result.outcome === 'skipped') return;
+    this.errorEl?.setText(
+      result.outcome === 'failed'
+        ? formatMediaLlmFailureForModal(result)
+        : formatMediaLlmCompletion(result),
+    );
   }
 }
 

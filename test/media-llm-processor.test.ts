@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MediaLlmEditorSession } from '../src/dictation/audio-file-transcript-adapter';
-import {
-  type MediaLlmProcessingError,
-  type MediaLlmSnapshot,
-  processMediaLlm,
-} from '../src/dictation/media-llm-processor';
+import { type MediaLlmSnapshot, processMediaLlm } from '../src/dictation/media-llm-processor';
 import type { RawTranscriptRecoveryReceipt } from '../src/editor/raw-transcript-recovery';
 import { ProviderError } from '../src/llm/provider';
 import type { SessionRangeReplacementResult } from '../src/session/session';
@@ -156,17 +152,41 @@ describe('media LLM processing', () => {
         signal: new AbortController().signal,
         snapshot: replaceSnapshot,
       }),
-    ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'empty' });
+    ).rejects.toMatchObject({ code: 'empty' });
     expect(session.replaceSessionRangeWithCleaned).not.toHaveBeenCalled();
   });
 
-  it('does not apply a bare provider refusal', async () => {
+  it.each(["I'm sorry, but I can't complete the request.", "I can't do your request."])(
+    'does not apply a bare provider refusal: %s',
+    async (reply) => {
+      const session = new FakeMediaSession();
+      const router = createFakeLlmRouter({
+        cleanup: async () => ({
+          model: 'm',
+          providerId: 'openrouter' as const,
+          text: reply,
+        }),
+      });
+
+      await expect(
+        processMediaLlm(session, {
+          onRawTranscriptRecoveryAvailable: vi.fn(),
+          router,
+          signal: new AbortController().signal,
+          snapshot: replaceSnapshot,
+        }),
+      ).rejects.toMatchObject({ code: 'refused', refusalReply: reply });
+      expect(session.replaceSessionRangeWithCleaned).not.toHaveBeenCalled();
+    },
+  );
+
+  it('accepts a concise one-sentence summary', async () => {
     const session = new FakeMediaSession();
     const router = createFakeLlmRouter({
       cleanup: async () => ({
         model: 'm',
         providerId: 'openrouter' as const,
-        text: "I'm sorry, but I cannot assist with that request.",
+        text: 'The speaker proposes delaying the launch until Friday.',
       }),
     });
 
@@ -177,8 +197,8 @@ describe('media LLM processing', () => {
         signal: new AbortController().signal,
         snapshot: replaceSnapshot,
       }),
-    ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'refused' });
-    expect(session.replaceSessionRangeWithCleaned).not.toHaveBeenCalled();
+    ).resolves.toMatchObject({ text: 'The speaker proposes delaying the launch until Friday.' });
+    expect(session.replaceSessionRangeWithCleaned).toHaveBeenCalledOnce();
   });
 
   it('keeps raw text and surfaces a provider failure', async () => {
@@ -216,7 +236,7 @@ describe('media LLM processing', () => {
         signal: new AbortController().signal,
         snapshot: replaceSnapshot,
       }),
-    ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'range_unavailable' });
+    ).rejects.toMatchObject({ code: 'range_unavailable' });
   });
 
   it('omits note context when the effective total cap is zero', async () => {
@@ -253,7 +273,7 @@ describe('media LLM processing', () => {
         signal: new AbortController().signal,
         snapshot: replaceSnapshot,
       }),
-    ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'empty' });
+    ).rejects.toMatchObject({ code: 'empty' });
     expect(cleanup).not.toHaveBeenCalled();
   });
 
@@ -272,7 +292,7 @@ describe('media LLM processing', () => {
         signal: new AbortController().signal,
         snapshot: replaceSnapshot,
       }),
-    ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'cancelled' });
+    ).rejects.toMatchObject({ code: 'cancelled' });
     expect(cleanup).not.toHaveBeenCalled();
 
     const controller = new AbortController();
@@ -287,7 +307,7 @@ describe('media LLM processing', () => {
       signal: controller.signal,
       snapshot: replaceSnapshot,
     });
-    await expect(pending).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({
+    await expect(pending).rejects.toMatchObject({
       code: 'cancelled',
     });
   });
@@ -307,6 +327,6 @@ describe('media LLM processing', () => {
         signal: controller.signal,
         snapshot: replaceSnapshot,
       }),
-    ).rejects.toMatchObject<Partial<MediaLlmProcessingError>>({ code: 'cancelled' });
+    ).rejects.toMatchObject({ code: 'cancelled' });
   });
 });

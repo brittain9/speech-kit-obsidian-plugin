@@ -34,6 +34,7 @@ export class OllamaClientError extends Error {
       | 'connection_failed'
       | 'http_error'
       | 'invalid_response'
+      | 'output_limit'
       | 'timeout',
     options: { responseText?: string | undefined; status?: number | undefined } = {},
   ) {
@@ -165,7 +166,7 @@ async function cleanup(
   if (response.done_reason === 'length') {
     throw new OllamaClientError(
       'Ollama stopped because the transformed text exceeded the output limit.',
-      'invalid_response',
+      'output_limit',
     );
   }
 

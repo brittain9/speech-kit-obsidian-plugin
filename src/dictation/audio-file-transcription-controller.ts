@@ -74,7 +74,7 @@ import {
 import {
   MediaLlmCoordinator,
   type MediaLlmJob,
-  type MediaLlmRunOutcome,
+  type MediaLlmRunResult,
 } from './media-llm-coordinator';
 
 export type AudioFileTranscriptionState =
@@ -184,7 +184,9 @@ export class AudioFileTranscriptionController {
   private mediaError: unknown = null;
   private lastMediaResultSource: 'creator_captions' | 'automatic_captions' | 'local_audio' | null =
     null;
-  private lastMediaAiOutcome: MediaLlmRunOutcome | null = null;
+  private lastMediaAiResult: MediaLlmRunResult | null = null;
+  private lastMediaCancelled = false;
+  private lastImportedYouTubeVideoId: string | null = null;
   private readonly progressListeners = new Set<
     (progress: MediaTranscriptionProgress | null) => void
   >();
@@ -250,8 +252,21 @@ export class AudioFileTranscriptionController {
     return this.lastMediaResultSource;
   }
 
-  getLastMediaAiOutcome(): MediaLlmRunOutcome | null {
-    return this.lastMediaAiOutcome;
+  getLastMediaAiResult(): MediaLlmRunResult | null {
+    return this.lastMediaAiResult;
+  }
+
+  wasLastMediaJobCancelled(): boolean {
+    return this.lastMediaCancelled;
+  }
+
+  getLastImportedYouTubeVideoId(): string | null {
+    return this.lastImportedYouTubeVideoId;
+  }
+
+  isMediaJobActive(sourceId?: string): boolean {
+    const active = this.activeMediaProvider;
+    return active !== null && (sourceId === undefined || active.id === sourceId);
   }
 
   clearMediaError(): void {
@@ -362,6 +377,7 @@ export class AudioFileTranscriptionController {
   async cancelProvider(providerId: string): Promise<void> {
     const active = this.activeMediaProvider;
     if (active === null || active.id !== providerId) return;
+    this.lastMediaCancelled = true;
     active.abortController.abort(createAudioFileCancellationError());
     this.mediaLlmCoordinator.cancel();
     const pending = this.pendingStart;
@@ -416,7 +432,9 @@ export class AudioFileTranscriptionController {
     this.applyState('selecting');
     this.partialRecovery = null;
     this.lastMediaResultSource = null;
-    this.lastMediaAiOutcome = null;
+    this.lastMediaAiResult = null;
+    this.lastMediaCancelled = false;
+    this.lastImportedYouTubeVideoId = null;
     const abortController = new AbortController();
     this.activeMediaProvider = { abortController, id: entry.id };
     let decodedAudio: DecodedAudioFile | null = null;
@@ -550,7 +568,9 @@ export class AudioFileTranscriptionController {
         this.lastMediaResultSource = 'local_audio';
         const mediaLlmSession = transcript.getMediaLlmSession();
         if (mediaLlmSession !== null) {
-          await this.mediaLlmCoordinator.run(mediaLlmSession, mediaLlmJob);
+          this.lastMediaAiResult = await this.mediaLlmCoordinator.run(mediaLlmSession, mediaLlmJob);
+        } else {
+          this.lastMediaAiResult = skippedMediaLlmResult();
         }
       });
       if (this.pendingStart === pending) this.pendingStart = null;
@@ -724,9 +744,9 @@ export class AudioFileTranscriptionController {
       transcriptCommitted = true;
       this.lastMediaResultSource = captions.source;
       const mediaLlmSession = transcript.getMediaLlmSession();
-      this.lastMediaAiOutcome =
+      this.lastMediaAiResult =
         mediaLlmSession === null
-          ? 'skipped'
+          ? skippedMediaLlmResult()
           : await this.mediaLlmCoordinator.run(
               mediaLlmSession,
               mediaLlmJob,
@@ -757,7 +777,9 @@ export class AudioFileTranscriptionController {
     this.mediaError = null;
     this.partialRecovery = null;
     this.lastMediaResultSource = null;
-    this.lastMediaAiOutcome = null;
+    this.lastMediaAiResult = null;
+    this.lastMediaCancelled = false;
+    this.lastImportedYouTubeVideoId = null;
     const abortController = new AbortController();
     this.activeMediaProvider = { abortController, id: 'youtube_captions' };
 
@@ -793,6 +815,7 @@ export class AudioFileTranscriptionController {
         mediaLlmJob,
         abortController.signal,
       );
+      this.lastImportedYouTubeVideoId = ref.videoId;
     } catch (error) {
       if (!this.isMediaCancellation(error)) this.mediaError = error;
       throw error;
@@ -805,6 +828,7 @@ export class AudioFileTranscriptionController {
   }
 
   async cancel(): Promise<void> {
+    if (this.activeMediaProvider !== null) this.lastMediaCancelled = true;
     this.mediaLlmCoordinator.cancel();
     this.activeMediaProvider?.abortController.abort(createAudioFileCancellationError());
     const pending = this.pendingStart;
@@ -1411,6 +1435,10 @@ function createProviderNeutralDecoderLease(lease: MediaLease): MediaLease {
     provenance: lease.provenance,
     release: () => lease.release(),
   };
+}
+
+function skippedMediaLlmResult(): MediaLlmRunResult {
+  return { failureCategory: null, model: null, outcome: 'skipped', providerId: null };
 }
 
 function createRendererOptions(

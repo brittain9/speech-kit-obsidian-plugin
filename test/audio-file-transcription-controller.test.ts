@@ -461,7 +461,12 @@ describe('AudioFileTranscriptionController', () => {
         userMessage: '<media_transcript>\nBeginning Ending\n</media_transcript>',
       }),
     );
-    expect(harness.controller.getLastMediaAiOutcome()).toBe('applied');
+    expect(harness.controller.getLastMediaAiResult()).toMatchObject({
+      failureCategory: null,
+      model: 'fake-model',
+      outcome: 'applied',
+      providerId: 'ollama',
+    });
     expect(harness.sidecarConnection.startSessionWithControl).not.toHaveBeenCalled();
   });
 
@@ -1753,7 +1758,7 @@ describe('AudioFileTranscriptionController', () => {
     );
     expect(recoveries).toHaveLength(1);
     expect(harness.feedback.show).not.toHaveBeenCalledWith(
-      expect.objectContaining({ key: 'media-llm-failed' }),
+      expect.objectContaining({ key: 'media-llm-provider_error' }),
     );
   });
 });

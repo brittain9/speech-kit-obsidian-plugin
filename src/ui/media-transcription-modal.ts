@@ -1,6 +1,11 @@
 import { type App, type ButtonComponent, Modal, Setting } from 'obsidian';
 
 import { AudioFileError } from '../audio/audio-file-decoder';
+import {
+  formatMediaLlmCompletion,
+  formatMediaLlmFailureForModal,
+  type MediaLlmRunResult,
+} from '../dictation/media-llm-coordinator';
 import { DICTATION_LANGUAGE_OPTIONS, type DictationLanguage } from '../language/dictation-language';
 import { describeMediaLlmConfiguration } from '../llm/media-llm-policy';
 import { listPresetEntries, resolvePresetEntry } from '../llm/presets';
@@ -24,6 +29,7 @@ export interface MediaTranscriptionModalDependencies {
   readonly cancel: () => Promise<void>;
   readonly getModels: (language: DictationLanguage) => readonly MediaTranscriptionModelOption[];
   readonly getLastError: () => unknown;
+  readonly getLastMediaAiResult: () => MediaLlmRunResult | null;
   readonly getPartialTranscript: () => string | null;
   readonly insertPartialTranscript: () => boolean;
   readonly getProgress: () => MediaTranscriptionProgress | null;
@@ -31,6 +37,8 @@ export interface MediaTranscriptionModalDependencies {
   readonly isTranscribing: () => boolean;
   readonly isDecoderInstalled: () => Promise<boolean>;
   readonly openDecoderInstaller: (onInstalled: () => void) => void;
+  readonly isJobActive: () => boolean;
+  readonly wasLastJobCancelled: () => boolean;
   readonly onManageModels: () => void;
   readonly onManagePresets: (onClosed: () => void) => void;
   readonly startFile: (file: File, options: MediaTranscriptionJobOptions) => Promise<void>;
@@ -55,6 +63,10 @@ export class MediaTranscriptionModalRegistry {
     this.modal?.close();
     this.modal = null;
   }
+
+  isOpen(): boolean {
+    return this.modal !== null;
+  }
 }
 
 class MediaTranscriptionModal extends Modal {
@@ -72,6 +84,8 @@ class MediaTranscriptionModal extends Modal {
   private transcriptFormatting: TranscriptFormattingMode;
   private optionsExpanded = false;
   private busy = false;
+  private observingJob = false;
+  private startedByThisModal = false;
   private closed = false;
   private cancelRequested = false;
   private decoderStatus: 'checking' | 'missing' | 'installed' | 'unknown' = 'checking';
@@ -84,7 +98,6 @@ class MediaTranscriptionModal extends Modal {
   private decoderRequirementEl: HTMLElement | null = null;
   private fileNameEl: HTMLElement | null = null;
   private primaryButton: ButtonComponent | null = null;
-  private closeButton: ButtonComponent | null = null;
 
   constructor(
     app: App,
@@ -105,6 +118,8 @@ class MediaTranscriptionModal extends Modal {
     this.mediaPresetRef = settings.mediaLlmProcessing
       ? settings.llmPostprocessActivePresetRef
       : null;
+    this.busy = dependencies.isJobActive();
+    this.observingJob = this.busy;
     this.releaseProgress = dependencies.subscribeProgress((progress) =>
       this.renderProgress(progress),
     );
@@ -122,7 +137,6 @@ class MediaTranscriptionModal extends Modal {
     this.closed = true;
     this.lifecycle.abort();
     this.releaseProgress();
-    if (this.busy) void this.dependencies.cancel();
     this.contentEl.empty();
     this.onClosed();
   }
@@ -130,7 +144,6 @@ class MediaTranscriptionModal extends Modal {
   private render(): void {
     this.contentEl.empty();
     this.primaryButton = null;
-    this.closeButton = null;
     this.contentEl.createEl('p', {
       cls: 'local-stt-media-intro',
       text: t('media.modal.intro'),
@@ -172,7 +185,6 @@ class MediaTranscriptionModal extends Modal {
     const footer = this.contentEl.createDiv({ cls: 'local-stt-media-footer' });
     const actions = new Setting(footer);
     actions.addButton((button) => {
-      this.closeButton = button;
       button.setButtonText(t('common.close')).onClick(() => this.close());
     });
     actions.addButton((button) => {
@@ -411,7 +423,6 @@ class MediaTranscriptionModal extends Modal {
     );
     this.primaryButton?.setDisabled(this.cancelRequested || blocker !== null || completed);
     this.primaryButton?.buttonEl.toggle(!completed);
-    this.closeButton?.buttonEl.toggle(!this.busy);
     this.progressSpinnerEl?.toggle(this.busy && !this.cancelRequested);
     const decoderBlocks = this.decoderStatus !== 'installed';
     this.requirementEl?.setText(
@@ -436,14 +447,22 @@ class MediaTranscriptionModal extends Modal {
   }
 
   private renderProgress(progress: MediaTranscriptionProgress | null): void {
+    if (this.dependencies.isJobActive()) {
+      this.observingJob = true;
+      this.busy = true;
+    } else if (this.observingJob && !this.startedByThisModal) {
+      this.busy = false;
+    }
     if (this.progressEl !== null) {
       const message =
         progress === null
           ? this.busy
             ? this.acquisitionProgressText()
-            : this.dependencies.isTranscribing()
+            : this.dependencies.isTranscribing() && !this.observingJob
               ? t('media.modal.alreadyRunning')
-              : ''
+              : this.observingJob
+                ? this.mediaCompletionMessage()
+                : ''
           : this.busy
             ? progress.phase === 'acquire'
               ? this.acquisitionProgressText()
@@ -451,6 +470,11 @@ class MediaTranscriptionModal extends Modal {
             : t('media.modal.completed');
       this.progressEl.setText(message);
       this.progressRowEl?.toggle(message.length > 0);
+    }
+    if (!this.busy && this.observingJob) {
+      const error = this.dependencies.getLastError();
+      if (error !== null) this.showError(error);
+      else this.showAiResult();
     }
     this.updatePrimaryButton();
   }
@@ -498,6 +522,8 @@ class MediaTranscriptionModal extends Modal {
             }),
     };
     this.busy = true;
+    this.observingJob = true;
+    this.startedByThisModal = true;
     this.cancelRequested = false;
     this.errorEl?.setText('');
     this.partialEl?.empty();
@@ -511,8 +537,9 @@ class MediaTranscriptionModal extends Modal {
           this.showError(error);
         } else {
           this.completedFile = file;
-          this.progressEl?.setText(t('media.modal.completed'));
+          this.progressEl?.setText(this.mediaCompletionMessage());
           this.progressRowEl?.toggle(true);
+          this.showAiResult();
         }
       }
     } catch (error) {
@@ -578,6 +605,24 @@ class MediaTranscriptionModal extends Modal {
           });
         });
     });
+  }
+
+  private mediaCompletionMessage(): string {
+    if (this.dependencies.wasLastJobCancelled()) return t('media.modal.cancelled');
+    const result = this.dependencies.getLastMediaAiResult();
+    return result === null || result.outcome === 'failed' || result.outcome === 'cancelled'
+      ? t('media.modal.completed')
+      : formatMediaLlmCompletion(result);
+  }
+
+  private showAiResult(): void {
+    const result = this.dependencies.getLastMediaAiResult();
+    if (result === null || result.outcome === 'applied' || result.outcome === 'skipped') return;
+    this.errorEl?.setText(
+      result.outcome === 'failed'
+        ? formatMediaLlmFailureForModal(result)
+        : formatMediaLlmCompletion(result),
+    );
   }
 
   private renderPartialRecovery(): void {

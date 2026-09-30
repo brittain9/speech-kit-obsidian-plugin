@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MediaLlmEditorSession } from '../src/dictation/audio-file-transcript-adapter';
-import { MediaLlmCoordinator } from '../src/dictation/media-llm-coordinator';
+import {
+  formatMediaLlmFailure,
+  formatMediaLlmFailureForModal,
+  MediaLlmCoordinator,
+} from '../src/dictation/media-llm-coordinator';
 import { ProviderError } from '../src/llm/provider';
 import type { LlmRouter } from '../src/llm/router';
 import { resolveLlmTransformSnapshot } from '../src/llm/transform-policy';
@@ -86,6 +90,65 @@ describe('MediaLlmCoordinator', () => {
         message: expect.stringContaining('API key'),
       }),
     );
+  });
+
+  it.each([
+    ['auth_invalid', 'auth', 'Authentication failed.'],
+    ['connection_failed', 'connection', 'Connection failed.'],
+    ['empty_response', 'empty', 'Provider returned an empty chat message.'],
+    ['output_limit', 'output_limit', 'Provider stopped because the output limit was reached.'],
+    ['content_filtered', 'filtered', 'Provider filtered the response.'],
+    ['rate_limited', 'rate_limited', 'Rate limited.'],
+    ['timeout', 'timeout', 'Timed out.'],
+    ['unknown_model', 'model_unavailable', 'Model was not found.'],
+  ] as const)(
+    'returns a safe, model-specific %s failure',
+    async (code, failureCategory, message) => {
+      const feedback = { show: vi.fn() };
+      const current = settings();
+      const coordinator = new MediaLlmCoordinator({
+        createRouter: () => ({
+          cleanup: async () => {
+            throw new ProviderError(message, code, {
+              responseText: 'private provider response body',
+            });
+          },
+          selectProviderId: () => 'ollama',
+        }),
+        feedback,
+        getSettings: () => current,
+      });
+
+      const result = await coordinator.run(session());
+
+      expect(result).toMatchObject({
+        failureCategory,
+        model: 'local-model',
+        outcome: 'failed',
+        providerId: 'ollama',
+      });
+      expect(feedback.show).not.toHaveBeenCalled();
+      expect(formatMediaLlmFailure(result)).toContain('local-model');
+      expect(formatMediaLlmFailure(result)).not.toContain('private provider response body');
+    },
+  );
+
+  it('shows the recognized refusal reply in the modal while keeping notifications safe', async () => {
+    const reply = "I can't do your request.";
+    const coordinator = new MediaLlmCoordinator({
+      createRouter: () => ({
+        cleanup: async () => ({ model: 'local-model', providerId: 'ollama', text: reply }),
+        selectProviderId: () => 'ollama',
+      }),
+      feedback: { show: vi.fn() },
+      getSettings: () => settings(),
+    });
+
+    const result = await coordinator.run(session());
+
+    expect(result).toMatchObject({ failureCategory: 'refused', refusalReply: reply });
+    expect(formatMediaLlmFailureForModal(result)).toContain(reply);
+    expect(formatMediaLlmFailure(result)).not.toContain(reply);
   });
 
   it('aborts an active provider request when media processing is disabled', async () => {

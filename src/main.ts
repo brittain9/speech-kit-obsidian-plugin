@@ -12,7 +12,7 @@ import {
 } from 'obsidian';
 
 import { AudioCaptureStream } from './audio/audio-capture-stream';
-import { FfmpegAudioFileDecoder } from './audio/audio-file-decoder';
+import { AudioFileError, FfmpegAudioFileDecoder } from './audio/audio-file-decoder';
 import { pickLocalAudioFile } from './audio/local-audio-file-picker';
 import { isMediaToolInstalled } from './audio/media-tool-installer';
 import { SidecarAudioLevelMeter } from './audio/sidecar-audio-level-meter';
@@ -21,6 +21,7 @@ import { AudioFileTranscriptionController } from './dictation/audio-file-transcr
 import { DictationSessionController } from './dictation/dictation-session-controller';
 import { FinalizedUtteranceAutoCopy } from './dictation/finalized-utterance-auto-copy';
 import { LastUtteranceRecovery } from './dictation/last-utterance-recovery';
+import { formatMediaLlmCompletion, formatMediaLlmFailure } from './dictation/media-llm-coordinator';
 import { dictationAnchorExtension } from './editor/dictation-anchor-extension';
 import { noteSurfaceUpdateListenerExtension } from './editor/note-surface';
 import { provisionalTranscriptExtension } from './editor/provisional-transcript-extension';
@@ -37,7 +38,7 @@ import { createConfiguredLlmRouter } from './llm/runtime';
 import { LocalMediaSource } from './media/local-media-source';
 import type { LocalMediaAcquireRequest, MediaTranscriptionEntry } from './media/media-source';
 import { getMediaTranscriptionModelOptions } from './media/media-transcription-options';
-import { fetchDirectYouTubeCaptions } from './media/youtube-captions';
+import { CaptionAcquisitionError, fetchDirectYouTubeCaptions } from './media/youtube-captions';
 import { parseYouTubeVideoUrl } from './media/youtube-url';
 import { ManageModelsModal, type ModelPickerOptions } from './models/manage-models-modal';
 import { ModelInstallManager } from './models/model-install-manager';
@@ -371,6 +372,8 @@ export default class LocalSttPlugin extends Plugin {
           getMediaTranscriptionModelOptions(this.requireModelInstallManager().getState(), language),
         getProgress: () => this.requireAudioFileTranscriptionController().getMediaProgress(),
         getLastError: () => this.requireAudioFileTranscriptionController().getMediaError(),
+        getLastMediaAiResult: () =>
+          this.requireAudioFileTranscriptionController().getLastMediaAiResult(),
         getPartialTranscript: () =>
           this.requireAudioFileTranscriptionController().getPartialTranscript(),
         insertPartialTranscript: () =>
@@ -391,14 +394,53 @@ export default class LocalSttPlugin extends Plugin {
               });
             });
         },
+        isJobActive: () =>
+          this.requireAudioFileTranscriptionController().isMediaJobActive('local_file'),
+        wasLastJobCancelled: () =>
+          this.requireAudioFileTranscriptionController().wasLastMediaJobCancelled(),
         onManageModels: () => void this.openModelPicker(),
         onManagePresets: (onClosed) => void this.openMediaPresetManager(onClosed),
         startFile: async (file, options) => {
           const controller = this.requireAudioFileTranscriptionController();
           if (controller.isBusy()) throw new Error(t('media.modal.alreadyRunning'));
           controller.clearMediaError();
-          await controller.transcribeProvider(localMediaEntry, { file }, options);
-          rethrowMediaError(controller.getMediaError());
+          try {
+            await controller.transcribeProvider(localMediaEntry, { file }, options);
+            rethrowMediaError(controller.getMediaError());
+          } catch (error) {
+            if (!this.mediaTranscriptionModals.isOpen() && !controller.wasLastMediaJobCancelled()) {
+              this.feedback.show({
+                intent: 'error',
+                key: 'media-background-failed',
+                message: t('media.background.failed', {
+                  reason:
+                    error instanceof AudioFileError
+                      ? error.message
+                      : t('media.modal.unknownFailure'),
+                }),
+              });
+            }
+            throw error;
+          }
+          if (controller.wasLastMediaJobCancelled() || this.mediaTranscriptionModals.isOpen())
+            return;
+          const result = controller.getLastMediaAiResult();
+          if (result?.outcome === 'failed') {
+            this.feedback.show({
+              intent: 'warning',
+              key: 'media-background-ai-failed',
+              message: formatMediaLlmFailure(result),
+            });
+          } else {
+            this.feedback.show({
+              intent: result?.outcome === 'cancelled' ? 'warning' : 'success',
+              key: 'media-background-completed',
+              message:
+                result === null
+                  ? t('media.background.completed')
+                  : formatMediaLlmCompletion(result),
+            });
+          }
         },
         subscribeProgress: (listener) =>
           this.requireAudioFileTranscriptionController().subscribeMediaProgress(listener),
@@ -568,6 +610,7 @@ export default class LocalSttPlugin extends Plugin {
           cancel: () =>
             this.requireAudioFileTranscriptionController().cancelProvider('youtube_captions'),
           getProgress: () => this.requireAudioFileTranscriptionController().getMediaProgress(),
+          getError: () => this.requireAudioFileTranscriptionController().getMediaError(),
           getPartialTranscript: () =>
             this.requireAudioFileTranscriptionController().getPartialTranscript(),
           getResultSource: () => {
@@ -575,16 +618,59 @@ export default class LocalSttPlugin extends Plugin {
               this.requireAudioFileTranscriptionController().getLastMediaResultSource();
             return source === 'local_audio' ? null : source;
           },
-          getAiOutcome: () =>
-            this.requireAudioFileTranscriptionController().getLastMediaAiOutcome(),
+          getAiResult: () => this.requireAudioFileTranscriptionController().getLastMediaAiResult(),
+          getCompletedVideoId: () =>
+            this.requireAudioFileTranscriptionController().getLastImportedYouTubeVideoId(),
           getSettings: () => this.settings,
           isBusy: () => this.requireAudioFileTranscriptionController().isBusy(),
+          isJobActive: () =>
+            this.requireAudioFileTranscriptionController().isMediaJobActive('youtube_captions'),
+          wasLastJobCancelled: () =>
+            this.requireAudioFileTranscriptionController().wasLastMediaJobCancelled(),
           onManagePresets: (onClosed) => void this.openMediaPresetManager(onClosed),
           insertPartialTranscript: () =>
             this.requireAudioFileTranscriptionController().insertPartialTranscript(),
           start: async (url, options) => {
             const controller = this.requireAudioFileTranscriptionController();
-            await controller.transcribeYouTubeCaptions(parseYouTubeVideoUrl(url), options);
+            try {
+              await controller.transcribeYouTubeCaptions(parseYouTubeVideoUrl(url), options);
+            } catch (error) {
+              if (
+                !this.youtubeTranscriptModals.isOpen() &&
+                !controller.wasLastMediaJobCancelled()
+              ) {
+                this.feedback.show({
+                  intent: 'error',
+                  key: 'youtube-background-failed',
+                  message: t('youtube.modal.backgroundFailed', {
+                    reason:
+                      error instanceof CaptionAcquisitionError
+                        ? error.message
+                        : t('media.modal.unknownFailure'),
+                  }),
+                });
+              }
+              throw error;
+            }
+            if (!this.youtubeTranscriptModals.isOpen() && !controller.wasLastMediaJobCancelled()) {
+              const result = controller.getLastMediaAiResult();
+              if (result?.outcome === 'failed') {
+                this.feedback.show({
+                  intent: 'warning',
+                  key: 'youtube-background-ai-failed',
+                  message: formatMediaLlmFailure(result),
+                });
+              } else {
+                this.feedback.show({
+                  intent: result?.outcome === 'cancelled' ? 'warning' : 'success',
+                  key: 'youtube-background-completed',
+                  message:
+                    result === null
+                      ? t('youtube.modal.backgroundCompleted')
+                      : formatMediaLlmCompletion(result),
+                });
+              }
+            }
           },
           subscribeProgress: (listener) =>
             this.requireAudioFileTranscriptionController().subscribeMediaProgress(listener),

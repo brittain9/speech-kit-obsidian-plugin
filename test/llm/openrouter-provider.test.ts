@@ -83,7 +83,26 @@ describe('OpenRouterProvider', () => {
     );
 
     await expect(cleanup()).rejects.toMatchObject({
-      code: 'invalid_response',
+      code: 'output_limit',
+      name: 'ProviderError',
+    } satisfies Partial<ProviderError>);
+  });
+
+  it('rejects provider-filtered responses instead of applying partial text', async () => {
+    mockFetch(async () =>
+      jsonResponse({
+        choices: [
+          {
+            finish_reason: 'content_filter',
+            message: { content: null },
+          },
+        ],
+      }),
+    );
+
+    await expect(cleanup()).rejects.toMatchObject({
+      code: 'content_filtered',
+      message: expect.stringContaining('filtered'),
       name: 'ProviderError',
     } satisfies Partial<ProviderError>);
   });

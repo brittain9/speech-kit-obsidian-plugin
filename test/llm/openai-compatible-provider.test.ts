@@ -130,11 +130,8 @@ describe('OpenAiCompatibleProvider', () => {
 
   it.each([
     [{ choices: [] }, 'invalid_response'],
-    [{ choices: [{ message: { content: '' } }] }, 'invalid_response'],
-    [
-      { choices: [{ finish_reason: 'length', message: { content: 'partial' } }] },
-      'invalid_response',
-    ],
+    [{ choices: [{ message: { content: '' } }] }, 'empty_response'],
+    [{ choices: [{ finish_reason: 'length', message: { content: 'partial' } }] }, 'output_limit'],
   ] as const)('rejects malformed, empty, or truncated chat output', async (body, code) => {
     mockFetch(async () => jsonResponse(body));
 
