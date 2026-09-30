@@ -37,11 +37,14 @@ describe('local media transcription modal', () => {
       cancel: vi.fn(async () => {}),
       getModels: () => [],
       getLastError: () => null,
+      getLastMediaAiResult: () => null,
       getPartialTranscript: () => null,
       insertPartialTranscript: () => false,
       getProgress: () => null,
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       isTranscribing: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
       isDecoderInstalled: async () => true,
       openDecoderInstaller: vi.fn(),
       onManageModels: vi.fn(),
@@ -80,11 +83,14 @@ describe('local media transcription modal', () => {
       cancel: vi.fn(async () => {}),
       getModels: () => [],
       getLastError: () => null,
+      getLastMediaAiResult: () => null,
       getPartialTranscript: () => null,
       insertPartialTranscript: () => false,
       getProgress: () => null,
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       isTranscribing: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
       isDecoderInstalled: async () => decoderInstalled,
       openDecoderInstaller,
       onManageModels: vi.fn(),
@@ -140,11 +146,14 @@ describe('local media transcription modal', () => {
       cancel: vi.fn(async () => {}),
       getModels: () => [model],
       getLastError: () => null,
+      getLastMediaAiResult: () => null,
       getPartialTranscript: () => null,
       insertPartialTranscript: () => false,
       getProgress: () => null,
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       isTranscribing: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
       isDecoderInstalled: async () => true,
       openDecoderInstaller,
       onManageModels: vi.fn(),
@@ -198,11 +207,14 @@ describe('local media transcription modal', () => {
       cancel: vi.fn(async () => {}),
       getModels: () => [model],
       getLastError: () => null,
+      getLastMediaAiResult: () => null,
       getPartialTranscript: () => null,
       insertPartialTranscript: () => false,
       getProgress: () => null,
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       isTranscribing: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
       isDecoderInstalled: async () => true,
       openDecoderInstaller: vi.fn(),
       onManageModels: vi.fn(),
@@ -232,7 +244,7 @@ describe('local media transcription modal', () => {
     await start.click();
     await vi.waitFor(() => expect(start.buttonEl.style.display).toBe('none'));
     expect(start.buttonEl.disabled).toBe(true);
-    expect(close.buttonEl.style.display).toBe('');
+    expect(close.buttonEl.style.display).not.toBe('none');
     expect(startFile).toHaveBeenCalledOnce();
 
     dropZone?.dispatchEvent({
@@ -246,7 +258,7 @@ describe('local media transcription modal', () => {
     await start.click();
     await vi.waitFor(() => expect(startFile).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(start.buttonEl.style.display).toBe('none'));
-    expect(close.buttonEl.style.display).toBe('');
+    expect(close.buttonEl.style.display).not.toBe('none');
 
     registry.closeAll();
   });
@@ -272,11 +284,14 @@ describe('local media transcription modal', () => {
       cancel: vi.fn(async () => {}),
       getModels: () => [model],
       getLastError: () => null,
+      getLastMediaAiResult: () => null,
       getPartialTranscript: () => 'recovered words',
       insertPartialTranscript,
       getProgress: () => null,
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       isTranscribing: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
       isDecoderInstalled: async () => true,
       openDecoderInstaller: vi.fn(),
       onManageModels: vi.fn(),
@@ -351,11 +366,14 @@ describe('local media transcription modal', () => {
       cancel: vi.fn(async () => {}),
       getModels: () => [model],
       getLastError: () => null,
+      getLastMediaAiResult: () => null,
       getPartialTranscript: () => 'partial words',
       insertPartialTranscript: () => true,
       getProgress: () => null,
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       isTranscribing: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
       isDecoderInstalled: async () => true,
       openDecoderInstaller: vi.fn(),
       onManageModels: vi.fn(),
@@ -395,6 +413,121 @@ describe('local media transcription modal', () => {
     await vi.waitFor(() => expect(startFile).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(start.buttonEl.style.display).toBe('none'));
 
+    registry.closeAll();
+  });
+
+  it.each(['transcribe', 'ai_processing'] as const)(
+    'keeps a local %s job running after close and reattaches on reopen',
+    async (phase) => {
+      const registry = new MediaTranscriptionModalRegistry();
+      const model: MediaTranscriptionModelOption = {
+        capabilities: {} as MediaTranscriptionModelOption['capabilities'],
+        label: 'Whisper',
+        selection: {
+          familyId: 'whisper',
+          kind: 'catalog_model',
+          modelId: 'test',
+          runtimeId: 'whisper_cpp',
+        },
+      };
+      let finish!: () => void;
+      let active = false;
+      const startFile = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            active = true;
+            finish = () => {
+              active = false;
+              resolve();
+            };
+          }),
+      );
+      const cancel = vi.fn(async () => {});
+      const dependencies = {
+        cancel,
+        getModels: () => [model],
+        getLastError: () => null,
+        getLastMediaAiResult: () => null,
+        getPartialTranscript: () => null,
+        insertPartialTranscript: () => false,
+        getProgress: () => (active ? { phase } : null),
+        getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+        isTranscribing: () => active,
+        isJobActive: () => active,
+        wasLastJobCancelled: () => false,
+        isDecoderInstalled: async () => true,
+        openDecoderInstaller: vi.fn(),
+        onManageModels: vi.fn(),
+        onManagePresets: vi.fn(),
+        startFile,
+        subscribeProgress: () => () => {},
+      };
+      registry.open({} as never, dependencies);
+      const first = (
+        Modal as unknown as { instances: Array<{ contentEl: TestElement }> }
+      ).instances.at(-1);
+      first?.contentEl.findByClass('local-stt-media-drop-zone')?.dispatchEvent({
+        type: 'drop',
+        preventDefault: vi.fn(),
+        dataTransfer: { files: [new File(['audio'], 'meeting.wav')] },
+      } as never);
+      await vi.waitFor(() =>
+        expect(
+          first?.contentEl.findByClass('local-stt-media-decoder-requirement')?.style.display,
+        ).toBe('none'),
+      );
+      await buttonNamed(t('media.modal.start')).click();
+      expect(startFile).toHaveBeenCalledOnce();
+      await buttonNamed(t('common.close')).click();
+      expect(cancel).not.toHaveBeenCalled();
+      registry.open({} as never, dependencies);
+      const second = (
+        Modal as unknown as { instances: Array<{ contentEl: TestElement }> }
+      ).instances.at(-1);
+      expect(second?.contentEl.findByClass('local-stt-media-progress-text')?.textContent).toBe(
+        t(phase === 'transcribe' ? 'media.progress.transcribe' : 'media.progress.aiProcessing'),
+      );
+      expect(buttonNamed(t('media.modal.cancelJob'))).toBeDefined();
+      finish();
+      await vi.waitFor(() => expect(buttonNamed(t('media.modal.start'))).toBeDefined());
+      expect(startFile).toHaveBeenCalledOnce();
+      registry.closeAll();
+    },
+  );
+  it('shows the last local AI failure when reopened after the job finishes', () => {
+    const registry = new MediaTranscriptionModalRegistry();
+    registry.open({} as never, {
+      cancel: vi.fn(async () => {}),
+      getModels: () => [],
+      getLastError: () => null,
+      getLastMediaAiResult: () => ({
+        failureCategory: 'refused',
+        model: 'example-model',
+        outcome: 'failed',
+        providerId: 'openrouter',
+        refusalReply: 'I cannot complete the request.',
+      }),
+      getPartialTranscript: () => null,
+      insertPartialTranscript: () => false,
+      getProgress: () => null,
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      isTranscribing: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
+      isDecoderInstalled: async () => true,
+      openDecoderInstaller: vi.fn(),
+      onManageModels: vi.fn(),
+      onManagePresets: vi.fn(),
+      startFile: vi.fn(async () => {}),
+      subscribeProgress: () => () => {},
+    });
+
+    const modal = (
+      Modal as unknown as { instances: Array<{ contentEl: TestElement }> }
+    ).instances.at(-1);
+    expect(modal?.contentEl.findByClass('local-stt-media-error')?.textContent).toContain(
+      'I cannot complete the request.',
+    );
     registry.closeAll();
   });
 });

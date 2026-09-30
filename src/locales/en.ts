@@ -75,6 +75,8 @@ export const en = {
   'youtube.modal.completedCreatorCaptions': 'Creator captions were added to the active note.',
   'youtube.modal.completedAutomaticCaptions':
     'YouTube automatic captions were added to the active note.',
+  'youtube.modal.backgroundCompleted': 'The YouTube transcript was added to the note.',
+  'youtube.modal.backgroundFailed': 'The YouTube transcript could not be added: {reason}',
   'youtube.modal.aiFailedRawKept':
     'The transcript was added, but the optional AI step failed: {reason}',
   'youtube.modal.aiCouldNotFinish':
@@ -106,14 +108,47 @@ export const en = {
   'media.tools.busy':
     'Finish or cancel the current transcription before installing the media decoder.',
   'media-llm-empty':
-    'The media transcript is empty or the AI provider returned no text. The raw transcript was kept; record a non-empty transcript or check the provider and try again.',
+    '{provider} model {model} returned no text. Your raw transcript is still in the note. Try another model or check the preset output settings.',
   'media-llm-failed':
-    'AI media processing failed, so the raw transcript was kept. Check the configured provider and try again.',
+    'AI processing could not complete. Your raw transcript is still in the note. Check the selected provider and try again.',
   'media-llm-refused':
-    'The AI model declined this transcript. The raw transcript is still in your note. Try another preset or model.',
+    '{provider} model {model} declined the transcript request. Your raw transcript is still in the note. Try another model or adjust the preset.',
+  'media-llm-refusal_like_reply':
+    '{provider} model {model} returned a reply that appears to decline the transcript request. Your raw transcript is still in the note. Review the model reply or try another model.',
+  'media-llm-refusal-reply': 'Model reply: “{reply}”',
   'media-llm-cancelled': 'AI media processing was cancelled; the raw transcript was kept.',
   'media-llm-range-unavailable':
-    'The media transcript changed while AI processing was pending, so the raw transcript was kept.',
+    'The note changed while AI processing was pending. Review the transcript before running the preset again.',
+  'media-llm-auth':
+    '{provider} could not authenticate the request for model {model}. Check the provider credentials and try again.',
+  'media-llm-connection':
+    'Could not connect to {provider} for model {model}. Check your connection and try again.',
+  'media-llm-filtered':
+    '{provider} filtered the response from model {model}. Your raw transcript is still in the note. Adjust the preset or choose another model.',
+  'media-llm-invalid_response':
+    '{provider} model {model} returned a response Speech Kit could not use. Your raw transcript is still in the note. Try another model.',
+  'media-llm-model_unavailable':
+    '{provider} could not find model {model}. Check the model selection or choose another model.',
+  'media-llm-note_changed':
+    'The note changed while AI processing was pending. Review the transcript before running the preset again.',
+  'media-llm-output_limit':
+    '{provider} model {model} stopped before finishing within its output limit. Your raw transcript is still in the note. Try a shorter transcript or another model.',
+  'media-llm-provider_error':
+    '{provider} could not process the transcript with model {model}. Your raw transcript is still in the note. Check the provider settings and try again.',
+  'media-llm-provider_unavailable':
+    'The selected AI provider is unavailable. Check its setup and try again; your raw transcript is still in the note.',
+  'media-llm-rate_limited':
+    '{provider} is limiting requests for model {model}. Wait a little, then try again.',
+  'media-llm-timeout':
+    '{provider} model {model} took too long to respond. Your raw transcript is still in the note. Try again or choose another model.',
+  'media-llm-completed': 'The transcript was added to the note and AI processing finished.',
+  'media-llm-transcript-only': 'The transcript was added to the note.',
+  'media.background.completed':
+    'Media transcription finished and the transcript was added to the note.',
+  'media.background.failed':
+    'Media transcription could not finish: {reason} The note may contain a partial transcript; reopen the command to review it.',
+  'media-llm-provider-name': 'The selected AI provider',
+  'media-llm-model-name': 'selected model',
   'media-llm-readiness':
     'Media AI is not ready ({issue}). Configure the selected provider, model, and credentials before enabling it.',
   'llm.mediaDisclosure.none':

@@ -83,8 +83,45 @@ describe('OpenRouterProvider', () => {
     );
 
     await expect(cleanup()).rejects.toMatchObject({
-      code: 'invalid_response',
+      code: 'output_limit',
       name: 'ProviderError',
+    } satisfies Partial<ProviderError>);
+  });
+
+  it('rejects provider-filtered responses instead of applying partial text', async () => {
+    mockFetch(async () =>
+      jsonResponse({
+        choices: [
+          {
+            finish_reason: 'content_filter',
+            message: { content: null },
+          },
+        ],
+      }),
+    );
+
+    await expect(cleanup()).rejects.toMatchObject({
+      code: 'content_filtered',
+      message: expect.stringContaining('filtered'),
+      name: 'ProviderError',
+    } satisfies Partial<ProviderError>);
+  });
+
+  it('uses an explicit model refusal signal even when no content is returned', async () => {
+    mockFetch(async () =>
+      jsonResponse({
+        choices: [
+          {
+            finish_reason: 'stop',
+            message: { content: null, refusal: 'I cannot help with that request.' },
+          },
+        ],
+      }),
+    );
+
+    await expect(cleanup()).rejects.toMatchObject({
+      code: 'model_refusal',
+      refusalReply: 'I cannot help with that request.',
     } satisfies Partial<ProviderError>);
   });
 

@@ -106,11 +106,7 @@ function parseChatContent(response: unknown, providerName: string): string {
   }
 
   const choice: unknown = response.choices[0];
-  if (
-    !isRecord(choice) ||
-    !isRecord(choice.message) ||
-    typeof choice.message.content !== 'string'
-  ) {
+  if (!isRecord(choice)) {
     throw new ProviderError(
       `${providerName} returned an invalid chat message.`,
       'invalid_response',
@@ -119,13 +115,34 @@ function parseChatContent(response: unknown, providerName: string): string {
   if (choice.finish_reason === 'length') {
     throw new ProviderError(
       `${providerName} stopped because the transformed text exceeded the output limit.`,
+      'output_limit',
+    );
+  }
+  if (choice.finish_reason === 'content_filter') {
+    throw new ProviderError(
+      `${providerName} filtered the response before it was complete.`,
+      'content_filtered',
+    );
+  }
+  if (
+    isRecord(choice.message) &&
+    typeof choice.message.refusal === 'string' &&
+    choice.message.refusal.trim().length > 0
+  ) {
+    throw new ProviderError(`${providerName} model refused the request.`, 'model_refusal', {
+      refusalReply: choice.message.refusal.trim(),
+    });
+  }
+  if (!isRecord(choice.message) || typeof choice.message.content !== 'string') {
+    throw new ProviderError(
+      `${providerName} returned an invalid chat message.`,
       'invalid_response',
     );
   }
 
   const content = choice.message.content.trim();
   if (content.length === 0) {
-    throw new ProviderError(`${providerName} returned an empty chat message.`, 'invalid_response');
+    throw new ProviderError(`${providerName} returned an empty chat message.`, 'empty_response');
   }
   return content;
 }

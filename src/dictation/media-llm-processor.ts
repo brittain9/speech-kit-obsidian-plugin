@@ -26,13 +26,16 @@ export type MediaLlmProcessingErrorCode =
   | 'refused';
 
 export class MediaLlmProcessingError extends Error {
+  readonly refusalReply: string | undefined;
+
   constructor(
     readonly code: MediaLlmProcessingErrorCode,
     message: string,
-    options?: { cause?: unknown },
+    options?: { cause?: unknown; refusalReply?: string },
   ) {
     super(message, options);
     this.name = 'MediaLlmProcessingError';
+    this.refusalReply = options?.refusalReply;
   }
 }
 
@@ -108,6 +111,7 @@ export async function processMediaLlm(
       throw new MediaLlmProcessingError(
         'refused',
         'The AI model declined this transcript. The raw transcript was kept.',
+        { refusalReply: text },
       );
     }
 
@@ -147,7 +151,7 @@ export async function processMediaLlm(
 
 function isBareProviderRefusal(text: string): boolean {
   if (text.length > 240) return false;
-  return /^(?:i(?:'m| am) sorry,? (?:but )?)?(?:i (?:cannot|can'?t|am unable to) (?:assist with|help with|comply with) (?:that|this|your) request|i (?:cannot|can'?t) (?:provide|fulfill) (?:that|this) request)[.!]?$/iu.test(
+  return /^(?:(?:i(?:'m| am) sorry|sorry)[,! ]*(?:but )?)?(?:i (?:cannot|can not|can't|am unable to) (?:complete|fulfill|assist with|help with|comply with|process) (?:(?:the|this|that|your) )?(?:request|task|instruction)|i (?:cannot|can not|can't) (?:provide|fulfill) (?:(?:the|this|that|your) )?(?:request|response|output|content)|i(?:'m| am) unable to (?:complete|fulfill|process) (?:(?:the|this|that|your) )?(?:request|task))[.!]?$/iu.test(
     text.trim(),
   );
 }

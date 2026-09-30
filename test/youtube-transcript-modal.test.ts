@@ -48,10 +48,14 @@ describe('YouTube transcript modal', () => {
       getProgress: () => null,
       getPartialTranscript: () => null,
       getResultSource: () => null,
-      getAiOutcome: () => null,
+      getCompletedVideoId: () => null,
+      getAiResult: () => null,
+      getError: () => null,
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       insertPartialTranscript: () => false,
       isBusy: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
       onManagePresets,
       start: vi.fn(async () => {}),
       subscribeProgress: () => () => {},
@@ -81,10 +85,14 @@ describe('YouTube transcript modal', () => {
       getProgress: () => null,
       getPartialTranscript: () => null,
       getResultSource: () => null,
-      getAiOutcome: () => null,
+      getCompletedVideoId: () => null,
+      getAiResult: () => null,
+      getError: () => null,
       getSettings: () => saved,
       insertPartialTranscript: () => false,
       isBusy: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
       onManagePresets: vi.fn(),
       start,
       subscribeProgress: () => () => {},
@@ -128,10 +136,14 @@ describe('YouTube transcript modal', () => {
       getProgress: () => null,
       getPartialTranscript: () => null,
       getResultSource: () => null,
-      getAiOutcome: () => null,
+      getCompletedVideoId: () => null,
+      getAiResult: () => null,
+      getError: () => null,
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       insertPartialTranscript: () => false,
       isBusy: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
       onManagePresets: vi.fn(),
       start,
       subscribeProgress: () => () => {},
@@ -145,7 +157,7 @@ describe('YouTube transcript modal', () => {
 
     const modal = (Modal as unknown as { instances: ModalFixture[] }).instances.at(-1);
     expect(primary.text).toBe(t('media.modal.cancelJob'));
-    expect(settings().flatMap(({ buttonComponents }) => buttonComponents)).toHaveLength(1);
+    expect(settings().flatMap(({ buttonComponents }) => buttonComponents)).toHaveLength(2);
     expect(
       modal?.contentEl.findByClass('local-stt-media-spinner')?.getAttribute('aria-hidden'),
     ).toBe('true');
@@ -158,6 +170,82 @@ describe('YouTube transcript modal', () => {
     finish();
     await vi.waitFor(() => expect(primary.text).toBe(t('media.modal.start')));
     registry.closeAll();
+  });
+
+  it('continues caption retrieval after the modal is dismissed', async () => {
+    let finish!: () => void;
+    const start = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const cancel = vi.fn(async () => {});
+    const registry = new YouTubeTranscriptModalRegistry();
+    registry.open({} as never, {
+      cancel,
+      getProgress: () => null,
+      getPartialTranscript: () => null,
+      getResultSource: () => null,
+      getCompletedVideoId: () => null,
+      getAiResult: () => null,
+      getError: () => null,
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      insertPartialTranscript: () => false,
+      isBusy: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
+      onManagePresets: vi.fn(),
+      start,
+      subscribeProgress: () => () => {},
+    });
+    settings()
+      .find(({ name }) => name === t('youtube.modal.urlName'))
+      ?.textComponents[0]?.change('https://youtu.be/8MxG6tOkdNY');
+    await buttonNamed(t('media.modal.start')).click();
+    await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
+
+    registry.closeAll();
+
+    expect(cancel).not.toHaveBeenCalled();
+    finish();
+  });
+
+  it('reattaches to an active import when reopened and keeps close separate from cancel', () => {
+    const cancel = vi.fn(async () => {});
+    const start = vi.fn(async () => {});
+    const registry = new YouTubeTranscriptModalRegistry();
+    registry.open({} as never, {
+      cancel,
+      getProgress: () => ({ phase: 'ai_processing' }),
+      getPartialTranscript: () => null,
+      getResultSource: () => null,
+      getCompletedVideoId: () => null,
+      getAiResult: () => null,
+      getError: () => null,
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      insertPartialTranscript: () => false,
+      isBusy: () => true,
+      isJobActive: () => true,
+      wasLastJobCancelled: () => false,
+      onManagePresets: vi.fn(),
+      start,
+      subscribeProgress: (listener) => {
+        listener({ phase: 'ai_processing' });
+        return () => {};
+      },
+    });
+
+    const modal = (Modal as unknown as { instances: ModalFixture[] }).instances.at(-1);
+    expect(buttonNamed(t('media.modal.cancelJob')).text).toBe(t('media.modal.cancelJob'));
+    expect(buttonNamed(t('common.close'))).toBeDefined();
+    expect(modal?.contentEl.findByClass('local-stt-media-progress-text')?.textContent).toBe(
+      t('media.progress.aiProcessing'),
+    );
+    expect(start).not.toHaveBeenCalled();
+
+    registry.closeAll();
+    expect(cancel).not.toHaveBeenCalled();
   });
 
   it('keeps the note-facing action recoverable when captions are unavailable', async () => {
@@ -173,10 +261,14 @@ describe('YouTube transcript modal', () => {
       getProgress: () => null,
       getPartialTranscript,
       getResultSource: () => null,
-      getAiOutcome: () => null,
+      getCompletedVideoId: () => null,
+      getAiResult: () => null,
+      getError: () => null,
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       insertPartialTranscript,
       isBusy: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
       onManagePresets: vi.fn(),
       start,
       subscribeProgress: () => () => {},
@@ -214,10 +306,20 @@ describe('YouTube transcript modal', () => {
       getProgress: () => null,
       getPartialTranscript: () => null,
       getResultSource: () => 'creator_captions',
-      getAiOutcome: () => 'failed',
+      getCompletedVideoId: () => null,
+      getAiResult: () => ({
+        failureCategory: 'refused',
+        model: 'example-model',
+        outcome: 'failed',
+        providerId: 'openrouter',
+        refusalReply: 'I cannot complete the request.',
+      }),
+      getError: () => null,
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       insertPartialTranscript: () => false,
       isBusy: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
       onManagePresets: vi.fn(),
       start,
       subscribeProgress: () => () => {},
@@ -229,11 +331,80 @@ describe('YouTube transcript modal', () => {
     const modal = (Modal as unknown as { instances: ModalFixture[] }).instances.at(-1);
     await vi.waitFor(() =>
       expect(modal?.contentEl.findByClass('local-stt-media-error')?.textContent).toContain(
-        'optional AI step could not finish',
+        'declined the transcript request',
       ),
+    );
+    expect(modal?.contentEl.findByClass('local-stt-media-error')?.textContent).toContain(
+      'I cannot complete the request.',
     );
     expect(buttonNamed(t('common.done')).disabled).toBe(false);
     expect(start).toHaveBeenCalledOnce();
+    registry.closeAll();
+  });
+
+  it('recognizes an imported video after reopening and avoids another insertion', async () => {
+    const start = vi.fn(async () => {});
+    const registry = new YouTubeTranscriptModalRegistry();
+    registry.open({} as never, {
+      cancel: vi.fn(async () => {}),
+      getProgress: () => null,
+      getError: () => null,
+      getPartialTranscript: () => null,
+      getResultSource: () => 'creator_captions',
+      getCompletedVideoId: () => '8MxG6tOkdNY',
+      getAiResult: () => null,
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      insertPartialTranscript: () => false,
+      isBusy: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
+      onManagePresets: vi.fn(),
+      start,
+      subscribeProgress: () => () => {},
+    });
+    settings()
+      .find(({ name }) => name === t('youtube.modal.urlName'))
+      ?.textComponents[0]?.change('https://youtu.be/8MxG6tOkdNY');
+    expect(buttonNamed(t('common.done'))).toBeDefined();
+    await buttonNamed(t('common.done')).click();
+    expect(start).not.toHaveBeenCalled();
+  });
+  it('shows the last YouTube AI failure after dismissal without inserting again', () => {
+    const start = vi.fn(async () => {});
+    const registry = new YouTubeTranscriptModalRegistry();
+    registry.open({} as never, {
+      cancel: vi.fn(async () => {}),
+      getProgress: () => null,
+      getError: () => null,
+      getPartialTranscript: () => null,
+      getResultSource: () => 'creator_captions',
+      getCompletedVideoId: () => '8MxG6tOkdNY',
+      getAiResult: () => ({
+        failureCategory: 'refused',
+        model: 'example-model',
+        outcome: 'failed',
+        providerId: 'openrouter',
+        refusalReply: 'I cannot complete the request.',
+      }),
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      insertPartialTranscript: () => false,
+      isBusy: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
+      onManagePresets: vi.fn(),
+      start,
+      subscribeProgress: () => () => {},
+    });
+
+    const modal = (Modal as unknown as { instances: ModalFixture[] }).instances.at(-1);
+    expect(modal?.contentEl.findByClass('local-stt-media-error')?.textContent).toContain(
+      'I cannot complete the request.',
+    );
+    settings()
+      .find(({ name }) => name === t('youtube.modal.urlName'))
+      ?.textComponents[0]?.change('https://youtu.be/anotherVideo');
+    expect(modal?.contentEl.findByClass('local-stt-media-error')?.textContent).toBe('');
+    expect(start).not.toHaveBeenCalled();
     registry.closeAll();
   });
 });
