@@ -54,6 +54,7 @@ export type MediaLlmFailureCategory =
   | 'provider_unavailable'
   | 'rate_limited'
   | 'refused'
+  | 'refusal_like_reply'
   | 'timeout';
 
 export interface MediaLlmRunResult {
@@ -77,6 +78,7 @@ const failureMessageKeys: Record<MediaLlmFailureCategory, TranslationKey> = {
   provider_unavailable: 'media-llm-provider_unavailable',
   rate_limited: 'media-llm-rate_limited',
   refused: 'media-llm-refused',
+  refusal_like_reply: 'media-llm-refusal_like_reply',
   timeout: 'media-llm-timeout',
 };
 
@@ -94,7 +96,9 @@ export function formatMediaLlmFailure(result: MediaLlmRunResult): string {
 
 export function formatMediaLlmFailureForModal(result: MediaLlmRunResult): string {
   const summary = formatMediaLlmFailure(result);
-  return result.failureCategory === 'refused' && result.refusalReply !== undefined
+  return (result.failureCategory === 'refused' ||
+    result.failureCategory === 'refusal_like_reply') &&
+    result.refusalReply !== undefined
     ? `${summary} ${t('media-llm-refusal-reply', { reply: result.refusalReply })}`
     : summary;
 }
@@ -189,7 +193,11 @@ export class MediaLlmCoordinator {
       if (abortController.signal.aborted)
         return { ...context, failureCategory: null, outcome: 'cancelled' };
       this.dependencies.logger?.warn('llm', 'media transcript post-completion failed', error);
-      return failedResult(categoryForError(error), context);
+      return failedResult(
+        categoryForError(error),
+        context,
+        error instanceof ProviderError ? error.refusalReply : undefined,
+      );
     } finally {
       if (this.activeAbortController === abortController) this.activeAbortController = null;
     }
@@ -310,7 +318,7 @@ function categoryForError(error: unknown): MediaLlmFailureCategory {
       case 'range_unavailable':
         return 'note_changed';
       case 'refused':
-        return 'refused';
+        return 'refusal_like_reply';
       case 'cancelled':
         return 'provider_error';
       case 'failed':
@@ -332,6 +340,8 @@ function categoryForError(error: unknown): MediaLlmFailureCategory {
       return 'output_limit';
     case 'invalid_response':
       return 'invalid_response';
+    case 'model_refusal':
+      return 'refused';
     case 'model_not_configured':
     case 'unknown_model':
       return 'model_unavailable';

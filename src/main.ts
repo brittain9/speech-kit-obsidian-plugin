@@ -372,8 +372,12 @@ export default class LocalSttPlugin extends Plugin {
           getMediaTranscriptionModelOptions(this.requireModelInstallManager().getState(), language),
         getProgress: () => this.requireAudioFileTranscriptionController().getMediaProgress(),
         getLastError: () => this.requireAudioFileTranscriptionController().getMediaError(),
-        getLastMediaAiResult: () =>
-          this.requireAudioFileTranscriptionController().getLastMediaAiResult(),
+        getLastMediaAiResult: () => {
+          const controller = this.requireAudioFileTranscriptionController();
+          return controller.getLastMediaResultSource() === 'local_audio'
+            ? controller.getLastMediaAiResult()
+            : null;
+        },
         getPartialTranscript: () =>
           this.requireAudioFileTranscriptionController().getPartialTranscript(),
         insertPartialTranscript: () =>

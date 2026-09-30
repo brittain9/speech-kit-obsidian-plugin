@@ -133,8 +133,28 @@ describe('MediaLlmCoordinator', () => {
     },
   );
 
+  it('uses a provider refusal signal without inferring refusal from response length', async () => {
+    const reply = 'The model explicitly refused the request.';
+    const coordinator = new MediaLlmCoordinator({
+      createRouter: () => ({
+        cleanup: async () => {
+          throw new ProviderError('Model refused.', 'model_refusal', { refusalReply: reply });
+        },
+        selectProviderId: () => 'ollama',
+      }),
+      feedback: { show: vi.fn() },
+      getSettings: () => settings(),
+    });
+
+    const result = await coordinator.run(session());
+
+    expect(result).toMatchObject({ failureCategory: 'refused', refusalReply: reply });
+    expect(formatMediaLlmFailureForModal(result)).toContain(reply);
+    expect(formatMediaLlmFailure(result)).not.toContain(reply);
+  });
+
   it('shows the recognized refusal reply in the modal while keeping notifications safe', async () => {
-    const reply = "I can't do your request.";
+    const reply = 'I cannot complete the request.';
     const coordinator = new MediaLlmCoordinator({
       createRouter: () => ({
         cleanup: async () => ({ model: 'local-model', providerId: 'ollama', text: reply }),
@@ -146,7 +166,7 @@ describe('MediaLlmCoordinator', () => {
 
     const result = await coordinator.run(session());
 
-    expect(result).toMatchObject({ failureCategory: 'refused', refusalReply: reply });
+    expect(result).toMatchObject({ failureCategory: 'refusal_like_reply', refusalReply: reply });
     expect(formatMediaLlmFailureForModal(result)).toContain(reply);
     expect(formatMediaLlmFailure(result)).not.toContain(reply);
   });

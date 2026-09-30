@@ -30,6 +30,7 @@ export type ProviderErrorCode =
   | 'http_error'
   | 'invalid_response'
   | 'model_not_configured'
+  | 'model_refusal'
   | 'output_limit'
   | 'permission_denied'
   | 'rate_limited'
@@ -85,6 +86,7 @@ export interface LlmCleanupFailure {
 
 export class ProviderError extends Error {
   readonly responseText?: string;
+  readonly refusalReply?: string;
   readonly status?: number;
   // Set by the router so failures are attributed to the provider that was
   // actually routed to, even if routing inputs changed mid-call.
@@ -93,10 +95,17 @@ export class ProviderError extends Error {
   constructor(
     message: string,
     public readonly code: ProviderErrorCode,
-    options: { responseText?: string | undefined; status?: number | undefined } = {},
+    options: {
+      refusalReply?: string | undefined;
+      responseText?: string | undefined;
+      status?: number | undefined;
+    } = {},
   ) {
     super(message);
     this.name = 'ProviderError';
+    if (options.refusalReply !== undefined) {
+      this.refusalReply = options.refusalReply;
+    }
     if (options.responseText !== undefined) {
       this.responseText = options.responseText;
     }

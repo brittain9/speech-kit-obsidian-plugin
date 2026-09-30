@@ -124,6 +124,15 @@ function parseChatContent(response: unknown, providerName: string): string {
       'content_filtered',
     );
   }
+  if (
+    isRecord(choice.message) &&
+    typeof choice.message.refusal === 'string' &&
+    choice.message.refusal.trim().length > 0
+  ) {
+    throw new ProviderError(`${providerName} model refused the request.`, 'model_refusal', {
+      refusalReply: choice.message.refusal.trim(),
+    });
+  }
   if (!isRecord(choice.message) || typeof choice.message.content !== 'string') {
     throw new ProviderError(
       `${providerName} returned an invalid chat message.`,

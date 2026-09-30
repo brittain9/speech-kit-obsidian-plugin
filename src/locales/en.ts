@@ -113,6 +113,8 @@ export const en = {
     'AI processing could not complete. Your raw transcript is still in the note. Check the selected provider and try again.',
   'media-llm-refused':
     '{provider} model {model} declined the transcript request. Your raw transcript is still in the note. Try another model or adjust the preset.',
+  'media-llm-refusal_like_reply':
+    '{provider} model {model} returned a reply that appears to decline the transcript request. Your raw transcript is still in the note. Review the model reply or try another model.',
   'media-llm-refusal-reply': 'Model reply: “{reply}”',
   'media-llm-cancelled': 'AI media processing was cancelled; the raw transcript was kept.',
   'media-llm-range-unavailable':

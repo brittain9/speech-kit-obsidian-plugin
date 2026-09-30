@@ -91,8 +91,12 @@ class YouTubeTranscriptModal extends Modal {
       ? settings.llmPostprocessActivePresetRef
       : null;
     this.busy = dependencies.isJobActive();
-    this.observingJob = this.busy;
     this.completedVideoId = dependencies.getCompletedVideoId();
+    this.observingJob =
+      this.busy ||
+      (this.completedVideoId !== null &&
+        dependencies.getResultSource() !== null &&
+        dependencies.getAiResult()?.outcome === 'failed');
     this.releaseProgress = dependencies.subscribeProgress((progress) =>
       this.renderProgress(progress),
     );
@@ -127,7 +131,7 @@ class YouTubeTranscriptModal extends Modal {
         text.inputEl.addClass('local-stt-youtube-transcript-url');
         text.onChange((value) => {
           this.url = value;
-          this.updatePrimaryButton();
+          this.renderProgress(this.dependencies.getProgress());
         });
       });
     urlSetting.settingEl.addClass('local-stt-youtube-url-setting');
@@ -293,8 +297,10 @@ class YouTubeTranscriptModal extends Modal {
       this.busy = false;
       this.completedVideoId = this.dependencies.getCompletedVideoId();
     }
+    const showingPreviousResult =
+      this.url.trim().length === 0 || this.completedVideoId === this.videoId();
     const message = !this.busy
-      ? this.observingJob
+      ? this.observingJob && showingPreviousResult
         ? this.completedMessage()
         : ''
       : progress === null
@@ -303,9 +309,12 @@ class YouTubeTranscriptModal extends Modal {
     this.progressEl.setText(message);
     this.progressRowEl?.toggle(message.length > 0 || this.busy);
     if (!this.busy && this.observingJob) {
-      const error = this.dependencies.getError();
-      if (error !== null) this.errorEl?.setText(errorMessage(error));
-      else this.showAiResult();
+      if (!showingPreviousResult) this.errorEl?.setText('');
+      else {
+        const error = this.dependencies.getError();
+        if (error !== null) this.errorEl?.setText(errorMessage(error));
+        else this.showAiResult();
+      }
     }
     this.updatePrimaryButton();
   }

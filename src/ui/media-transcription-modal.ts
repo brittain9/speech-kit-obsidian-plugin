@@ -119,7 +119,7 @@ class MediaTranscriptionModal extends Modal {
       ? settings.llmPostprocessActivePresetRef
       : null;
     this.busy = dependencies.isJobActive();
-    this.observingJob = this.busy;
+    this.observingJob = this.busy || dependencies.getLastMediaAiResult()?.outcome === 'failed';
     this.releaseProgress = dependencies.subscribeProgress((progress) =>
       this.renderProgress(progress),
     );

@@ -309,10 +309,10 @@ describe('YouTube transcript modal', () => {
       getCompletedVideoId: () => null,
       getAiResult: () => ({
         failureCategory: 'refused',
-        model: 'luna',
+        model: 'example-model',
         outcome: 'failed',
         providerId: 'openrouter',
-        refusalReply: "I can't do your request.",
+        refusalReply: 'I cannot complete the request.',
       }),
       getError: () => null,
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
@@ -335,7 +335,7 @@ describe('YouTube transcript modal', () => {
       ),
     );
     expect(modal?.contentEl.findByClass('local-stt-media-error')?.textContent).toContain(
-      "I can't do your request.",
+      'I cannot complete the request.',
     );
     expect(buttonNamed(t('common.done')).disabled).toBe(false);
     expect(start).toHaveBeenCalledOnce();
@@ -368,5 +368,43 @@ describe('YouTube transcript modal', () => {
     expect(buttonNamed(t('common.done'))).toBeDefined();
     await buttonNamed(t('common.done')).click();
     expect(start).not.toHaveBeenCalled();
+  });
+  it('shows the last YouTube AI failure after dismissal without inserting again', () => {
+    const start = vi.fn(async () => {});
+    const registry = new YouTubeTranscriptModalRegistry();
+    registry.open({} as never, {
+      cancel: vi.fn(async () => {}),
+      getProgress: () => null,
+      getError: () => null,
+      getPartialTranscript: () => null,
+      getResultSource: () => 'creator_captions',
+      getCompletedVideoId: () => '8MxG6tOkdNY',
+      getAiResult: () => ({
+        failureCategory: 'refused',
+        model: 'example-model',
+        outcome: 'failed',
+        providerId: 'openrouter',
+        refusalReply: 'I cannot complete the request.',
+      }),
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      insertPartialTranscript: () => false,
+      isBusy: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
+      onManagePresets: vi.fn(),
+      start,
+      subscribeProgress: () => () => {},
+    });
+
+    const modal = (Modal as unknown as { instances: ModalFixture[] }).instances.at(-1);
+    expect(modal?.contentEl.findByClass('local-stt-media-error')?.textContent).toContain(
+      'I cannot complete the request.',
+    );
+    settings()
+      .find(({ name }) => name === t('youtube.modal.urlName'))
+      ?.textComponents[0]?.change('https://youtu.be/anotherVideo');
+    expect(modal?.contentEl.findByClass('local-stt-media-error')?.textContent).toBe('');
+    expect(start).not.toHaveBeenCalled();
+    registry.closeAll();
   });
 });

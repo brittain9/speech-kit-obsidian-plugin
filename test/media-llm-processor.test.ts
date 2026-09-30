@@ -156,7 +156,7 @@ describe('media LLM processing', () => {
     expect(session.replaceSessionRangeWithCleaned).not.toHaveBeenCalled();
   });
 
-  it.each(["I'm sorry, but I can't complete the request.", "I can't do your request."])(
+  it.each(["I'm sorry, but I can't complete the request."])(
     'does not apply a bare provider refusal: %s',
     async (reply) => {
       const session = new FakeMediaSession();

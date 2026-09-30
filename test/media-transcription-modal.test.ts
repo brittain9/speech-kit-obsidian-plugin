@@ -494,4 +494,40 @@ describe('local media transcription modal', () => {
       registry.closeAll();
     },
   );
+  it('shows the last local AI failure when reopened after the job finishes', () => {
+    const registry = new MediaTranscriptionModalRegistry();
+    registry.open({} as never, {
+      cancel: vi.fn(async () => {}),
+      getModels: () => [],
+      getLastError: () => null,
+      getLastMediaAiResult: () => ({
+        failureCategory: 'refused',
+        model: 'example-model',
+        outcome: 'failed',
+        providerId: 'openrouter',
+        refusalReply: 'I cannot complete the request.',
+      }),
+      getPartialTranscript: () => null,
+      insertPartialTranscript: () => false,
+      getProgress: () => null,
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      isTranscribing: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
+      isDecoderInstalled: async () => true,
+      openDecoderInstaller: vi.fn(),
+      onManageModels: vi.fn(),
+      onManagePresets: vi.fn(),
+      startFile: vi.fn(async () => {}),
+      subscribeProgress: () => () => {},
+    });
+
+    const modal = (
+      Modal as unknown as { instances: Array<{ contentEl: TestElement }> }
+    ).instances.at(-1);
+    expect(modal?.contentEl.findByClass('local-stt-media-error')?.textContent).toContain(
+      'I cannot complete the request.',
+    );
+    registry.closeAll();
+  });
 });

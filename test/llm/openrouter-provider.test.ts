@@ -107,6 +107,24 @@ describe('OpenRouterProvider', () => {
     } satisfies Partial<ProviderError>);
   });
 
+  it('uses an explicit model refusal signal even when no content is returned', async () => {
+    mockFetch(async () =>
+      jsonResponse({
+        choices: [
+          {
+            finish_reason: 'stop',
+            message: { content: null, refusal: 'I cannot help with that request.' },
+          },
+        ],
+      }),
+    );
+
+    await expect(cleanup()).rejects.toMatchObject({
+      code: 'model_refusal',
+      refusalReply: 'I cannot help with that request.',
+    } satisfies Partial<ProviderError>);
+  });
+
   it('lists text models with pricing and drops audio/image models', async () => {
     mockFetch(async () =>
       jsonResponse({
