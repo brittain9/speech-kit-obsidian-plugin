@@ -142,10 +142,12 @@ the tag workflow run the metadata gate. The explicit tag check must print
 `<version>` with no error. The third command prints the sidecar release the
 plugin will use; it matches `<version>` only for a sidecar-bearing release.
 
-When a release changes settings behavior or its Obsidian API usage, also
-complete the [Obsidian settings compatibility matrix](../guides/obsidian-settings-compatibility-testing.md).
-Its exact 1.11.5 runtime row remains required while `manifest.json` declares
-1.11.5, even when the supported-floor typecheck passes.
+For changes to settings behavior or Obsidian API usage, the
+[Obsidian settings compatibility smoke guide](../guides/obsidian-settings-compatibility-testing.md)
+provides optional checks for investigating compatibility risks. No fixed
+Obsidian version matrix or exact-runtime row is required to tag a release.
+Record the runtime versions actually tested; do not describe untested versions
+as verified.
 
 ## Cut it
 
