@@ -35,6 +35,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Comparing against a prior sidecar tag requires a shared merge base.
+          fetch-depth: 0
 
       - id: build-config
         name: Resolve release build configuration
