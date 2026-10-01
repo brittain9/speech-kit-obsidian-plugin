@@ -29,6 +29,6 @@ Both commands check that the intended note is still a safe insertion target befo
 
 ## Customize the starting presets
 
-Speech Kit ships 23 starting presets. Every preset can be edited, duplicated, or deleted from **Manage presets**, including the shipped ones. Edits and deletions persist across reloads. **Restore transform defaults** resets edited starting presets and restores deleted ones while preserving custom presets and configured models. Deleting every preset turns AI transformation off.
+Speech Kit ships 16 starting presets. Every preset can be edited, duplicated, or deleted from **Manage presets**, including the shipped ones. Edits and deletions persist across reloads. **Restore transform defaults** resets edited starting presets and restores deleted ones while preserving custom presets and configured models. Deleting every preset turns AI transformation off.
 
 See [the complete preset settings and prompts](ai-preset-prompts.md) for placement defaults, timing, and prompt behavior.

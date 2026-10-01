@@ -18,6 +18,7 @@ import {
   type LlmPresetOverrides,
   type LlmPresetTiming,
   listPresetEntries,
+  reconcileStartingPresets,
   resolveActivePresetEntry,
   resolvePresetEntry,
   restoreDefaultPresets,
@@ -306,7 +307,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
     lineBreakPauseMs: raw.smartParagraphLineBreakPauseMs,
     paragraphPauseMs: raw.smartParagraphParagraphPauseMs,
   });
-  const savedPresets = readUserPresets(raw.llmPostprocessUserPresets);
+  const savedPresets = reconcileStartingPresets(readUserPresets(raw.llmPostprocessUserPresets));
   const initializedPresets =
     raw.llmPostprocessPresetsInitialized === true
       ? savedPresets
@@ -319,7 +320,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
   const { activeRef, userPresets } = migrateLlmPresetState({
     legacyPrompt: raw.llmPostprocessPrompt,
     storedRef: raw.llmPostprocessActivePresetRef,
-    userPresets: initializedPresets,
+    userPresets: reconcileStartingPresets(initializedPresets),
   });
   const legacyModel =
     typeof raw.llmPostprocessModel === 'string' ? raw.llmPostprocessModel.trim() : '';
@@ -926,13 +927,7 @@ function readUserPresets(value: unknown): LlmPreset[] {
       ...(useNoteContext !== undefined ? { useNoteContext } : {}),
     };
 
-    if (
-      !isDefaultPreset({ id, label, prompt, output }) &&
-      accepted.filter((preset) => !isDefaultPreset(preset)).length >= LLM_USER_PRESET_MAX_COUNT
-    ) {
-      continue;
-    }
-    accepted.push({
+    const candidate: LlmPreset = {
       ...(description.length > 0
         ? { description: description.slice(0, LLM_USER_PRESET_MAX_DESCRIPTION_CHARS) }
         : {}),
@@ -942,7 +937,15 @@ function readUserPresets(value: unknown): LlmPreset[] {
       ...(Object.keys(overrides).length > 0 ? { overrides } : {}),
       prompt,
       ...(timing !== undefined ? { timing } : {}),
-    });
+    };
+    if (reconcileStartingPresets([candidate]).length === 0) continue;
+    if (
+      !isDefaultPreset({ id, label, prompt, output }) &&
+      accepted.filter((preset) => !isDefaultPreset(preset)).length >= LLM_USER_PRESET_MAX_COUNT
+    ) {
+      continue;
+    }
+    accepted.push(candidate);
     seenIds.add(id);
   }
 
