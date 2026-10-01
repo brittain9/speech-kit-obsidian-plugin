@@ -23,4 +23,12 @@ Speech Kit retrieves the video's existing creator captions when available, other
 
 Choose **Transcript only** to add the raw transcript without AI processing. If you choose a preset, Speech Kit applies that preset to the complete transcript after insertion. A local AI provider keeps transcript text on your computer; a remote provider receives transcript text. The audio or video file itself is never sent to an AI provider. If AI processing fails, the raw transcript remains in the note.
 
-Both commands check that the intended note is still a safe insertion target before writing. You can cancel an active job from its dialog.
+Close either dialog to continue the job in the background, including the AI step. Reopen the command to see the active job and its current phase. Use the explicit cancellation control to stop processing; closing the dialog does not cancel it. Completion feedback reports AI failures with a specific reason and next step. Unloading Speech Kit stops active work.
+
+Both commands check that the intended note is still a safe insertion target before writing. If you navigate to another note while waiting, the result stays associated with the original target.
+
+## Customize the starting presets
+
+Speech Kit ships 16 starting presets. Every preset can be edited, duplicated, or deleted from **Manage presets**, including the shipped ones. Edits and deletions persist across reloads. **Restore transform defaults** resets edited starting presets and restores deleted ones while preserving custom presets and configured models. Deleting every preset turns AI transformation off.
+
+See [the complete preset settings and prompts](ai-preset-prompts.md) for placement defaults, timing, and prompt behavior.

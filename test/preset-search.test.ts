@@ -40,10 +40,10 @@ describe('searchPresetEntries', () => {
   it('matches on description when the label does not match', () => {
     const hits = searchPresetEntries(
       listPresetEntries(createDefaultPresets()),
-      substringSearch('reference guide'),
+      substringSearch('context, findings, and implications'),
     );
     expect(hits).toHaveLength(1);
-    expect(hits[0]?.entry.preset.id).toBe('default:cheat-sheet');
+    expect(hits[0]?.entry.preset.id).toBe('default:one-page-briefing');
     expect(hits[0]?.labelMatches).toBeNull();
     expect(hits[0]?.descriptionMatches).not.toBeNull();
   });

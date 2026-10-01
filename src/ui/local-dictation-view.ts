@@ -2,10 +2,7 @@ import { ItemView, Setting, setIcon, setTooltip, type WorkspaceLeaf } from 'obsi
 
 import {
   describePresetBehavior,
-  describePresetTiming,
-  isLlmPresetTiming,
   type LlmPreset,
-  type LlmPresetTiming,
   listPresetEntries,
   resolveActivePresetEntry,
 } from '../llm/presets';
@@ -27,17 +24,11 @@ import {
   resolveLlmSidebarPresentation,
 } from './llm-sidebar-presentation';
 import { INLINE_STATUS_PRESENTATION } from './llm-status';
-import { LlmTimingSettingsModal } from './llm-timing-settings-modal';
 import { PresetManagerModal } from './preset-manager-modal';
 
 export const LOCAL_DICTATION_VIEW_TYPE = 'local-dictation-sidebar';
 const LOCAL_DICTATION_VIEW_ICON = 'audio-lines';
 const NARROW_SIDEBAR_WIDTH_PX = 560;
-
-const CLEANUP_MODE_OPTIONS: ReadonlyArray<{ label: string; value: LlmPresetTiming }> = [
-  { label: t('llm.timing.option.perUtterance'), value: 'per_utterance' },
-  { label: t('llm.timing.option.batch'), value: 'batch' },
-];
 
 interface LocalDictationViewDependencies {
   feedback: Pick<UserFeedback, 'show'>;
@@ -183,7 +174,6 @@ export class LocalDictationView extends ItemView {
 
       const styleGroup = createSettingGroup(contentEl, t('llm.sidebar.group.preset'));
       this.renderPresetPicker(styleGroup, settings);
-      this.renderCleanupMode(styleGroup, settings);
       this.renderOriginalTranscriptToggle(styleGroup, settings);
 
       const whereGroup = createSettingGroup(contentEl, t('llm.sidebar.group.model'));
@@ -275,54 +265,6 @@ export class LocalDictationView extends ItemView {
       });
   }
 
-  private renderCleanupMode(parent: HTMLElement, settings: PluginSettings): void {
-    if (settings.llmPostprocessMode === 'off') {
-      return;
-    }
-    const { preset } = resolveActivePresetEntry(
-      settings.llmPostprocessActivePresetRef,
-      settings.llmPostprocessUserPresets,
-    );
-    const pinned = preset.timing;
-
-    const setting = new Setting(parent)
-      .setName(t('llm.sidebar.runTransform.name'))
-      .setDesc(
-        pinned !== undefined
-          ? t('llm.sidebar.runTransform.setByPreset', {
-              preset: preset.label,
-              timing: describePresetTiming(pinned),
-            })
-          : t('llm.sidebar.runTransform.description'),
-      )
-      .addDropdown((dropdown) => {
-        for (const option of CLEANUP_MODE_OPTIONS) {
-          dropdown.addOption(option.value, option.label);
-        }
-        dropdown.setValue(pinned ?? settings.llmPostprocessMode);
-        dropdown.setDisabled(pinned !== undefined);
-        dropdown.onChange(async (value) => {
-          if (!isLlmPresetTiming(value)) {
-            return;
-          }
-          await this.persistSettings({
-            ...this.dependencies.getSettings(),
-            llmPostprocessLastEnabledMode: value,
-            llmPostprocessMode: value,
-          });
-        });
-      });
-    setting.addExtraButton((button) => {
-      button
-        .setIcon('sliders-horizontal')
-        .setTooltip(t('llm.timing.settingsTooltip'))
-        .onClick(() => {
-          this.openTimingSettings();
-        });
-      button.extraSettingsEl.setAttribute('aria-label', t('llm.timing.settingsTooltip'));
-    });
-  }
-
   private renderPresetPicker(parent: HTMLElement, settings: PluginSettings): void {
     const entries = listPresetEntries(settings.llmPostprocessUserPresets);
     const active = resolveActivePresetEntry(
@@ -372,18 +314,6 @@ export class LocalDictationView extends ItemView {
       getSettings: () => this.dependencies.getSettings(),
       mutatePresetState: async (mutation) => {
         await this.mutatePresetState(mutation);
-      },
-    }).open();
-  }
-
-  private openTimingSettings(): void {
-    new LlmTimingSettingsModal(this.app, {
-      getSettings: () => this.dependencies.getSettings(),
-      onSave: () => {
-        this.requestRefresh();
-      },
-      saveSettings: async (settings) => {
-        await this.dependencies.saveSettings(settings);
       },
     }).open();
   }
@@ -535,9 +465,6 @@ export class LocalDictationView extends ItemView {
 function formatPresetOptionLabel(preset: LlmPreset): string {
   if (preset.timing === 'per_utterance') {
     return t('llm.preset.option.perUtterance', { preset: preset.label });
-  }
-  if (preset.timing === 'batch') {
-    return t('llm.preset.option.batch', { preset: preset.label });
   }
   return preset.label;
 }

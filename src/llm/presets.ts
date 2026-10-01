@@ -48,17 +48,10 @@ export type LlmBuiltinPresetId =
   | 'outline'
   | 'study-notes'
   | 'meeting-notes'
-  | 'flashcards'
   | 'claims-and-evidence'
-  | 'cheat-sheet'
-  | 'step-by-step-guide'
-  | 'faq'
   | 'timeline'
   | 'story-version'
   | 'podcast-show-notes'
-  | 'social-post'
-  | 'memorable-quotes'
-  | 'ideas-to-try'
   | 'one-page-briefing'
   | 'explain-with-analogies'
   | 'youtube-notes'
@@ -156,15 +149,7 @@ export const LLM_BUILTIN_PRESETS = [
     timing: 'batch',
     overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
   },
-  {
-    id: 'flashcards',
-    label: t('llm.preset.builtin.flashcards.label'),
-    description: t('llm.preset.builtin.flashcards.description'),
-    output: 'add_below',
-    prompt: t('llm.preset.builtin.flashcards.prompt'),
-    timing: 'batch',
-    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
-  },
+
   {
     id: 'claims-and-evidence',
     label: t('llm.preset.builtin.claimsAndEvidence.label'),
@@ -174,33 +159,7 @@ export const LLM_BUILTIN_PRESETS = [
     timing: 'batch',
     overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
   },
-  {
-    id: 'cheat-sheet',
-    label: t('llm.preset.builtin.cheatSheet.label'),
-    description: t('llm.preset.builtin.cheatSheet.description'),
-    output: 'add_above',
-    prompt: t('llm.preset.builtin.cheatSheet.prompt'),
-    timing: 'batch',
-    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
-  },
-  {
-    id: 'step-by-step-guide',
-    label: t('llm.preset.builtin.stepByStepGuide.label'),
-    description: t('llm.preset.builtin.stepByStepGuide.description'),
-    output: 'add_above',
-    prompt: t('llm.preset.builtin.stepByStepGuide.prompt'),
-    timing: 'batch',
-    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
-  },
-  {
-    id: 'faq',
-    label: t('llm.preset.builtin.faq.label'),
-    description: t('llm.preset.builtin.faq.description'),
-    output: 'add_above',
-    prompt: t('llm.preset.builtin.faq.prompt'),
-    timing: 'batch',
-    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
-  },
+
   {
     id: 'timeline',
     label: t('llm.preset.builtin.timeline.label'),
@@ -219,33 +178,7 @@ export const LLM_BUILTIN_PRESETS = [
     timing: 'batch',
     overrides: { minWords: 0, temperature: 0.4, useNoteContext: false },
   },
-  {
-    id: 'social-post',
-    label: t('llm.preset.builtin.socialPost.label'),
-    description: t('llm.preset.builtin.socialPost.description'),
-    output: 'add_below',
-    prompt: t('llm.preset.builtin.socialPost.prompt'),
-    timing: 'batch',
-    overrides: { minWords: 0, temperature: 0.4, useNoteContext: false },
-  },
-  {
-    id: 'memorable-quotes',
-    label: t('llm.preset.builtin.memorableQuotes.label'),
-    description: t('llm.preset.builtin.memorableQuotes.description'),
-    output: 'add_below',
-    prompt: t('llm.preset.builtin.memorableQuotes.prompt'),
-    timing: 'batch',
-    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
-  },
-  {
-    id: 'ideas-to-try',
-    label: t('llm.preset.builtin.ideasToTry.label'),
-    description: t('llm.preset.builtin.ideasToTry.description'),
-    output: 'add_below',
-    prompt: t('llm.preset.builtin.ideasToTry.prompt'),
-    timing: 'batch',
-    overrides: { minWords: 0, temperature: 0.4, useNoteContext: false },
-  },
+
   {
     id: 'one-page-briefing',
     label: t('llm.preset.builtin.onePageBriefing.label'),
@@ -282,6 +215,73 @@ export const LLM_BUILTIN_PRESETS = [
     timing: 'batch',
   },
 ] as const satisfies readonly (LlmPreset & { id: LlmBuiltinPresetId })[];
+
+// Retained only to recognize untouched copies from the initial preset rollout.
+const RETIRED_STARTING_PRESETS: readonly LlmPreset[] = [
+  {
+    id: 'flashcards',
+    label: t('llm.preset.builtin.flashcards.label'),
+    description: t('llm.preset.builtin.flashcards.description'),
+    output: 'add_below',
+    prompt: t('llm.preset.builtin.flashcards.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'cheat-sheet',
+    label: t('llm.preset.builtin.cheatSheet.label'),
+    description: t('llm.preset.builtin.cheatSheet.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.cheatSheet.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'step-by-step-guide',
+    label: t('llm.preset.builtin.stepByStepGuide.label'),
+    description: t('llm.preset.builtin.stepByStepGuide.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.stepByStepGuide.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'faq',
+    label: t('llm.preset.builtin.faq.label'),
+    description: t('llm.preset.builtin.faq.description'),
+    output: 'add_above',
+    prompt: t('llm.preset.builtin.faq.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'social-post',
+    label: t('llm.preset.builtin.socialPost.label'),
+    description: t('llm.preset.builtin.socialPost.description'),
+    output: 'add_below',
+    prompt: t('llm.preset.builtin.socialPost.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.4, useNoteContext: false },
+  },
+  {
+    id: 'memorable-quotes',
+    label: t('llm.preset.builtin.memorableQuotes.label'),
+    description: t('llm.preset.builtin.memorableQuotes.description'),
+    output: 'add_below',
+    prompt: t('llm.preset.builtin.memorableQuotes.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.2, useNoteContext: false },
+  },
+  {
+    id: 'ideas-to-try',
+    label: t('llm.preset.builtin.ideasToTry.label'),
+    description: t('llm.preset.builtin.ideasToTry.description'),
+    output: 'add_below',
+    prompt: t('llm.preset.builtin.ideasToTry.prompt'),
+    timing: 'batch',
+    overrides: { minWords: 0, temperature: 0.4, useNoteContext: false },
+  },
+];
 
 export const DEFAULT_LLM_BUILTIN_PRESET_ID: LlmBuiltinPresetId = 'summary';
 
@@ -343,8 +343,45 @@ export function isDefaultPreset(preset: LlmPreset): boolean {
   return LLM_BUILTIN_PRESETS.some((entry) => preset.id === `default:${entry.id}`);
 }
 
+function samePresetSettings(saved: LlmPreset, template: LlmPreset): boolean {
+  return (
+    saved.label === template.label &&
+    saved.description === template.description &&
+    saved.prompt === template.prompt &&
+    saved.output === template.output &&
+    saved.timing === template.timing &&
+    saved.overrides?.minWords === template.overrides?.minWords &&
+    saved.overrides?.temperature === template.overrides?.temperature &&
+    saved.overrides?.useNoteContext === template.overrides?.useNoteContext
+  );
+}
+
+function normalizedPresetLabel(preset: LlmPreset): string {
+  return preset.label.trim().toLocaleLowerCase();
+}
+
+export function reconcileStartingPresets(presets: readonly LlmPreset[]): LlmPreset[] {
+  return presets.filter((preset) => {
+    const template = [...LLM_BUILTIN_PRESETS, ...RETIRED_STARTING_PRESETS].find(
+      (entry) => preset.id === `default:${entry.id}`,
+    );
+    // Edited copies remain user-owned, even when their starting template retires.
+    if (!template || !samePresetSettings(preset, template)) return true;
+    if (RETIRED_STARTING_PRESETS.includes(template)) return false;
+    return !presets.some(
+      (other) =>
+        other.id !== preset.id &&
+        !other.id.startsWith('default:') &&
+        normalizedPresetLabel(other) === normalizedPresetLabel(preset),
+    );
+  });
+}
+
 export function restoreDefaultPresets(presets: readonly LlmPreset[]): LlmPreset[] {
-  return [...createDefaultPresets(), ...presets.filter((preset) => !isDefaultPreset(preset))];
+  return reconcileStartingPresets([
+    ...createDefaultPresets(),
+    ...presets.filter((preset) => !isDefaultPreset(preset)),
+  ]);
 }
 
 export function listPresetEntries(presets: readonly LlmPreset[]): LlmPresetEntry[] {
@@ -373,6 +410,11 @@ export function resolveActivePresetEntry(
   return (
     resolvePresetEntry(ref, presets) ??
     resolvePresetEntry(`user:default:${DEFAULT_LLM_BUILTIN_PRESET_ID}`, presets) ??
+    listPresetEntries(presets).find(
+      (entry) =>
+        normalizedPresetLabel(entry.preset) ===
+        normalizedPresetLabel(getLlmBuiltinPreset(DEFAULT_LLM_BUILTIN_PRESET_ID)),
+    ) ??
     listPresetEntries(presets)[0] ?? {
       isBuiltin: false,
       preset: {

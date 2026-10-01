@@ -696,3 +696,9 @@ A representative slice of user-facing settings (full list and defaults in
   - Windows: `%LOCALAPPDATA%\obsidian-local-stt\models`
   - macOS: `~/Library/Application Support/obsidian-local-stt/models`
   - Linux: `~/.local/share/obsidian-local-stt/models`
+
+## Editable AI starting presets
+
+The shipped preset catalog is a set of templates, not an immutable runtime list. Settings migration seeds saved preset copies once and maps legacy built-in selections to those copies. The initialized marker preserves intentional deletions, including an empty list. Runtime selection resolves only saved presets; an empty list disables transformation. Preset mutations and restoration use the serialized preset state store. Restore transform defaults replaces template-owned IDs with fresh copies and retains independently created preset IDs, including duplicates and colliding labels.
+
+The transcription controller owns media job lifetime. Modal dismissal detaches its presentation without cancelling the job; explicit cancellation and plugin disposal stop work. Transcript insertion and optional AI transformation are separate stages, and AI failures retain the raw transcript with provider/model-specific feedback.
