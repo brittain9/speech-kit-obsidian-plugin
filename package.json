@@ -67,5 +67,8 @@
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-eslint": "^8.70.1",
     "vitest": "5.0.2"
+  },
+  "overrides": {
+    "moment": "^2.31.0"
   }
 }
