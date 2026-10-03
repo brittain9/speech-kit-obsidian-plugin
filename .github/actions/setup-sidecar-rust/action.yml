@@ -41,6 +41,28 @@ runs:
       shell: pwsh
       run: echo "LIBCLANG_PATH=$((Get-Command clang).Source | Split-Path -Parent)" >> $env:GITHUB_ENV
 
+    # ggml refuses to build with MSVC for ARM64, so Windows ARM64 compiles
+    # whisper.cpp and llama.cpp with clang-cl. cmake-rs forces -Thost=x64 on the
+    # Visual Studio generators, which would pin the MSVC toolset; Ninja skips
+    # that, and CC/CXX select the compiler. The ARM64 vcvars environment
+    # supplies the MSVC headers, libraries, and linker that clang-cl uses.
+    # cc-rs and cmake-rs replace CMake's default flags, dropping /EHsc; MSVC only
+    # warns without it, but clang-cl rejects try/throw, so CXXFLAGS restores it.
+    - name: Configure clang-cl toolchain (Windows ARM64)
+      if: runner.os == 'Windows' && runner.arch == 'ARM64'
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: arm64
+
+    - name: Select clang-cl and Ninja (Windows ARM64)
+      if: runner.os == 'Windows' && runner.arch == 'ARM64'
+      shell: pwsh
+      run: |
+        "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
+        "CC=clang-cl" >> $env:GITHUB_ENV
+        "CXX=clang-cl" >> $env:GITHUB_ENV
+        "CXXFLAGS=/EHsc" >> $env:GITHUB_ENV
+
     # Fork the rust-cache key by Visual Studio product line (e.g. 2022 vs
     # 2026). cmake configures whisper.cpp's build dir inside target/ with a
     # VS-versioned generator, and CMake hard-fails on a generator mismatch, so

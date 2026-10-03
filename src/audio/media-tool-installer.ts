@@ -13,12 +13,20 @@ import {
 
 export const MEDIA_TOOL_VERSION = '9.0.2-2';
 const RELEASE_TAG = `media-ffmpeg-${MEDIA_TOOL_VERSION}`;
-const HASHES = {
+const HASHES: Readonly<Record<string, string>> = {
+  'linux-arm64': '74b8574078a47edd19f9fe24236871a00013c06432e035b9f229ab798bad2581',
   'linux-x86_64': 'ee0d6bbea587712185912cd6d7c042dd647012d14cfe6a0157ae787efe7cba72',
   'macos-arm64': '359fd6f6e04e79549114c534ee147300a11df6ff265c2485e1e21b587d9e3745',
   'macos-x86_64': 'ed49d46e372bb83dabf8b955edb2f57f53ce870645ff941c5732b3ef807e677c',
+  'windows-arm64': 'bb9d4caceb4f2d811203b29e76b133b22ea87583661d77d8441b5ce07e06f377',
   'windows-x86_64': 'f0fabeb95beb43c8e15dcf2566121a2725567fefb44d463773c44791a71f9205',
-} as const;
+};
+const OS_NAMES: Readonly<Record<string, string>> = {
+  darwin: 'macos',
+  linux: 'linux',
+  win32: 'windows',
+};
+const ARCH_NAMES: Readonly<Record<string, string>> = { arm64: 'arm64', x64: 'x86_64' };
 
 export interface MediaToolInstallProgress {
   readonly bytesDownloaded: number;
@@ -46,18 +54,11 @@ export function mediaToolAsset(
   readonly name: string;
   readonly sha256: string;
 } {
-  const key =
-    platform === 'darwin' && arch === 'arm64'
-      ? 'macos-arm64'
-      : platform === 'darwin' && arch === 'x64'
-        ? 'macos-x86_64'
-        : platform === 'linux' && arch === 'x64'
-          ? 'linux-x86_64'
-          : platform === 'win32' && arch === 'x64'
-            ? 'windows-x86_64'
-            : null;
-  if (key === null) throw new Error('The media decoder is not available for this computer.');
-  return { name: `media-ffmpeg-9.0.2-${key}.tar.gz`, sha256: HASHES[key] };
+  const key = `${OS_NAMES[platform] ?? platform}-${ARCH_NAMES[arch] ?? arch}`;
+  const sha256 = HASHES[key];
+  if (sha256 === undefined)
+    throw new Error('The media decoder is not available for this computer.');
+  return { name: `media-ffmpeg-9.0.2-${key}.tar.gz`, sha256 };
 }
 
 export async function isMediaToolInstalled(pluginDirectory: string): Promise<boolean> {

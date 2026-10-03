@@ -122,6 +122,16 @@ describe('detectPlatformAsset', () => {
     expect(detectPlatformAsset('win32', 'x64', 'cpu')).toBe('sidecar-windows-x86_64-cpu.tar.gz');
     expect(detectPlatformAsset('win32', 'x64', 'cuda')).toBe('sidecar-windows-x86_64-cuda.tar.gz');
   });
+
+  it('returns the CPU-only ARM64 tarballs for Linux and Windows', () => {
+    expect(detectPlatformAsset('linux', 'arm64', 'cpu')).toBe('sidecar-linux-arm64.tar.gz');
+    expect(detectPlatformAsset('win32', 'arm64', 'cpu')).toBe('sidecar-windows-arm64.tar.gz');
+  });
+
+  it('rejects CUDA on ARM64', () => {
+    expect(() => detectPlatformAsset('linux', 'arm64', 'cuda')).toThrow(/not available on ARM64/);
+    expect(() => detectPlatformAsset('win32', 'arm64', 'cuda')).toThrow(/not available on ARM64/);
+  });
 });
 
 describe('parseChecksum', () => {

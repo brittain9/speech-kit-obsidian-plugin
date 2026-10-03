@@ -23,14 +23,22 @@ jobs:
             platform: macos-x86_64
           - runner: ubuntu-24.04
             platform: linux-x86_64
+          - runner: ubuntu-24.04-arm
+            platform: linux-arm64
           - runner: windows-2022
             platform: windows-x86_64
+            msystem: MINGW64
+            packages: mingw-w64-x86_64-gcc mingw-w64-x86_64-nasm
+          - runner: windows-11-arm
+            platform: windows-arm64
+            msystem: CLANGARM64
+            packages: mingw-w64-clang-aarch64-clang
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Install Linux assembler
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && runner.arch == 'X64'
         run: sudo apt-get update && sudo apt-get install -y nasm
 
       - name: Install macOS Intel assembler
@@ -41,11 +49,10 @@ jobs:
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: ${{ matrix.msystem }}
           update: true
           install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-nasm
+            ${{ matrix.packages }}
             make
             perl
             curl
