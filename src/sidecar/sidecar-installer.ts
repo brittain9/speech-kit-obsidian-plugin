@@ -71,15 +71,23 @@ export function detectPlatformAsset(
     return 'sidecar-macos-arm64.tar.gz';
   }
 
-  if (arch !== 'x64') {
-    throw new Error(`Unsupported ${platform} architecture for sidecar: ${arch}.`);
+  const os = platform === 'linux' ? 'linux' : 'windows';
+
+  if (arch === 'arm64') {
+    if (variant === 'cuda') {
+      throw new Error('CUDA sidecar is not available on ARM64.');
+    }
+
+    return `sidecar-${os}-arm64.tar.gz`;
   }
 
-  if (platform === 'linux') {
-    return `sidecar-linux-x86_64-${variant}.tar.gz`;
+  if (arch === 'x64') {
+    return `sidecar-${os}-x86_64-${variant}.tar.gz`;
   }
 
-  return `sidecar-windows-x86_64-${variant}.tar.gz`;
+  // `arch` is narrowed to `never` here, but process.arch can still be another
+  // value (e.g. ia32) at runtime.
+  throw new Error(`Unsupported ${platform} architecture for sidecar: ${String(arch)}.`);
 }
 
 export function detectPlatformAssetForCurrentEnv(variant: SidecarInstallVariant): string {
