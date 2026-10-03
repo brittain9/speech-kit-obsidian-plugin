@@ -1678,7 +1678,12 @@
 .local-stt-youtube-transcript-modal .local-stt-youtube-url-setting {
   display: block;
   padding: 0;
-  border-top: 0 !important;
+}
+
+/* Outranks Obsidian's `.modal:not(.mod-settings) .setting-item:not(.setting-item-heading)` border. */
+.modal.local-stt-youtube-transcript-modal
+.setting-item.local-stt-youtube-url-setting:not(.setting-item-heading) {
+  border-top: 0;
 }
 
 .local-stt-youtube-url-setting .setting-item-control {
