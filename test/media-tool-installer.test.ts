@@ -24,7 +24,9 @@ describe('media tool installer', () => {
     expect(mediaToolAsset('darwin', 'x64').name).toBe('media-ffmpeg-9.0.2-macos-x86_64.tar.gz');
     expect(mediaToolAsset('linux', 'x64').name).toBe('media-ffmpeg-9.0.2-linux-x86_64.tar.gz');
     expect(mediaToolAsset('win32', 'x64').name).toBe('media-ffmpeg-9.0.2-windows-x86_64.tar.gz');
-    expect(() => mediaToolAsset('linux', 'arm64')).toThrow(/not available/u);
+    expect(mediaToolAsset('linux', 'arm64').name).toBe('media-ffmpeg-9.0.2-linux-arm64.tar.gz');
+    expect(mediaToolAsset('win32', 'arm64').name).toBe('media-ffmpeg-9.0.2-windows-arm64.tar.gz');
+    expect(() => mediaToolAsset('win32', 'ia32')).toThrow(/not available/u);
   });
 
   it('requires a matching install receipt and both executables', async () => {
