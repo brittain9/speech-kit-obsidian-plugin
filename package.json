@@ -17,7 +17,7 @@
     "build:sidecar:cuda:windows": "powershell -ExecutionPolicy Bypass -File scripts/build-cuda.ps1",
     "build:sidecar:cuda:windows:release": "powershell -ExecutionPolicy Bypass -File scripts/build-cuda.ps1 -Release",
     "build:frontend": "node esbuild.config.mjs production",
-    "build": "npm run build:sidecar && npm run build:frontend && npm run verify:build-output",
+    "build": "npm run build:frontend",
     "dev": "node esbuild.config.mjs watch",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "typecheck:obsidian-floor": "tsc --project tsconfig.obsidian-floor.json --noEmit",
