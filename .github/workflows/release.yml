@@ -152,7 +152,9 @@ jobs:
             build_command: npm run build:sidecar:release
             cache_workspaces: native -> target
             cuda: false
-          - runner: ubuntu-24.04-arm
+          # Ubuntu 22.04 (glibc 2.35) so the sidecar runs on Raspberry Pi OS
+          # Bookworm (glibc 2.36); a 24.04 build requires glibc 2.39.
+          - runner: ubuntu-22.04-arm
             asset_name: sidecar-linux-arm64
             archive_name: sidecar-linux-arm64.tar.gz
             binary_path: native/target/release/local-dictation-sidecar
@@ -222,6 +224,7 @@ jobs:
           ASSET_NAME: ${{ matrix.asset_name }}
           BINARY_PATH: ${{ matrix.binary_path }}
           CUDA: ${{ matrix.cuda }}
+          MSVC_RUNTIME_ARCH: ${{ matrix.msvc_runtime_arch }}
         run: node scripts/package-sidecar-archive.mjs
 
       - name: Attest build provenance
@@ -272,6 +275,7 @@ jobs:
             build_command: npm run build:sidecar:release
             cache_workspaces: native -> target
             cuda: false
+            msvc_runtime_arch: arm64
 
     # The x86_64 legs run on windows-2025; the arm64 leg on windows-11-arm.
     # windows-2025 is the Windows Server 2025 image, which now ships Visual

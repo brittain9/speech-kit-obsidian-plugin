@@ -4,11 +4,12 @@
 // per-OS jobs only differ in build setup, not in packaging logic.
 //
 // Required env: ARCHIVE_NAME, ASSET_NAME, BINARY_PATH
-// Optional env: CUDA=true to copy whisper.cpp CUDA runtime libraries alongside
+// Optional env: CUDA=true to copy whisper.cpp CUDA runtime libraries alongside;
+// MSVC_RUNTIME_ARCH=<arch> to bundle the Visual C++ runtime DLLs (Windows)
 
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { copyFile, realpath } from 'node:fs/promises';
+import { copyFile, readdir, realpath } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
 
@@ -21,6 +22,7 @@ const archiveName = requiredEnv('ARCHIVE_NAME');
 const assetName = requiredEnv('ASSET_NAME');
 const binaryPath = requiredEnv('BINARY_PATH');
 const isCuda = process.env.CUDA === 'true';
+const msvcRuntimeArch = process.env.MSVC_RUNTIME_ARCH ?? '';
 
 const isWindows = process.platform === 'win32';
 const isLinux = process.platform === 'linux';
@@ -68,6 +70,24 @@ if (isCuda) {
     } else {
       await copyFile(src, dest);
     }
+  }
+}
+
+if (msvcRuntimeArch !== '') {
+  // The ARM64 Visual C++ runtime is rarely preinstalled on Windows on ARM (x64
+  // installers only bring the x64 copy), so ship the redistributable CRT DLLs
+  // app-locally; Windows loads DLLs from the executable's directory first.
+  // VCToolsRedistDir is exported by the vcvars environment (msvc-dev-cmd).
+  const redistArchDir = join(requiredEnv('VCToolsRedistDir'), msvcRuntimeArch);
+  const crtDirName = (await readdir(redistArchDir)).find((name) =>
+    /^Microsoft\.VC\d+\.CRT$/u.test(name),
+  );
+  if (crtDirName === undefined) {
+    throw new Error(`No Microsoft.VC*.CRT directory under ${redistArchDir}.`);
+  }
+  const crtDir = join(redistArchDir, crtDirName);
+  for (const dll of (await readdir(crtDir)).filter((name) => name.endsWith('.dll'))) {
+    await copyFile(join(crtDir, dll), join(artifactDir, dll));
   }
 }
 

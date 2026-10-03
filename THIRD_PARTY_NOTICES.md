@@ -33,6 +33,16 @@ standalone PyInstaller executables include GPLv3-or-later components; see the
 upstream notice for the bundled components and their terms. The helper is a
 separate process and is not linked into the plugin.
 
+## Microsoft Visual C++ runtime (Windows ARM64 sidecar)
+
+- Work: Visual C++ Redistributable runtime DLLs (`vcruntime140.dll`, `msvcp140*.dll`, and companions) for ARM64
+- License: Microsoft Visual Studio license terms, Distributable Code
+- Guidance: https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files
+
+The Windows ARM64 sidecar archive ships these DLLs unmodified next to the
+executables (app-local deployment), copied from the Visual Studio redistributable
+folder at build time.
+
 ## Silero voice-activity-detection model
 
 - Work: Silero VAD

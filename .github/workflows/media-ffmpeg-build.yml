@@ -23,7 +23,8 @@ jobs:
             platform: macos-x86_64
           - runner: ubuntu-24.04
             platform: linux-x86_64
-          - runner: ubuntu-24.04-arm
+          # Ubuntu 22.04 (glibc 2.35) so the helper runs on Raspberry Pi OS Bookworm.
+          - runner: ubuntu-22.04-arm
             platform: linux-arm64
           - runner: windows-2022
             platform: windows-x86_64

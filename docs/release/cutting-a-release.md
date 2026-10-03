@@ -220,7 +220,7 @@ A sidecar-bearing release additionally carries:
 - `sidecar-linux-x86_64-cpu.tar.gz`, `sidecar-linux-x86_64-cuda.tar.gz`.
 - `sidecar-linux-arm64.tar.gz` — CPU-only; ggml targets the ARMv8.2 + dotprod floor (`GGML_CPU_ARM_ARCH` in `setup-sidecar-rust`).
 - `sidecar-windows-x86_64-cpu.tar.gz`, `sidecar-windows-x86_64-cuda.tar.gz`.
-- `sidecar-windows-arm64.tar.gz` — CPU-only; built with clang-cl because ggml does not support MSVC on ARM64, targeting the same ARMv8.2 + dotprod floor.
+- `sidecar-windows-arm64.tar.gz` — CPU-only; built with clang-cl because ggml does not support MSVC on ARM64, targeting the same ARMv8.2 + dotprod floor, with the ARM64 Visual C++ runtime DLLs bundled next to the executables.
 - `checksums.txt` — SHA-256 of every sidecar archive, exactly seven lines, sorted.
 
 CUDA archives bundle the reviewed whisper.cpp CUDA runtime libraries declared in

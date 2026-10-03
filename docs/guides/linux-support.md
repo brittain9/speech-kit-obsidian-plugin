@@ -7,7 +7,7 @@ Speech Kit supports desktop Obsidian on x86-64 and ARM64 GNU/Linux. The plugin U
 | Area | Support boundary |
 | --- | --- |
 | CPU transcription | x86-64 or ARM64, glibc-based distributions with a new enough runtime for the current release build |
-| ARM64 CPUs | ARMv8.2 or newer with the dot-product extension, such as Raspberry Pi 5, AWS Graviton, Ampere, and NVIDIA Jetson Orin. Use a current 64-bit OS such as Raspberry Pi OS Trixie or Ubuntu 24.04; the setup wizard refuses Raspberry Pi 4 and other ARMv8.0 boards |
+| ARM64 CPUs | ARMv8.2 or newer with the dot-product extension, such as Raspberry Pi 5, AWS Graviton, Ampere, and NVIDIA Jetson Orin. Use a 64-bit OS at least as new as Raspberry Pi OS Bookworm or Ubuntu 22.04; the setup wizard refuses Raspberry Pi 4 and other ARMv8.0 boards |
 | NVIDIA acceleration | x86-64 with a Turing-or-newer GPU and a CUDA 13-compatible driver; see [CUDA setup](cuda-setup.md) |
 | Microphone capture | Obsidian/Electron's audio input through PulseAudio or PipeWire |
 | System audio | The default output monitor through PulseAudio, or PipeWire's PulseAudio compatibility service |
