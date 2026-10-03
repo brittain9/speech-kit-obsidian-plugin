@@ -79,7 +79,9 @@ if [[ "$executable_suffix" == .exe ]]; then
   # GCC environments ship objdump; MSYS2 clang environments ship llvm-objdump.
   objdump_bin="$(command -v objdump || command -v llvm-objdump)"
   for executable in ffmpeg.exe ffprobe.exe; do
-    if "$objdump_bin" -p "$output_dir/$executable" | grep -Eiq 'DLL Name: (libwinpthread|libgcc|libstdc\+\+|libc\+\+|libunwind)'; then
+    # Capture first: a failing objdump inside the `if` would otherwise pass silently.
+    imports="$("$objdump_bin" -p "$output_dir/$executable")"
+    if grep -Eiq 'DLL Name: (libwinpthread|libgcc|libstdc\+\+|libc\+\+|libunwind)' <<<"$imports"; then
       echo "$executable requires an unbundled MinGW runtime DLL." >&2
       exit 1
     fi

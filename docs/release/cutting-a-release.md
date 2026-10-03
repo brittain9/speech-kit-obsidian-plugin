@@ -173,7 +173,7 @@ This architecture is based on measured end-to-end evidence from issue #306. For
 already-running tagged build; merge-to-publication took 36m48s while the tagged
 workflow itself took 17m. For `2026.8.0`, the same two-stage path spent 18m35s
 warming before a 16m45s tagged release. Removing the gate eliminates that duplicate
-critical-path work while leaving the authoritative tagged build, five native assets,
+critical-path work while leaving the authoritative tagged build, seven native assets,
 checksums, and provenance unchanged.
 
 ```bash

@@ -79,6 +79,7 @@ vi.mock('node:https', async () => {
 import {
   detectPlatformAsset,
   installSidecar,
+  linuxArm64CpuMeetsFloor,
   parseChecksum,
   readInstallManifest,
   uninstallSidecarVariant,
@@ -131,6 +132,25 @@ describe('detectPlatformAsset', () => {
   it('rejects CUDA on ARM64', () => {
     expect(() => detectPlatformAsset('linux', 'arm64', 'cuda')).toThrow(/not available on ARM64/);
     expect(() => detectPlatformAsset('win32', 'arm64', 'cuda')).toThrow(/not available on ARM64/);
+  });
+});
+
+describe('linuxArm64CpuMeetsFloor', () => {
+  const cpuinfo = (features: string): string =>
+    [0, 1].map((n) => `processor\t: ${n}\nFeatures\t: ${features}\n`).join('\n');
+
+  it('accepts an ARMv8.2 core with dot product and fp16 (Raspberry Pi 5)', () => {
+    expect(
+      linuxArm64CpuMeetsFloor(
+        cpuinfo(
+          'fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects an ARMv8.0 core (Raspberry Pi 4)', () => {
+    expect(linuxArm64CpuMeetsFloor(cpuinfo('fp asimd evtstrm crc32 cpuid'))).toBe(false);
   });
 });
 

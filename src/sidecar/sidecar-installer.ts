@@ -1,5 +1,5 @@
 import { createHash, type Hash } from 'node:crypto';
-import { createReadStream, createWriteStream, type WriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, readFileSync, type WriteStream } from 'node:fs';
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import { get as httpsGet, type RequestOptions } from 'node:https';
@@ -90,7 +90,31 @@ export function detectPlatformAsset(
   throw new Error(`Unsupported ${platform} architecture for sidecar: ${String(arch)}.`);
 }
 
+// Linux ARM64 sidecars target ARMv8.2 with the int8 dot product and fp16
+// (GGML_CPU_ARM_ARCH in setup-sidecar-rust). Older cores such as the Raspberry
+// Pi 4 would crash with an illegal instruction on first inference, so reject
+// them before downloading. Every Windows 11 ARM device meets the floor.
+export function linuxArm64CpuMeetsFloor(cpuinfo: string): boolean {
+  return cpuinfo
+    .split('\n')
+    .filter((line) => /^Features\s*:/u.test(line))
+    .every((line) => {
+      const features = line.split(':')[1]?.trim().split(/\s+/u) ?? [];
+      return features.includes('asimddp') && features.includes('asimdhp');
+    });
+}
+
 export function detectPlatformAssetForCurrentEnv(variant: SidecarInstallVariant): string {
+  if (
+    process.platform === 'linux' &&
+    process.arch === 'arm64' &&
+    !linuxArm64CpuMeetsFloor(readFileSync('/proc/cpuinfo', 'utf8'))
+  ) {
+    throw new Error(
+      'Speech Kit on ARM64 Linux requires an ARMv8.2 CPU with dot-product support (e.g. Raspberry Pi 5).',
+    );
+  }
+
   return detectPlatformAsset(
     process.platform as TargetPlatform,
     process.arch as TargetArch,
