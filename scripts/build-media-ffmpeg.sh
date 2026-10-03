@@ -52,6 +52,12 @@ if [[ "$executable_suffix" == .exe ]]; then
   # executables self-contained so a clean Windows install can actually run them.
   configure_flags+=(--extra-ldflags=-static)
 fi
+if [[ "${MSYSTEM:-}" == CLANGARM64 ]]; then
+  # MSYS2's own runtime is x86-64 under emulation on Windows ARM64, so uname
+  # reports x86_64. Name the target architecture and the clang toolchain
+  # explicitly instead of letting configure infer them.
+  configure_flags+=(--arch=aarch64 --cc=clang --cxx=clang++)
+fi
 
 (
   cd "$source_dir"
@@ -70,8 +76,12 @@ if [[ "$(uname -s)" == Darwin ]]; then
   done
 fi
 if [[ "$executable_suffix" == .exe ]]; then
+  # GCC environments ship objdump; MSYS2 clang environments ship llvm-objdump.
+  objdump_bin="$(command -v objdump || command -v llvm-objdump)"
   for executable in ffmpeg.exe ffprobe.exe; do
-    if objdump -p "$output_dir/$executable" | grep -Eiq 'DLL Name: (libwinpthread|libgcc|libstdc\+\+)'; then
+    # Capture first: a failing objdump inside the `if` would otherwise pass silently.
+    imports="$("$objdump_bin" -p "$output_dir/$executable")"
+    if grep -Eiq 'DLL Name: (libwinpthread|libgcc|libstdc\+\+|libc\+\+|libunwind)' <<<"$imports"; then
       echo "$executable requires an unbundled MinGW runtime DLL." >&2
       exit 1
     fi

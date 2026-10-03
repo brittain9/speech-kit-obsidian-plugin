@@ -1,5 +1,5 @@
 import { createHash, type Hash } from 'node:crypto';
-import { createReadStream, createWriteStream, type WriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, readFileSync, type WriteStream } from 'node:fs';
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import { get as httpsGet, type RequestOptions } from 'node:https';
@@ -71,18 +71,50 @@ export function detectPlatformAsset(
     return 'sidecar-macos-arm64.tar.gz';
   }
 
-  if (arch !== 'x64') {
-    throw new Error(`Unsupported ${platform} architecture for sidecar: ${arch}.`);
+  const os = platform === 'linux' ? 'linux' : 'windows';
+
+  if (arch === 'arm64') {
+    if (variant === 'cuda') {
+      throw new Error('CUDA sidecar is not available on ARM64.');
+    }
+
+    return `sidecar-${os}-arm64.tar.gz`;
   }
 
-  if (platform === 'linux') {
-    return `sidecar-linux-x86_64-${variant}.tar.gz`;
+  if (arch === 'x64') {
+    return `sidecar-${os}-x86_64-${variant}.tar.gz`;
   }
 
-  return `sidecar-windows-x86_64-${variant}.tar.gz`;
+  // `arch` is narrowed to `never` here, but process.arch can still be another
+  // value (e.g. ia32) at runtime.
+  throw new Error(`Unsupported ${platform} architecture for sidecar: ${String(arch)}.`);
+}
+
+// Linux ARM64 sidecars target ARMv8.2 with the int8 dot product and fp16
+// (GGML_CPU_ARM_ARCH in setup-sidecar-rust). Older cores such as the Raspberry
+// Pi 4 would crash with an illegal instruction on first inference, so reject
+// them before downloading. Every Windows 11 ARM device meets the floor.
+export function linuxArm64CpuMeetsFloor(cpuinfo: string): boolean {
+  return cpuinfo
+    .split('\n')
+    .filter((line) => /^Features\s*:/u.test(line))
+    .every((line) => {
+      const features = line.split(':')[1]?.trim().split(/\s+/u) ?? [];
+      return features.includes('asimddp') && features.includes('asimdhp');
+    });
 }
 
 export function detectPlatformAssetForCurrentEnv(variant: SidecarInstallVariant): string {
+  if (
+    process.platform === 'linux' &&
+    process.arch === 'arm64' &&
+    !linuxArm64CpuMeetsFloor(readFileSync('/proc/cpuinfo', 'utf8'))
+  ) {
+    throw new Error(
+      'Speech Kit on ARM64 Linux requires an ARMv8.2 CPU with dot-product support (e.g. Raspberry Pi 5).',
+    );
+  }
+
   return detectPlatformAsset(
     process.platform as TargetPlatform,
     process.arch as TargetArch,

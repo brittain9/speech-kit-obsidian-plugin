@@ -66,8 +66,8 @@ Many speech apps are limited to one operating system, one model, or one part of 
 | Platform | Architecture | Acceleration | System audio |
 | --- | --- | --- | --- |
 | macOS | Apple silicon | Metal for Whisper | macOS 14.2 or later |
-| Windows | x86-64 | Optional NVIDIA CUDA | Supported |
-| Linux | x86-64 glibc | Optional NVIDIA CUDA | PulseAudio or PipeWire |
+| Windows | x86-64, ARM64 (Snapdragon 8cx or newer) | Optional NVIDIA CUDA (x86-64 only) | Supported |
+| Linux | x86-64, ARM64 glibc (ARMv8.2 or newer, e.g. Raspberry Pi 5) | Optional NVIDIA CUDA (x86-64 only) | PulseAudio or PipeWire |
 
 Choose your platform. Choose your models. Keep one workflow inside Obsidian.
 

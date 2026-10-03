@@ -152,6 +152,15 @@ jobs:
             build_command: npm run build:sidecar:release
             cache_workspaces: native -> target
             cuda: false
+          # Stays on 24.04: ort's prebuilt ONNX Runtime needs GCC 14 and glibc
+          # 2.38+ to link, so an older image cannot build the sidecar.
+          - runner: ubuntu-24.04-arm
+            asset_name: sidecar-linux-arm64
+            archive_name: sidecar-linux-arm64.tar.gz
+            binary_path: native/target/release/local-dictation-sidecar
+            build_command: npm run build:sidecar:release
+            cache_workspaces: native -> target
+            cuda: false
           - runner: ubuntu-latest
             asset_name: sidecar-linux-x86_64-cuda
             archive_name: sidecar-linux-x86_64-cuda.tar.gz
@@ -246,17 +255,28 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - asset_name: sidecar-windows-x86_64-cpu
+          - runner: windows-2025
+            asset_name: sidecar-windows-x86_64-cpu
             archive_name: sidecar-windows-x86_64-cpu.tar.gz
             binary_path: native/target/release/local-dictation-sidecar.exe
             build_command: npm run build:sidecar:release
             cache_workspaces: native -> target
             cuda: false
-          - asset_name: sidecar-windows-x86_64-cuda
+          - runner: windows-2025
+            asset_name: sidecar-windows-x86_64-cuda
             archive_name: sidecar-windows-x86_64-cuda.tar.gz
             binary_path: native/target-cuda/release/local-dictation-sidecar.exe
             cuda: true
+          - runner: windows-11-arm
+            asset_name: sidecar-windows-arm64
+            archive_name: sidecar-windows-arm64.tar.gz
+            binary_path: native/target/release/local-dictation-sidecar.exe
+            build_command: npm run build:sidecar:release
+            cache_workspaces: native -> target
+            cuda: false
+            msvc_runtime_arch: arm64
 
+    # The x86_64 legs run on windows-2025; the arm64 leg on windows-11-arm.
     # windows-2025 is the Windows Server 2025 image, which now ships Visual
     # Studio 2026 (v18) by default. The pinned toolkit supports MSVC v18 as a
     # host compiler, so the VS CUDA generator works here. We pin
@@ -267,7 +287,7 @@ jobs:
     # migrates VS inside it, as in the 2022->2026 move), so the rust-cache key is
     # forked by VS product line (see setup-sidecar-rust) to survive a future
     # flip. See #139.
-    runs-on: windows-2025
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout
@@ -335,6 +355,7 @@ jobs:
           ASSET_NAME: ${{ matrix.asset_name }}
           BINARY_PATH: ${{ matrix.binary_path }}
           CUDA: ${{ matrix.cuda }}
+          MSVC_RUNTIME_ARCH: ${{ matrix.msvc_runtime_arch }}
         run: node scripts/package-sidecar-archive.mjs
 
       - name: Attest build provenance

@@ -41,6 +41,38 @@ runs:
       shell: pwsh
       run: echo "LIBCLANG_PATH=$((Get-Command clang).Source | Split-Path -Parent)" >> $env:GITHUB_ENV
 
+    # ggml refuses to build with MSVC for ARM64, so Windows ARM64 compiles
+    # whisper.cpp and llama.cpp with clang-cl. cmake-rs forces -Thost=x64 on the
+    # Visual Studio generators, which would pin the MSVC toolset; Ninja skips
+    # that, and CC/CXX select the compiler. The ARM64 vcvars environment
+    # supplies the MSVC headers, libraries, and linker that clang-cl uses.
+    # cc-rs and cmake-rs replace CMake's default flags, dropping /EHsc; MSVC only
+    # warns without it, but clang-cl rejects try/throw, so CXXFLAGS restores it.
+    - name: Configure clang-cl toolchain (Windows ARM64)
+      if: runner.os == 'Windows' && runner.arch == 'ARM64'
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: arm64
+
+    - name: Select clang-cl and Ninja (Windows ARM64)
+      if: runner.os == 'Windows' && runner.arch == 'ARM64'
+      shell: pwsh
+      run: |
+        "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
+        "CC=clang-cl" >> $env:GITHUB_ENV
+        "CXX=clang-cl" >> $env:GITHUB_ENV
+        "CXXFLAGS=/EHsc" >> $env:GITHUB_ENV
+
+    # Target the ARMv8.2 floor (int8 dot product + fp16) instead of baseline
+    # armv8-a. Every Windows 11 ARM device (Snapdragon 8cx and newer) and modern
+    # Linux ARM64 hosts (Raspberry Pi 5, Graviton, Ampere, Jetson Orin) support
+    # it, and ggml's quantized matmul is several times faster with dotprod.
+    # macOS is excluded: Apple silicon builds keep their own ggml defaults.
+    - name: Target the ARMv8.2 CPU floor (Windows and Linux ARM64)
+      if: runner.os != 'macOS' && runner.arch == 'ARM64'
+      shell: bash
+      run: echo "GGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16" >> "$GITHUB_ENV"
+
     # Fork the rust-cache key by Visual Studio product line (e.g. 2022 vs
     # 2026). cmake configures whisper.cpp's build dir inside target/ with a
     # VS-versioned generator, and CMake hard-fails on a generator mismatch, so
@@ -53,6 +85,14 @@ runs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: echo "CMAKE_VS_PRODUCT_LINE=$(& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property catalog_productLineVersion)" >> $env:GITHUB_ENV
+
+    # Fork the rust-cache key by distro release (e.g. ubuntu22.04). Cached
+    # build-script binaries link the runner's glibc, so a cache saved on a newer
+    # image fails to run on an older one. The CMAKE prefix puts it in the key.
+    - name: Fork Rust cache key by runner image (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: . /etc/os-release && echo "CMAKE_RUNNER_IMAGE_OS=$ID$VERSION_ID" >> "$GITHUB_ENV"
 
     - name: Setup Rust (with components)
       if: inputs.components != ''
