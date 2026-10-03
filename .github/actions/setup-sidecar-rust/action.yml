@@ -46,6 +46,8 @@ runs:
     # Visual Studio generators, which would pin the MSVC toolset; Ninja skips
     # that, and CC/CXX select the compiler. The ARM64 vcvars environment
     # supplies the MSVC headers, libraries, and linker that clang-cl uses.
+    # cc-rs and cmake-rs replace CMake's default flags, dropping /EHsc; MSVC only
+    # warns without it, but clang-cl rejects try/throw, so CXXFLAGS restores it.
     - name: Configure clang-cl toolchain (Windows ARM64)
       if: runner.os == 'Windows' && runner.arch == 'ARM64'
       uses: ilammy/msvc-dev-cmd@v1
@@ -59,6 +61,7 @@ runs:
         "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
         "CC=clang-cl" >> $env:GITHUB_ENV
         "CXX=clang-cl" >> $env:GITHUB_ENV
+        "CXXFLAGS=/EHsc" >> $env:GITHUB_ENV
 
     # Fork the rust-cache key by Visual Studio product line (e.g. 2022 vs
     # 2026). cmake configures whisper.cpp's build dir inside target/ with a
