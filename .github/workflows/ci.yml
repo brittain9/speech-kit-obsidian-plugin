@@ -94,7 +94,7 @@ jobs:
             rust_cache_key: engine-cohere-transcribe-gpu-metal
           - os: windows-11-arm
             rust_cache_key: engine-cohere-transcribe-windows-arm64
-          - os: ubuntu-22.04-arm
+          - os: ubuntu-24.04-arm
             rust_cache_key: engine-cohere-transcribe-linux-arm64
 
     runs-on: ${{ matrix.os }}

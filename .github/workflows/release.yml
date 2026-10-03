@@ -152,9 +152,9 @@ jobs:
             build_command: npm run build:sidecar:release
             cache_workspaces: native -> target
             cuda: false
-          # Ubuntu 22.04 (glibc 2.35) so the sidecar runs on Raspberry Pi OS
-          # Bookworm (glibc 2.36); a 24.04 build requires glibc 2.39.
-          - runner: ubuntu-22.04-arm
+          # Stays on 24.04: ort's prebuilt ONNX Runtime needs GCC 14 and glibc
+          # 2.38+ to link, so an older image cannot build the sidecar.
+          - runner: ubuntu-24.04-arm
             asset_name: sidecar-linux-arm64
             archive_name: sidecar-linux-arm64.tar.gz
             binary_path: native/target/release/local-dictation-sidecar
