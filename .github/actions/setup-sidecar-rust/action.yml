@@ -63,6 +63,16 @@ runs:
         "CXX=clang-cl" >> $env:GITHUB_ENV
         "CXXFLAGS=/EHsc" >> $env:GITHUB_ENV
 
+    # Target the ARMv8.2 floor (int8 dot product + fp16) instead of baseline
+    # armv8-a. Every Windows 11 ARM device (Snapdragon 8cx and newer) and modern
+    # Linux ARM64 hosts (Raspberry Pi 5, Graviton, Ampere, Jetson Orin) support
+    # it, and ggml's quantized matmul is several times faster with dotprod.
+    # macOS is excluded: Apple silicon builds keep their own ggml defaults.
+    - name: Target the ARMv8.2 CPU floor (Windows and Linux ARM64)
+      if: runner.os != 'macOS' && runner.arch == 'ARM64'
+      shell: bash
+      run: echo "GGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16" >> "$GITHUB_ENV"
+
     # Fork the rust-cache key by Visual Studio product line (e.g. 2022 vs
     # 2026). cmake configures whisper.cpp's build dir inside target/ with a
     # VS-versioned generator, and CMake hard-fails on a generator mismatch, so

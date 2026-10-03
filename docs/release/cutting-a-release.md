@@ -218,9 +218,9 @@ A sidecar-bearing release additionally carries:
 
 - `sidecar-macos-arm64.tar.gz` — Whisper Metal + ONNX model families on CPU.
 - `sidecar-linux-x86_64-cpu.tar.gz`, `sidecar-linux-x86_64-cuda.tar.gz`.
-- `sidecar-linux-arm64.tar.gz` — CPU-only.
+- `sidecar-linux-arm64.tar.gz` — CPU-only; ggml targets the ARMv8.2 + dotprod floor (`GGML_CPU_ARM_ARCH` in `setup-sidecar-rust`).
 - `sidecar-windows-x86_64-cpu.tar.gz`, `sidecar-windows-x86_64-cuda.tar.gz`.
-- `sidecar-windows-arm64.tar.gz` — CPU-only; built with clang-cl because ggml does not support MSVC on ARM64.
+- `sidecar-windows-arm64.tar.gz` — CPU-only; built with clang-cl because ggml does not support MSVC on ARM64, targeting the same ARMv8.2 + dotprod floor.
 - `checksums.txt` — SHA-256 of every sidecar archive, exactly seven lines, sorted.
 
 CUDA archives bundle the reviewed whisper.cpp CUDA runtime libraries declared in
