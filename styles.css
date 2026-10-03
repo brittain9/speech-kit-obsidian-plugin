@@ -1675,14 +1675,10 @@
   max-width: min(100%, 190px);
 }
 
-.local-stt-youtube-transcript-modal .local-stt-youtube-url-setting {
-  display: block;
-  padding: 0;
-}
-
 /* Outranks Obsidian's `.modal:not(.mod-settings) .setting-item:not(.setting-item-heading)` border. */
 .modal.local-stt-youtube-transcript-modal
 .setting-item.local-stt-youtube-url-setting:not(.setting-item-heading) {
+  display: block;
   border-top: 0;
 }
 
