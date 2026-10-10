@@ -66,6 +66,7 @@ function state(installed: boolean): ModelManagerState {
           },
         ]
       : [],
+    installRequestPending: false,
     loadError: null,
     loadStatus: 'ready',
     modelStore: { overridePath: null, path: '/models', usingDefaultPath: true },
