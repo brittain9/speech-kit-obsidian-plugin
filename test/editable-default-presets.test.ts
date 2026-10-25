@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 import {
   createDefaultPresets,
   isDefaultPreset,
@@ -77,7 +77,9 @@ describe('editable starting presets', () => {
     expect(empty.llmPostprocessUserPresets).toEqual([]);
     expect(empty.llmPostprocessActivePresetRef).toBe('');
     expect(empty.llmPostprocessMode).toBe('off');
-    expect(resolveLlmPostprocessMode(empty, createDefaultPresets()[0]!)).toBe('off');
+    const [preset] = createDefaultPresets();
+    assert(preset);
+    expect(resolveLlmPostprocessMode(empty, preset)).toBe('off');
     expect(resolvePluginSettings(empty).llmPostprocessUserPresets).toEqual([]);
   });
 
@@ -87,8 +89,10 @@ describe('editable starting presets', () => {
       label: 'Summary',
       prompt: 'Keep this exact prompt.',
     });
+    const [preset] = createDefaultPresets();
+    assert(preset);
     const edited = {
-      ...createDefaultPresets()[0]!,
+      ...preset,
       label: 'Renamed starting preset',
       prompt: 'Modified default.',
     };
@@ -154,7 +158,9 @@ describe('editable starting presets', () => {
 
   it('preserves edited starting presets even when a custom name collides', () => {
     const custom = createUserPreset({ id: 'mine', label: 'Summary' });
-    const edited = { ...createDefaultPresets()[0]!, prompt: 'Edited default prompt.' };
+    const [preset] = createDefaultPresets();
+    assert(preset);
+    const edited = { ...preset, prompt: 'Edited default prompt.' };
     const resolved = resolvePluginSettings({
       ...DEFAULT_PLUGIN_SETTINGS,
       llmPostprocessUserPresets: [custom, edited],

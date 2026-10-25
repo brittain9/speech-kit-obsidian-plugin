@@ -642,10 +642,6 @@
   animation-delay: 1.05s;
 }
 
-.side-dock-ribbon-action[data-local-stt-state="listening"] > svg {
-  opacity: 0.45;
-}
-
 /* Live per-band FFT amplitude scales each bar via --local-stt-bar-N (1..6),
    written by DictationRibbonController on every animation frame while VAD
    reports speech. The listening state shares the same transform rules with a
@@ -686,28 +682,6 @@
   transform: scaleY(var(--local-stt-bar-6, 1));
 }
 
-.side-dock-ribbon-action[data-local-stt-state="error"] > svg {
-  animation: local-stt-shake 0.4s ease-in-out 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .side-dock-ribbon-action[data-local-stt-state] > svg,
-  .side-dock-ribbon-action[data-local-stt-state] > svg > path {
-    animation: none;
-    opacity: 1;
-  }
-
-  .local-stt-dictation-anchor--visible::before {
-    animation: none;
-    opacity: 0.55;
-  }
-
-  .local-stt-session-processing {
-    animation: none;
-    opacity: 1;
-  }
-}
-
 /* --- Dictation anchor widget -------------------------------------- */
 
 .local-stt-dictation-anchor {
@@ -723,21 +697,6 @@
 
 .local-stt-dictation-anchor--visible {
   color: var(--interactive-accent);
-}
-
-.local-stt-dictation-anchor--visible::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 2px;
-  height: 1em;
-  border-radius: 1px;
-  background: currentColor;
-  animation:
-    local-stt-fade-in 0.35s ease-out both,
-    local-stt-caret-pulse 1.4s ease-in-out 0.35s infinite;
 }
 
 @keyframes local-stt-fade-in {
@@ -760,10 +719,6 @@
 }
 
 /* --- Preset manager modal ------------------------------------------ */
-
-.local-stt-preset-manager .local-stt-preset-row .setting-item-info {
-  cursor: pointer;
-}
 
 .local-stt-preset-manager .local-stt-preset-row .setting-item-info:focus-visible {
   outline: 2px solid var(--interactive-accent);
@@ -818,10 +773,6 @@
 .local-stt-transcript-provisional {
   opacity: 0.85;
   transition: opacity 120ms ease;
-}
-
-.local-stt-session-processing {
-  animation: local-stt-session-processing-pulse 1.4s ease-in-out infinite;
 }
 
 @keyframes local-stt-session-processing-pulse {
@@ -1024,29 +975,9 @@
   max-width: 100%;
 }
 
-.local-dictation-sidebar .setting-item-control select {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.local-dictation-sidebar .local-dictation-preset-setting .setting-item-control > select {
-  flex: 1 1 10rem;
-  min-width: min(10rem, 100%);
-}
-
 .local-dictation-sidebar .local-dictation-model-setting {
   flex-direction: column;
   align-items: stretch;
-}
-
-.local-dictation-sidebar .local-dictation-model-setting .setting-item-info {
-  margin-right: 0;
-  margin-bottom: 6px;
-}
-
-.local-dictation-sidebar .local-dictation-model-setting .setting-item-control {
-  justify-content: flex-start;
-  width: 100%;
 }
 
 .local-dictation-sidebar .local-dictation-model-setting input[type="text"] {
@@ -1070,17 +1001,6 @@
 .local-dictation-sidebar--narrow .setting-item-control {
   justify-content: flex-start;
   flex-wrap: wrap;
-}
-
-.local-dictation-sidebar--narrow .setting-item-control select,
-.local-dictation-sidebar--narrow .setting-item-control input[type="text"],
-.local-dictation-sidebar--narrow .setting-item-control input[type="number"] {
-  width: 100%;
-  min-width: 0;
-}
-
-.local-dictation-sidebar--narrow .local-dictation-preset-setting .setting-item-control > select {
-  flex-basis: 100%;
 }
 
 /* Truncate preset description to one line; full text in title attr on hover. */
@@ -1121,6 +1041,32 @@
 
 .local-dictation-connection-test--loading svg {
   animation: local-dictation-connection-test-spin 800ms linear infinite;
+}
+
+.side-dock-ribbon-action[data-local-stt-state="listening"] > svg {
+  opacity: 0.45;
+}
+
+.side-dock-ribbon-action[data-local-stt-state="error"] > svg {
+  animation: local-stt-shake 0.4s ease-in-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-dock-ribbon-action[data-local-stt-state] > svg,
+  .side-dock-ribbon-action[data-local-stt-state] > svg > path {
+    animation: none;
+    opacity: 1;
+  }
+
+  .local-stt-dictation-anchor--visible::before {
+    animation: none;
+    opacity: 0.55;
+  }
+
+  .local-stt-session-processing {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 @keyframes local-dictation-connection-test-spin {
@@ -1505,6 +1451,15 @@
   padding: 0 0 4px;
 }
 
+.local-stt-preset-manager .local-stt-preset-row .setting-item-info {
+  cursor: pointer;
+}
+
+.local-dictation-sidebar .local-dictation-model-setting .setting-item-info {
+  margin-right: 0;
+  margin-bottom: 6px;
+}
+
 .local-stt-translation-modal__translation-style .setting-item-control,
 .local-stt-translation-modal__language-control .setting-item-control {
   width: 100%;
@@ -1637,11 +1592,6 @@
   line-height: 1.5;
 }
 
-.local-stt-youtube-transcript-modal .local-stt-media-source-hint {
-  margin: 0 0 12px;
-  line-height: 1.5;
-}
-
 .local-stt-youtube-controls {
   margin-top: 16px;
   padding: 16px 18px;
@@ -1653,17 +1603,6 @@
 .local-stt-media-panel-title {
   margin-bottom: 10px;
   font-weight: var(--font-semibold);
-}
-
-.local-stt-youtube-transcript-modal .local-stt-youtube-options > .setting-item {
-  min-height: 0;
-  padding: 12px 0;
-  gap: 16px;
-  border-top: 0;
-}
-
-.local-stt-youtube-transcript-modal .local-stt-youtube-options > .setting-item + .setting-item {
-  border-top: 1px solid var(--background-modifier-border);
 }
 
 .local-stt-youtube-options .setting-item-name {
@@ -1693,10 +1632,6 @@
   box-sizing: border-box;
 }
 
-.local-stt-youtube-transcript-modal .local-stt-media-footer {
-  margin-top: 18px;
-}
-
 @media (max-width: 420px) {
   .local-stt-youtube-options > .setting-item,
   .local-stt-media-options-grid > .setting-item,
@@ -1721,6 +1656,11 @@
   line-height: 1.4;
 }
 
+.local-stt-youtube-transcript-modal .local-stt-media-source-hint {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
 .local-stt-media-source > .setting-item {
   padding: 0;
   border: 0;
@@ -1728,17 +1668,6 @@
 
 .local-stt-media-source > .setting-item:first-child {
   display: block;
-}
-
-.local-stt-media-source > .setting-item:first-child .setting-item-control {
-  display: block;
-  margin-top: 8px;
-}
-
-.local-stt-media-source > .setting-item:first-child input {
-  width: 100%;
-  max-width: none;
-  box-sizing: border-box;
 }
 
 .local-stt-media-source > .setting-item:last-child:not(:first-child) {
@@ -1751,13 +1680,6 @@
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--background-modifier-border);
-}
-
-.local-stt-media-modal .local-stt-media-preset .setting-item,
-.local-stt-youtube-transcript-modal .local-stt-media-preset .setting-item {
-  padding: 12px 0;
-  border-top: 0;
-  gap: 16px;
 }
 
 .local-stt-media-preset .setting-item-control {
@@ -1829,17 +1751,6 @@
   padding: 0;
 }
 
-.local-stt-media-modal .local-stt-media-options-grid > .setting-item {
-  min-width: 0;
-  padding: 12px 0;
-  gap: 16px;
-  border-top: 0;
-}
-
-.local-stt-media-modal .local-stt-media-options-grid > .setting-item + .setting-item {
-  border-top: 1px solid var(--background-modifier-border);
-}
-
 .local-stt-media-options-grid .setting-item-description {
   line-height: 1.5;
 }
@@ -1848,9 +1759,40 @@
   max-width: 100%;
 }
 
+.local-dictation-sidebar .setting-item-control select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.local-dictation-sidebar--narrow .setting-item-control select,
+.local-dictation-sidebar--narrow .setting-item-control input[type="text"],
+.local-dictation-sidebar--narrow .setting-item-control input[type="number"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.local-stt-media-source > .setting-item:first-child input {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.local-dictation-sidebar .local-dictation-preset-setting .setting-item-control > select {
+  flex: 1 1 10rem;
+  min-width: min(10rem, 100%);
+}
+
+.local-dictation-sidebar--narrow .local-dictation-preset-setting .setting-item-control > select {
+  flex-basis: 100%;
+}
+
 .local-stt-media-footer {
   margin-top: 20px;
   padding: 0 0 4px;
+}
+
+.local-stt-youtube-transcript-modal .local-stt-media-footer {
+  margin-top: 18px;
 }
 
 .local-stt-media-footer .setting-item {
@@ -1858,8 +1800,47 @@
   border: 0;
 }
 
+.local-stt-youtube-transcript-modal .local-stt-youtube-options > .setting-item {
+  min-height: 0;
+  padding: 12px 0;
+  gap: 16px;
+  border-top: 0;
+}
+
+.local-stt-media-modal .local-stt-media-preset .setting-item,
+.local-stt-youtube-transcript-modal .local-stt-media-preset .setting-item {
+  padding: 12px 0;
+  border-top: 0;
+  gap: 16px;
+}
+
+.local-stt-media-modal .local-stt-media-options-grid > .setting-item {
+  min-width: 0;
+  padding: 12px 0;
+  gap: 16px;
+  border-top: 0;
+}
+
+.local-stt-youtube-transcript-modal .local-stt-youtube-options > .setting-item + .setting-item {
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.local-stt-media-modal .local-stt-media-options-grid > .setting-item + .setting-item {
+  border-top: 1px solid var(--background-modifier-border);
+}
+
 .local-stt-media-footer .setting-item-control {
   margin-left: auto;
+}
+
+.local-dictation-sidebar .local-dictation-model-setting .setting-item-control {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.local-stt-media-source > .setting-item:first-child .setting-item-control {
+  display: block;
+  margin-top: 8px;
 }
 
 .local-stt-media-drop-zone {
@@ -1932,6 +1913,25 @@
   .local-stt-media-spinner {
     animation: none;
   }
+}
+
+.local-stt-dictation-anchor--visible::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 1em;
+  border-radius: 1px;
+  background: currentColor;
+  animation:
+    local-stt-fade-in 0.35s ease-out both,
+    local-stt-caret-pulse 1.4s ease-in-out 0.35s infinite;
+}
+
+.local-stt-session-processing {
+  animation: local-stt-session-processing-pulse 1.4s ease-in-out infinite;
 }
 
 @media (max-width: 600px) {
