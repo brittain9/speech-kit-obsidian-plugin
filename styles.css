@@ -1069,6 +1069,25 @@
   }
 }
 
+.local-stt-dictation-anchor--visible::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 1em;
+  border-radius: 1px;
+  background: currentColor;
+  animation:
+    local-stt-fade-in 0.35s ease-out both,
+    local-stt-caret-pulse 1.4s ease-in-out 0.35s infinite;
+}
+
+.local-stt-session-processing {
+  animation: local-stt-session-processing-pulse 1.4s ease-in-out infinite;
+}
+
 @keyframes local-dictation-connection-test-spin {
   to {
     transform: rotate(360deg);
@@ -1913,25 +1932,6 @@
   .local-stt-media-spinner {
     animation: none;
   }
-}
-
-.local-stt-dictation-anchor--visible::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 2px;
-  height: 1em;
-  border-radius: 1px;
-  background: currentColor;
-  animation:
-    local-stt-fade-in 0.35s ease-out both,
-    local-stt-caret-pulse 1.4s ease-in-out 0.35s infinite;
-}
-
-.local-stt-session-processing {
-  animation: local-stt-session-processing-pulse 1.4s ease-in-out infinite;
 }
 
 @media (max-width: 600px) {
