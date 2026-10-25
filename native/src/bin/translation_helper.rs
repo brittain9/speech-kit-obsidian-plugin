@@ -11,7 +11,7 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel};
+use llama_cpp_2::model::{LlamaChatMessage, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::{LogOptions, send_logs_to_tracing};
 
@@ -96,7 +96,8 @@ impl HyMtInference for LlamaInference<'_> {
             .model
             .model
             .apply_chat_template(&template, &[message], false)?;
-        let tokens = self.model.model.str_to_token(&rendered, AddBos::Always)?;
+        let vocab = self.model.model.vocab();
+        let tokens = vocab.tokenize(rendered.as_bytes(), true, true);
         let context_size = NonZeroU32::new(HY_MT_CONTEXT_SIZE).expect("nonzero");
         if tokens.len() >= context_size.get() as usize {
             bail!("translation unit exceeds model context");
@@ -118,7 +119,7 @@ impl HyMtInference for LlamaInference<'_> {
             .context("unable to decode the HY-MT prompt")?;
         let penalty_last_n = i32::try_from(context_size.get())?;
         let mut sampler = LlamaSampler::chain_simple([
-            LlamaSampler::penalties(self.model.model.n_vocab(), penalty_last_n, 1.05, 0.0, 0.0),
+            LlamaSampler::penalties(vocab.n_tokens(), penalty_last_n, 1.05, 0.0, 0.0),
             LlamaSampler::top_k(20),
             LlamaSampler::top_p(0.6, 1),
             LlamaSampler::temp(0.7),
@@ -134,25 +135,10 @@ impl HyMtInference for LlamaInference<'_> {
             }
             let token = sampler.sample(&context, batch.n_tokens() - 1);
             sampler.accept(token);
-            if self.model.model.is_eog_token(token) {
+            if vocab.is_eog(token) {
                 break;
             }
-            match self
-                .model
-                .model
-                .token_to_piece_bytes(token, 32, false, None)
-            {
-                Ok(bytes) => output.extend(bytes),
-                Err(llama_cpp_2::TokenToStringError::InsufficientBufferSpace(size)) => {
-                    output.extend(self.model.model.token_to_piece_bytes(
-                        token,
-                        (-size) as usize,
-                        false,
-                        None,
-                    )?);
-                }
-                Err(error) => return Err(error.into()),
-            }
+            vocab.token_to_piece_into(token, &mut output, false, None);
             batch.clear();
             batch
                 .add(token, position, &[0], true)
