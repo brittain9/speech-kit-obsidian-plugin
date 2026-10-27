@@ -231,6 +231,7 @@ function detailsState(
     ],
     failedInstall: null,
     installedModels: [installed],
+    installRequestPending: false,
     loadError: null,
     loadStatus: 'ready',
     modelStore: { overridePath: null, path: '/models', usingDefaultPath: true },

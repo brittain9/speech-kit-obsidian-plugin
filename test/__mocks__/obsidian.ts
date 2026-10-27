@@ -83,6 +83,7 @@ export class TestElement {
   }
 
   async click(): Promise<void> {
+    if (this.disabled) return;
     this.dispatchEvent({ type: 'click' });
     await Promise.resolve();
   }
@@ -133,6 +134,17 @@ export class TestElement {
     event.target ??= this;
     for (const listener of this.listeners.get(event.type) ?? []) {
       void listener(event);
+    }
+    // Native buttons turn Enter and Space keyboard input into click activation.
+    // Keep that browser contract available to behavior tests without adding a
+    // production-only key handler that would double-fire in Obsidian.
+    if (
+      this.tagName === 'BUTTON' &&
+      !this.disabled &&
+      event.type === 'keydown' &&
+      (event.key === 'Enter' || event.key === ' ')
+    ) {
+      this.dispatchEvent({ type: 'click' });
     }
     return true;
   }

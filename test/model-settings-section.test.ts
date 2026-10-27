@@ -27,6 +27,7 @@ describe('model settings section ownership', () => {
       compiledRuntimes: [],
       failedInstall: null,
       installedModels: [],
+      installRequestPending: false,
       loadError: null,
       loadStatus: 'ready',
       modelStore: { overridePath: null, path: '/models', usingDefaultPath: true },

@@ -366,6 +366,15 @@ export function normalizeSelectedModel(value: SelectedModel): SelectedModel {
   };
 }
 
+export function translationSupportLanguages(
+  model: Pick<CatalogModelRecord, 'translationSupport'>,
+): readonly string[] {
+  const support = model.translationSupport;
+  if (support === undefined) return [];
+  if (support.kind === 'all_to_all') return support.languages;
+  return [...new Set(support.pairs.flatMap((pair) => [pair.source, pair.target]))];
+}
+
 export function getTotalModelSize(model: CatalogModelRecord): number {
   return model.artifacts
     .filter((artifact) => artifact.required)
