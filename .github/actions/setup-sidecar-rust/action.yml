@@ -107,6 +107,13 @@ runs:
       with:
         toolchain: ${{ inputs.toolchain }}
 
+    # Cached native objects move between runners with different CPUs. Match the
+    # portable release setting unless the caller has set a specific value.
+    - name: Select portable GGML build
+      if: env.GGML_NATIVE == ''
+      shell: bash
+      run: echo "GGML_NATIVE=OFF" >> "$GITHUB_ENV"
+
     - name: Cache Rust build
       uses: Swatinem/rust-cache@v2
       with:

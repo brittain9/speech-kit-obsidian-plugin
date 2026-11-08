@@ -13,13 +13,13 @@ Before changing an ownership boundary, compatibility contract, core product cons
 
 ## Prerequisites
 
-- Node.js `24.14.1`, npm `11.12.1`
+- Node.js `24.22.2`, npm `11.19.1`
 - TypeScript `6.0.3`
 - Rust `1.94.1`
 - CMake and a platform C/C++ toolchain for native sidecar builds
 - CUDA Toolkit `13.2` with `nvcc` for Linux/Windows CUDA sidecar builds only
 
-The recommended Node version is pinned in `package.json` `engines` (a compatibility floor, not an exact pin) and the Rust toolchain in `rust-toolchain.toml`. If you use [mise](https://mise.jdx.dev), `mise install` sets up the Node and Rust toolchains automatically.
+The recommended Node version is pinned in `.mise.toml`. The supported Node range is in `package.json` `engines`, and the Rust toolchain is pinned in `rust-toolchain.toml`. If you use [mise](https://mise.jdx.dev), `mise install` sets up the Node and Rust toolchains automatically.
 
 The CUDA Toolkit is a build-from-source dependency. Published Linux/Windows CUDA sidecar archives bundle the CUDA runtime libraries needed to accelerate Whisper through whisper.cpp; release users need only a Turing-or-newer NVIDIA GPU and an R595 or newer driver. The archives use CUDA 13.2 with a PTX-only compute 7.5 target, so they require CUDA 13.2's native driver branch rather than CUDA minor-version compatibility.
 
@@ -28,7 +28,7 @@ The CUDA Toolkit is a build-from-source dependency. Published Linux/Windows CUDA
 Install dependencies:
 
 ```sh
-npm install
+npm ci --engine-strict
 ```
 
 For fast frontend iteration, symlink or clone this repo into `<vault>/.obsidian/plugins/local-dictation`, run watch mode, and reload Obsidian after rebuilds:
