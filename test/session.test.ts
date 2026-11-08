@@ -831,6 +831,17 @@ describe('Session', () => {
     session.dispose();
   });
 
+  it('keeps surrounding text separate when dictation starts within a note', () => {
+    const { session, view } = createRecoveryIntegrationHarness('before after', 6);
+    session.acceptTranscript(
+      transcript({ sessionId: 'recovery-integration', text: 'speech', utteranceId: 'u1' }),
+    );
+    expect(session.insertMicrophoneRecording('![[audio.webm]]')).toBe(true);
+    expect(view.state.doc.toString()).toBe('before speech\n\n![[audio.webm]]\n\n after');
+    expect(session.readCurrentSessionText()).toBe('speech');
+    session.dispose();
+  });
+
   it('omits emptied finalized utterances from joined raw session text', () => {
     const { session } = createSessionHarness();
 
@@ -1106,7 +1117,10 @@ function createSessionHarness(
   };
 }
 
-function createRecoveryIntegrationHarness(documentText: string): {
+function createRecoveryIntegrationHarness(
+  documentText: string,
+  selectionHead = documentText.length,
+): {
   recovery: RawTranscriptRecovery;
   session: Session;
   view: StateBackedEditorView;
@@ -1125,7 +1139,7 @@ function createRecoveryIntegrationHarness(documentText: string): {
       provisionalTranscriptExtension(),
       sessionProcessingExtension(),
     ],
-    selectionHead: documentText.length,
+    selectionHead,
   });
   targetLeaf.view.editor.cm = view as unknown as EditorView;
   workspace.activeEditor = targetLeaf.view;
