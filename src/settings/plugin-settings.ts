@@ -1007,6 +1007,9 @@ function readSelectedModelCapabilitiesSnapshot(
   return {
     capabilities: normalized.capabilities,
     selection: normalizeSelectedModel(normalized.selection),
+    ...(normalized.modelStorePathOverride === undefined
+      ? {}
+      : { modelStorePathOverride: normalized.modelStorePathOverride }),
   };
 }
 

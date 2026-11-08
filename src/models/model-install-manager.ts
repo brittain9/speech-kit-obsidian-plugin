@@ -371,7 +371,8 @@ export class ModelInstallManager {
       expectedSelectionGenerations.stt === this.selectionGenerations.stt
     ) {
       const snapshot = this.deps.getSettings().selectedModelCapabilitiesSnapshot;
-      if (snapshot !== null && selectedModelEquals(snapshot.selection, persistedSelection)) {
+      if (snapshot !== null && selectedModelEquals(snapshot.selection, persistedSelection) &&
+          (persistedSelection.kind === 'external_file' || snapshot.modelStorePathOverride === this.deps.getSettings().modelStorePathOverride)) {
         // Trust the snapshot's successful probe instead of loading the model on
         // every startup (issue #195), but refresh its capability metadata from
         // the running sidecar. Adapter capabilities can evolve across releases
@@ -418,7 +419,8 @@ export class ModelInstallManager {
       expectedSelectionGenerations.tts === this.selectionGenerations.tts
     ) {
       const snapshot = this.deps.getSettings().selectedTtsModelCapabilitiesSnapshot;
-      if (snapshot !== null && selectedModelEquals(snapshot.selection, persistedTtsSelection)) {
+      if (snapshot !== null && selectedModelEquals(snapshot.selection, persistedTtsSelection) &&
+          (persistedTtsSelection.kind === 'external_file' || snapshot.modelStorePathOverride === this.deps.getSettings().modelStorePathOverride)) {
         this.selectedTtsModelCapabilities = {
           capabilities: snapshot.capabilities,
           selection: persistedTtsSelection,
@@ -1374,12 +1376,14 @@ export class ModelInstallManager {
               selectedTtsModelCapabilitiesSnapshot: {
                 capabilities,
                 selection,
+                modelStorePathOverride: currentSettings.modelStorePathOverride,
               },
             }
           : {
               selectedModelCapabilitiesSnapshot: {
                 capabilities,
                 selection,
+                modelStorePathOverride: currentSettings.modelStorePathOverride,
               },
             }),
       }));

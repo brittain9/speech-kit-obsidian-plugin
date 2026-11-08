@@ -2549,6 +2549,29 @@ describe('ModelInstallManager', () => {
   });
 
   describe('startup probe skip (issue #195)', () => {
+    it('does not trust an unbound model snapshot after the store path was changed', async () => {
+      harness = createManagerHarness({
+        modelStorePathOverride: '/new-models',
+        selectedModel: sampleSelection(),
+        selectedModelCapabilitiesSnapshot: {
+          capabilities: sampleMergedCapabilities(),
+          selection: sampleSelection(),
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      harness.sidecarConnection.listInstalledModels.mockResolvedValue({ models: [] });
+      const probe = deferred<ModelProbeResultEvent>();
+      harness.sidecarConnection.probeModelSelection.mockReturnValue(probe.promise);
+
+      await harness.manager.init();
+
+      expect(harness.manager.getState().installedModels).toEqual([]);
+      expect(harness.manager.getState().selectedModelCapabilities.status).toBe('pending');
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledWith(
+        expect.objectContaining({ modelStorePathOverride: '/new-models' }),
+      );
+    });
+
     it('trusts a matching persisted capabilities snapshot on init and never probes the sidecar', async () => {
       harness = createManagerHarness({
         selectedModel: sampleSelection(),

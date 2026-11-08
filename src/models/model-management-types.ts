@@ -213,6 +213,7 @@ export type SelectedModelCapabilities =
 export interface SelectedModelCapabilitiesSnapshot {
   capabilities: EngineCapabilitiesRecord;
   selection: SelectedModel;
+  modelStorePathOverride?: string;
 }
 
 export type ModelInstallState =
@@ -344,6 +345,7 @@ export function isSelectedModelCapabilitiesSnapshot(
   return (
     isRecord(value) &&
     isSelectedModel(value.selection) &&
+    (value.modelStorePathOverride === undefined || typeof value.modelStorePathOverride === 'string') &&
     isEngineCapabilitiesRecord(value.capabilities)
   );
 }
