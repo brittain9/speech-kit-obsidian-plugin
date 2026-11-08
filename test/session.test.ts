@@ -14,7 +14,7 @@ import type {
   RewriteResult,
   SurfaceDesynchronization,
 } from '../src/editor/note-surface';
-import { noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
+import { NoteSurface, noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
 import { provisionalTranscriptExtension } from '../src/editor/provisional-transcript-extension';
 import { RawTranscriptRecovery } from '../src/editor/raw-transcript-recovery';
 import { sessionProcessingExtension } from '../src/editor/session-processing-extension';
@@ -231,6 +231,16 @@ describe('Session', () => {
     ]);
     expect(surface.setProvisional).toHaveBeenNthCalledWith(1, 'u1', true);
     expect(surface.setProvisional).toHaveBeenNthCalledWith(2, 'u1', false);
+  });
+
+  it('reports an applied cleanup without offering recovery after a concurrent edit', () => {
+    const { session, surface } = createSessionHarness();
+    session.acceptTranscript(transcript({ text: 'raw words', utteranceId: 'u1' }));
+    surface.nextRewriteResult = { kind: 'rewritten_modified' };
+    expect(session.replaceSessionRangeWithCleaned('cleaned')).toEqual({
+      kind: 'replaced_without_recovery',
+    });
+    session.dispose();
   });
 
   it.each([
@@ -1344,6 +1354,11 @@ function createRecoveryIntegrationHarness(
     },
     leafPinManager: new TemporaryLeafPinLeaseManager(),
     lockedFile,
+    noteSurfaceFactory: (editor, placement, onFailure) => {
+      const surface = new NoteSurface(editor, placement, onFailure);
+      view.addTrackingListener((update) => surface.observeTransaction(update));
+      return surface;
+    },
     placement: { anchor: 'at_cursor' },
     rendererOptions: renderOptions(),
     sessionId: 'recovery-integration',

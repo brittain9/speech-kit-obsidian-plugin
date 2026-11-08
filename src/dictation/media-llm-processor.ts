@@ -130,7 +130,9 @@ export async function processMediaLlm(
           'The media transcript was edited while AI processing was pending; the raw text was kept.',
         );
       }
-      dependencies.onRawTranscriptRecoveryAvailable(replacement.recovery);
+      if (replacement.kind === 'replaced') {
+        dependencies.onRawTranscriptRecoveryAvailable(replacement.recovery);
+      }
     } else {
       const inserted = session.insertAdjacentToSessionRange(text, outputBehavior.placement, {
         rejectUserEdits: true,

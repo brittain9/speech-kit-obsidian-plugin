@@ -201,6 +201,24 @@ describe('media LLM processing', () => {
     expect(session.replaceSessionRangeWithCleaned).toHaveBeenCalledOnce();
   });
 
+  it('reports an applied result without offering unsafe recovery after a concurrent edit', async () => {
+    const session = new FakeMediaSession();
+    session.replaceSessionRangeWithCleaned.mockReturnValue({ kind: 'replaced_without_recovery' });
+    const onRecovery = vi.fn();
+    const router = createFakeLlmRouter({
+      cleanup: async () => ({ model: 'm', providerId: 'ollama' as const, text: 'Cleaned.' }),
+    });
+    await expect(
+      processMediaLlm(session, {
+        onRawTranscriptRecoveryAvailable: onRecovery,
+        router,
+        signal: new AbortController().signal,
+        snapshot: replaceSnapshot,
+      }),
+    ).resolves.toEqual({ text: 'Cleaned.' });
+    expect(onRecovery).not.toHaveBeenCalled();
+  });
+
   it('keeps raw text and surfaces a provider failure', async () => {
     const session = new FakeMediaSession();
     const router = createFakeLlmRouter({

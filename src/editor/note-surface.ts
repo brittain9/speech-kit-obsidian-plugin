@@ -1,6 +1,6 @@
-import type { Extension, StateEffect } from '@codemirror/state';
+import type { Extension, StateEffect, TransactionSpec } from '@codemirror/state';
 import { Annotation, Transaction } from '@codemirror/state';
-import { EditorView, type ViewUpdate } from '@codemirror/view';
+import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 
 import type { UtteranceId } from '../session/session-journal';
 import type { DictationAnchor } from '../settings/plugin-settings';
@@ -105,6 +105,7 @@ export type RewriteDenialReason =
   | SurfaceDesynchronization;
 
 export type RewriteResult =
+  | { kind: 'rewritten_modified' }
   | {
       kind: 'rewritten';
       range: RewriteRange;
@@ -115,6 +116,7 @@ export type RewriteResult =
     };
 
 const noteSurfaceInsertOrder = Annotation.define<number>();
+const noteSurfaceDispatch = Annotation.define<object>();
 const noteSurfaceInsertAfter = Annotation.define<{ order: number; position: number }>();
 const noteSurfacesByView = new WeakMap<EditorView, Set<NoteSurface>>();
 let nextSurfaceOrder = 0;
@@ -139,16 +141,28 @@ function unregisterNoteSurface(surface: NoteSurface): void {
 }
 
 export function noteSurfaceUpdateListenerExtension(): Extension {
-  return EditorView.updateListener.of((update) => {
-    const surfaces = noteSurfacesByView.get(update.view);
-    if (surfaces === undefined) {
-      return;
-    }
+  const trackingPlugin = ViewPlugin.fromClass(
+    class {
+      update(update: ViewUpdate): void {
+        for (const surface of [...(noteSurfacesByView.get(update.view) ?? [])]) {
+          surface.observeTransaction(update);
+        }
+      }
+    },
+  );
+  return [
+    trackingPlugin,
+    EditorView.updateListener.of((update) => {
+      const surfaces = noteSurfacesByView.get(update.view);
+      if (surfaces === undefined) {
+        return;
+      }
 
-    for (const surface of [...surfaces]) {
-      surface.observeTransaction(update);
-    }
-  });
+      for (const surface of [...surfaces]) {
+        surface.flushNotifications();
+      }
+    }),
+  ];
 }
 
 export class NoteSurface {
@@ -159,6 +173,14 @@ export class NoteSurface {
   private readonly initialBoundaryPos: number;
   private pendingInitialPrefix = '';
   private readonly spans = new Map<UtteranceId, ProjectedSpan>();
+  private readonly pendingUtteranceIds = new Set<UtteranceId>();
+  private readonly pendingProvisionalClears = new Set<UtteranceId>();
+  private pendingFailure: SurfaceDesynchronization | null = null;
+  private readonly pendingDispatches: Array<{
+    token: object;
+    seen: boolean;
+    updates: ViewUpdate[];
+  }> = [];
 
   constructor(
     readonly view: EditorView,
@@ -182,13 +204,24 @@ export class NoteSurface {
     if (this.disposed || update.view !== this.view || !update.docChanged) {
       return null;
     }
+    for (const pending of this.pendingDispatches) {
+      if (
+        update.transactions.some(
+          (transaction) => transaction.annotation(noteSurfaceDispatch) === pending.token,
+        )
+      ) {
+        pending.seen = true;
+      } else if (pending.seen) {
+        pending.updates.push(update);
+      }
+    }
     if (this.desynchronization !== null) {
       return this.desynchronization;
     }
 
     const desynchronization = this.detectOwnedDesynchronization(update.startState.doc.length);
     if (desynchronization !== null) {
-      this.onSurfaceDesynchronized?.(desynchronization);
+      this.pendingFailure = desynchronization;
       return desynchronization;
     }
 
@@ -214,8 +247,17 @@ export class NoteSurface {
       }
     }
 
-    this.clearProvisional(latchedUtteranceIds);
+    for (const utteranceId of latchedUtteranceIds) this.pendingProvisionalClears.add(utteranceId);
     return null;
+  }
+
+  flushNotifications(): void {
+    const failure = this.pendingFailure;
+    this.pendingFailure = null;
+    const utteranceIds = [...this.pendingProvisionalClears];
+    this.pendingProvisionalClears.clear();
+    if (failure !== null) this.onSurfaceDesynchronized?.(failure);
+    if (!this.disposed) this.clearProvisional(utteranceIds);
   }
 
   readProjectionContext(): NoteProjectionContext {
@@ -237,7 +279,7 @@ export class NoteSurface {
       return { kind: 'denied', reason: desynchronization, utteranceId };
     }
 
-    if (this.spans.has(utteranceId)) {
+    if (this.spans.has(utteranceId) || this.pendingUtteranceIds.has(utteranceId)) {
       return { kind: 'denied', reason: { kind: 'already_projected' }, utteranceId };
     }
 
@@ -246,11 +288,21 @@ export class NoteSurface {
     const textEnd = from + projection.textEndOffset;
     const to = from + projection.projectedText.length;
 
-    this.view.dispatch({
-      annotations: noteSurfaceInsertOrder.of(this.createdAt),
-      changes: { from, insert: projection.projectedText },
-      effects: this.ownerAnchorEffects(to),
-    });
+    this.pendingUtteranceIds.add(utteranceId);
+    let nestedUpdates: ViewUpdate[];
+    try {
+      nestedUpdates = this.dispatchTracked({
+        annotations: noteSurfaceInsertOrder.of(this.createdAt),
+        changes: { from, insert: projection.projectedText },
+        effects: this.ownerAnchorEffects(to),
+      });
+    } finally {
+      this.pendingUtteranceIds.delete(utteranceId);
+    }
+
+    if (this.disposed) return { kind: 'denied', reason: { kind: 'disposed' }, utteranceId };
+    if (this.desynchronization !== null)
+      return { kind: 'denied', reason: this.desynchronization, utteranceId };
 
     const span: ProjectedSpan = {
       end: to,
@@ -260,6 +312,7 @@ export class NoteSurface {
       textStart,
       utteranceId,
     };
+    for (const update of nestedUpdates) this.mapPendingSpan(span, update);
     this.spans.set(utteranceId, span);
     this.pendingInitialPrefix = '';
 
@@ -315,17 +368,27 @@ export class NoteSurface {
       };
     }
 
+    const before = cloneSpan(span);
     const replacementStart = removeBoundary ? span.start : span.textStart;
-    this.view.dispatch({
+    const nestedUpdates = this.dispatchTracked({
       changes: { from: replacementStart, to: span.textEnd, insert: newText },
       effects: this.ownerAnchorEffects(replacementStart + newText.length),
     });
 
-    const removedLength = span.textEnd - replacementStart;
-    span.textStart = replacementStart;
-    span.textEnd = replacementStart + newText.length;
-    span.end -= removedLength - newText.length;
-    span.projectedText = newText;
+    if (this.disposed) return { kind: 'denied', reason: { kind: 'disposed' }, utteranceId };
+    if (this.desynchronization !== null)
+      return { kind: 'denied', reason: this.desynchronization, utteranceId };
+
+    const replacement = {
+      ...before,
+      textStart: replacementStart,
+      textEnd: replacementStart + newText.length,
+      end: before.end - (before.textEnd - replacementStart) + newText.length,
+      projectedText: newText,
+    };
+    for (const update of nestedUpdates) this.mapPendingSpan(replacement, update);
+    if (span.latched !== undefined) replacement.latched = span.latched;
+    Object.assign(span, replacement);
 
     return { kind: 'replaced', span: cloneSpan(span) };
   }
@@ -410,21 +473,77 @@ export class NoteSurface {
 
     const end = range.from + newText.length;
     const ownsAnchor = this.isAnchorOwner();
-    this.view.dispatch({
-      annotations: bypassSessionProcessingLock.of(true),
-      changes: { from: range.from, to: range.to, insert: newText },
-      effects: this.ownerAnchorEffects(end),
-      // Only move the real caret when this surface owns the cursor, so a batch
-      // rewrite from an older session can't yank focus from a newer session.
-      ...(ownsAnchor ? { selection: { anchor: end } } : {}),
-    });
-    for (const span of spansInRange) {
-      this.spans.delete(span.utteranceId);
-    }
-    this.clearProvisional(spansInRange.map((span) => span.utteranceId));
-    this.pendingInitialPrefix = '';
+    const nestedUpdates = this.dispatchTracked(
+      {
+        annotations: bypassSessionProcessingLock.of(true),
+        changes: { from: range.from, to: range.to, insert: newText },
+        effects: this.ownerAnchorEffects(end),
+        // Only move the real caret when this surface owns the cursor, so a batch
+        // rewrite from an older session can't yank focus from a newer session.
+        ...(ownsAnchor ? { selection: { anchor: end } } : {}),
+      },
+      () => {
+        if (this.disposed || this.desynchronization !== null) return;
+        for (const span of spansInRange) this.spans.delete(span.utteranceId);
+        this.clearProvisional(spansInRange.map((span) => span.utteranceId));
+        this.pendingInitialPrefix = '';
+      },
+    );
+    if (this.disposed || this.desynchronization !== null) return { kind: 'rewritten_modified' };
 
-    return { kind: 'rewritten', range };
+    const rewrittenRange = { from: range.from, to: end };
+    for (const update of nestedUpdates) {
+      let overlaps = false;
+      const insertedAfter = update.transactions
+        .map((transaction) => transaction.annotation(noteSurfaceInsertAfter))
+        .find((value) => value !== undefined);
+      update.changes.iterChangedRanges((from, to) => {
+        const recordingAfter =
+          insertedAfter?.order === this.createdAt &&
+          insertedAfter.position === rewrittenRange.to &&
+          from === to &&
+          from === rewrittenRange.to;
+        if (!recordingAfter && rangeIntersects(from, to, rewrittenRange.from, rewrittenRange.to))
+          overlaps = true;
+      });
+      if (overlaps) return { kind: 'rewritten_modified' };
+      rewrittenRange.from = update.changes.mapPos(rewrittenRange.from, 1);
+      rewrittenRange.to = update.changes.mapPos(rewrittenRange.to, -1);
+    }
+    return {
+      kind: 'rewritten',
+      range: { from: rewrittenRange.from, to: rewrittenRange.from + (range.to - range.from) },
+    };
+  }
+
+  private dispatchTracked(spec: TransactionSpec, afterDispatch?: () => void): ViewUpdate[] {
+    const pending = { token: {}, seen: false, updates: [] as ViewUpdate[] };
+    this.pendingDispatches.push(pending);
+    try {
+      this.view.dispatch(spec, { annotations: noteSurfaceDispatch.of(pending.token) });
+      afterDispatch?.();
+    } finally {
+      this.pendingDispatches.splice(this.pendingDispatches.indexOf(pending), 1);
+    }
+    return pending.updates;
+  }
+
+  private mapPendingSpan(span: ProjectedSpan, update: ViewUpdate): void {
+    if (this.hasLatchableUserChange(update) && changeIntersectsSpan(update, span))
+      span.latched = 'user_edited';
+    const insertOrder = update.transactions
+      .map((transaction) => transaction.annotation(noteSurfaceInsertOrder))
+      .find((order) => order !== undefined);
+    const insertedAfter = update.transactions
+      .map((transaction) => transaction.annotation(noteSurfaceInsertAfter))
+      .find((value) => value !== undefined);
+    const startBias = insertOrder !== undefined && insertOrder < this.createdAt ? 1 : -1;
+    const endBias =
+      insertedAfter?.order === this.createdAt && insertedAfter.position === span.end ? -1 : 1;
+    span.start = update.changes.mapPos(span.start, startBias);
+    span.textStart = update.changes.mapPos(span.textStart, startBias);
+    span.textEnd = update.changes.mapPos(span.textEnd, -1);
+    span.end = update.changes.mapPos(span.end, endBias);
   }
 
   validateExternalModification(): SurfaceDesynchronization | null {
