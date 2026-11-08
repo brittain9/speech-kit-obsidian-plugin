@@ -1,4 +1,4 @@
-import type { App, Editor, EditorPosition } from 'obsidian';
+import type { App, Editor, EditorPosition, MarkdownFileInfo, TFile } from 'obsidian';
 import type { ModelInstallManager } from '../models/model-install-manager';
 import { type CatalogModelRecord, matchesModelTriple } from '../models/model-management-types';
 import {
@@ -128,12 +128,15 @@ interface ActiveTranslation {
   configuration: TranslationConfiguration;
   configurationListeners: Set<() => void>;
   editor: Editor;
+  sourceView: MarkdownFileInfo;
+  sourceFile: TFile;
   job: TranslationJob;
   modelSelectionGeneration: number;
   modelSelectionPendingGeneration: number | null;
   modelSelectionTarget: CatalogModelRecord | null;
   release: () => void;
   snapshot: TranslationSnapshot;
+  reviewedOutput: { text: string | null };
 }
 interface TranslationConfiguration {
   model: CatalogModelRecord | null;
@@ -147,14 +150,19 @@ export class TranslationController {
   private activeModal: TranslationModal | null = null;
   constructor(private readonly dependencies: TranslationControllerDependencies) {}
 
-  translateSelection(editor: Editor): void {
-    if (this.reopenActive() || !editor.somethingSelected()) return;
+  translateSelection(editor: Editor, view: MarkdownFileInfo): void {
+    if (this.reopenActive(view) || !editor.somethingSelected() || view.file === null) return;
     const from = editor.getCursor('from');
     const to = editor.getCursor('to');
-    this.begin(editor, { from, kind: 'selection', source: editor.getRange(from, to), to });
+    this.begin(editor, view, view.file, {
+      from,
+      kind: 'selection',
+      source: editor.getRange(from, to),
+      to,
+    });
   }
-  translateNote(editor: Editor): void {
-    if (this.reopenActive()) return;
+  translateNote(editor: Editor, view: MarkdownFileInfo): void {
+    if (this.reopenActive(view) || view.file === null) return;
     const source = editor.getValue();
     if (source.trim().length === 0) {
       this.dependencies.feedback.show({
@@ -164,7 +172,12 @@ export class TranslationController {
       });
       return;
     }
-    this.begin(editor, { from: { line: 0, ch: 0 }, kind: 'note', source, to: endPosition(source) });
+    this.begin(editor, view, view.file, {
+      from: { line: 0, ch: 0 },
+      kind: 'note',
+      source,
+      to: endPosition(source),
+    });
   }
   dispose(): void {
     this.active?.job.cancel();
@@ -172,13 +185,15 @@ export class TranslationController {
     this.clearActive();
   }
 
-  private reopenActive(): boolean {
+  private reopenActive(view: MarkdownFileInfo): boolean {
     if (this.active === null) return false;
-    this.openModal();
+    this.openModal(view.file !== this.active.sourceFile);
     return true;
   }
   private begin(
     editor: Editor,
+    sourceView: MarkdownFileInfo,
+    sourceFile: TFile,
     snapshot: TranslationSnapshot,
     sourceOverride?: TranslationLanguage,
     targetOverride?: TranslationLanguage,
@@ -229,12 +244,15 @@ export class TranslationController {
       configuration: { model, sourceLanguage, styleInstruction, targetLanguage },
       configurationListeners: new Set(),
       editor,
+      sourceView,
+      sourceFile,
       job,
       modelSelectionGeneration: 0,
       modelSelectionPendingGeneration: null,
       modelSelectionTarget: null,
       release: () => {},
       snapshot,
+      reviewedOutput: { text: null },
     };
     const releaseJob = job.subscribe((state) => {
       if (this.active !== active) return;
@@ -291,13 +309,15 @@ export class TranslationController {
     return true;
   }
 
-  private openModal(): void {
+  private openModal(otherNote = false): void {
     const active = this.active;
     if (active === null || this.activeModal !== null) return;
     this.dependencies.setDetachedStatus?.(null, () => {});
     const modal = new TranslationModal(this.dependencies.app, {
       canReadAloud: this.dependencies.canReadAloud,
       editor: active.editor,
+      sourcePath: active.sourceFile.path,
+      sourceIsAvailable: () => !otherNote && active.sourceView.file === active.sourceFile,
       feedback: this.dependencies.feedback,
       job: active.job,
       configuration: active.configuration,
@@ -307,6 +327,7 @@ export class TranslationController {
       }),
       isModelSelectionPending: () => active.modelSelectionPendingGeneration !== null,
       snapshot: active.snapshot,
+      reviewedOutput: active.reviewedOutput,
       onApplied: () => this.clearActive(),
       onDismissed: () => this.clearActive(),
       subscribeConfiguration: (listener) => {
@@ -408,9 +429,16 @@ export class TranslationController {
       getStyleInstruction: () => this.dependencies.getSettings().translationStyleInstruction,
       onStyleChange: (style, instruction) => this.persistTranslationStyle(style, instruction),
       onTranslateCurrent: (sourceLanguage, targetLanguage, styleInstruction) => {
-        if (active.modelSelectionPendingGeneration !== null) return;
+        if (
+          active.modelSelectionPendingGeneration !== null ||
+          otherNote ||
+          active.sourceView.file !== active.sourceFile
+        )
+          return;
         this.begin(
           active.editor,
+          active.sourceView,
+          active.sourceFile,
           this.snapshotFromCurrentEditor(active),
           sourceLanguage,
           targetLanguage,
@@ -418,10 +446,17 @@ export class TranslationController {
         );
       },
       onRestart: (source, target, styleInstruction) => {
-        if (active.modelSelectionPendingGeneration !== null) return;
+        if (
+          active.modelSelectionPendingGeneration !== null ||
+          otherNote ||
+          active.sourceView.file !== active.sourceFile
+        )
+          return;
         void this.persistTranslationLanguages(source, target);
         this.begin(
           active.editor,
+          active.sourceView,
+          active.sourceFile,
           this.snapshotFromCurrentEditor(active),
           source,
           target,

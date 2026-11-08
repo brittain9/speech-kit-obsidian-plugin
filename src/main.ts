@@ -691,22 +691,23 @@ export default class LocalSttPlugin extends Plugin {
             this.requireAudioFileTranscriptionController().subscribeMediaProgress(listener),
         });
       },
-      translateNote: (editor) => this.requireTranslationController().translateNote(editor),
-      translateSelection: (editor) =>
-        this.requireTranslationController().translateSelection(editor),
+      translateNote: (editor, view) =>
+        this.requireTranslationController().translateNote(editor, view),
+      translateSelection: (editor, view) =>
+        this.requireTranslationController().translateSelection(editor, view),
       toggleDictation: async () => this.requireDictationController().toggleDictation(),
       toggleReadAloudPaused: () => this.requireReadAloudController().togglePaused(),
     });
 
     this.registerEvent(
-      this.app.workspace.on('editor-menu', (menu, editor) => {
+      this.app.workspace.on('editor-menu', (menu, editor, view) => {
         if (!editor.somethingSelected()) return;
         menu.addItem((item) => {
           item
             .setTitle(t('commands.translateSelection'))
             .setIcon('languages')
             .onClick(() => {
-              this.requireTranslationController().translateSelection(editor);
+              this.requireTranslationController().translateSelection(editor, view);
             });
         });
         menu.addItem((item) => {

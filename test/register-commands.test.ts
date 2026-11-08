@@ -17,6 +17,8 @@ describe('registerCommands', () => {
     });
     const reinsertLastUtterance = vi.fn((_editor: Editor) => {});
     const copyLastUtterance = vi.fn();
+    const translateNote = vi.fn();
+    const translateSelection = vi.fn();
     registerCommands({
       cancelAudioFile: vi.fn(async () => {}),
       cancelDictation: vi.fn(async () => {}),
@@ -39,8 +41,8 @@ describe('registerCommands', () => {
       stopReadAloud: vi.fn(),
       stopDictation: vi.fn(async () => {}),
       transcribeAudioFile: vi.fn(async () => {}),
-      translateNote: vi.fn(),
-      translateSelection: vi.fn(),
+      translateNote,
+      translateSelection,
       toggleDictation: vi.fn(async () => {}),
       toggleReadAloudPaused: vi.fn(async () => {}),
     });
@@ -48,6 +50,15 @@ describe('registerCommands', () => {
     const copyCommand = commands.find(({ id }) => id === 'copy-last-utterance');
     const clearCommand = commands.find(({ id }) => id === 'clear-last-utterance');
     const editor = {} as Editor;
+
+    const translationEditor = { somethingSelected: () => true } as Editor;
+    const view = { file: { path: 'Notes/source.md' } } as never;
+    commands.find(({ id }) => id === 'translate-note')?.editorCallback?.(translationEditor, view);
+    commands
+      .find(({ id }) => id === 'translate-selection')
+      ?.editorCheckCallback?.(false, translationEditor, view);
+    expect(translateNote).toHaveBeenCalledWith(translationEditor, view);
+    expect(translateSelection).toHaveBeenCalledWith(translationEditor, view);
 
     expect(reinsertCommand?.name).toBe('Reinsert last utterance');
     expect(copyCommand?.name).toBe('Copy last utterance');

@@ -355,6 +355,9 @@ export const en = {
   'translation.modal.largeNote': 'Large note: translation may take a few seconds.',
   'translation.modal.sourceSelection': 'Source selection',
   'translation.modal.sourceNote': 'Source note',
+  'translation.modal.sourcePath': 'Source: {path}',
+  'translation.modal.otherNote':
+    'This preview belongs to another note. Copy or dismiss it, then run Translate note in the note you want to translate.',
   'translation.modal.previewAria': 'Translation preview',
   'translation.modal.readAloud': 'Read translation aloud in {language}',
   'translation.modal.preparing': 'Preparing local translation…',

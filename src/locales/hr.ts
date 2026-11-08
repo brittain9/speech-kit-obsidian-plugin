@@ -185,6 +185,9 @@ export const hr = {
   'translation.modal.largeNote': 'Velika bilješka: prijevod može potrajati nekoliko sekundi.',
   'translation.modal.sourceSelection': 'Odabrani tekst',
   'translation.modal.sourceNote': 'Izvorna bilješka',
+  'translation.modal.sourcePath': 'Izvor: {path}',
+  'translation.modal.otherNote':
+    'Ovaj pregled pripada drugoj bilješci. Kopirajte ga ili odbacite, a zatim pokrenite Prevedi bilješku u željenoj bilješci.',
   'translation.modal.previewAria': 'Pregled prijevoda',
   'translation.modal.readAloud': 'Pročitaj prijevod naglas na jeziku {language}',
   'translation.modal.preparing': 'Priprema lokalnog prijevoda…',
