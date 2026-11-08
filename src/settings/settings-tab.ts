@@ -30,6 +30,7 @@ import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
 import { changeHardwareAcceleration } from './hardware-acceleration-action';
 import { renderHardwareAccelerationSetting } from './hardware-acceleration-setting';
+import { renderLlmProviderSettings } from './llm-provider-settings-section';
 import { renderMediaToolSetting } from './media-tool-setting';
 import { renderMicrophonePicker } from './microphone-picker';
 import { renderModelSection } from './model-settings-section';
@@ -83,6 +84,7 @@ interface SettingsTabDependencies {
   logger?: PluginLogger | undefined;
   modelInstallManager: ModelInstallManager;
   openModelPicker: (options?: ModelPickerOptions) => Promise<void>;
+  openLlmSidebar: () => Promise<void>;
   openSetupWizard: () => Promise<void>;
   sidecarVersion: string;
   resolvePluginDirectory: () => Promise<string>;
@@ -485,6 +487,10 @@ export class LocalSttSettingTab extends PluginSettingTab {
         this.refreshSettingsTab();
       });
     });
+
+    if (settings.llmFeaturesEnabled) {
+      renderLlmProviderSettings(llmCard, () => void this.dependencies.openLlmSidebar());
+    }
 
     new Setting(llmCard)
       .setName(t('settings.llm.restoreDefaults.name'))
