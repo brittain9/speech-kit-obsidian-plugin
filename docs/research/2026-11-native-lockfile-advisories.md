@@ -1,0 +1,9 @@
+# Native lockfile advisory review — 2026-11-08
+
+Update `webpki-roots` from 1.0.7 to 1.0.11 and `quinn-proto` from 0.11.15 to 0.11.19. Both resolve within the existing dependency requirements and Rust 1.94.1 toolchain. No direct dependency or feature changes.
+
+[RUSTSEC-2026-0381](https://rustsec.org/advisories/RUSTSEC-2026-0381.html) reports that older `webpki-roots` versions can trust certificate paths through distrusted emSign intermediates with known private keys. The fix starts at 1.0.10. The sidecar's selected dependency graph includes `webpki-roots` through `reqwest` and `hyper-rustls`; `ort-sys` also uses it through build-time `ureq`. This is an active dependency, though the advisory alone does not establish a specific exploit against this application.
+
+The lockfile also contained `quinn-proto` 0.11.15. Five RustSec denial-of-service advisories apply to that version: [0338](https://rustsec.org/advisories/RUSTSEC-2026-0338.html), [0339](https://rustsec.org/advisories/RUSTSEC-2026-0339.html), [0340](https://rustsec.org/advisories/RUSTSEC-2026-0340.html), [0341](https://rustsec.org/advisories/RUSTSEC-2026-0341.html), and [0342](https://rustsec.org/advisories/RUSTSEC-2026-0342.html). All are fixed by 0.11.18 or later. `cargo tree --target all --all-features -i quinn-proto` found no active path for the package's selected features on any target. The lockfile update removes the affected version without asserting that the shipped sidecar used QUIC.
+
+OSV-Scanner 2.7.0 scanned `native/Cargo.lock` and `package-lock.json`. Before the update it reported those six RustSec advisories. After the update it reported no findings. A clean result covers known OSV records for the scanned lockfiles; it is not a complete security audit. GitHub reported no open Dependabot or code-scanning alerts during the same review, which shows why those alerts alone did not cover this finding.
