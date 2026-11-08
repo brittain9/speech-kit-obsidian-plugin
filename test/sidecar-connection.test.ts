@@ -13,6 +13,7 @@ import {
 } from '../src/sidecar/protocol';
 import { SidecarConnection, type SidecarError } from '../src/sidecar/sidecar-connection';
 import type { ResolveSidecarLaunchSpec } from '../src/sidecar/sidecar-process';
+import { translateWithHyMt } from '../src/translation/hy-mt-client';
 
 interface SidecarProcessHandlers {
   onExit: (code: number | null, signal: NodeJS.Signals | null) => void;
@@ -196,6 +197,50 @@ afterEach(() => {
 });
 
 describe('SidecarConnection', () => {
+  it('does not start a translation cancelled while the sidecar is starting', async () => {
+    const { connection, process } = createHarness();
+    await process.start();
+    let finishStartup!: () => void;
+    vi.spyOn(connection, 'ensureStarted').mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishStartup = resolve;
+        }),
+    );
+    const originalStart = connection.startTranslation.bind(connection);
+    let pendingStart!: Promise<void>;
+    vi.spyOn(connection, 'startTranslation').mockImplementation((...args) => {
+      pendingStart = originalStart(...args);
+      return pendingStart;
+    });
+    const abort = new AbortController();
+    const translation = translateWithHyMt({
+      accelerationPreference: 'auto',
+      modelSelection: {
+        kind: 'catalog_model',
+        runtimeId: 'llama_cpp',
+        familyId: 'tencent_hy_mt',
+        modelId: 'model',
+      },
+      onProgress: vi.fn(),
+      onReady: vi.fn(),
+      sidecarConnection: connection,
+      signal: abort.signal,
+      sourceLanguage: 'en',
+      targetLanguage: 'es',
+      texts: ['Hello'],
+      translationId: 'cancelled',
+    });
+    const cancelled = expect(translation).rejects.toMatchObject({ name: 'AbortError' });
+    abort.abort();
+    await cancelled;
+    finishStartup();
+    await pendingStart.catch(() => {});
+    expect(process.writtenFrames.map(readJsonPayload)).not.toContainEqual(
+      expect.objectContaining({ type: 'start_translation', translationId: 'cancelled' }),
+    );
+  });
+
   it('resolves a waiter only after the matching correlated event arrives', async () => {
     const { connection, process } = createHarness();
 

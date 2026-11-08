@@ -34,6 +34,7 @@ describe('translateWithHyMt', () => {
 
     expect(startTranslation).toHaveBeenCalledWith(
       expect.not.objectContaining({ styleInstruction: expect.anything() }),
+      expect.any(AbortSignal),
     );
 
     listener?.({
@@ -84,6 +85,7 @@ describe('translateWithHyMt', () => {
       expect.objectContaining({
         styleInstruction: 'Use a formal register appropriate to the target language.',
       }),
+      expect.any(AbortSignal),
     );
     listener?.({
       translations: ['Traduzca esto.'],
@@ -124,7 +126,10 @@ describe('translateWithHyMt', () => {
     });
 
     await vi.waitFor(() =>
-      expect(startTranslation).toHaveBeenCalledExactlyOnceWith(expect.anything()),
+      expect(startTranslation).toHaveBeenCalledExactlyOnceWith(
+        expect.anything(),
+        expect.any(AbortSignal),
+      ),
     );
     listener?.({
       code: 'sidecar_exited',
