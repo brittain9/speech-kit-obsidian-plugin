@@ -499,9 +499,9 @@
       "languageTags": ["en"],
       "uxTags": ["fast", "lightweight", "cpu"],
       "licenseLabel": "MIT",
-      "licenseUrl": "https://github.com/moonshine-ai/moonshine/blob/main/LICENSE",
-      "sourceUrl": "https://github.com/moonshine-ai/moonshine",
-      "modelCardUrl": "https://huggingface.co/UsefulSensors/moonshine-streaming-tiny",
+      "licenseUrl": "https://github.com/moonshine-ai/moonshine/blob/d8d8fa29d05ca67441a7719e70099f9f48917a93/LICENSE",
+      "sourceUrl": "https://huggingface.co/moonshine-ai/moonshine-voice-assets/tree/015f7269048251aff164cb60df02bfea76884c8f/model/tiny-streaming-en/quantized_26_07_30",
+      "modelCardUrl": "https://huggingface.co/moonshine-ai/moonshine-streaming-tiny",
       "notes": [
         "English-only model for live, streaming dictation.",
         "Quantized (int8) precision; the first choice for low-end hardware."
@@ -512,52 +512,52 @@
           "role": "transcription_model",
           "required": true,
           "filename": "frontend.ort",
-          "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized/frontend.ort",
-          "sha256": "bbdf5edb120cb3df1adf9ebc07c35136539b007a7047fd148c6f2960fc56fcf1",
-          "sizeBytes": 8324600
+          "downloadUrl": "https://huggingface.co/moonshine-ai/moonshine-voice-assets/resolve/015f7269048251aff164cb60df02bfea76884c8f/model/tiny-streaming-en/quantized_26_07_30/frontend.ort",
+          "sha256": "271a563251f11e6311949530f8025ed4d345c5d69d4ac1efa74093779927d636",
+          "sizeBytes": 8324920
         },
         {
           "artifactId": "encoder",
           "role": "supporting_file",
           "required": true,
           "filename": "encoder.ort",
-          "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized/encoder.ort",
-          "sha256": "96dde726be90c4429f3bc458d04e3ea5bd1818a5fdcd0152edf4c07b8e405c07",
-          "sizeBytes": 7569200
+          "downloadUrl": "https://huggingface.co/moonshine-ai/moonshine-voice-assets/resolve/015f7269048251aff164cb60df02bfea76884c8f/model/tiny-streaming-en/quantized_26_07_30/encoder.ort",
+          "sha256": "a8414e1a5dedf9f2093d7680601dd8a9b0433e7020260eafe0e370ead91134ca",
+          "sizeBytes": 7675440
         },
         {
           "artifactId": "adapter",
           "role": "supporting_file",
           "required": true,
           "filename": "adapter.ort",
-          "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized/adapter.ort",
-          "sha256": "df13e655b29d279911fcb42d8b91b0e655b8fe32b7ba1f463ece663ce55ae6eb",
-          "sizeBytes": 1319440
+          "downloadUrl": "https://huggingface.co/moonshine-ai/moonshine-voice-assets/resolve/015f7269048251aff164cb60df02bfea76884c8f/model/tiny-streaming-en/quantized_26_07_30/adapter.ort",
+          "sha256": "22ecc949e146c49667fda28d102d4e30749a107dc88a396292aa8f277ef1347c",
+          "sizeBytes": 1319664
         },
         {
           "artifactId": "cross_kv",
           "role": "supporting_file",
           "required": true,
           "filename": "cross_kv.ort",
-          "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized/cross_kv.ort",
-          "sha256": "5acfca68f7bb068c68c1960b54e215995ba07ee46b61645b78bff010a14e5a92",
-          "sizeBytes": 1264384
+          "downloadUrl": "https://huggingface.co/moonshine-ai/moonshine-voice-assets/resolve/015f7269048251aff164cb60df02bfea76884c8f/model/tiny-streaming-en/quantized_26_07_30/cross_kv.ort",
+          "sha256": "143a36667b8d05fd9d04e8c337b7ee121f37ef299aea6b3d82bdb3d3401950b4",
+          "sizeBytes": 1287544
         },
         {
           "artifactId": "decoder_kv",
           "role": "supporting_file",
           "required": true,
           "filename": "decoder_kv.ort",
-          "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized/decoder_kv.ort",
-          "sha256": "6e3828f1db4b634bc525cb8ba1f0b628ec56059168f0336ad060891c7c1c9154",
-          "sizeBytes": 32403688
+          "downloadUrl": "https://huggingface.co/moonshine-ai/moonshine-voice-assets/resolve/015f7269048251aff164cb60df02bfea76884c8f/model/tiny-streaming-en/quantized_26_07_30/decoder_kv.ort",
+          "sha256": "8852553f312adb6c9aa4d17418015049b30f412209ee569d336548c0044627de",
+          "sizeBytes": 32583720
         },
         {
           "artifactId": "streaming_config",
           "role": "supporting_file",
           "required": true,
           "filename": "streaming_config.json",
-          "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized/streaming_config.json",
+          "downloadUrl": "https://huggingface.co/moonshine-ai/moonshine-voice-assets/resolve/015f7269048251aff164cb60df02bfea76884c8f/model/tiny-streaming-en/quantized_26_07_30/streaming_config.json",
           "sha256": "74fe5ddebd63b17caf59e8a3b18c17547ff7bce1642050edbb1c3962674f8950",
           "sizeBytes": 509
         },
@@ -566,7 +566,7 @@
           "role": "supporting_file",
           "required": true,
           "filename": "tokenizer.bin",
-          "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized/tokenizer.bin",
+          "downloadUrl": "https://huggingface.co/moonshine-ai/moonshine-voice-assets/resolve/015f7269048251aff164cb60df02bfea76884c8f/model/tiny-streaming-en/quantized_26_07_30/tokenizer.bin",
           "sha256": "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d",
           "sizeBytes": 249974
         }

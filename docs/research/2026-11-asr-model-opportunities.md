@@ -1,6 +1,6 @@
 # Practical ASR model opportunities, 2026-11-08
 
-Validate corrected English Moonshine Tiny first. It serves daily live dictation through the existing adapter. Multilingual Whisper Small and Whisper Turbo Q5_0 are the next two low-cost options. Do not add a new runtime for this maintenance run. All candidates below are **proposed**, unless a later validation entry states otherwise.
+The corrected English Moonshine Tiny export is implemented in this branch and validated through a fresh managed install and real streaming inference. It improves the small public-fixture sample at nearly unchanged download cost. [Local measurements and limits](../quality/2026-11-08-moonshine-tiny-refresh.md). Multilingual Whisper Small and Whisper Turbo Q5_0 are the next two low-cost options. Do not add a new runtime for this maintenance run. All other candidates below remain **proposed**.
 
 Research baseline: `db75b7e`; catalog version 9. No weights were downloaded, converted, loaded, or benchmarked during this research pass. Remote reads covered source, model metadata, two small configs, two tokenizers, and bounded availability checks. No personal vault was accessed.
 
@@ -8,13 +8,13 @@ Research baseline: `db75b7e`; catalog version 9. No weights were downloaded, con
 
 The catalog already has five Whisper variants, three English streaming Moonshine variants, multilingual Nemotron 3.5 ASR 560 ms, and three English Cohere Transcribe variants. German already works through Whisper Turbo and Nemotron. Adding German is therefore a resource/latency choice, not first German support. Current model-file totals are:
 
-| Existing family | Download bytes | Relevant behavior |
-| --- | ---: | --- |
-| Whisper Tiny/Base/Small/Medium English | 43,550,795 / 81,781,811 / 190,098,681 / 539,225,533 | Batch; CPU, Metal, or packaged CUDA path |
-| Whisper Large V3 Turbo Q8_0 | 874,188,075 | Batch; ten product languages; segment/word timing |
-| Moonshine Tiny/Small/Medium English | 51,131,795 / 164,689,974 / 303,329,727 | Streaming; CPU |
-| Nemotron 3.5 ASR 560 ms INT8 | 682,215,356 | Streaming; nine catalog language tags; CPU |
-| Cohere FP16/INT8/Q4 | 4,133,550,259 / 3,069,676,797 / 2,127,668,654 | English batch; CPU |
+| Existing family                        |                                      Download bytes | Relevant behavior                                 |
+| -------------------------------------- | --------------------------------------------------: | ------------------------------------------------- |
+| Whisper Tiny/Base/Small/Medium English | 43,550,795 / 81,781,811 / 190,098,681 / 539,225,533 | Batch; CPU, Metal, or packaged CUDA path          |
+| Whisper Large V3 Turbo Q8_0            |                                         874,188,075 | Batch; ten product languages; segment/word timing |
+| Moonshine Tiny/Small/Medium English    |              51,131,795 / 164,689,974 / 303,329,727 | Streaming; CPU                                    |
+| Nemotron 3.5 ASR 560 ms INT8           |                                         682,215,356 | Streaming; nine catalog language tags; CPU        |
+| Cohere FP16/INT8/Q4                    |       4,133,550,259 / 3,069,676,797 / 2,127,668,654 | English batch; CPU                                |
 
 Sources: [catalog](../../native/catalog.json), [Whisper adapter](../../native/src/adapters/whisper.rs), [Moonshine adapter](../../native/src/adapters/moonshine.rs), [Nemotron adapter](../../native/src/adapters/nemotron_asr.rs), and [CPU-only ONNX runtime](../../native/src/runtimes/onnx.rs). The Nemotron description says eight languages, but its tags/prompt table include Croatian as the ninth. This is a copy inconsistency, not a missing language.
 
@@ -24,16 +24,16 @@ The native dependencies are `whisper-rs 0.16.0` / `whisper-rs-sys 0.15.0` and `o
 
 Ranking favors live dictation, modest downloads, and reuse of working execution paths. Memory descriptions are planning estimates, not measured RSS. Quantized file size excludes runtime tensors, caches, and dequantized weights. No battery or accuracy improvement is established for Speech Kit.
 
-| Rank | Candidate and user benefit | Integration class | Recommendation |
-| --- | --- | --- | --- |
-| 1 | Corrected English Moonshine Tiny, July 30 monolithic export: possible accuracy gain at nearly unchanged resource cost | Catalog-only candidate; existing graph family | Validate now against current Tiny |
-| 2 | Multilingual Whisper Small Q5_1: smaller multilingual batch option than Turbo; optional Base Q5_1 for constrained machines | Catalog-only candidate | Validate Small in English and German; defer Base unless needed |
-| 3 | Whisper Turbo Q5_0: 300,146,880 fewer download bytes than current Q8_0 | Catalog-only candidate | Validate if download/memory saving matters; no speed claim |
-| 4 | German/Spanish streaming Moonshine Tiny or Small: compact live alternatives to Nemotron | Small adapter within existing ONNX runtime | Next useful feature; validate one language/model first |
-| 5 | primeLine German Whisper Turbo fine-tune: targeted German quality candidate | Offline conversion, then existing Whisper adapter | Defer until German fixtures show a need |
-| 6 | Nemotron 80 ms INT8: lower encoder chunk latency than current 560 ms | Small adapter; new validated shape profile | Defer until measured live delay identifies a need |
-| 7 | Parakeet TDT 0.6B v3 INT8 ONNX: multilingual batch and token timing opportunity | New family adapter within ONNX runtime | Defer; overlaps existing Nemotron/Turbo |
-| 8 | Qwen3-ASR 0.6B GGUF: broader language/dialect coverage | New audio architecture/helper integration | Separate architectural work; not a catalog addition |
+| Rank | Candidate and user benefit                                                                                                 | Integration class                                 | Recommendation                                                 |
+| ---- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------- |
+| 1    | Corrected English Moonshine Tiny, July 30 monolithic export: possible accuracy gain at nearly unchanged resource cost      | Catalog-only candidate; existing graph family     | Validate now against current Tiny                              |
+| 2    | Multilingual Whisper Small Q5_1: smaller multilingual batch option than Turbo; optional Base Q5_1 for constrained machines | Catalog-only candidate                            | Validate Small in English and German; defer Base unless needed |
+| 3    | Whisper Turbo Q5_0: 300,146,880 fewer download bytes than current Q8_0                                                     | Catalog-only candidate                            | Validate if download/memory saving matters; no speed claim     |
+| 4    | German/Spanish streaming Moonshine Tiny or Small: compact live alternatives to Nemotron                                    | Small adapter within existing ONNX runtime        | Next useful feature; validate one language/model first         |
+| 5    | primeLine German Whisper Turbo fine-tune: targeted German quality candidate                                                | Offline conversion, then existing Whisper adapter | Defer until German fixtures show a need                        |
+| 6    | Nemotron 80 ms INT8: lower encoder chunk latency than current 560 ms                                                       | Small adapter; new validated shape profile        | Defer until measured live delay identifies a need              |
+| 7    | Parakeet TDT 0.6B v3 INT8 ONNX: multilingual batch and token timing opportunity                                            | New family adapter within ONNX runtime            | Defer; overlaps existing Nemotron/Turbo                        |
+| 8    | Qwen3-ASR 0.6B GGUF: broader language/dialect coverage                                                                     | New audio architecture/helper integration         | Separate architectural work; not a catalog addition            |
 
 ### 1. Corrected English Moonshine Tiny
 
@@ -49,10 +49,10 @@ Latest English exports use a split frontend. They are not the catalog-only choic
 
 All three files are already present at the same `ggerganov/whisper.cpp` revision used by the current catalog: `5359861c739e955e79d9a303bcbc70fb988958b1`. Each is a self-contained **GGML `.bin`**, including vocabulary; no separate tokenizer or Python runtime is required. The runtime's own download list supports these variants. MIT; retain upstream notices. [Official files](https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1), [runtime model documentation](https://github.com/ggml-org/whisper.cpp/blob/master/models/README.md), [download script](https://github.com/ggml-org/whisper.cpp/blob/master/models/download-ggml-model.sh).
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `ggml-small-q5_1.bin` | 190,085,487 | `ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb` |
-| `ggml-base-q5_1.bin` | 59,707,625 | `422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898` |
+| File                           |       Bytes | SHA-256                                                            |
+| ------------------------------ | ----------: | ------------------------------------------------------------------ |
+| `ggml-small-q5_1.bin`          | 190,085,487 | `ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb` |
+| `ggml-base-q5_1.bin`           |  59,707,625 | `422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898` |
 | `ggml-large-v3-turbo-q5_0.bin` | 574,041,195 | `394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2` |
 
 These are batch models. Whisper.cpp supports multilingual files without `.en`; Speech Kit must advertise only its ten reviewed product languages until new fixtures and language review exist. Metal/CUDA can use the existing Whisper path. No CPU/GPU speed comparison was run. Lower bit width does not prove lower latency or battery use. Expect low-GiB working sets for Small and multi-GiB for Turbo; investigate peaks above 2/4 GiB respectively. [Product language contract](../../native/src/adapters/whisper.rs), [GPU selection](../../native/src/runtimes/whisper_cpp.rs).
@@ -110,4 +110,4 @@ There is upstream snapshot drift: the inspected GitHub catalog (`d8d8fa29…`) n
 5. For German batch, test candidate 2 against installed Turbo on the checked-in German fixture plus at least two additional public utterances. Cap the added Small download at **191 MB**. Its success does not validate all ten languages. Candidate 3 needs another **575 MB** only after the first result identifies a reason.
 6. For multilingual Moonshine, first implement split-frontend and language-reporting tests. Cap German Tiny validation at **33 MB**, run English rejection/selection plus German streaming, and compare to installed Nemotron. Do not download the whole language family. Full native Obsidian QA remains a distinct step owned by the run's UI coordinator.
 
-No candidate is currently implemented or locally quality-validated by this report. No release, tag, version bump, training, or paid infrastructure was created.
+Candidate 1 is now implemented and locally validated; see the linked validation report. Candidates 2–8 remain proposed. No release, tag, version bump, training, or paid infrastructure was created.
