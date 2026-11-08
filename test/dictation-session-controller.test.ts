@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AudioCaptureStream } from '../src/audio/audio-capture-stream';
 import { formatMicrophonePermissionDeniedMessage } from '../src/audio/microphone-permission-message';
 import type { MicrophoneRecordingLike } from '../src/audio/microphone-recording';
 import {
@@ -25,6 +26,10 @@ import {
 } from '../src/sidecar/sidecar-lifecycle-gate';
 import type { TranscriptRenderOptions } from '../src/transcript/renderer';
 import { createFakeLlmRouter, createUserPreset } from './fixtures/llm';
+
+vi.mock('../src/audio/pcm-recorder-worklet-source', () => ({
+  PCM_RECORDER_WORKLET_SOURCE: 'registerProcessor("pcm-recorder", class {});',
+}));
 
 class FakeCaptureStream {
   public capturing = false;
@@ -173,6 +178,158 @@ class FakeAudioLevelMeter {
 }
 
 describe('DictationSessionController', () => {
+  it('keeps a restarted session listening when an old startup failure finishes cleanup', async () => {
+    const track = () => ({
+      stop: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      readyState: 'live',
+    });
+    const getUserMedia = vi.fn(async () => {
+      const current = track();
+      return {
+        getTracks: () => [current],
+        getAudioTracks: () => [current],
+      } as unknown as MediaStream;
+    });
+    let finishOldClose!: () => void;
+    class AudioNodeFake {
+      connect() {}
+      disconnect() {}
+    }
+    class ContextFake {
+      static count = 0;
+      readonly first = ContextFake.count++ === 0;
+      audioWorklet = {
+        addModule: async () => {
+          if (this.first) throw new Error('worklet failed');
+        },
+      };
+      destination = new AudioNodeFake();
+      state = 'running';
+      createMediaStreamSource() {
+        return new AudioNodeFake();
+      }
+      createGain() {
+        return Object.assign(new AudioNodeFake(), { gain: { value: 1 } });
+      }
+      async resume() {}
+      async close() {
+        if (this.first)
+          await new Promise<void>((resolve) => {
+            finishOldClose = resolve;
+          });
+        this.state = 'closed';
+      }
+    }
+    class WorkletFake extends AudioNodeFake {
+      port = { onmessage: null };
+    }
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    vi.stubGlobal('AudioContext', ContextFake);
+    vi.stubGlobal('AudioWorkletNode', WorkletFake);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:recorder');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    try {
+      const sidecarConnection = new FakeSidecarConnection();
+      const feedback = { show: vi.fn() };
+      const controller = createController({
+        captureStream: new AudioCaptureStream({}),
+        sidecarConnection,
+        feedback,
+      });
+      const oldStart = controller.startDictation();
+      await vi.waitFor(() => expect(finishOldClose).toBeDefined());
+      const oldSessionId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId;
+      await controller.stopDictation();
+      await controller.startDictation();
+      expect(controller.getState()).toBe('listening');
+      finishOldClose();
+      await oldStart;
+
+      expect(controller.getState()).toBe('listening');
+      expect(sidecarConnection.cancelSession).not.toHaveBeenCalledWith(oldSessionId);
+      expect(feedback.show).not.toHaveBeenCalled();
+      await controller.stopDictation();
+    } finally {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps a restarted session listening when an old microphone request resolves', async () => {
+    const oldTrack = {
+      stop: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      readyState: 'live',
+    };
+    const newTrack = {
+      stop: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      readyState: 'live',
+    };
+    const stream = (track: typeof oldTrack) =>
+      ({ getTracks: () => [track], getAudioTracks: () => [track] }) as unknown as MediaStream;
+    let grantOldRequest!: (value: MediaStream) => void;
+    const getUserMedia = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<MediaStream>((resolve) => {
+            grantOldRequest = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(stream(newTrack));
+    class AudioNodeFake {
+      connect() {}
+      disconnect() {}
+    }
+    class ContextFake {
+      audioWorklet = { addModule: async () => {} };
+      destination = new AudioNodeFake();
+      state = 'running';
+      createMediaStreamSource() {
+        return new AudioNodeFake();
+      }
+      createGain() {
+        return Object.assign(new AudioNodeFake(), { gain: { value: 1 } });
+      }
+      async resume() {}
+      async close() {
+        this.state = 'closed';
+      }
+    }
+    class WorkletFake extends AudioNodeFake {
+      port = { onmessage: null };
+    }
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    vi.stubGlobal('AudioContext', ContextFake);
+    vi.stubGlobal('AudioWorkletNode', WorkletFake);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:recorder');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    try {
+      const captureStream = new AudioCaptureStream({});
+      const controller = createController({ captureStream });
+      const oldStart = controller.startDictation();
+      await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+      await controller.stopDictation();
+      await controller.startDictation();
+      expect(controller.getState()).toBe('listening');
+      grantOldRequest(stream(oldTrack));
+      await oldStart;
+
+      expect(oldTrack.stop).toHaveBeenCalledOnce();
+      expect(newTrack.stop).not.toHaveBeenCalled();
+      expect(controller.getState()).toBe('listening');
+      expect(captureStream.isCapturing()).toBe(true);
+      await controller.stopDictation();
+    } finally {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
+  });
   it('refuses microphone dictation while a local audio file is being transcribed', async () => {
     const sidecarConnection = new FakeSidecarConnection();
     const captureStream = new FakeCaptureStream();
@@ -3604,7 +3761,7 @@ function createController({
   stopConflictingSpeech = vi.fn(),
 }: {
   audioLevelMeter?: FakeAudioLevelMeter;
-  captureStream?: FakeCaptureStream;
+  captureStream?: FakeCaptureStream | AudioCaptureStream;
   createMicrophoneRecording?: (
     sourcePath: string,
     onSaved: (link: string) => void,
