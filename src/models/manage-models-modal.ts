@@ -7,7 +7,7 @@ import {
   formatCatalogLanguageLabel,
 } from '../language/dictation-language';
 import { formatBytes, formatVoiceLabel } from '../shared/format-utils';
-import { t } from '../shared/i18n';
+import { t, tPlural } from '../shared/i18n';
 import type { UserFeedback } from '../shared/user-feedback';
 import { SidecarLifecycleConflictError } from '../sidecar/sidecar-lifecycle-gate';
 import { ConfirmModal } from '../ui/confirm-modal';
@@ -31,7 +31,6 @@ import {
   type ModelFamilyId,
   matchesModelTriple,
   type RuntimeId,
-  translationSupportLanguages,
 } from './model-management-types';
 import { resolveModelPresentationPolicy } from './model-presentation-policy';
 import { deriveModelFamilyTabs, deriveModelRowStates, type ModelRowState } from './model-row-state';
@@ -81,14 +80,14 @@ export interface ModelLanguageOption {
 
 export const ALL_MODEL_LANGUAGES: ModelLanguageFilter = { kind: 'all' };
 
-const MODEL_LANGUAGE_ORDER = ['en', 'fr', 'de', 'es', 'pt', 'it', 'nl', 'ja'] as const;
+const MODEL_LANGUAGE_ORDER = ['auto', 'en', 'fr', 'de', 'es', 'pt', 'it', 'nl', 'ja'] as const;
 
 export function deriveModelLanguageOptions(
   models: readonly CatalogModelRecord[],
   task: ModelPickerTask,
 ): ModelLanguageOption[] {
   const languageTags = new Set(
-    models.filter((model) => model.task === task).flatMap(modelLanguageTags),
+    models.filter((model) => model.task === task).flatMap(modelLanguageTagsForDiscovery),
   );
   const knownTags = MODEL_LANGUAGE_ORDER.filter((tag) => languageTags.delete(tag));
   const remainingTags = [...languageTags].sort((left, right) => left.localeCompare(right));
@@ -96,27 +95,75 @@ export function deriveModelLanguageOptions(
   return [
     { code: null, filter: ALL_MODEL_LANGUAGES, label: t('models.manage.allLanguages') },
     ...[...knownTags, ...remainingTags].map((tag) => ({
-      code: tag.toUpperCase(),
+      code: tag === 'auto' ? 'AUTO' : tag.toUpperCase(),
       filter: { kind: 'language' as const, tag },
       label: modelLanguageLabel(tag),
     })),
   ];
 }
 
-type ModelLanguageCapability = Pick<
-  CatalogModelRecord,
-  'languageTags' | 'task' | 'translationSupport'
->;
-
 export function modelMatchesLanguageFilter(
-  model: ModelLanguageCapability,
+  model: Pick<
+    CatalogModelRecord,
+    'languageTags' | 'supportsAutomaticLanguageDetection' | 'task' | 'translationSupport'
+  >,
   filter: ModelLanguageFilter,
 ): boolean {
-  return filter.kind === 'all' || modelLanguageTags(model).includes(filter.tag);
+  if (filter.kind === 'all') return true;
+  if (model.task === 'stt') {
+    return filter.tag === 'auto'
+      ? model.supportsAutomaticLanguageDetection
+      : model.languageTags.includes(filter.tag);
+  }
+  if (model.task === 'translation') {
+    const support = model.translationSupport;
+    if (support?.kind === 'all_to_all') return support.languages.includes(filter.tag);
+    if (support?.kind === 'pairs') {
+      return support.pairs.some((pair) => pair.source === filter.tag || pair.target === filter.tag);
+    }
+    return false;
+  }
+  return model.languageTags.includes(filter.tag);
 }
 
-function modelLanguageTags(model: ModelLanguageCapability): readonly string[] {
-  return model.task === 'translation' ? translationSupportLanguages(model) : model.languageTags;
+export function modelLanguageTagsForDiscovery(
+  model: Pick<
+    CatalogModelRecord,
+    'languageTags' | 'supportsAutomaticLanguageDetection' | 'task' | 'translationSupport'
+  >,
+): string[] {
+  if (model.task === 'translation') {
+    const support = model.translationSupport;
+    if (support?.kind === 'all_to_all') return support.languages;
+    return (support?.pairs ?? []).flatMap((pair) => [pair.source, pair.target]);
+  }
+  return model.supportsAutomaticLanguageDetection && model.task === 'stt'
+    ? [...model.languageTags, 'auto']
+    : model.languageTags;
+}
+
+export interface TaskModelAvailability {
+  compatibleDownloads: number;
+  installed: number;
+  task: ModelPickerTask;
+}
+
+export function deriveTaskModelAvailability(
+  rows: readonly ModelRowState[],
+  languageTag: string,
+): TaskModelAvailability[] {
+  const language = { kind: 'language', tag: languageTag } as const;
+  return MODEL_PICKER_TASKS.map((task) => {
+    const taskRows = rows.filter(
+      (row) => row.model.task === task && modelMatchesLanguageFilter(row.model, language),
+    );
+    const installed = taskRows.filter((row) => row.installed).length;
+    return {
+      compatibleDownloads: taskRows.length - installed,
+      installed,
+      task,
+    };
+  });
 }
 
 interface ManageModelsModalDependencies {
@@ -191,6 +238,7 @@ function adapterTabId(key: AdapterTabKey): string {
 
 export class ManageModelsModal extends Modal {
   private actionInProgress = false;
+  private capabilityRetryPending = false;
   private readonly activeLanguages = new Map<ModelPickerTask, ModelLanguageFilter>();
   private readonly activeTabs = new Map<ModelPickerTask, AdapterTabKey>();
   private activeTask: ModelPickerTask;
@@ -336,6 +384,7 @@ export class ManageModelsModal extends Modal {
     this.releaseSubscription?.();
     this.releaseSubscription = null;
     this.actionInProgress = false;
+    this.capabilityRetryPending = false;
     this.browserEl = null;
     this.navigationEl = null;
     this.navigationSignature = '';
@@ -536,6 +585,25 @@ export class ManageModelsModal extends Modal {
   // Model list
   // -------------------------------------------------------------------------
 
+  private renderLanguageAvailability(): void {
+    const activeLanguage = this.getActiveLanguage();
+    if (this.listContainer === null || activeLanguage.kind === 'all') return;
+    const panel = this.listContainer.createDiv({ cls: 'local-stt-language-availability' });
+    panel.createEl('h3', {
+      text: t('models.manage.languageAvailabilityTitle', {
+        language: modelLanguageLabel(activeLanguage.tag),
+      }),
+    });
+    for (const availability of deriveTaskModelAvailability(
+      this.getRunnableRows(),
+      activeLanguage.tag,
+    )) {
+      panel.createEl('p', {
+        text: `${taskLabel(availability.task)}: ${formatTaskModelAvailability(availability)}`,
+      });
+    }
+  }
+
   private renderModelList(): void {
     if (this.listContainer === null) {
       return;
@@ -545,6 +613,11 @@ export class ManageModelsModal extends Modal {
     this.progressElements.clear();
 
     const state = this.deps.manager.getState();
+
+    if (state.capabilityLoadError != null || this.capabilityRetryPending) {
+      this.renderCapabilityErrorPanel(state.capabilityLoadError ?? '');
+      return;
+    }
 
     if (state.loadStatus === 'loading') {
       this.listContainer.createEl('p', { text: t('models.manage.loadingCatalog') });
@@ -558,6 +631,7 @@ export class ManageModelsModal extends Modal {
       return;
     }
 
+    this.renderLanguageAvailability();
     const activeTab = this.getActiveTab();
     if (activeTab === null) {
       this.listContainer.createEl('p', {
@@ -604,6 +678,30 @@ export class ManageModelsModal extends Modal {
     }
   }
 
+  private renderCapabilityErrorPanel(message: string): void {
+    if (this.listContainer === null) return;
+    const panel = this.listContainer.createDiv({ cls: 'local-stt-empty-panel' });
+    panel.createEl('h3', { text: t('models.manage.capabilitiesUnavailableTitle') });
+    panel.createEl('p', { text: t('models.manage.capabilitiesUnavailableDesc') });
+    const actions = panel.createDiv({ cls: 'local-stt-empty-panel__actions' });
+    const pending =
+      this.capabilityRetryPending || this.deps.manager.getState().loadStatus === 'loading';
+    const retry = actions.createEl('button', {
+      cls: 'mod-cta',
+      text: t(pending ? 'models.manage.capabilitiesChecking' : 'models.manage.capabilitiesRetry'),
+    });
+    retry.disabled = pending;
+    retry.addEventListener('click', () => {
+      if (pending) return;
+      this.capabilityRetryPending = true;
+      this.renderModelList();
+      void this.deps.manager.init();
+    });
+    if (message.length > 0) {
+      panel.createEl('p', { cls: 'local-stt-model-warning', text: message });
+    }
+  }
+
   private renderRow(row: ModelRowState, container: HTMLDivElement): void {
     container.empty();
 
@@ -642,15 +740,14 @@ export class ManageModelsModal extends Modal {
       );
       setting.setDesc(fragment);
     } else {
-      const tags = this.buildTagsFragment(row.model);
+      const tags = this.buildTagsFragment(row.model, row.installed);
       if (!supportsSelectedLanguage) {
-        tags.append(
-          document.createTextNode(
-            t('models.manage.unsupportedLanguage', {
-              language: dictationLanguageLabel(selectedLanguage),
-            }),
-          ),
-        );
+        tags.createDiv({
+          cls: 'local-stt-model-warning',
+          text: t('models.manage.unsupportedLanguage', {
+            language: dictationLanguageLabel(selectedLanguage),
+          }),
+        });
       }
       setting.setDesc(tags);
     }
@@ -921,6 +1018,7 @@ export class ManageModelsModal extends Modal {
 
   private handleStateChange(): void {
     const state = this.deps.manager.getState();
+    if (state.loadStatus !== 'loading') this.capabilityRetryPending = false;
 
     // If we're currently in the sidecar-required panel (listContainer === null)
     // or the state has just transitioned into error mode, do a full re-render
@@ -1094,18 +1192,7 @@ export class ManageModelsModal extends Modal {
   }
 
   private buildNavigationSignature(): string {
-    return this.getRunnableRows()
-      .map((row) => {
-        const { model } = row;
-        return [
-          model.runtimeId,
-          model.familyId,
-          model.modelId,
-          model.task,
-          ...modelLanguageTags(model),
-        ].join(':');
-      })
-      .join('|');
+    return buildModelNavigationSignature(this.deps.manager.getState());
   }
 
   private getRunnableRows(): ModelRowState[] {
@@ -1140,9 +1227,20 @@ export class ManageModelsModal extends Modal {
     };
   }
 
-  private buildTagsFragment(model: CatalogModelRecord): DocumentFragment {
+  private buildTagsFragment(model: CatalogModelRecord, installed: boolean): DocumentFragment {
     const frag = createFragment();
     const tagsContainer = frag.createSpan({ cls: 'local-stt-tags' });
+    tagsContainer.createSpan({
+      text: t(installed ? 'models.manage.installed' : 'models.manage.downloadable'),
+    });
+    const activeLanguage = this.getActiveLanguage();
+    if (activeLanguage.kind !== 'all') {
+      tagsContainer.createSpan({
+        text: t('models.manage.compatibleLanguage', {
+          language: modelLanguageLabel(activeLanguage.tag),
+        }),
+      });
+    }
     const policy = resolveModelPresentationPolicy(model);
 
     for (const tag of model.uxTags) {
@@ -1170,6 +1268,61 @@ export class ManageModelsModal extends Modal {
 
     return frag;
   }
+}
+
+export function buildModelNavigationSignature(state: Readonly<ModelManagerState>): string {
+  const runnableRows = deriveModelRowStates(state).filter((row) =>
+    state.compiledAdapters.some(
+      (adapter) =>
+        adapter.runtimeId === row.model.runtimeId && adapter.familyId === row.model.familyId,
+    ),
+  );
+  return JSON.stringify({
+    adapters: state.compiledAdapters.map((adapter) => {
+      const family = state.catalog.families.find(
+        (candidate) =>
+          candidate.runtimeId === adapter.runtimeId && candidate.familyId === adapter.familyId,
+      );
+      return [
+        adapter.runtimeId,
+        adapter.familyId,
+        adapter.familyCapabilities?.task ?? family?.task ?? null,
+        adapter.familyCapabilities?.supportsStreaming ?? false,
+      ];
+    }),
+    catalogVersion: state.catalog.catalogVersion,
+    models: runnableRows.map((row) => [
+      row.model.runtimeId,
+      row.model.familyId,
+      row.model.modelId,
+      row.model.task,
+      modelLanguageTagsForDiscovery(row.model),
+    ]),
+  });
+}
+
+function formatTaskModelAvailability(availability: TaskModelAvailability): string {
+  if (availability.installed + availability.compatibleDownloads === 0) {
+    return t('models.manage.languageAvailability_none');
+  }
+  const installed = tPlural(
+    availability.installed,
+    {
+      one: 'models.manage.languageAvailability_installed_one',
+      other: 'models.manage.languageAvailability_installed_other',
+    },
+    { count: availability.installed },
+  );
+  if (availability.compatibleDownloads === 0) return installed;
+  const downloads = tPlural(
+    availability.compatibleDownloads,
+    {
+      one: 'models.manage.languageAvailability_downloads_one',
+      other: 'models.manage.languageAvailability_downloads_other',
+    },
+    { count: availability.compatibleDownloads },
+  );
+  return `${installed} · ${downloads}`;
 }
 
 export function resolveTabNavigationIndex(
@@ -1206,7 +1359,9 @@ function matchesAdapterTab(left: AdapterTabKey, right: AdapterTabKey | null): bo
 }
 
 function modelLanguageLabel(tag: string): string {
-  return formatCatalogLanguageLabel(tag);
+  return tag === 'auto'
+    ? t('settings.dictationLanguage.autoDetect')
+    : formatCatalogLanguageLabel(tag);
 }
 
 function getRowKey(row: ModelRowState): string {
