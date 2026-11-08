@@ -739,7 +739,7 @@ export const en = {
   'settings.sidecar.stopBeforeUninstall':
     'Stop dictation or Read aloud before uninstalling the {sidecar}. If dictation is still processing, run "Cancel dictation" to stop it now.',
   'settings.sidecar.operationInProgress':
-    'Another speech-engine maintenance operation is in progress. Wait for it to finish, then try again.',
+    'The speech engine is busy. Wait for the current operation to finish, then try again.',
   'settings.sidecar.uninstallFailed':
     'Could not uninstall the {sidecar}. Close other setup windows and try again.',
   'settings.sidecar.uninstalled': 'Sidecar uninstalled.',

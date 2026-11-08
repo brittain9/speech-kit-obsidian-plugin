@@ -515,7 +515,7 @@ export const hr = {
   'settings.sidecar.stopBeforeUninstall':
     'Prije nego što deinstalirate {sidecar}, zaustavite diktiranje ili čitanje naglas. Ako se diktiranje još obrađuje, pokrenite „Odustani od diktiranja” da biste ga odmah zaustavili.',
   'settings.sidecar.operationInProgress':
-    'U tijeku je druga operacija održavanja govornog modula. Pričekajte da završi pa pokušajte ponovno.',
+    'Govorni modul je zauzet. Pričekajte da trenutačna operacija završi pa pokušajte ponovno.',
   'settings.sidecar.uninstallFailed':
     '{sidecar} nije moguće deinstalirati. Zatvorite ostale prozore za postavljanje i pokušajte ponovno.',
   'settings.sidecar.uninstalled': 'Sidecar je deinstaliran.',
