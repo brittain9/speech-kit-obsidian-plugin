@@ -1,3 +1,4 @@
+import { Transaction } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import type { App, EventRef, TFile } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
@@ -13,6 +14,7 @@ import type {
   RewriteResult,
   SurfaceDesynchronization,
 } from '../src/editor/note-surface';
+import { noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
 import { provisionalTranscriptExtension } from '../src/editor/provisional-transcript-extension';
 import { RawTranscriptRecovery } from '../src/editor/raw-transcript-recovery';
 import { sessionProcessingExtension } from '../src/editor/session-processing-extension';
@@ -28,6 +30,9 @@ import { transcript } from './fixtures/transcript';
 import { renderOptions, timestamps } from './helpers/render-options';
 
 class FakeSurface {
+  appendContinuation(_text: string): SurfaceDesynchronization | null {
+    return null;
+  }
   public readonly appendCalls: Array<{
     projection: TranscriptInsertProjection;
     utteranceId: string;
@@ -225,6 +230,193 @@ describe('Session', () => {
     ]);
     expect(surface.setProvisional).toHaveBeenNthCalledWith(1, 'u1', true);
     expect(surface.setProvisional).toHaveBeenNthCalledWith(2, 'u1', false);
+  });
+
+  it.each([
+    ['live words', 'Existing note live words [TYPED LIVE] https://example.com/qa'],
+    [
+      'live words and more',
+      'Existing note live words [TYPED LIVE] https://example.com/qa and more',
+    ],
+  ])('preserves edits and inserts only new speech for final %s', (finalText, expected) => {
+    const { session, view } = createRecoveryIntegrationHarness('Existing note');
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: false,
+        revision: 0,
+        text: 'live words',
+        utteranceId: 'u1',
+      }),
+    );
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.type'),
+      changes: { from: view.state.doc.length, insert: ' [TYPED LIVE] ' },
+    });
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.paste'),
+      changes: { from: view.state.doc.length, insert: 'https://example.com/qa' },
+    });
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: true,
+        revision: 1,
+        text: finalText,
+        utteranceId: 'u1',
+      }),
+    );
+    expect(view.state.doc.toString()).toBe(expected);
+    expect(session.readCurrentSessionText()).toContain(
+      finalText === 'live words' ? 'live words' : 'and more',
+    );
+    session.dispose();
+  });
+
+  it('preserves edited speech and does not guess when the final changes its prefix', () => {
+    const { session, view } = createRecoveryIntegrationHarness('Existing note');
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: false,
+        revision: 0,
+        text: 'live words',
+        utteranceId: 'u1',
+      }),
+    );
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.type'),
+      changes: { from: 19, insert: 'edited ' },
+    });
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: true,
+        revision: 1,
+        text: 'different words and more',
+        utteranceId: 'u1',
+      }),
+    );
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: true,
+        revision: 0,
+        text: 'different words and more',
+        utteranceId: 'u2',
+      }),
+    );
+    expect(view.state.doc.toString()).toBe(
+      'Existing note live edited words different words and more',
+    );
+    session.dispose();
+  });
+
+  it('does not append an older utterance suffix after a newer utterance', () => {
+    const { session, view } = createRecoveryIntegrationHarness('Existing note');
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: false,
+        revision: 0,
+        text: 'hello',
+        utteranceId: 'u1',
+      }),
+    );
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.paste'),
+      changes: { from: view.state.doc.length, insert: ' https://example.com' },
+    });
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: true,
+        revision: 0,
+        text: 'later speech',
+        utteranceId: 'u2',
+      }),
+    );
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: true,
+        revision: 1,
+        text: 'hello world',
+        utteranceId: 'u1',
+      }),
+    );
+    expect(view.state.doc.toString()).toBe('Existing note hello https://example.com later speech');
+    session.dispose();
+  });
+
+  it('includes the link and final suffix in the batch cleanup range', () => {
+    const { session, view } = createRecoveryIntegrationHarness('Existing note');
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: false,
+        revision: 0,
+        text: 'hello',
+        utteranceId: 'u1',
+      }),
+    );
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.paste'),
+      changes: { from: view.state.doc.length, insert: ' https://example.com' },
+    });
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: true,
+        revision: 1,
+        text: 'hello world',
+        utteranceId: 'u1',
+      }),
+    );
+    expect(session.readCurrentSessionText()).toBe('hello https://example.com world');
+    const result = session.replaceSessionRangeWithCleaned('cleaned');
+    expect(result.kind).toBe('replaced');
+    if (result.kind === 'replaced')
+      expect(result.recovery.rawText).toBe(' hello https://example.com world');
+    expect(view.state.doc.toString()).toBe('Existing note cleaned');
+    session.dispose();
+  });
+
+  it('uses the last visible partial when later partials arrive after a boundary edit', () => {
+    const { session, view } = createRecoveryIntegrationHarness('Existing note');
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: false,
+        revision: 0,
+        text: 'hello',
+        utteranceId: 'u1',
+      }),
+    );
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.paste'),
+      changes: { from: view.state.doc.length, insert: ' https://example.com' },
+    });
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: false,
+        revision: 1,
+        text: 'hello world',
+        utteranceId: 'u1',
+      }),
+    );
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: true,
+        revision: 2,
+        text: 'hello world today',
+        utteranceId: 'u1',
+      }),
+    );
+    expect(view.state.doc.toString()).toBe('Existing note hello https://example.com world today');
+    session.dispose();
   });
 
   it('keeps a user-edited partial latched while recording later partials and the final', () => {
@@ -1097,6 +1289,7 @@ function createRecoveryIntegrationHarness(documentText: string): {
   const view = new StateBackedEditorView(documentText, {
     extensions: [
       dictationAnchorExtension(),
+      noteSurfaceUpdateListenerExtension(),
       provisionalTranscriptExtension(),
       sessionProcessingExtension(),
     ],
