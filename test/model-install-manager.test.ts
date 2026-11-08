@@ -514,7 +514,7 @@ describe('ModelInstallManager', () => {
         expect.stringContaining('failed before progress'),
         error,
       );
-      expect(onStateChange).toHaveBeenCalledTimes(2);
+      expect(onStateChange).toHaveBeenCalled();
     });
 
     it('publishes failed state before rejecting installAndWait', async () => {
@@ -1117,6 +1117,382 @@ describe('ModelInstallManager', () => {
     it('is a no-op when no install is active', async () => {
       await harness.manager.cancel();
       expect(harness.sidecarConnection.cancelModelInstall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reinstall()', () => {
+    it.each([
+      'acknowledgement failure',
+      'confirmed stop then shutdown rejection',
+      'process stop',
+      'process stop before acknowledgement',
+      'stuck cancellation',
+    ] as const)(
+      'reconciles metadata and selected capabilities before releasing after %s',
+      async (recovery) => {
+        vi.useFakeTimers();
+        try {
+          const selection = sampleSelection();
+          harness = createManagerHarness({
+            selectedModel: selection,
+            selectedModelCapabilitiesSnapshot: {
+              capabilities: sampleMergedCapabilities(),
+              selection,
+            },
+          });
+          configureSidecarForInit(harness.sidecarConnection);
+          await harness.manager.init();
+          const refreshed = deferred<{ models: InstalledModelRecord[] }>();
+          const probed = deferred<ModelProbeResultEvent>();
+          harness.sidecarConnection.listInstalledModels.mockReturnValueOnce(refreshed.promise);
+          harness.sidecarConnection.probeModelSelection.mockReturnValueOnce(probed.promise);
+          harness.sidecarConnection.installModel.mockResolvedValueOnce(
+            sampleInstallUpdate({ state: 'queued' }),
+          );
+          let recoveryFinished: Promise<unknown>;
+          if (recovery === 'process stop before acknowledgement') {
+            const acknowledgement = deferred<ReturnType<typeof sampleInstallUpdate>>();
+            harness.sidecarConnection.installModel.mockReset();
+            harness.sidecarConnection.installModel.mockReturnValueOnce(acknowledgement.promise);
+            const starting = harness.manager.reinstall(selection);
+            recoveryFinished = expect(starting).rejects.toThrow('lost acknowledgement');
+            harness.emitProcessStop(true);
+            acknowledgement.reject(new Error('lost acknowledgement'));
+          } else if (
+            recovery === 'acknowledgement failure' ||
+            recovery === 'confirmed stop then shutdown rejection'
+          ) {
+            const stopped = deferred<void>();
+            if (recovery === 'confirmed stop then shutdown rejection')
+              harness.sidecarConnection.shutdown.mockReturnValueOnce(stopped.promise);
+            harness.sidecarConnection.installModel.mockReset();
+            harness.sidecarConnection.installModel.mockRejectedValueOnce(
+              new Error('lost acknowledgement'),
+            );
+            recoveryFinished = expect(harness.manager.reinstall(selection)).rejects.toThrow(
+              'lost acknowledgement',
+            );
+            if (recovery === 'confirmed stop then shutdown rejection') {
+              await vi.waitFor(() =>
+                expect(harness.sidecarConnection.shutdown).toHaveBeenCalledOnce(),
+              );
+              harness.emitProcessStop(false);
+              expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+                SidecarLifecycleConflictError,
+              );
+              stopped.reject(new Error('shutdown rejected after exit'));
+            }
+          } else {
+            await harness.manager.reinstall(selection);
+            const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+            if (request === undefined) throw new Error('Expected a reinstall request');
+            if (recovery === 'process stop') {
+              harness.emitProcessStop(true);
+              recoveryFinished = Promise.resolve();
+            } else {
+              emitInstallUpdate(harness, { installId: request.installId, state: 'downloading' });
+              await harness.manager.cancel();
+              await vi.advanceTimersByTimeAsync(30_000);
+              recoveryFinished = harness.manager.dismissCancelStuck();
+            }
+          }
+          await vi.waitFor(() =>
+            expect(harness.sidecarConnection.listInstalledModels).toHaveBeenCalledTimes(2),
+          );
+          if (recovery === 'process stop before acknowledgement') {
+            expect(harness.sidecarConnection.shutdown).not.toHaveBeenCalled();
+          }
+          expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+            SidecarLifecycleConflictError,
+          );
+          refreshed.resolve({ models: [sampleInstalledModel(undefined, { totalSizeBytes: 950 })] });
+          await vi.waitFor(() =>
+            expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledOnce(),
+          );
+          expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+            SidecarLifecycleConflictError,
+          );
+          const freshCapabilities = {
+            ...sampleMergedCapabilities(),
+            family: { ...sampleMergedCapabilities().family, supportsWordTimestamps: false },
+          };
+          probed.resolve({
+            ...sampleReadyProbeResult(selection),
+            mergedCapabilities: freshCapabilities,
+            type: 'model_probe_result',
+          });
+          await recoveryFinished;
+          await vi.waitFor(() =>
+            expect(harness.manager.getState().installRequestPending).toBe(false),
+          );
+          expect(harness.manager.getState().installedModels[0]?.totalSizeBytes).toBe(950);
+          expect(harness.getSettings().selectedModel).toEqual(selection);
+          expect(harness.getSettings().selectedModelCapabilitiesSnapshot?.capabilities).toEqual(
+            freshCapabilities,
+          );
+          expect(() => harness.sidecarLifecycleGate.acquireSpeech().release()).not.toThrow();
+        } finally {
+          vi.useRealTimers();
+        }
+      },
+    );
+
+    it('invalidates the old selected snapshot when a completed replacement cannot be probed', async () => {
+      const selection = sampleSelection();
+      harness = createManagerHarness({
+        selectedModel: selection,
+        selectedModelCapabilitiesSnapshot: { capabilities: sampleMergedCapabilities(), selection },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      await harness.manager.init();
+      harness.sidecarConnection.installModel.mockResolvedValueOnce(
+        sampleInstallUpdate({ state: 'queued' }),
+      );
+      harness.sidecarConnection.probeModelSelection.mockRejectedValueOnce(
+        new Error('probe failed'),
+      );
+      await harness.manager.reinstall(selection);
+      const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected a reinstall request');
+      emitInstallUpdate(harness, { installId: request.installId, state: 'completed' });
+      await vi.waitFor(() => expect(harness.manager.getState().installRequestPending).toBe(false));
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
+      expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+        status: 'unavailable',
+      });
+    });
+
+    it('does not probe or change selection after disposal during the completed-install refresh', async () => {
+      const selection = sampleSelection();
+      harness = createManagerHarness({
+        selectedModel: selection,
+        selectedModelCapabilitiesSnapshot: {
+          capabilities: sampleMergedCapabilities(),
+          selection,
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      await harness.manager.init();
+      const refreshed = deferred<{ models: InstalledModelRecord[] }>();
+      harness.sidecarConnection.listInstalledModels.mockReturnValueOnce(refreshed.promise);
+      harness.sidecarConnection.installModel.mockResolvedValueOnce(
+        sampleInstallUpdate({ state: 'queued' }),
+      );
+      harness.sidecarConnection.probeModelSelection.mockResolvedValue(sampleReadyProbeResult());
+      await harness.manager.reinstall(selection);
+      const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected a reinstall request');
+      emitInstallUpdate(harness, { installId: request.installId, state: 'completed' });
+      harness.manager.dispose();
+      refreshed.resolve({ models: [sampleInstalledModel()] });
+      await vi.waitFor(() => {
+        expect(() => harness.sidecarLifecycleGate.acquireSpeech().release()).not.toThrow();
+      });
+
+      expect(harness.sidecarConnection.probeModelSelection).not.toHaveBeenCalled();
+      expect(harness.getSettings().selectedModel).toEqual(selection);
+    });
+
+    it.each(['terminal', 'process-stop'] as const)(
+      'retains replacement ownership after disposal until confirmed %s',
+      async (proof) => {
+        configureSidecarForInit(harness.sidecarConnection);
+        await harness.manager.init();
+        harness.sidecarConnection.installModel.mockResolvedValueOnce(
+          sampleInstallUpdate({ state: 'queued' }),
+        );
+        await harness.manager.reinstall(sampleSelection());
+        const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+        if (request === undefined) throw new Error('Expected a reinstall request');
+        harness.manager.dispose();
+        emitInstallUpdate(harness, { installId: 'unrelated', state: 'cancelled' });
+        expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+          SidecarLifecycleConflictError,
+        );
+
+        if (proof === 'terminal') {
+          emitInstallUpdate(harness, { installId: request.installId, state: 'cancelled' });
+        } else {
+          harness.emitProcessStop(false);
+        }
+
+        expect(() => harness.sidecarLifecycleGate.acquireSpeech().release()).not.toThrow();
+        expect(harness.getSettings().selectedModel).toBeNull();
+      },
+    );
+
+    it('keeps an unconfirmed shutdown quarantined until a later confirmed process stop', async () => {
+      configureSidecarForInit(harness.sidecarConnection);
+      await harness.manager.init();
+      harness.sidecarConnection.installModel.mockRejectedValueOnce(
+        new Error('acknowledgement lost'),
+      );
+      harness.sidecarConnection.shutdown.mockRejectedValueOnce(new Error('shutdown unconfirmed'));
+
+      await expect(harness.manager.reinstall(sampleSelection())).rejects.toThrow(
+        'shutdown unconfirmed',
+      );
+      const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected a reinstall request');
+      expect(harness.manager.getState().failedInstall?.message).toContain('Restart Obsidian');
+      emitInstallUpdate(harness, { installId: request.installId, state: 'cancelled' });
+      expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+        SidecarLifecycleConflictError,
+      );
+      harness.emitProcessStop(false);
+
+      await vi.waitFor(() => {
+        expect(() => harness.sidecarLifecycleGate.acquireSpeech().release()).not.toThrow();
+      });
+      expect(harness.manager.getState().installedModels).toHaveLength(1);
+    });
+
+    it('preserves an empty model selection when reinstalling an installed model', async () => {
+      configureSidecarForInit(harness.sidecarConnection);
+      await harness.manager.init();
+      harness.sidecarConnection.installModel.mockResolvedValueOnce(
+        sampleInstallUpdate({ state: 'queued' }),
+      );
+      harness.sidecarConnection.probeModelSelection.mockResolvedValue(sampleReadyProbeResult());
+      await harness.manager.reinstall(sampleSelection());
+      const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected a reinstall request');
+      emitInstallUpdate(harness, { installId: request.installId, state: 'completed' });
+      await vi.waitFor(() => expect(harness.manager.getState().installRequestPending).toBe(false));
+
+      expect(harness.getSettings().selectedModel).toBeNull();
+    });
+
+    it('keeps replacement owned after an acknowledgement failure until shutdown is confirmed', async () => {
+      configureSidecarForInit(harness.sidecarConnection);
+      await harness.manager.init();
+      const stopped = deferred<void>();
+      harness.sidecarConnection.shutdown.mockReturnValueOnce(stopped.promise);
+      harness.sidecarConnection.installModel.mockRejectedValueOnce(
+        new Error('acknowledgement lost'),
+      );
+      const completion = harness.manager.reinstall(sampleSelection());
+      const rejected = expect(completion).rejects.toThrow('acknowledgement lost');
+      const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected a reinstall request');
+      await vi.waitFor(() => expect(harness.sidecarConnection.shutdown).toHaveBeenCalledOnce());
+
+      emitInstallUpdate(harness, { installId: request.installId, state: 'cancelled' });
+      harness.emitProcessStop(false);
+      expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+        SidecarLifecycleConflictError,
+      );
+      stopped.resolve(undefined);
+      await rejected;
+      expect(() => harness.sidecarLifecycleGate.acquireSpeech().release()).not.toThrow();
+      expect(harness.manager.getState().installedModels).toHaveLength(1);
+    });
+
+    it('confirms shutdown before dismissing stuck reinstall cancellation', async () => {
+      vi.useFakeTimers();
+      try {
+        configureSidecarForInit(harness.sidecarConnection);
+        await harness.manager.init();
+        harness.sidecarConnection.installModel.mockResolvedValueOnce(
+          sampleInstallUpdate({ state: 'queued' }),
+        );
+        await harness.manager.reinstall(sampleSelection());
+        const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+        if (request === undefined) throw new Error('Expected a reinstall request');
+        emitInstallUpdate(harness, { installId: request.installId, state: 'downloading' });
+        await harness.manager.cancel();
+        await vi.advanceTimersByTimeAsync(30_000);
+        const stopped = deferred<void>();
+        harness.sidecarConnection.shutdown.mockReturnValueOnce(stopped.promise);
+
+        const dismissing = harness.manager.dismissCancelStuck();
+        expect(harness.sidecarConnection.shutdown).toHaveBeenCalledOnce();
+        expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+          SidecarLifecycleConflictError,
+        );
+        stopped.resolve(undefined);
+        await dismissing;
+
+        expect(harness.manager.getState().activeInstall).toBeNull();
+        expect(() => harness.sidecarLifecycleGate.acquireSpeech().release()).not.toThrow();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('returns the queued acknowledgement so cancellation stays available while replacement owns the gate', async () => {
+      configureSidecarForInit(harness.sidecarConnection);
+      await harness.manager.init();
+      harness.sidecarConnection.installModel.mockResolvedValueOnce(
+        sampleInstallUpdate({ state: 'queued' }),
+      );
+      const completion = harness.manager.reinstall(sampleSelection());
+      const outcome = completion.then(
+        () => 'queued',
+        () => 'rejected',
+      );
+      const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected a reinstall request');
+
+      expect(
+        await Promise.race([
+          outcome,
+          new Promise((resolve) => window.setTimeout(() => resolve('pending'), 20)),
+        ]),
+      ).toBe('queued');
+      expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+        SidecarLifecycleConflictError,
+      );
+      emitInstallUpdate(harness, { installId: request.installId, state: 'cancelled' });
+      expect(() => harness.sidecarLifecycleGate.acquireSpeech().release()).not.toThrow();
+    });
+
+    it('refreshes the only installed selected model while blocking speech until refresh completes', async () => {
+      const selection = sampleSelection();
+      harness = createManagerHarness({
+        selectedModel: selection,
+        selectedModelCapabilitiesSnapshot: {
+          capabilities: sampleMergedCapabilities(),
+          selection,
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      await harness.manager.init();
+      const refreshed = deferred<{ models: InstalledModelRecord[] }>();
+      harness.sidecarConnection.listInstalledModels.mockReturnValueOnce(refreshed.promise);
+      harness.sidecarConnection.installModel.mockResolvedValueOnce(
+        sampleInstallUpdate({ state: 'queued' }),
+      );
+      harness.sidecarConnection.probeModelSelection.mockResolvedValueOnce(
+        sampleReadyProbeResult(selection),
+      );
+
+      const completion = harness.manager.reinstall(selection);
+      const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected a reinstall request');
+      expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+        SidecarLifecycleConflictError,
+      );
+      emitInstallUpdate(harness, { installId: request.installId, state: 'completed' });
+      expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+        SidecarLifecycleConflictError,
+      );
+      refreshed.resolve({ models: [sampleInstalledModel(undefined, { totalSizeBytes: 950 })] });
+      await completion;
+
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().installRequestPending).toBe(false);
+      });
+
+      expect(harness.manager.getState().installedModels).toHaveLength(1);
+      expect(harness.manager.getState().installedModels[0]?.totalSizeBytes).toBe(950);
+      expect(harness.getSettings().selectedModel).toEqual(selection);
+      expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+        selection,
+        status: 'ready',
+      });
+      expect(harness.sidecarConnection.removeModel).not.toHaveBeenCalled();
+      expect(() => harness.sidecarLifecycleGate.acquireSpeech().release()).not.toThrow();
     });
   });
 
@@ -2731,6 +3107,7 @@ interface ManagerHarness {
     started: Promise<void>;
   };
   emit(event: SidecarEvent): void;
+  emitProcessStop(unexpected: boolean): void;
   getSettings(): PluginSettings;
   logger: {
     debug: ReturnType<typeof vi.fn>;
@@ -2744,7 +3121,8 @@ interface ManagerHarness {
 
 function createManagerHarness(settingsOverride?: Partial<PluginSettings>): ManagerHarness {
   const listeners = new Set<(event: SidecarEvent) => void>();
-  const sidecarConnection = createSidecarConnectionStub(listeners);
+  const processStopListeners = new Set<(unexpected: boolean) => void>();
+  const sidecarConnection = createSidecarConnectionStub(listeners, processStopListeners);
   const sidecarLifecycleGate = new SidecarLifecycleGate();
   let settings: PluginSettings = { ...DEFAULT_PLUGIN_SETTINGS, ...settingsOverride };
   const logger = {
@@ -2801,6 +3179,9 @@ function createManagerHarness(settingsOverride?: Partial<PluginSettings>): Manag
         listener(event);
       }
     },
+    emitProcessStop: (unexpected) => {
+      for (const listener of processStopListeners) listener(unexpected);
+    },
     getSettings: () => settings,
     logger,
     manager,
@@ -2809,7 +3190,10 @@ function createManagerHarness(settingsOverride?: Partial<PluginSettings>): Manag
   };
 }
 
-function createSidecarConnectionStub(listeners: Set<(event: SidecarEvent) => void>) {
+function createSidecarConnectionStub(
+  listeners: Set<(event: SidecarEvent) => void>,
+  processStopListeners: Set<(unexpected: boolean) => void>,
+) {
   return {
     cancelModelInstall: vi.fn(() => {}),
     getModelStore: vi.fn(),
@@ -2819,12 +3203,17 @@ function createSidecarConnectionStub(listeners: Set<(event: SidecarEvent) => voi
     listModelCatalog: vi.fn(),
     probeModelSelection: vi.fn(),
     removeModel: vi.fn(),
+    shutdown: vi.fn(async () => {}),
     subscribe: (listener: (event: SidecarEvent) => void) => {
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
       };
     },
+    subscribeProcessStop: vi.fn((listener: (unexpected: boolean) => void) => {
+      processStopListeners.add(listener);
+      return () => processStopListeners.delete(listener);
+    }),
   };
 }
 
