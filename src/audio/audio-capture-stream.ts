@@ -30,6 +30,7 @@ export interface AudioCaptureStartOptions {
 }
 
 export class AudioCaptureStream {
+  private captureOwner: object | null = null;
   private audioContext: AudioContext | null = null;
   private frameListener: AudioFrameListener | null = null;
   private mediaStream: MediaStream | null = null;
@@ -45,7 +46,7 @@ export class AudioCaptureStream {
   constructor(private readonly options: AudioCaptureStreamOptions) {}
 
   isCapturing(): boolean {
-    return this.mediaStream !== null;
+    return this.captureOwner !== null;
   }
 
   async start(
@@ -65,18 +66,29 @@ export class AudioCaptureStream {
       throw new Error('Microphone capture is not available in this Obsidian runtime.');
     }
 
-    const { mediaStream, unavailableDeviceId } = await this.requestUserMedia(
-      mediaDevices,
-      audioInputDeviceId,
-    );
-
+    const owner = {};
+    this.captureOwner = owner;
+    let mediaStream: MediaStream | null = null;
     let audioContext: AudioContext | null = null;
+    let ownedByCapture = false;
 
     try {
+      const request = await this.requestUserMedia(mediaDevices, audioInputDeviceId, owner);
+      mediaStream = request.mediaStream;
+      if (this.captureOwner !== owner) {
+        await stopMediaStream(mediaStream);
+        return;
+      }
+      this.mediaStream = mediaStream;
+      ownedByCapture = true;
+
       const AudioContextConstructor = getAudioContextConstructor();
       audioContext = new AudioContextConstructor();
+      this.audioContext = audioContext;
       await installRecorderWorklet(audioContext, this.options.logger);
+      if (this.captureOwner !== owner) return;
       await audioContext.resume();
+      if (this.captureOwner !== owner) return;
 
       const sourceNode = audioContext.createMediaStreamSource(mediaStream);
       const recorderNode = new AudioWorkletNode(audioContext, PCM_RECORDER_WORKLET_NAME, {
@@ -113,24 +125,28 @@ export class AudioCaptureStream {
       this.muteNode = muteNode;
       this.recorderNode = recorderNode;
       this.sourceNode = sourceNode;
-      this.microphoneRecording = microphoneRecording ?? null;
       this.observeUnexpectedTrackEnd(mediaStream, sessionId);
-      if (microphoneRecording !== undefined) {
+      if (this.captureOwner === owner && microphoneRecording !== undefined) {
+        this.microphoneRecording = microphoneRecording;
         await microphoneRecording.start(mediaStream);
       }
+      if (this.captureOwner !== owner) return;
       this.options.logger?.debug('audio', 'capture started');
 
-      if (unavailableDeviceId !== null) {
-        void this.handleDeviceFallback(unavailableDeviceId);
+      if (request.unavailableDeviceId !== null) {
+        void this.handleDeviceFallback(request.unavailableDeviceId);
       }
     } catch (error) {
-      this.options.logger?.error('audio', 'failed to initialize streaming audio capture', error);
-      await stopMediaStream(mediaStream);
-
-      if (audioContext !== null) {
-        await closeAudioContext(audioContext);
+      const stillOwned = this.captureOwner === owner;
+      if (stillOwned) this.captureOwner = null;
+      if (ownedByCapture) {
+        if (stillOwned) await this.releaseCapture(false);
+      } else {
+        if (mediaStream !== null) await stopMediaStream(mediaStream);
+        if (audioContext !== null) await closeAudioContext(audioContext);
       }
-
+      if (!stillOwned) return;
+      this.options.logger?.error('audio', 'failed to initialize streaming audio capture', error);
       throw asError(error, 'Failed to initialize microphone capture.');
     }
   }
@@ -140,6 +156,7 @@ export class AudioCaptureStream {
       return;
     }
 
+    this.captureOwner = null;
     await this.releaseCapture(saveRecording);
     this.options.logger?.debug('audio', 'capture stopped');
   }
@@ -147,6 +164,7 @@ export class AudioCaptureStream {
   private async requestUserMedia(
     mediaDevices: MediaDevices,
     audioInputDeviceId: string | null | undefined,
+    owner: object,
   ): Promise<UserMediaRequest> {
     const baseConstraints: MediaTrackConstraints = {
       autoGainControl: false,
@@ -171,7 +189,7 @@ export class AudioCaptureStream {
         unavailableDeviceId: null,
       };
     } catch (error) {
-      if (!isDeviceConstraintError(error)) {
+      if (!isDeviceConstraintError(error) || this.captureOwner !== owner) {
         throw error;
       }
 
@@ -238,20 +256,18 @@ export class AudioCaptureStream {
       recorderNode.port.onmessage = null;
     }
 
-    if (microphoneRecording !== null) {
+    const recordingStop = microphoneRecording?.stop(saveRecording).catch((error: unknown) => {
+      this.options.logger?.warn('audio', 'failed to finish microphone recording', error);
+    });
+
+    try {
       try {
-        await microphoneRecording.stop(saveRecording);
-      } catch (error) {
-        this.options.logger?.warn('audio', 'failed to finish microphone recording', error);
+        if (mediaStream !== null) await stopMediaStream(mediaStream);
+      } finally {
+        if (audioContext !== null) await closeAudioContext(audioContext);
       }
-    }
-
-    if (mediaStream !== null) {
-      await stopMediaStream(mediaStream);
-    }
-
-    if (audioContext !== null) {
-      await closeAudioContext(audioContext);
+    } finally {
+      await recordingStop;
     }
   }
 

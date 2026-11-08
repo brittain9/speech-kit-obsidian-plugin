@@ -1383,7 +1383,7 @@ describe('AudioFileTranscriptionController', () => {
     );
   });
 
-  it('does not deadlock when projection rejection precedes asynchronous session_stopped', async () => {
+  it('does not deadlock when staged transcript rejection precedes session_stopped', async () => {
     let resolveCancel:
       | ((value: { reason: 'user_cancel'; sessionId: string; type: 'session_stopped' }) => void)
       | undefined;
@@ -1394,7 +1394,7 @@ describe('AudioFileTranscriptionController', () => {
           resolveCancel = resolve;
         }),
     );
-    const harness = createHarness({ sidecarConnection });
+    const harness = createHarness({ sessionStopTimeoutMs: 60_000, sidecarConnection });
     const transcribing = harness.controller.transcribe();
     await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalledOnce());
     const sessionId = sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
@@ -1402,9 +1402,9 @@ describe('AudioFileTranscriptionController', () => {
     if (sessionId === undefined || session === undefined) {
       throw new Error('Expected a projection test session.');
     }
-    session.acceptTranscript.mockReturnValueOnce({ kind: 'rejected', reason: 'surface changed' });
 
-    sidecarConnection.emit(transcriptReady(sessionId, 'rejected'));
+    sidecarConnection.emit(transcriptReady(sessionId, 'x'.repeat(16 * 1024 * 1024 + 1)));
+    expect(session.acceptTranscript).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(sidecarConnection.cancelSession).toHaveBeenCalledOnce());
     sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
     await transcribing;
