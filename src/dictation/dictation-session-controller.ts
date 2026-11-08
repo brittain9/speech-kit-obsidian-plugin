@@ -130,6 +130,7 @@ interface ManagedSession {
   llmFailureLogged: boolean;
   microphoneRecording: MicrophoneRecordingLike | null;
   microphoneRecordingLink: string | null;
+  captureStop: Promise<void> | null;
   pendingTranscriptWork: Set<Promise<void>>;
   phase: SessionPhase;
   session: ControllerSession;
@@ -477,6 +478,7 @@ export class DictationSessionController {
       llmFailureLogged: false,
       microphoneRecording: null,
       microphoneRecordingLink: null,
+      captureStop: null,
       pendingTranscriptWork: new Set(),
       phase: 'starting',
       session,
@@ -562,7 +564,7 @@ export class DictationSessionController {
               'stopping audio capture: sidecar rejected an audio frame',
               error,
             );
-            void this.cancelSession(frameSessionId);
+            void this.cancelSession(frameSessionId, true);
           }
         },
         entry.microphoneRecording ?? undefined,
@@ -605,6 +607,7 @@ export class DictationSessionController {
     try {
       this.dependencies.sidecarConnection.requestStopSession(sessionId);
     } catch (error) {
+      if (entry !== undefined) this.appendMicrophoneRecording(entry);
       this.disposeLocalSession(sessionId);
       this.handleError(FEEDBACK_FAILURES.stopDictation, error, entry);
     }
@@ -679,7 +682,7 @@ export class DictationSessionController {
     }
   }
 
-  private cancelSession(sessionId: string): Promise<void> {
+  private cancelSession(sessionId: string, saveRecording = false): Promise<void> {
     const inFlightCancellation = this.cancellationPromises.get(sessionId);
     if (inFlightCancellation !== undefined) {
       return inFlightCancellation;
@@ -696,7 +699,10 @@ export class DictationSessionController {
     entry.terminalArbitration = 'cancelled';
     entry.phase = 'cancelling';
     this.abortProviderCleanups(entry);
-    const cancellation = Promise.resolve().then(() => this.completeSessionCancellation(sessionId));
+    const captureStop = this.clearActiveSession(sessionId, saveRecording);
+    const cancellation = Promise.resolve().then(() =>
+      this.completeSessionCancellation(sessionId, captureStop),
+    );
     this.cancellationPromises.set(sessionId, cancellation);
     void cancellation.then(
       () => {
@@ -713,13 +719,18 @@ export class DictationSessionController {
     return cancellation;
   }
 
-  private async completeSessionCancellation(sessionId: string): Promise<void> {
-    await this.clearActiveSession(sessionId);
+  private async completeSessionCancellation(
+    sessionId: string,
+    captureStop: Promise<void>,
+  ): Promise<void> {
+    await captureStop;
 
     try {
       await this.dependencies.sidecarConnection.cancelSession(sessionId);
     } catch (error) {
       this.dependencies.logger?.warn('session', 'failed to cancel dictation cleanly', error);
+      const entry = this.sessions.get(sessionId);
+      if (entry !== undefined) this.appendMicrophoneRecording(entry);
       this.disposeLocalSession(sessionId);
     }
   }
@@ -732,7 +743,11 @@ export class DictationSessionController {
     this.dependencies.audioLevelMeter.clearSession(sessionId);
     this.applyUiState('idle');
     this.resetQueueTier();
-    await this.stopCaptureForTeardown(saveRecording);
+    const captureStop = this.stopCaptureForTeardown(saveRecording);
+    const entry = this.sessions.get(sessionId);
+    if (entry !== undefined) entry.captureStop = captureStop;
+    await captureStop;
+    if (entry?.captureStop === captureStop) entry.captureStop = null;
   }
 
   private async stopCaptureForTeardown(saveRecording = false): Promise<void> {
@@ -1265,6 +1280,7 @@ export class DictationSessionController {
   }
 
   private async disposeAfterPendingWork(sessionId: string, entry: ManagedSession): Promise<void> {
+    if (entry.captureStop !== null) await entry.captureStop;
     if (entry.pendingTranscriptWork.size > 0) {
       await this.drainPendingTranscriptWork(entry);
     }
@@ -1299,6 +1315,7 @@ export class DictationSessionController {
   }
 
   private async runBatchCleanup(sessionId: string, entry: ManagedSession): Promise<void> {
+    if (entry.captureStop !== null) await entry.captureStop;
     // The sidecar can emit the final transcript_ready and session_stopped in the
     // same I/O chunk, so drain in-flight per-utterance accepts before reading the
     // transcript — otherwise the batch rewrite would miss the last utterance(s).
@@ -1547,7 +1564,7 @@ export class DictationSessionController {
       this.dependencies.logger?.warn('session', rawDetail);
     }
 
-    await this.cancelSession(event.sessionId);
+    await this.cancelSession(event.sessionId, true);
   }
 
   // Queue overload is a sidecar-initiated graceful stop: capture is already
@@ -1590,7 +1607,7 @@ export class DictationSessionController {
     }
 
     entry.phase = 'stopping';
-    await this.clearActiveSession(sessionId);
+    await this.clearActiveSession(sessionId, true);
   }
 
   private maybeLogLlmStageFailure(entry: ManagedSession, message: string): void {
