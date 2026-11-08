@@ -16,6 +16,24 @@ and SHA-256 checksums, validates the model, and only then promotes the complete
 install into the model store. Use the same screen to select, update, or remove a
 Moonshine model.
 
+## Refresh an installed model
+
+Stop dictation, file transcription, translation, and Read aloud. In **Manage
+models**, select **Reinstall** on the installed Moonshine row. This also works
+when it is your only installed and selected speech model. Keep it selected;
+there is no need to install another model first.
+
+Reinstall downloads the current catalog artifacts and shows the normal download
+progress and **Cancel** control. The installed copy stays in place until the
+replacement passes verification and validation. A failure or cancellation
+before activation preserves that copy. Your model selection stays the same.
+After completion, dictate a short sentence, stop, and repeat to check both runs.
+
+If cancellation does not finish, use the offered recovery control. Speech Kit
+stops the engine and checks the installed model before allowing new speech
+work. If it cannot confirm that the engine stopped, restart Obsidian as the
+message directs.
+
 ## Behavior and limitations
 
 Moonshine writes provisional text while you speak, revises that text in place,

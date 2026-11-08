@@ -682,6 +682,28 @@ opens it in source mode. Non-empty vaults retain the normal open-note guidance.
 A target or microphone failure keeps setup open with localized recovery and does
 not mark setup complete.
 
+### Reinstalling a speech model
+
+Manage Models offers **Reinstall** for installed STT models, including the only
+selected model. `ModelInstallManager` owns a sidecar mutation lease from the
+install request through its matching terminal event and metadata/capability
+refresh. The queued acknowledgement returns promptly so Cancel remains usable.
+Other speech work cannot acquire the gate during replacement.
+
+The native installer downloads, verifies, and probes a staged copy. Before
+promotion, the transcription worker confirms that prior session teardown has
+dropped the target model. It rejects replacement if a matching session is still
+active; unrelated sessions are left intact. The existing synthesis cache
+release barrier then runs before the installer atomically promotes the copy.
+
+If the install acknowledgement or final event is lost, confirmed process exit
+establishes that writes stopped. The manager then refreshes installed metadata
+and re-probes the selected replacement before releasing its lease. An
+unavailable probe invalidates the old persisted capability snapshot. A shutdown
+that cannot be confirmed keeps the gate closed and asks for an application
+restart. Disposal keeps ownership until a correlated terminal event or confirmed
+exit, without restarting the sidecar for a closed manager.
+
 ### Listening Modes
 
 | Mode                  | Behavior                                       | Auto-stop                              |
