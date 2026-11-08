@@ -50,7 +50,7 @@ type ProjectionState =
       precedingSpeakerIndex: number | null;
       projectedText: string;
     }
-  | { kind: 'latched' }
+  | { kind: 'latched'; projectedText: string }
   | { kind: 'denied' };
 
 export type SessionAcceptResult =
@@ -88,6 +88,7 @@ export interface SessionDependencies {
 
 interface NoteSurfaceLike {
   appendProjection(utteranceId: string, projection: TranscriptInsertProjection): AppendResult;
+  appendContinuation(text: string): SurfaceDesynchronization | null;
   dispose(): void;
   getSpan(utteranceId: UtteranceId): ProjectedSpan | undefined;
   insertAfterRange(range: RewriteRange | null, text: string): boolean;
@@ -444,7 +445,11 @@ export class Session {
 
     const state = this.projectionByUtterance.get(revision.utteranceId) ?? { kind: 'unprojected' };
 
-    if (state.kind === 'latched' || state.kind === 'denied') {
+    if (state.kind === 'latched') {
+      this.appendLatchedFinal(revision, state.projectedText);
+      return;
+    }
+    if (state.kind === 'denied') {
       return;
     }
 
@@ -590,7 +595,10 @@ export class Session {
     }
 
     if (isLatchKind(result.reason.kind)) {
-      this.projectionByUtterance.set(revision.utteranceId, { kind: 'latched' });
+      this.projectionByUtterance.set(revision.utteranceId, {
+        kind: 'latched',
+        projectedText: state.projectedText,
+      });
     } else {
       this.projectionByUtterance.set(revision.utteranceId, { kind: 'denied' });
     }
@@ -598,6 +606,37 @@ export class Session {
       return;
     }
     this.dependencies.logger?.debug('session', `projection replace denied: ${result.reason.kind}`);
+    if (isLatchKind(result.reason.kind)) this.appendLatchedFinal(revision, state.projectedText);
+  }
+
+  private appendLatchedFinal(revision: TranscriptRevision, projectedText: string): void {
+    if (
+      !revision.isFinal ||
+      revision.spans.length !== 1 ||
+      this.rawSessionEntryIndexByUtterance.get(revision.utteranceId) !==
+        this.rawSessionEntries.length - 1 ||
+      !revision.text.startsWith(projectedText)
+    )
+      return;
+    const suffix = revision.text.slice(projectedText.length);
+    if (!/^\s+\S/.test(suffix)) return;
+    const span = this.surface?.getSpan(revision.utteranceId);
+    if (
+      span === undefined ||
+      this.surface?.readRange({ from: span.textStart, to: span.textEnd }) !== projectedText
+    )
+      return;
+    const failure = this.surface.appendContinuation(suffix);
+    if (failure !== null) {
+      this.handleSurfaceDesynchronization(failure);
+      return;
+    }
+    this.lastProjectionInserted = true;
+    this.recordRawSessionReplace(revision);
+    this.projectionByUtterance.set(revision.utteranceId, {
+      kind: 'latched',
+      projectedText: revision.text,
+    });
   }
 
   private registerLifecycleSubscriptions(): void {

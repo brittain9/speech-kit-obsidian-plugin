@@ -266,6 +266,18 @@ export class NoteSurface {
     return { kind: 'appended', span: cloneSpan(span) };
   }
 
+  appendContinuation(text: string): SurfaceDesynchronization | null {
+    if (this.disposed) return null;
+    const desynchronization = this.detectDesynchronization();
+    if (desynchronization !== null) return desynchronization;
+    const from = this.writingRegionTail();
+    this.view.dispatch({
+      changes: { from, insert: text },
+      effects: this.ownerAnchorEffects(from + text.length),
+    });
+    return null;
+  }
+
   replaceAnchor(
     utteranceId: UtteranceId,
     newText: string,
