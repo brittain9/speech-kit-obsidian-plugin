@@ -270,6 +270,7 @@ impl AppState {
             }
             Err(error) => {
                 events.push(Event::Error {
+                    request_id: None,
                     code: error.code.to_string(),
                     details: error.details,
                     message: error.message.to_string(),
@@ -337,17 +338,20 @@ impl AppState {
             }
             Command::GetModelStore {
                 model_store_path_override,
+                request_id,
             } => {
                 match resolve_model_store_info(model_store_path_override.as_deref()) {
                     Ok(info) => events.push(Event::ModelStore {
+                        request_id,
                         override_path: info.override_path.map(|path| path.display().to_string()),
                         path: info.path.display().to_string(),
                         using_default_path: info.using_default_path,
                     }),
-                    Err(error) => events.push(internal_error_event(
+                    Err(error) => events.push(correlated_error_event(
                         "invalid_model_store",
                         "Failed to resolve the configured model store path.",
                         Some(format!("{error:#}")),
+                        request_id,
                     )),
                 }
 
@@ -366,15 +370,17 @@ impl AppState {
             }
             Command::ListInstalledModels {
                 model_store_path_override,
+                request_id,
             } => {
                 match resolve_model_store_info(model_store_path_override.as_deref())
                     .and_then(|info| scan_installed_models(&self.catalog, &info.path))
                 {
-                    Ok(models) => events.push(Event::InstalledModels { models }),
-                    Err(error) => events.push(internal_error_event(
+                    Ok(models) => events.push(Event::InstalledModels { models, request_id }),
+                    Err(error) => events.push(correlated_error_event(
                         "invalid_model_store",
                         "Failed to scan installed models.",
                         Some(format!("{error:#}")),
+                        request_id,
                     )),
                 }
 
@@ -383,10 +389,18 @@ impl AppState {
             Command::ProbeModelSelection {
                 model_selection,
                 model_store_path_override,
+                request_id,
             } => {
-                events.push(
-                    self.build_probe_event(model_selection, model_store_path_override.as_deref()),
-                );
+                let mut event =
+                    self.build_probe_event(model_selection, model_store_path_override.as_deref());
+                if let Event::ModelProbeResult {
+                    request_id: result_id,
+                    ..
+                } = &mut event
+                {
+                    *result_id = request_id;
+                }
+                events.push(event);
                 (ControlFlow::Continue, events)
             }
             Command::RemoveModel {
@@ -848,6 +862,7 @@ impl AppState {
             } => {
                 if self.active_sessions.len() >= MAX_ACTIVE_SESSIONS {
                     events.push(Event::Error {
+                        request_id: None,
                         code: "session_capacity_exceeded".to_string(),
                         details: Some(format!("maximum active sessions: {MAX_ACTIVE_SESSIONS}")),
                         message: "Speech Kit already has the maximum number of active sessions."
@@ -859,6 +874,7 @@ impl AppState {
 
                 if self.active_sessions.contains_key(&session_id) {
                     events.push(Event::Error {
+                        request_id: None,
                         code: "session_already_exists".to_string(),
                         details: None,
                         message: "A dictation session with this id already exists.".to_string(),
@@ -869,6 +885,7 @@ impl AppState {
 
                 if diarization_max_speakers == Some(0) {
                     events.push(Event::Error {
+                        request_id: None,
                         code: "invalid_diarization_speaker_limit".to_string(),
                         details: Some(
                             "diarizationMaxSpeakers must be a positive integer".to_string(),
@@ -892,6 +909,7 @@ impl AppState {
                             .is_some_and(|adapter| adapter.capabilities().task != ModelTask::Stt)
                         {
                             events.push(Event::Error {
+                                request_id: None,
                                 code: "invalid_model_task".to_string(),
                                 details: Some(format!(
                                     "family={} task=tts",
@@ -919,6 +937,7 @@ impl AppState {
                             Ok(session) => session,
                             Err(SessionInitError::VadLoad(details)) => {
                                 events.push(Event::Error {
+                                    request_id: None,
                                     code: "vad_init_failed".to_string(),
                                     details: Some(details),
                                     message: "Failed to initialize the bundled Silero VAD."
@@ -1010,6 +1029,7 @@ impl AppState {
                         {
                             self.tear_down_session(&session_id);
                             events.push(Event::Error {
+                                request_id: None,
                                 code: error.code().to_string(),
                                 details: None,
                                 message: error.message(),
@@ -1131,6 +1151,7 @@ impl AppState {
                         resolved_model.supports_automatic_language_detection;
                 }
                 Event::ModelProbeResult {
+                    request_id: None,
                     available: true,
                     details: None,
                     display_name: Some(resolved_model.display_name),
@@ -1323,6 +1344,7 @@ impl AppState {
 
         if self.transcription_worker.send(command).is_err() {
             events.push(Event::Error {
+                request_id: None,
                 code: "internal_error".to_string(),
                 details: None,
                 message: "Failed to stream audio for local transcription.".to_string(),
@@ -1374,6 +1396,7 @@ impl AppState {
                     // looks alive to the host forever while the worker
                     // silently ignores every future command for it (#194).
                     events.push(Event::Error {
+                        request_id: None,
                         code,
                         details,
                         message,
@@ -1412,6 +1435,7 @@ impl AppState {
                 }
 
                 events.push(Event::Error {
+                    request_id: None,
                     code,
                     details,
                     message,
@@ -1531,6 +1555,7 @@ impl AppState {
                     });
             if send_result.is_err() {
                 events.push(Event::Error {
+                    request_id: None,
                     code: "internal_error".to_string(),
                     details: None,
                     message: "Failed to finalize streaming transcription.".to_string(),
@@ -1645,6 +1670,7 @@ impl AppState {
         if send_result.is_err() {
             let session_id = pending.session_id.clone();
             events.push(Event::Error {
+                request_id: None,
                 code: "internal_error".to_string(),
                 details: None,
                 message: "Failed to queue audio for local transcription.".to_string(),
@@ -1673,6 +1699,7 @@ impl AppState {
                     status,
                     ..
                 } => Box::new(Event::Error {
+                    request_id: None,
                     // A successful probe never reaches this branch: the Err
                     // path only carries Missing or Invalid statuses. Treating
                     // Ready as Invalid keeps the dispatch exhaustive without
@@ -1705,6 +1732,7 @@ impl AppState {
                 LanguageSupport::Unknown => "en (safe default)".to_string(),
             };
             return Err(Box::new(Event::Error {
+                request_id: None,
                 code: "unsupported_language".to_string(),
                 details: Some(format!(
                     "model={}, selected={language}, supported={supported}",
@@ -1729,6 +1757,7 @@ impl AppState {
         let family_id = selection.family_id();
         let probe_error = |status, message: &str, fields: ProbeErrorFields| {
             Box::new(Event::ModelProbeResult {
+                request_id: None,
                 available: false,
                 size_bytes: None,
                 runtime_id,
@@ -2028,6 +2057,7 @@ fn enter_overload_drain_if_saturated(active_session: &mut ActiveSession, events:
 
     active_session.overload_draining = true;
     events.push(Event::Error {
+            request_id: None,
         code: "utterance_queue_overload".to_string(),
         details: Some(format!(
             "queue depth reached saturation at {QUEUE_OVERLOAD_DEPTH}"
@@ -2063,6 +2093,7 @@ fn audio_level_event_if_due(
 
 fn invalid_audio_frame_event(session_id: &str, error: AudioMixerError) -> Event {
     Event::Error {
+        request_id: None,
         code: "invalid_audio_frame".to_string(),
         details: Some(format!(
             "expected {} bytes, received {}",
@@ -2139,11 +2170,29 @@ fn file_name_or_path(path: &Path) -> String {
 
 fn internal_error_event(code: &str, message: &str, details: Option<String>) -> Event {
     Event::Error {
+        request_id: None,
         code: code.to_string(),
         details,
         message: message.to_string(),
         session_id: None,
     }
+}
+
+fn correlated_error_event(
+    code: &str,
+    message: &str,
+    details: Option<String>,
+    request_id: Option<String>,
+) -> Event {
+    let mut event = internal_error_event(code, message, details);
+    if let Event::Error {
+        request_id: result_id,
+        ..
+    } = &mut event
+    {
+        *result_id = request_id;
+    }
+    event
 }
 
 fn synthesis_error_event(
@@ -2536,6 +2585,48 @@ mod tests {
     }
 
     #[test]
+    fn store_queries_echo_request_ids_for_success_and_failure() {
+        let root = temp_dir().join("correlated-model-store");
+        let path = root.display().to_string();
+        let (_, events) = test_app().handle_command(Command::GetModelStore {
+            model_store_path_override: Some(path.clone()),
+            request_id: Some("store-1".into()),
+        });
+        assert!(
+            matches!(events.as_slice(), [Event::ModelStore { request_id: Some(id), .. }] if id == "store-1")
+        );
+
+        let (_, events) = test_app().handle_command(Command::ListInstalledModels {
+            model_store_path_override: Some(path.clone()),
+            request_id: Some("list-1".into()),
+        });
+        assert!(
+            matches!(events.as_slice(), [Event::InstalledModels { request_id: Some(id), .. }] if id == "list-1")
+        );
+
+        let (_, events) = test_app().handle_command(Command::ProbeModelSelection {
+            model_selection: SelectedModel::CatalogModel {
+                runtime_id: RuntimeId::WhisperCpp,
+                family_id: ModelFamilyId::Whisper,
+                model_id: "small".into(),
+            },
+            model_store_path_override: Some(path),
+            request_id: Some("probe-1".into()),
+        });
+        assert!(
+            matches!(events.as_slice(), [Event::ModelProbeResult { request_id: Some(id), status: ModelProbeStatus::Missing, .. }] if id == "probe-1")
+        );
+
+        let (_, events) = test_app().handle_command(Command::GetModelStore {
+            model_store_path_override: Some("relative-path".into()),
+            request_id: Some("bad-store".into()),
+        });
+        assert!(
+            matches!(events.as_slice(), [Event::Error { request_id: Some(id), code, .. }] if id == "bad-store" && code == "invalid_model_store")
+        );
+    }
+
+    #[test]
     fn start_synthesis_rejects_a_dictation_catalog_model_with_a_typed_error() {
         let (_, events) = test_app().handle_command(Command::StartSynthesis {
             synthesis_id: 42,
@@ -2812,6 +2903,7 @@ mod tests {
         assert_eq!(
             events,
             vec![Event::Error {
+                request_id: None,
                 code: "system_audio_capture_failed".to_string(),
                 details: None,
                 message: "Could not start system-audio capture: device unavailable".to_string(),
@@ -2842,6 +2934,7 @@ mod tests {
         assert_eq!(
             events,
             vec![Event::Error {
+            request_id: None,
                 code: "system_audio_permission_denied".to_string(),
                 details: None,
                 message: "System-audio recording permission is off for Obsidian. Open System Settings → Privacy & Security → Screen & System Audio Recording, enable Obsidian, and try again.".to_string(),
@@ -2977,6 +3070,7 @@ mod tests {
     #[test]
     fn probe_model_selection_reports_missing_managed_model() {
         let (_, events) = test_app().handle_command(Command::ProbeModelSelection {
+            request_id: None,
             model_selection: SelectedModel::CatalogModel {
                 runtime_id: RuntimeId::WhisperCpp,
                 family_id: ModelFamilyId::Whisper,
@@ -3007,6 +3101,7 @@ mod tests {
     fn probe_model_selection_reports_ready_with_merged_capabilities() {
         let model_file_path = create_model_file();
         let (_, events) = test_app().handle_command(Command::ProbeModelSelection {
+            request_id: None,
             model_selection: SelectedModel::ExternalFile {
                 runtime_id: RuntimeId::WhisperCpp,
                 family_id: ModelFamilyId::Whisper,
@@ -3048,6 +3143,7 @@ mod tests {
         let model_file_path = create_model_file();
         let (_, events) = test_app_with_registry(Arc::new(registry)).handle_command(
             Command::ProbeModelSelection {
+                request_id: None,
                 model_selection: SelectedModel::ExternalFile {
                     runtime_id: RuntimeId::WhisperCpp,
                     family_id: ModelFamilyId::Whisper,
@@ -3084,6 +3180,7 @@ mod tests {
     #[test]
     fn probe_model_selection_reports_invalid_without_capabilities() {
         let (_, events) = test_app().handle_command(Command::ProbeModelSelection {
+            request_id: None,
             model_selection: SelectedModel::ExternalFile {
                 runtime_id: RuntimeId::WhisperCpp,
                 family_id: ModelFamilyId::Whisper,
@@ -3223,6 +3320,7 @@ mod tests {
         assert_eq!(
             events,
             vec![Event::Error {
+                request_id: None,
                 code: "vad_init_failed".to_string(),
                 details: Some("model bootstrap failed".to_string()),
                 message: "Failed to initialize the bundled Silero VAD.".to_string(),

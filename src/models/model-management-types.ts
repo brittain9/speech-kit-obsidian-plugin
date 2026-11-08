@@ -345,7 +345,8 @@ export function isSelectedModelCapabilitiesSnapshot(
   return (
     isRecord(value) &&
     isSelectedModel(value.selection) &&
-    (value.modelStorePathOverride === undefined || typeof value.modelStorePathOverride === 'string') &&
+    (value.modelStorePathOverride === undefined ||
+      typeof value.modelStorePathOverride === 'string') &&
     isEngineCapabilitiesRecord(value.capabilities)
   );
 }

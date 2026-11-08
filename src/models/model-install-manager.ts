@@ -15,9 +15,10 @@ import type {
   SystemInfoEvent,
 } from '../sidecar/protocol';
 import type { SidecarConnection } from '../sidecar/sidecar-connection';
-import type {
-  SidecarLifecycleGate,
-  SidecarLifecycleLease,
+import {
+  SidecarLifecycleConflictError,
+  type SidecarLifecycleGate,
+  type SidecarLifecycleLease,
 } from '../sidecar/sidecar-lifecycle-gate';
 import { resolveEngineCapabilities } from './capability-view';
 import { validateExternalModelFilePath } from './external-model-file';
@@ -298,6 +299,7 @@ export class ModelInstallManager {
   private failedInstall: FailedInstallInfo | null = null;
   private initGeneration = 0;
   private initPromise: Promise<void> | null = null;
+  private storeChangeInProgress = false;
   private installGeneration = 0;
   private readonly installWaiters = new Map<string, InstallWaiter>();
   private installedModels: InstalledModelRecord[] = [];
@@ -316,11 +318,154 @@ export class ModelInstallManager {
 
   constructor(private readonly deps: ModelInstallManagerDependencies) {}
 
+  async changeModelStore(path: string): Promise<void> {
+    const nextPath = path.trim();
+    if (nextPath === this.deps.getSettings().modelStorePathOverride) return;
+
+    await this.deps.sidecarLifecycleGate.runMutation(async () => {
+      if (
+        this.currentInstallRequest !== null ||
+        this.activeInstall !== null ||
+        this.replacementInstall !== null ||
+        Object.values(this.activeSelectionCounts).some((count) => count > 0)
+      ) {
+        throw new SidecarLifecycleConflictError('mutation', 'use');
+      }
+      this.storeChangeInProgress = true;
+      let retryOldStoreAt: number | null = null;
+      try {
+        const startLifecycle = this.lifecycleGeneration;
+        const oldPath = this.deps.getSettings().modelStorePathOverride;
+        const override = createModelStoreOverridePayload(nextPath).modelStorePathOverride;
+        const [installed, modelStore] = await Promise.all([
+          this.deps.sidecarConnection.listInstalledModels(override),
+          this.deps.sidecarConnection.getModelStore(override),
+        ]);
+        if (this.lifecycleGeneration !== startLifecycle)
+          throw new Error('The model manager closed before the store change completed.');
+
+        const previous = {
+          installedModels: this.installedModels,
+          modelStore: this.modelStore,
+          loadStatus: this.loadStatus,
+          loadError: this.loadError,
+          selectedModelCapabilities: this.selectedModelCapabilities,
+          selectedTtsModelCapabilities: this.selectedTtsModelCapabilities,
+        };
+
+        this.initGeneration += 1;
+        this.initPromise = null;
+        this.lifecycleGeneration += 1;
+        const switchLifecycle = this.lifecycleGeneration;
+        this.installGeneration += 1;
+        this.selectionGenerations.stt += 1;
+        this.selectionGenerations.tts += 1;
+        this.selectionGenerations.translation += 1;
+        this.probeGenerations.stt += 1;
+        this.probeGenerations.tts += 1;
+        this.installedModels = [];
+        this.loadStatus = 'loading';
+        this.loadError = null;
+        const current = this.deps.getSettings();
+        if (current.selectedModel?.kind === 'catalog_model')
+          this.selectedModelCapabilities = { selection: current.selectedModel, status: 'pending' };
+        if (current.selectedTtsModel?.kind === 'catalog_model')
+          this.selectedTtsModelCapabilities = {
+            selection: current.selectedTtsModel,
+            status: 'pending',
+          };
+        this.notify();
+
+        try {
+          const committed = await this.deps.commitSettingsIf(
+            (settings) =>
+              settings.modelStorePathOverride === oldPath &&
+              this.lifecycleGeneration === switchLifecycle,
+            (settings) => ({
+              ...settings,
+              modelStorePathOverride: nextPath,
+              selectedModelCapabilitiesSnapshot:
+                settings.selectedModel?.kind === 'catalog_model'
+                  ? null
+                  : settings.selectedModelCapabilitiesSnapshot,
+              selectedTtsModelCapabilitiesSnapshot:
+                settings.selectedTtsModel?.kind === 'catalog_model'
+                  ? null
+                  : settings.selectedTtsModelCapabilitiesSnapshot,
+            }),
+          );
+          if (!committed)
+            throw new Error('The model store changed while this operation was pending.');
+        } catch (error) {
+          if (this.lifecycleGeneration !== switchLifecycle) throw error;
+          if (this.deps.getSettings().modelStorePathOverride === oldPath) {
+            this.installedModels = previous.installedModels;
+            this.modelStore = previous.modelStore;
+            this.loadStatus = previous.loadStatus;
+            this.loadError = previous.loadError;
+            this.selectedModelCapabilities = previous.selectedModelCapabilities;
+            this.selectedTtsModelCapabilities = previous.selectedTtsModelCapabilities;
+            if (
+              previous.loadStatus === 'loading' ||
+              previous.selectedModelCapabilities.status === 'pending' ||
+              previous.selectedTtsModelCapabilities.status === 'pending'
+            ) {
+              retryOldStoreAt = switchLifecycle;
+            }
+          } else {
+            this.modelStore = {
+              overridePath: this.deps.getSettings().modelStorePathOverride || null,
+              path: this.deps.getSettings().modelStorePathOverride,
+              usingDefaultPath: this.deps.getSettings().modelStorePathOverride.length === 0,
+            };
+            this.loadStatus = 'error';
+            this.loadError = error instanceof Error ? error.message : String(error);
+          }
+          this.notify();
+          throw error;
+        }
+        if (this.lifecycleGeneration !== switchLifecycle)
+          throw new Error('The model manager closed before the store change completed.');
+        this.installedModels = installed.models;
+        this.modelStore = modelStore;
+        this.loadStatus = 'ready';
+        this.notify();
+        if (this.lifecycleGeneration !== switchLifecycle)
+          throw new Error('The model manager closed before the store change completed.');
+
+        const selected = this.deps.getSettings();
+        const switchInit = this.initGeneration;
+        const switchSelections = { ...this.selectionGenerations };
+        if (selected.selectedModel?.kind === 'catalog_model')
+          await this.refreshSelectedCapabilities(
+            selected.selectedModel,
+            'stt',
+            switchInit,
+            switchSelections.stt,
+          );
+        if (this.lifecycleGeneration !== switchLifecycle || this.initGeneration !== switchInit)
+          throw new Error('The model manager closed before the store change completed.');
+        if (selected.selectedTtsModel?.kind === 'catalog_model')
+          await this.refreshSelectedCapabilities(
+            selected.selectedTtsModel,
+            'tts',
+            switchInit,
+            switchSelections.tts,
+          );
+      } finally {
+        this.storeChangeInProgress = false;
+        if (retryOldStoreAt !== null && this.lifecycleGeneration === retryOldStoreAt)
+          void this.init();
+      }
+    });
+  }
+
   // -----------------------------------------------------------------------
   // Lifecycle
   // -----------------------------------------------------------------------
 
   init(): Promise<void> {
+    if (this.storeChangeInProgress) return Promise.resolve();
     if (this.initPromise !== null) return this.initPromise;
 
     const generation = ++this.initGeneration;
@@ -377,6 +522,30 @@ export class ModelInstallManager {
       if (generation !== this.initGeneration) return;
       this.loadStatus = 'error';
       this.loadError = error instanceof Error ? error.message : String(error);
+      this.installedModels = [];
+      const settings = this.deps.getSettings();
+      if (
+        settings.selectedModel?.kind === 'catalog_model' &&
+        expectedSelectionGenerations.stt === this.selectionGenerations.stt
+      ) {
+        this.selectedModelCapabilities = {
+          selection: settings.selectedModel,
+          reason: 'probe_failed',
+          status: 'unavailable',
+        };
+      }
+      if (
+        settings.selectedTtsModel?.kind === 'catalog_model' &&
+        expectedSelectionGenerations.tts === this.selectionGenerations.tts
+      ) {
+        this.selectedTtsModelCapabilities = {
+          selection: settings.selectedTtsModel,
+          reason: 'probe_failed',
+          status: 'unavailable',
+        };
+      }
+      this.notify();
+      return;
     }
 
     if (generation !== this.initGeneration) return;
@@ -386,8 +555,12 @@ export class ModelInstallManager {
       expectedSelectionGenerations.stt === this.selectionGenerations.stt
     ) {
       const snapshot = this.deps.getSettings().selectedModelCapabilitiesSnapshot;
-      if (snapshot !== null && selectedModelEquals(snapshot.selection, persistedSelection) &&
-          (persistedSelection.kind === 'external_file' || snapshot.modelStorePathOverride === this.deps.getSettings().modelStorePathOverride)) {
+      if (
+        snapshot !== null &&
+        selectedModelEquals(snapshot.selection, persistedSelection) &&
+        (persistedSelection.kind === 'external_file' ||
+          snapshot.modelStorePathOverride === this.deps.getSettings().modelStorePathOverride)
+      ) {
         // Trust the snapshot's successful probe instead of loading the model on
         // every startup (issue #195), but refresh its capability metadata from
         // the running sidecar. Adapter capabilities can evolve across releases
@@ -434,8 +607,12 @@ export class ModelInstallManager {
       expectedSelectionGenerations.tts === this.selectionGenerations.tts
     ) {
       const snapshot = this.deps.getSettings().selectedTtsModelCapabilitiesSnapshot;
-      if (snapshot !== null && selectedModelEquals(snapshot.selection, persistedTtsSelection) &&
-          (persistedTtsSelection.kind === 'external_file' || snapshot.modelStorePathOverride === this.deps.getSettings().modelStorePathOverride)) {
+      if (
+        snapshot !== null &&
+        selectedModelEquals(snapshot.selection, persistedTtsSelection) &&
+        (persistedTtsSelection.kind === 'external_file' ||
+          snapshot.modelStorePathOverride === this.deps.getSettings().modelStorePathOverride)
+      ) {
         this.selectedTtsModelCapabilities = {
           capabilities: snapshot.capabilities,
           selection: persistedTtsSelection,
@@ -573,6 +750,7 @@ export class ModelInstallManager {
   }
 
   private async startInstall(request: InstallRequest): Promise<ModelInstallUpdateEvent> {
+    if (this.storeChangeInProgress) throw new Error('The model store is being changed.');
     if (
       this.activeInstall !== null ||
       this.currentInstallRequest !== null ||
@@ -757,6 +935,7 @@ export class ModelInstallManager {
   // -----------------------------------------------------------------------
 
   async select(selection: SelectedModel): Promise<ModelSelectionResult> {
+    if (this.storeChangeInProgress) throw new Error('The model store is being changed.');
     const task = this.selectionTask(selection);
     const expectedLifecycleGeneration = this.lifecycleGeneration;
     const expectedSelectionGeneration = ++this.selectionGenerations[task];
@@ -1226,6 +1405,7 @@ export class ModelInstallManager {
   }
 
   async clearSelection(): Promise<void> {
+    if (this.storeChangeInProgress) throw new Error('The model store is being changed.');
     const expectedLifecycleGeneration = this.lifecycleGeneration;
     const expectedSelectionGeneration = ++this.selectionGenerations.stt;
     this.deps.logger?.debug('model', 'cleared selected model');
