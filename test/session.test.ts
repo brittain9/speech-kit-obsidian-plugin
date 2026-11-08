@@ -179,6 +179,35 @@ class FakeSurface {
 }
 
 describe('Session', () => {
+  it('keeps a recorded embed outside cleanup after an edited live partial gains speech', () => {
+    const { session, view } = createRecoveryIntegrationHarness('Existing note');
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: false,
+        text: 'hello',
+        utteranceId: 'u1',
+      }),
+    );
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.paste'),
+      changes: { from: view.state.doc.length, insert: ' https://example.com' },
+    });
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: true,
+        revision: 1,
+        text: 'hello world',
+        utteranceId: 'u1',
+      }),
+    );
+    expect(session.insertMicrophoneRecording('![[audio.webm]]')).toBe(true);
+    expect(session.readCurrentSessionText()).toBe('hello https://example.com world');
+    expect(session.replaceSessionRangeWithCleaned('cleaned')).toMatchObject({ kind: 'replaced' });
+    expect(view.state.doc.toString()).toBe('Existing note cleaned\n\n![[audio.webm]]');
+    session.dispose();
+  });
   it('reports whether ordinary dictation can resolve a writable Markdown target', () => {
     const activeFile = fakeFile('active.md');
     const activeView = {} as EditorView;
