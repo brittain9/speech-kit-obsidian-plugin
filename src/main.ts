@@ -549,6 +549,11 @@ export default class LocalSttPlugin extends Plugin {
         logger: this.logger,
         modelInstallManager: this.requireModelInstallManager(),
         openModelPicker: (options) => this.openModelPicker(options),
+        openLlmSidebar: async () => {
+          await this.ensureLocalDictationSidebar();
+          const leaf = this.app.workspace.getLeavesOfType(LOCAL_DICTATION_VIEW_TYPE)[0];
+          if (leaf) await this.app.workspace.revealLeaf(leaf);
+        },
         openSetupWizard: () => this.openSetupWizard(),
         sidecarVersion: REQUIRED_SIDECAR_VERSION,
         resolvePluginDirectory: () => this.resolvePluginDirectoryPath(),

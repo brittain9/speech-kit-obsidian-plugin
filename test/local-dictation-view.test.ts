@@ -3,7 +3,31 @@ import { expect, it, vi } from 'vitest';
 
 import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import { LocalDictationView } from '../src/ui/local-dictation-view';
-import type { TestElement } from './__mocks__/obsidian';
+import { Setting, type TestElement } from './__mocks__/obsidian';
+
+it('allows provider selection while dictation transformation is off', () => {
+  Setting.reset();
+  const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
+    feedback: { show: vi.fn() },
+    getSecret: () => '',
+    getSettings: () => ({
+      ...DEFAULT_PLUGIN_SETTINGS,
+      llmFeaturesEnabled: true,
+      llmPostprocessMode: 'off',
+    }),
+    mutatePresetState: vi.fn(async () => {}),
+    saveSettings: vi.fn(async () => {}),
+    synchronizePresets: vi.fn(async () => {}),
+  });
+
+  view.refresh();
+
+  expect(
+    Setting.named('Provider')
+      .onlyDropdown()
+      .selectEl.options.map((option) => option.label),
+  ).toContain('Ollama');
+});
 
 it('announces the changing sidebar workflow summary as one atomic status', () => {
   const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
