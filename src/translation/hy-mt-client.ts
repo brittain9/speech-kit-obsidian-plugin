@@ -77,20 +77,23 @@ export async function translateWithHyMt(options: HyMtTranslationOptions): Promis
       return;
     }
     void options.sidecarConnection
-      .startTranslation({
-        accelerationPreference: options.accelerationPreference,
-        modelSelection: options.modelSelection,
-        ...(options.modelStorePathOverride === undefined
-          ? {}
-          : { modelStorePathOverride: options.modelStorePathOverride }),
-        sourceLanguage: options.sourceLanguage,
-        ...(options.styleInstruction === undefined
-          ? {}
-          : { styleInstruction: options.styleInstruction }),
-        targetLanguage: options.targetLanguage,
-        texts: options.texts,
-        translationId: options.translationId,
-      })
+      .startTranslation(
+        {
+          accelerationPreference: options.accelerationPreference,
+          modelSelection: options.modelSelection,
+          ...(options.modelStorePathOverride === undefined
+            ? {}
+            : { modelStorePathOverride: options.modelStorePathOverride }),
+          sourceLanguage: options.sourceLanguage,
+          ...(options.styleInstruction === undefined
+            ? {}
+            : { styleInstruction: options.styleInstruction }),
+          targetLanguage: options.targetLanguage,
+          texts: options.texts,
+          translationId: options.translationId,
+        },
+        options.signal,
+      )
       .catch((error: unknown) =>
         finish(() => reject(asError(error, 'Translation could not be started.'))),
       );
