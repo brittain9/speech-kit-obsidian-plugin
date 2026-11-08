@@ -1,4 +1,5 @@
 ---
+
 status: accepted
 supersedes: media AI preview behavior in 0008-media-acquisition-boundary and 0010-youtube-caption-import
 ---

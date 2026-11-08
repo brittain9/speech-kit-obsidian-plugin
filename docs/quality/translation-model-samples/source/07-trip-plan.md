@@ -1,4 +1,5 @@
 ---
+
 title: Three days in Lisbon
 travelers: 2
 currency: EUR
@@ -26,12 +27,12 @@ Start early in Alfama, then walk uphill slowly. The route is short on a map but 
 1. Continue toward Graça and the viewpoints.
 2. Take a tram west and spend more time indoors.
 
-| Item | Estimate |
-| --- | ---: |
-| Transit | €18 |
-| Food | €90 |
-| Tickets | €35 |
-| Buffer | €40 |
+| Item    | Estimate |
+| ------- | -------: |
+| Transit |      €18 |
+| Food    |      €90 |
+| Tickets |      €35 |
+| Buffer  |      €40 |
 
 The rough daily budget is $B = T + F + A + 0.15(T + F + A)$. Keep the spreadsheet in `Travel/Lisbon budget.xlsx` and link the final reservations from [[Portugal 2026]].
 

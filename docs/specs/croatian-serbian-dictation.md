@@ -11,10 +11,10 @@ Croatian (`hr`) and Serbian (`sr`) are separate product choices; neither is a
 proxy for the other, nor for Bosnian or Montenegrin. Their matrices are very
 different, and that difference is the whole reason the tier system exists.
 
-| | Batch (Whisper LV3T) | Live (Nemotron) | Read aloud (Supertonic) | UI | en→ | →en |
-| --- | --- | --- | --- | --- | --- | --- |
-| **Hrvatski** `hr` | ✅ | ✅ prompt 29 | ✅ | ✅ | deferred | ❌ unreleased |
-| **Српски** `sr` | ✅ | ❌ absent | ❌ absent | ❌ by rule | deferred | ❌ unreleased |
+|                   | Batch (Whisper LV3T) | Live (Nemotron) | Read aloud (Supertonic) | UI         | en→      | →en           |
+| ----------------- | -------------------- | --------------- | ----------------------- | ---------- | -------- | ------------- |
+| **Hrvatski** `hr` | ✅                   | ✅ prompt 29    | ✅                      | ✅         | deferred | ❌ unreleased |
+| **Српски** `sr`   | ✅                   | ❌ absent       | ❌ absent               | ❌ by rule | deferred | ❌ unreleased |
 
 **Croatian is a Full-tier language** — every speech capability we ship covers
 it, so it also earns a UI catalog. **Serbian is Dictation tier**: batch
@@ -24,7 +24,7 @@ Every cell was checked against the pinned artifact, not inferred:
 
 - **Nemotron** — the pinned `processor_config.json` (`f3d3333`)
   `prompt_dictionary` has `hr` and `hr-HR` at index **29**, and no `sr`,
-  `sr-RS`, or `bs` at all. It *does* carry `sl`, `sk`, and `bg`, which is why
+  `sr-RS`, or `bs` at all. It _does_ carry `sl`, `sk`, and `bg`, which is why
   "Nemotron supports Slavic languages" is not a usable claim.
 - **Whisper** — the language map carries both `hr` and `sr` on the multilingual
   artifacts. `.en` artifacts are unaffected.
@@ -59,12 +59,12 @@ output.
 `native/src/transcription.rs:9` defines one eight-tag constant,
 `VERIFIED_MULTILINGUAL_LANGUAGE_TAGS`, that four unrelated consumers read:
 
-| Consumer | What it uses the list for |
-| --- | --- |
-| `catalog.rs:229` | validating `languageTags` on every catalog model |
-| `catalog.rs:379` | validating `translationSupport` and direction packs |
-| `whisper.rs:42,106` | Whisper's advertised support **and** its runtime rejection |
-| `nemotron_asr.rs:134` | Nemotron's advertised support |
+| Consumer              | What it uses the list for                                  |
+| --------------------- | ---------------------------------------------------------- |
+| `catalog.rs:229`      | validating `languageTags` on every catalog model           |
+| `catalog.rs:379`      | validating `translationSupport` and direction packs        |
+| `whisper.rs:42,106`   | Whisper's advertised support **and** its runtime rejection |
+| `nemotron_asr.rs:134` | Nemotron's advertised support                              |
 
 So adding `hr` and `sr` to it would simultaneously claim Serbian live dictation
 and permit a Serbian translation pair. There is no way to add one language to
@@ -81,7 +81,7 @@ Split it by responsibility:
 3. Make Nemotron derive its `LanguageSupport` from `SUPPORTED_LANGUAGE_PROMPTS`,
    which is already the authoritative mapping. Delete the test at
    `nemotron_asr.rs:1699` asserting the prompt table equals the global list —
-   that assertion *is* the coupling, and it will fail correctly the moment
+   that assertion _is_ the coupling, and it will fail correctly the moment
    Croatian lands.
 
 Supertonic already owns its list (`supertonic.rs:24`) and needs no structural
@@ -114,7 +114,7 @@ Following the recipe in [adding-a-product-language.md](adding-a-product-language
 
 Preflight is the part worth reviewing carefully. With `sr` selected, the model
 picker must show Whisper as the only eligible engine, and choosing live
-dictation or read aloud must explain the gap *before* capture or playback
+dictation or read aloud must explain the gap _before_ capture or playback
 starts. Silent English fallback is the failure mode this whole design exists to
 prevent.
 
@@ -189,26 +189,26 @@ when its prompt would need to be selected.
 ## Acceptance
 
 - [x] No shared constant can make an engine claim a language it cannot serve;
-      the Nemotron equality test is gone and its support derives from the prompt
-      table.
+  the Nemotron equality test is gone and its support derives from the prompt
+  table.
 - [x] `hr` and `sr` persist as distinct choices with endonym labels; Serbian is
-      explicitly Cyrillic and has no second script option.
+  explicitly Cyrillic and has no second script option.
 - [x] Whisper transcribes both, with pinned FLEURS fixtures at sentence 1577.
-      Native review still outstanding.
+  Native review still outstanding.
 - [x] Nemotron accepts `hr` at index 29 and rejects `sr` before audio capture.
 - [x] Supertonic reads Croatian aloud and rejects `sr` explicitly — read aloud
-      refuses a language the selected voice model does not declare rather than
-      falling through to the language-neutral `na` branch.
+  refuses a language the selected voice model does not declare rather than
+  falling through to the language-neutral `na` branch.
 - [x] Translation UI remains unchanged and offers neither Croatian nor Serbian.
 - [x] The eight existing languages are unchanged.
 - [x] Settings shows what the selected language actually covers, so Serbian
-      users learn the shape of their support without hitting a failure.
+  users learn the shape of their support without hitting a failure.
 - [x] README states three separate capability counts, not one.
 - [x] `npm run check` green, less `biome check .` — twelve stale worktrees under
-      `.worktree/` carry nested configs that abort the run; scoped
-      `biome check src test scripts` is clean.
+  `.worktree/` carry nested configs that abort the run; scoped
+  `biome check src test scripts` is clean.
 - [ ] `multilingual-quality` dispatched and linked; native review recorded in
-      `docs/quality/`. Needs the branch pushed first.
+  `docs/quality/`. Needs the branch pushed first.
 - [x] Support matrix in the playbook updated.
 
 ## Non-goals

@@ -1,4 +1,5 @@
 ---
+
 title: Weekly team meeting
 attendees: [Alex, Morgan, Priya]
 ---
@@ -21,11 +22,11 @@ Morgan reported that Portuguese output sounded wrong even when the sentence was 
 
 Alex showed the current worker timing. Loading the files and starting the worker took less than a second, while a multi-gigabyte decoder had a much larger cold start. Everyone agreed that `tokens/sec` is useful diagnostic data but not the product metric.
 
-| Owner | Follow-up | Due |
-| --- | --- | --- |
-| Alex | Run English↔Dutch COMET | Tuesday |
+| Owner  | Follow-up                 | Due       |
+| ------ | ------------------------- | --------- |
+| Alex   | Run English↔Dutch COMET   | Tuesday   |
 | Morgan | Review Portuguese dialect | Wednesday |
-| Priya | Inspect Markdown failures | Friday |
+| Priya  | Inspect Markdown failures | Friday    |
 
 ## Risks
 

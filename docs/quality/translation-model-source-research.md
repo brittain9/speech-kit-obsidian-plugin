@@ -178,13 +178,13 @@ documented MADLAD input format.
 
 ## Architecture and provenance
 
-| Property | HY-MT1.5-1.8B | MADLAD-400-3B-MT |
-| --- | --- | --- |
-| Publisher / origin | Tencent Hunyuan Team | Google Research |
-| Architecture | Decoder-only `HunYuanDenseV1ForCausalLM` | T5 encoder-decoder `T5ForConditionalGeneration` |
-| Relevant config | 32 decoder layers, hidden size 2,048, 16 attention heads, 4 KV heads, vocab 120,818, tied token/output embeddings | 32 encoder and 32 decoder layers, model width 1,024, FFN 8,192, 16 heads, vocab 256,000, configured input positions 512 |
-| Training provenance | HY-1.8B-Base → MT continuous pretraining and SFT → on-policy distillation from HY-MT1.5-7B → reinforcement learning | MADLAD-400 and parallel data; the 3B MT release is trained on 1T tokens covering more than 450 languages |
-| Proposed GGUF provenance | Official Tencent repository and quant | Community conversion of `google/madlad400-3b-mt` through llama.cpp/GGUF-my-repo |
+| Property                 | HY-MT1.5-1.8B                                                                                                       | MADLAD-400-3B-MT                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Publisher / origin       | Tencent Hunyuan Team                                                                                                | Google Research                                                                                                         |
+| Architecture             | Decoder-only `HunYuanDenseV1ForCausalLM`                                                                            | T5 encoder-decoder `T5ForConditionalGeneration`                                                                         |
+| Relevant config          | 32 decoder layers, hidden size 2,048, 16 attention heads, 4 KV heads, vocab 120,818, tied token/output embeddings   | 32 encoder and 32 decoder layers, model width 1,024, FFN 8,192, 16 heads, vocab 256,000, configured input positions 512 |
+| Training provenance      | HY-1.8B-Base → MT continuous pretraining and SFT → on-policy distillation from HY-MT1.5-7B → reinforcement learning | MADLAD-400 and parallel data; the 3B MT release is trained on 1T tokens covering more than 450 languages                |
+| Proposed GGUF provenance | Official Tencent repository and quant                                                                               | Community conversion of `google/madlad400-3b-mt` through llama.cpp/GGUF-my-repo                                         |
 
 Sources:
 
@@ -359,11 +359,11 @@ curl -sS -L --range 0-0 -o /dev/null -w '%{http_code} %{size_download}\n' \
 # 206 1
 ```
 
-| Repository at check time | Revision | Private / gated | Artifact | Bytes | Git LFS SHA-256 |
-| --- | --- | --- | --- | ---: | --- |
-| `tencent/HY-MT1.5-1.8B-GGUF` | `265b2e615a7dc9b06c435dc878829ad99a512ba2` | false / false | `HY-MT1.5-1.8B-Q4_K_M.gguf` | 1,133,080,512 | `4383ac0c3c8e476de98ff979c2a3f069f8c4fb385e7860cf2d28da896cc477c7` |
-| `mtsdurica/madlad400-3b-mt-Q4_K_M-GGUF` | `7f55e827c4c2fd1fdc52893879e18966d2867dba` | false / false | `madlad400-3b-mt-q4_k_m.gguf` | 1,858,124,864 | `fc56f16d215db71e856de3c3770974c867e3d95a782d415d4cfabc9fb470b8e4` |
-| `notjjustnumbers/madlad400-3b-mt-Q4_K_M-GGUF` | `b325d397b871d944f12cd98ddff3a969cc8fec6e` | false / false | `madlad400-3b-mt-q4_k_m.gguf` | 1,858,124,864 | `fc56f16d215db71e856de3c3770974c867e3d95a782d415d4cfabc9fb470b8e4` |
+| Repository at check time                      | Revision                                   | Private / gated | Artifact                      |         Bytes | Git LFS SHA-256                                                    |
+| --------------------------------------------- | ------------------------------------------ | --------------- | ----------------------------- | ------------: | ------------------------------------------------------------------ |
+| `tencent/HY-MT1.5-1.8B-GGUF`                  | `265b2e615a7dc9b06c435dc878829ad99a512ba2` | false / false   | `HY-MT1.5-1.8B-Q4_K_M.gguf`   | 1,133,080,512 | `4383ac0c3c8e476de98ff979c2a3f069f8c4fb385e7860cf2d28da896cc477c7` |
+| `mtsdurica/madlad400-3b-mt-Q4_K_M-GGUF`       | `7f55e827c4c2fd1fdc52893879e18966d2867dba` | false / false   | `madlad400-3b-mt-q4_k_m.gguf` | 1,858,124,864 | `fc56f16d215db71e856de3c3770974c867e3d95a782d415d4cfabc9fb470b8e4` |
+| `notjjustnumbers/madlad400-3b-mt-Q4_K_M-GGUF` | `b325d397b871d944f12cd98ddff3a969cc8fec6e` | false / false   | `madlad400-3b-mt-q4_k_m.gguf` | 1,858,124,864 | `fc56f16d215db71e856de3c3770974c867e3d95a782d415d4cfabc9fb470b8e4` |
 
 The public, unauthenticated Hugging Face APIs used to verify repository state
 are:

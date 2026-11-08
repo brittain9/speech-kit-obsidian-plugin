@@ -1,4 +1,5 @@
 ---
+
 title: Monthly finance review
 month: 2026-06
 private: true

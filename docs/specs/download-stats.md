@@ -108,7 +108,7 @@ its purpose.
 
 **Never delete this branch.** It is intentionally unmerged and will look stale
 in branch listings forever — that is by design. The traffic API retains only a
-rolling 14-day window, so this branch is the *only* long-term record of
+rolling 14-day window, so this branch is the _only_ long-term record of
 unique-visitor data; deleting it destroys that history permanently.
 
 ## Snapshot schema (`stats/history.jsonl` on `stats-history`)
@@ -120,10 +120,24 @@ One JSON object per line, newest appended at the bottom:
   "schemaVersion": 1,
   "capturedAt": "2026-07-09T18:32:00.000Z",
   "repo": { "stars": 12, "forks": 2, "watchers": 12 },
-  "releaseAssets": { "mainJsTotal": 512, "byRelease": [ { "tag": "2026.7.3", "publishedAt": "...", "assets": { "main.js": 20, "...": 0 } } ] },
-  "platformSplit": { "linux-cpu": 46, "linux-cuda": 19, "windows-cpu": 210, "windows-cuda": 34, "macos-arm64": 15 },
+  "releaseAssets": {
+    "mainJsTotal": 512,
+    "byRelease": [
+      { "tag": "2026.7.3", "publishedAt": "...", "assets": { "main.js": 20, "...": 0 } }
+    ]
+  },
+  "platformSplit": {
+    "linux-cpu": 46,
+    "linux-cuda": 19,
+    "windows-cpu": 210,
+    "windows-cuda": 34,
+    "macos-arm64": 15
+  },
   "obsidianRegistry": { "total": 488, "byVersion": { "2026.7.2": 55 } },
-  "traffic": { "views": { "count": 110, "uniques": 44 }, "clones": { "count": 1321, "uniques": 258 } }
+  "traffic": {
+    "views": { "count": 110, "uniques": 44 },
+    "clones": { "count": 1321, "uniques": 258 }
+  }
 }
 ```
 

@@ -12,7 +12,7 @@ utterance runs without being finalized** — a real O(n²) cost, confirmed in co
 
 This branch does two things, together:
 
-1. **Adds streaming integration tests to the sidecar** — quality *and* performance —
+1. **Adds streaming integration tests to the sidecar** — quality _and_ performance —
    layered onto the existing `native/tests/` harness rather than forking it.
 2. **Fixes the O(n²) partial-decode cost** with a change that is quality-neutral on
    the committed transcript by construction, gated by the new quality tests.
@@ -33,10 +33,10 @@ design leaned on. Both were caught by guards this spec had already listed as ris
 Design cause 1 assumed `k_cross`/`v_cross` are a pure per-frame linear projection of
 encoder memory, so an incremental cache (project only new frames, append) would be
 bit-identical. **False.** The equivalence guard, strengthened to also check a
-*nonzero-offset* suffix, showed a slice projected at absolute offset `i` does **not**
+_nonzero-offset_ suffix, showed a slice projected at absolute offset `i` does **not**
 match the same positions of the full projection (max abs diff ≈ 0.29 on `jfk`): the
 model position-encodes the cross-attention keys. Appending per-delta projections
-corrupts K/V, and because `compute_cross_kv` feeds *both* partial and final decode,
+corrupts K/V, and because `compute_cross_kv` feeds _both_ partial and final decode,
 it corrupted the committed transcript (`jfk` final decoded to **empty**).
 
 **Decision:** revert Fix A entirely. `compute_cross_kv` re-projects the full memory on
@@ -54,16 +54,16 @@ pre-existing latent bug in the shipped engine, not a new regression. `partial()`
 `encode_available(false)`, which emits stable encoder frames incrementally through a
 sliding window and holds back the lookahead tail. At finalize, `encode_available(true)`
 only **appended the remaining tail** to that incrementally-built memory rather than
-re-encoding — so the final decode consumed a streaming *approximation* of memory
+re-encoding — so the final decode consumed a streaming _approximation_ of memory
 (observed max frame diff ≈ 0.84 vs. a one-shot encode), which for `jfk` produced an
 empty final. Isolation probe: `jfk` final is correct fed one-shot **and** correct fed
-in chunks *without* partials, but **empty** fed in chunks *with* partials. Since live
+in chunks _without_ partials, but **empty** fed in chunks _with_ partials. Since live
 dictation always requests partials, real final transcripts were exposed.
 
 **Fix:** `decode()` now calls `reset_encoder_emission()` before the final encode,
 discarding the approximate memory and re-encoding all accumulated features in one pass —
 exactly what the one-shot path does. This makes the final decode independent of whether
-or how often partials were requested, so `final == one-shot` now holds *by construction*
+or how often partials were requested, so `final == one-shot` now holds _by construction_
 and is proven corpus-wide. This is the branch's most important quality fix.
 
 ### Finding 3 — Fix B alone carries the entire perf win
@@ -100,9 +100,9 @@ Absolute latency budgets are not portable across CI/dev hardware. Instead:
 
 - **Characterization** (always prints): a table of `(cumulative_secs, partial_ms,
   decode_tokens, cross_kv_ms)` per partial, so a human can see the scaling curve.
-- **Guard** (asserts): per-partial engine time in the *second half* of a long
-  utterance stays within a small factor (≈2–3×) of the *first half*, and cumulative
-  partial work is ~linear. This is hardware-portable: it measures *shape*, not speed.
+- **Guard** (asserts): per-partial engine time in the _second half_ of a long
+  utterance stays within a small factor (≈2–3×) of the _first half_, and cumulative
+  partial work is ~linear. This is hardware-portable: it measures _shape_, not speed.
   Current code violates it (per-partial time grows with cumulative length); the fix
   satisfies it.
 
@@ -128,42 +128,42 @@ saving; cross-KV-cache-only was rejected as an incomplete fix.
 
 **Cheap / already incremental (leave alone):** the frontend
 (`process_frontend_chunk`), encoder windowing (`encode_available`), and adapter all
-advance by *new frames only*.
+advance by _new frames only_.
 
 **The O(n²), two independent causes:**
 
 1. **cross-KV recompute** — `compute_cross_kv` (moonshine.rs:722) reprojects K/V over
-   the *entire* encoder `memory` whenever memory grows (`cross_kv_valid` is set false
+   the _entire_ encoder `memory` whenever memory grows (`cross_kv_valid` is set false
    in every `encode_available`). But `k_cross`/`v_cross` are a **per-frame linear
    projection** of memory with no cross-frame mixing, and memory only grows by
-   *appending stable frames* (partials encode only frames older than
+   _appending stable frames_ (partials encode only frames older than
    `total_lookahead`, so committed frames never change). So the K/V for existing
    frames are **bit-for-bit identical** whether you project the whole memory or only
    the new slice — the recompute is pure waste.
 
 2. **full re-decode from BOS every partial** — `decode_text` (moonshine.rs:841) calls
-   `reset_decoder()` and regenerates *every* token from BOS on each `partial()`, up to
+   `reset_decoder()` and regenerates _every_ token from BOS on each `partial()`, up to
    `duration_secs × MAX_TOKENS_PER_SECOND(6.5)` tokens (capped at `max_seq_len = 448`).
 
-Across an un-finalized utterance of length *T*, the worker fires ~*T*/0.5 s partials,
-each costing O(*T*) → **cumulative O(T²)**, bounded only past ~69 s when the 448-token
+Across an un-finalized utterance of length _T_, the worker fires ~_T_/0.5 s partials,
+each costing O(_T_) → **cumulative O(T²)**, bounded only past ~69 s when the 448-token
 cap engages (and even then each partial redecodes 448 tokens). This is exactly the
 "gets very heavy as I keep talking" symptom.
 
 ## Why the fix is quality-neutral on the committed transcript
 
 > **Superseded by Finding 2.** The premise below — that the final decode is
-> automatically independent of the partials — held for the *decoder* (it does reset
-> and re-decode from BOS) but **not** for the *encoder memory* the final decode reads.
+> automatically independent of the partials — held for the _decoder_ (it does reset
+> and re-decode from BOS) but **not** for the _encoder memory_ the final decode reads.
 > Partials incrementally emitted memory that the final path then appended to rather
-> than re-encoding, so partials *did* change the committed transcript. The
+> than re-encoding, so partials _did_ change the committed transcript. The
 > `reset_encoder_emission` fix (Finding 2) restores the guarantee — the reasoning
-> below is now true *because* of that fix, not by default.
+> below is now true _because_ of that fix, not by default.
 
 The intended insight: **the final transcript is always a fresh full decode.**
 `finalize_utterance` → `decode_final` resets the decoder and re-decodes the whole
-utterance from BOS regardless of anything the partials did. Partials are a *live
-preview* superseded via the revision protocol (`is_final` / `revision`,
+utterance from BOS regardless of anything the partials did. Partials are a _live
+preview_ superseded via the revision protocol (`is_final` / `revision`,
 `native/src/protocol.rs`).
 
 The intent was that **any optimization to the partial path cannot change the accuracy
@@ -177,7 +177,7 @@ memory from scratch (Finding 2); it was not true as originally shipped.
 - **cross-KV cache (cause 1, reverted)** was assumed bit-identical; it was not
   (Finding 1).
 
-The quality suite *proves* this rather than asserting it: `final == one-shot`
+The quality suite _proves_ this rather than asserting it: `final == one-shot`
 equivalence and the per-fixture WER budgets hold through the shipped fixes.
 
 ## The fix (`native/src/adapters/moonshine.rs`)
@@ -215,7 +215,7 @@ Shared-harness changes under `native/tests/common/`:
 
 - **`model.rs`** — add `require_moonshine_model(tier)`. Moonshine is a **7-sibling**
   catalog model (`frontend.ort` + encoder/adapter/cross_kv/decoder_kv/streaming_config/
-  tokenizer). Download *all* artifacts into a per-tier dir, sha-verify + cache each
+  tokenizer). Download _all_ artifacts into a per-tier dir, sha-verify + cache each
   (reusing the existing `file_sha256` / verified-download machinery), return the
   `frontend.ort` path. Same priority ladder as whisper: env override → cache → catalog.
 - **`driver.rs`** — generalize `start_session_command` / `start_session_json` to accept
@@ -258,21 +258,21 @@ corpus clips — no new committed audio asset), fed in 0.5 s cadence chunks, cal
 
 ## Risks and their guards
 
-| Risk | Guard | Outcome |
-| --- | --- | --- |
-| cross-KV is not actually per-frame position-independent | `cross_kv_projection_is_position_dependent` equivalence test | **FIRED** (Finding 1) — Fix A reverted |
-| Stable frames encoded during partials differ from the final encode | `final == one-shot` corpus test (end-to-end invariant) | **FIRED** (Finding 2) — fixed via `reset_encoder_emission` |
-| Bounded-tail corrupts decode or destabilizes previews | partial-stability test + finals-match + no-panic | held |
-| Perf guard flakes on slow/loaded CI | relative shape ratios, not absolute ms; `#[ignore]`d, run with `--ignored` | held (ratio 1.87) |
-| Model download flakiness / cost | sha-verified cache reuse; env override to point at local assets; suite is opt-in | held |
+| Risk                                                               | Guard                                                                            | Outcome                                                    |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| cross-KV is not actually per-frame position-independent            | `cross_kv_projection_is_position_dependent` equivalence test                     | **FIRED** (Finding 1) — Fix A reverted                     |
+| Stable frames encoded during partials differ from the final encode | `final == one-shot` corpus test (end-to-end invariant)                           | **FIRED** (Finding 2) — fixed via `reset_encoder_emission` |
+| Bounded-tail corrupts decode or destabilizes previews              | partial-stability test + finals-match + no-panic                                 | held                                                       |
+| Perf guard flakes on slow/loaded CI                                | relative shape ratios, not absolute ms; `#[ignore]`d, run with `--ignored`       | held (ratio 1.87)                                          |
+| Model download flakiness / cost                                    | sha-verified cache reuse; env override to point at local assets; suite is opt-in | held                                                       |
 
 ## Non-goals
 
-- Generalizing the streaming adapter interface for *future* streaming engines. The
+- Generalizing the streaming adapter interface for _future_ streaming engines. The
   maintainer flagged wanting more streaming models later; that is explicitly out of
   scope here. This branch stays focused on Moonshine quality/perf.
 - Moonshine medium tier.
-- Any change to the wire/revision protocol. (The final-decode path *was* changed —
+- Any change to the wire/revision protocol. (The final-decode path _was_ changed —
   Finding 2 forces a full re-encode at finalize — because the corpus test proved it was
   producing wrong committed output. The original "no final-path change" intent was
   incompatible with correctness.)

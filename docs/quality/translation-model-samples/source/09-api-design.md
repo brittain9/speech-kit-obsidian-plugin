@@ -1,4 +1,5 @@
 ---
+
 title: Translation adapter API sketch
 status: exploratory
 ---
@@ -34,11 +35,11 @@ interface TranslationRequest {
 
 A useful result type can carry translations plus timings, but it should not expose a llama.cpp JSON response. Keep diagnostics behind a structured field or log them separately.
 
-| Concern | Owner |
-| --- | --- |
-| Markdown segmentation | controller |
-| Prompt construction | engine adapter |
-| Artifact integrity | installer |
-| Editor mutation | preview workflow |
+| Concern               | Owner            |
+| --------------------- | ---------------- |
+| Markdown segmentation | controller       |
+| Prompt construction   | engine adapter   |
+| Artifact integrity    | installer        |
+| Editor mutation       | preview workflow |
 
 Related: [[Deep Modules]], [[Translation Controller]], and `src/translation/bergamot-client.ts`. #architecture/api
