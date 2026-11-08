@@ -7,7 +7,7 @@
     "logicalCores": 12
   },
   "binary": {
-    "path": "/Users/alex/Projects/obsidian-local-speech-to-text/native/target/debug/local-dictation-sidecar",
+    "path": "native/target/debug/local-dictation-sidecar",
     "sha256": "03cdd038f11e27e355d1485beff04930665dbe064fa5bff13a0be47a0ee93a34",
     "version": "2026.10.1",
     "profile": "debug",
@@ -729,7 +729,7 @@
   "managedInstall": {
     "binary_sha256": "8d6c326053b5f76417609a54b499d0c89b055b7294dc4776c67d9737db2f8954",
     "downloadedBytes": 51441771,
-    "modelStore": "/tmp/speechkit-asr-research/fresh-managed-store",
+    "modelStore": "<isolated-validation-model-store>",
     "installTerminal": {
       "type": "model_install_update",
       "details": null,
@@ -786,7 +786,7 @@
       },
       "message": "Model selection is ready.",
       "modelId": "moonshine_tiny_streaming_en",
-      "resolvedPath": "/tmp/speechkit-asr-research/fresh-managed-store/onnx_runtime/moonshine/moonshine_tiny_streaming_en/frontend.ort",
+      "resolvedPath": "<isolated-validation-model-store>/onnx_runtime/moonshine/moonshine_tiny_streaming_en/frontend.ort",
       "selection": {
         "kind": "catalog_model",
         "runtimeId": "onnx_runtime",
@@ -904,7 +904,7 @@
       },
       "message": "Model selection is ready.",
       "modelId": "moonshine_tiny_streaming_en",
-      "resolvedPath": "/Users/alex/Library/Application Support/obsidian-local-stt/models/onnx_runtime/moonshine/moonshine_tiny_streaming_en/frontend.ort",
+      "resolvedPath": "<existing-model-store>/onnx_runtime/moonshine/moonshine_tiny_streaming_en/frontend.ort",
       "selection": {
         "kind": "catalog_model",
         "runtimeId": "onnx_runtime",
