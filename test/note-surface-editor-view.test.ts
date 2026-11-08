@@ -146,6 +146,31 @@ it('keeps a recording inserted during speech projection outside its tracked rang
   view.destroy();
 });
 
+it('keeps a nested recording outside the rewritten range', () => {
+  let surface: NoteSurface;
+  let armed = false;
+  const early = EditorView.updateListener.of((update) => {
+    if (update.docChanged && armed) {
+      armed = false;
+      expect(surface.insertAfterRange({ from: 0, to: 5 }, '![[recording.webm]]')).toBe(true);
+    }
+  });
+  const view = new EditorView({
+    state: EditorState.create({ extensions: [early, noteSurfaceUpdateListenerExtension()] }),
+    parent: document.body,
+  });
+  surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  surface.appendProjection('u1', projection('hello'));
+  armed = true;
+  expect(surface.rewriteRegion({ from: 0, to: 5 }, 'world', [])).toEqual({
+    kind: 'rewritten',
+    range: { from: 0, to: 5 },
+  });
+  expect(view.state.doc.toString()).toBe('world\n\n![[recording.webm]]');
+  surface.dispose();
+  view.destroy();
+});
+
 it('does not register a span if the surface is disposed during insertion', () => {
   let surface: NoteSurface;
   const early = EditorView.updateListener.of((update) => {
