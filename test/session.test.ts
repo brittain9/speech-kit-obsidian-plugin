@@ -232,6 +232,16 @@ describe('Session', () => {
     expect(surface.setProvisional).toHaveBeenNthCalledWith(2, 'u1', false);
   });
 
+  it('reports an applied cleanup without offering recovery after a concurrent edit', () => {
+    const { session, surface } = createSessionHarness();
+    session.acceptTranscript(transcript({ text: 'raw words', utteranceId: 'u1' }));
+    surface.nextRewriteResult = { kind: 'rewritten_modified' };
+    expect(session.replaceSessionRangeWithCleaned('cleaned')).toEqual({
+      kind: 'replaced_without_recovery',
+    });
+    session.dispose();
+  });
+
   it.each([
     ['live words', 'Existing note live words [TYPED LIVE] https://example.com/qa'],
     [

@@ -21,6 +21,150 @@ function projection(text: string) {
   };
 }
 
+it('tracks a new speech span across a nested edit during its insertion', () => {
+  let nested = false;
+  const early = EditorView.updateListener.of((update) => {
+    if (update.docChanged && !nested) {
+      nested = true;
+      update.view.dispatch({ changes: { from: 0, insert: 'X' } });
+    }
+  });
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: 'prefix ',
+      selection: { anchor: 7 },
+      extensions: [early, noteSurfaceUpdateListenerExtension()],
+    }),
+    parent: document.body,
+  });
+  const surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  expect(surface.appendProjection('u1', projection('hello')).kind).toBe('appended');
+  expect(surface.replaceAnchor('u1', 'world', 'hello').kind).toBe('replaced');
+  expect(view.state.doc.toString()).toBe('Xprefix world');
+  surface.dispose();
+  view.destroy();
+});
+
+it('tracks a speech span across a nested edit during its revision', () => {
+  let armed = false;
+  const early = EditorView.updateListener.of((update) => {
+    if (update.docChanged && armed) {
+      armed = false;
+      update.view.dispatch({ changes: { from: 0, insert: 'X' } });
+    }
+  });
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: 'prefix ',
+      selection: { anchor: 7 },
+      extensions: [early, noteSurfaceUpdateListenerExtension()],
+    }),
+    parent: document.body,
+  });
+  const surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  expect(surface.appendProjection('u1', projection('hello')).kind).toBe('appended');
+  armed = true;
+  expect(surface.replaceAnchor('u1', 'world', 'hello').kind).toBe('replaced');
+  expect(surface.replaceAnchor('u1', 'final', 'world').kind).toBe('replaced');
+  expect(view.state.doc.toString()).toBe('Xprefix final');
+  surface.dispose();
+  view.destroy();
+});
+
+it('returns the rewritten location after a nested edit before the range', () => {
+  let armed = false;
+  const early = EditorView.updateListener.of((update) => {
+    if (update.docChanged && armed) {
+      armed = false;
+      update.view.dispatch({ changes: { from: 0, insert: 'X' } });
+    }
+  });
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: 'prefix ',
+      selection: { anchor: 7 },
+      extensions: [early, noteSurfaceUpdateListenerExtension()],
+    }),
+    parent: document.body,
+  });
+  const surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  surface.appendProjection('u1', projection('hello'));
+  armed = true;
+  expect(surface.rewriteRegion({ from: 7, to: 12 }, 'world', [])).toMatchObject({
+    kind: 'rewritten',
+    range: { from: 8, to: 13 },
+  });
+  expect(view.state.doc.toString()).toBe('Xprefix world');
+  surface.dispose();
+  view.destroy();
+});
+
+it('preserves a nested user edit inside newly inserted speech', () => {
+  let nested = false;
+  const early = EditorView.updateListener.of((update) => {
+    if (update.docChanged && !nested) {
+      nested = true;
+      update.view.dispatch({
+        annotations: Transaction.userEvent.of('input.type'),
+        changes: { from: 2, insert: 'X' },
+      });
+    }
+  });
+  const view = new EditorView({
+    state: EditorState.create({ extensions: [early, noteSurfaceUpdateListenerExtension()] }),
+    parent: document.body,
+  });
+  const surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  expect(surface.appendProjection('u1', projection('hello')).kind).toBe('appended');
+  expect(surface.replaceAnchor('u1', 'world', 'hello').kind).toBe('denied');
+  expect(view.state.doc.toString()).toBe('heXllo');
+  surface.dispose();
+  view.destroy();
+});
+
+it('does not register a span if the surface is disposed during insertion', () => {
+  let surface: NoteSurface;
+  const early = EditorView.updateListener.of((update) => {
+    if (update.docChanged) surface.dispose();
+  });
+  const view = new EditorView({
+    state: EditorState.create({ extensions: [early, noteSurfaceUpdateListenerExtension()] }),
+    parent: document.body,
+  });
+  surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  expect(surface.appendProjection('u1', projection('hello'))).toMatchObject({
+    kind: 'denied',
+    reason: { kind: 'disposed' },
+  });
+  expect(surface.getSpan('u1')).toBeUndefined();
+  expect(view.state.doc.toString()).toBe('hello');
+  view.destroy();
+});
+
+it('does not return a recovery range when a nested edit changes the rewritten text', () => {
+  let armed = false;
+  const early = EditorView.updateListener.of((update) => {
+    if (update.docChanged && armed) {
+      armed = false;
+      update.view.dispatch({
+        annotations: Transaction.userEvent.of('input.type'),
+        changes: { from: 2, insert: 'X' },
+      });
+    }
+  });
+  const view = new EditorView({
+    state: EditorState.create({ extensions: [early, noteSurfaceUpdateListenerExtension()] }),
+    parent: document.body,
+  });
+  const surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  surface.appendProjection('u1', projection('hello'));
+  armed = true;
+  expect(surface.rewriteRegion({ from: 0, to: 5 }, 'world', []).kind).toBe('rewritten_modified');
+  expect(view.state.doc.toString()).toBe('woXrld');
+  surface.dispose();
+  view.destroy();
+});
+
 it('tracks nested editor updates in document order', () => {
   let nested = false;
   const earlierListener = EditorView.updateListener.of((update) => {
