@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   ALL_MODEL_LANGUAGES,
+  buildModelNavigationSignature,
   deriveModelLanguageOptions,
   derivePickerFamilyTabs,
+  deriveTaskModelAvailability,
   filterModelRowsForPicker,
   ManageModelsModal,
   modelMatchesLanguageFilter,
@@ -84,7 +86,33 @@ function sttModel(
   };
 }
 
-function translationModel({
+function translationModel(
+  modelId: string,
+  languageTags: string[],
+  translationLanguages: string[],
+): CatalogModelRecord {
+  return {
+    artifacts: [],
+    collectionId: 'translation',
+    displayName: modelId,
+    familyId: 'tencent_hy_mt',
+    languageTags,
+    supportsAutomaticLanguageDetection: false,
+    licenseLabel: 'Apache-2.0',
+    licenseUrl: 'https://example.com/license',
+    modelCardUrl: null,
+    modelId,
+    notes: [],
+    runtimeId: 'llama_cpp',
+    sourceUrl: 'https://example.com/source',
+    summary: 'Translation model',
+    task: 'translation',
+    translationSupport: { kind: 'all_to_all', languages: translationLanguages },
+    uxTags: [],
+  };
+}
+
+function translationModelWithSupport({
   familyId,
   languageTags,
   modelId,
@@ -98,23 +126,10 @@ function translationModel({
   translationSupport: NonNullable<CatalogModelRecord['translationSupport']>;
 }): CatalogModelRecord {
   return {
-    artifacts: [],
-    collectionId: 'translation',
-    displayName: modelId,
+    ...translationModel(modelId, languageTags, []),
     familyId,
-    languageTags,
-    supportsAutomaticLanguageDetection: false,
-    licenseLabel: 'MPL-2.0',
-    licenseUrl: 'https://example.com/license',
-    modelCardUrl: 'https://example.com/model-card',
-    modelId,
-    notes: [],
     runtimeId,
-    sourceUrl: 'https://example.com/source',
-    summary: 'Local translation',
-    task: 'translation',
     translationSupport,
-    uxTags: [],
   };
 }
 
@@ -177,7 +192,7 @@ describe('model browser', () => {
     expect(searchQueryAfterTaskSwitch('tts', 'tts', 'french')).toBe('french');
   });
 
-  it('derives an All-first language rail from speech-to-text models in stable native-label order', () => {
+  it('derives an All-first language rail for the active task in stable native-label order', () => {
     const models = [
       sttModel('english', 'moonshine', ['en']),
       sttModel('multilingual', 'nemotron_asr', ['ja', 'nl', 'es']),
@@ -192,11 +207,306 @@ describe('model browser', () => {
       deriveModelLanguageOptions(models, 'stt').map(({ code, label }) => ({ code, label })),
     ).toEqual([
       { code: null, label: 'All languages' },
+      { code: 'AUTO', label: 'Auto detect' },
       { code: 'EN', label: 'English' },
       { code: 'ES', label: 'Español' },
       { code: 'NL', label: 'Nederlands' },
       { code: 'JA', label: '日本語' },
     ]);
+  });
+
+  it('uses task-aware discovery projections in the navigation signature', () => {
+    const autoModel = {
+      ...sttModel('auto', 'moonshine', ['en']),
+      supportsAutomaticLanguageDetection: true,
+    };
+    const translation = translationModel('translation', ['raw'], ['tl']);
+    const state = {
+      activeInstall: null,
+      installRequestPending: false,
+      catalog: {
+        catalogVersion: 1,
+        collections: [],
+        families: [],
+        models: [autoModel, translation],
+      },
+      compiledAdapters: [
+        {
+          displayName: 'Moonshine',
+          familyCapabilities: {
+            availableVoices: [],
+            maxAudioDurationSecs: null,
+            outputSampleRate: null,
+            producesPunctuation: true,
+            supportsHardwareAcceleration: false,
+            supportedLanguages: { kind: 'list', tags: ['en'] },
+            supportsAutomaticLanguageDetection: true,
+            supportsInitialPrompt: false,
+            supportsLanguageSelection: true,
+            supportsSegmentTimestamps: false,
+            supportsSpeedControl: false,
+            supportsStreaming: true,
+            supportsWordTimestamps: false,
+            task: 'stt',
+          },
+          familyId: 'moonshine',
+          runtimeId: 'onnx_runtime',
+        },
+        {
+          displayName: 'Translation',
+          familyCapabilities: {
+            availableVoices: [],
+            maxAudioDurationSecs: null,
+            outputSampleRate: null,
+            producesPunctuation: false,
+            supportsHardwareAcceleration: false,
+            supportedLanguages: { kind: 'list', tags: ['tl'] },
+            supportsAutomaticLanguageDetection: false,
+            supportsInitialPrompt: true,
+            supportsLanguageSelection: true,
+            supportsSegmentTimestamps: false,
+            supportsSpeedControl: false,
+            supportsStreaming: false,
+            supportsWordTimestamps: false,
+            task: 'translation',
+          },
+          familyId: 'tencent_hy_mt',
+          runtimeId: 'llama_cpp',
+        },
+      ],
+      compiledRuntimes: [],
+      failedInstall: null,
+      installedModels: [],
+      loadError: null,
+      loadStatus: 'ready',
+      modelStore: { overridePath: null, path: '', usingDefaultPath: true },
+      selectedModel: null,
+      selectedModelCapabilities: { status: 'none' },
+      selectedTtsModel: null,
+      selectedTtsModelCapabilities: { status: 'none' },
+    } satisfies ModelManagerState;
+    const baseSignature = buildModelNavigationSignature(state);
+    const rawTagOnly = {
+      ...state,
+      catalog: {
+        ...state.catalog,
+        models: [autoModel, { ...translation, languageTags: ['different'] }],
+      },
+    };
+    const autoChanged = {
+      ...state,
+      catalog: {
+        ...state.catalog,
+        models: [{ ...autoModel, supportsAutomaticLanguageDetection: false }, translation],
+      },
+    };
+    const translationChanged = {
+      ...state,
+      catalog: {
+        ...state.catalog,
+        models: [
+          autoModel,
+          {
+            ...translation,
+            translationSupport: { kind: 'all_to_all' as const, languages: ['es'] },
+          },
+        ],
+      },
+    };
+
+    expect(buildModelNavigationSignature(rawTagOnly)).toBe(baseSignature);
+    expect(buildModelNavigationSignature(autoChanged)).not.toBe(baseSignature);
+    expect(buildModelNavigationSignature(translationChanged)).not.toBe(baseSignature);
+  });
+
+  it('derives task availability for a translation-only language from the same catalog', () => {
+    const english = row(sttModel('whisper-en', 'whisper', ['en']));
+    const frenchVoice = row(ttsModel('pocket-fr', 'fr'));
+    const natural = {
+      ...row(translationModel('hy-mt-natural', ['xx'], ['en', 'tl'])),
+      installed: true,
+    };
+    const literal = row(translationModel('hy-mt-literal', ['yy'], ['en', 'tl']));
+
+    const options = deriveModelLanguageOptions(
+      [english.model, frenchVoice.model, natural.model, literal.model],
+      'translation',
+    ).map(({ code }) => code);
+    expect(options).toContain('TL');
+    expect(options).not.toContain('XX');
+    expect(options).not.toContain('YY');
+    expect(deriveTaskModelAvailability([english, frenchVoice, natural, literal], 'tl')).toEqual([
+      { compatibleDownloads: 0, installed: 0, task: 'stt' },
+      { compatibleDownloads: 0, installed: 0, task: 'tts' },
+      { compatibleDownloads: 1, installed: 1, task: 'translation' },
+    ]);
+  });
+
+  it('shows capability discovery failure with a disabled pending retry', async () => {
+    let state: ModelManagerState = {
+      activeInstall: null,
+      installRequestPending: false,
+      capabilityLoadError: 'system info unavailable',
+      catalog: { catalogVersion: 1, collections: [], families: [], models: [] },
+      compiledAdapters: [],
+      compiledRuntimes: [],
+      failedInstall: null,
+      installedModels: [],
+      loadError: null,
+      loadStatus: 'ready',
+      modelStore: { overridePath: null, path: '', usingDefaultPath: true },
+      selectedModel: null,
+      selectedModelCapabilities: { status: 'none' },
+      selectedTtsModel: null,
+      selectedTtsModelCapabilities: { status: 'none' },
+    };
+    let notify: (() => void) | undefined;
+    let resolveRetry: (() => void) | undefined;
+    const retry = new Promise<void>((resolve) => {
+      resolveRetry = resolve;
+    });
+    const init = vi.fn(() => {
+      state = { ...state, capabilityLoadError: null, loadStatus: 'loading' };
+      notify?.();
+      return retry;
+    });
+    const manager = {
+      getState: () => state,
+      init,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
+    } as unknown as ModelInstallManager;
+    const modal = new ManageModelsModal({} as never, {
+      feedback: { show: vi.fn() },
+      manager,
+      onChanged: vi.fn(),
+    });
+
+    modal.open();
+    const content = modal.contentEl as unknown as TestElement;
+    expect(texts(content)).toEqual(
+      expect.arrayContaining(['Model capabilities unavailable', 'Retry capabilities']),
+    );
+    expect(texts(content)).not.toContain('No models available');
+
+    const retryButton = content
+      .querySelectorAll('button')
+      .find((candidate) => candidate.textContent === 'Retry capabilities');
+    await retryButton?.click();
+    const checkingButton = content
+      .querySelectorAll('button')
+      .find((candidate) => candidate.textContent === 'Checking capabilities…');
+    expect(checkingButton?.disabled).toBe(true);
+    await checkingButton?.click();
+    expect(init).toHaveBeenCalledOnce();
+
+    state = { ...state, capabilityLoadError: 'still unavailable', loadStatus: 'ready' };
+    resolveRetry?.();
+    await retry;
+    notify?.();
+    expect(texts(content)).toContain('Retry capabilities');
+    modal.close();
+  });
+  it('shows installed and compatible-download counts for every task when a language is selected', async () => {
+    vi.stubGlobal('createFragment', () => new TestElement());
+    const naturalModel = translationModel('hy-mt-natural', ['en', 'tl'], ['en', 'tl']);
+    const literalModel = translationModel('hy-mt-literal', ['en', 'tl'], ['en', 'tl']);
+    const state = {
+      activeInstall: null,
+      installRequestPending: false,
+      catalog: {
+        catalogVersion: 1,
+        collections: [],
+        families: [
+          {
+            displayName: 'Tencent HY-MT 2',
+            familyId: 'tencent_hy_mt' as const,
+            runtimeId: 'llama_cpp' as const,
+            summary: '',
+            task: 'translation' as const,
+          },
+        ],
+        models: [naturalModel, literalModel],
+      },
+      compiledAdapters: [
+        {
+          displayName: 'Tencent HY-MT 2',
+          familyCapabilities: {
+            availableVoices: [],
+            maxAudioDurationSecs: null,
+            outputSampleRate: null,
+            producesPunctuation: false,
+            supportsHardwareAcceleration: false,
+            supportedLanguages: { kind: 'list' as const, tags: ['en', 'tl'] },
+            supportsAutomaticLanguageDetection: false,
+            supportsInitialPrompt: true,
+            supportsLanguageSelection: true,
+            supportsSegmentTimestamps: false,
+            supportsSpeedControl: false,
+            supportsStreaming: false,
+            supportsWordTimestamps: false,
+            task: 'translation' as const,
+          },
+          familyId: 'tencent_hy_mt' as const,
+          runtimeId: 'llama_cpp' as const,
+        },
+      ],
+      compiledRuntimes: [],
+      failedInstall: null,
+      installedModels: [
+        {
+          catalogVersion: 1,
+          familyId: 'tencent_hy_mt' as const,
+          installPath: '/models/hy-mt-natural',
+          installedArtifactIds: ['model'],
+          installedAtUnixMs: 1,
+          installedVoiceIds: [],
+          modelId: 'hy-mt-natural',
+          runtimeId: 'llama_cpp' as const,
+          runtimePath: null,
+          totalSizeBytes: 100,
+        },
+      ],
+      loadError: null,
+      loadStatus: 'ready' as const,
+      modelStore: { overridePath: null, path: '/models', usingDefaultPath: true },
+      selectedModel: null,
+      selectedModelCapabilities: { status: 'none' as const },
+      selectedTtsModel: null,
+      selectedTtsModelCapabilities: { status: 'none' as const },
+    } satisfies ModelManagerState;
+    const manager = {
+      getDictationLanguage: () => 'en',
+      getState: () => state,
+      subscribe: () => () => {},
+    } as unknown as ModelInstallManager;
+    const modal = new ManageModelsModal({} as never, {
+      feedback: { show: vi.fn() },
+      initialTask: 'translation',
+      manager,
+      onChanged: vi.fn(),
+    });
+    modal.open();
+    const content = modal.contentEl as unknown as TestElement;
+    const filipino = content
+      .querySelectorAll('.local-stt-language-rail__button')
+      .find((button) => button.findByText('Filipino') !== undefined);
+
+    expect(filipino).toBeDefined();
+    await filipino?.click();
+
+    expect(texts(content)).toEqual(
+      expect.arrayContaining([
+        'Filipino availability',
+        'Speech to text: No compatible model',
+        'Text to speech: No compatible model',
+        'Translation: 1 installed · 1 compatible download',
+      ]),
+    );
+    modal.close();
+    vi.unstubAllGlobals();
   });
 
   it('derives text-to-speech language options from languageTags for the active task', () => {
@@ -259,7 +569,7 @@ describe('model browser', () => {
       'ug',
       'yue',
     ];
-    const model = translationModel({
+    const model = translationModelWithSupport({
       familyId: 'tencent_hy_mt',
       languageTags: ['en'],
       modelId: 'hy-mt-2-1.8b',
@@ -277,7 +587,7 @@ describe('model browser', () => {
   });
 
   it('derives Firefox translation languages only from exact directed-pair endpoints', () => {
-    const firefox = translationModel({
+    const firefox = translationModelWithSupport({
       familyId: 'firefox_translations',
       languageTags: ['de', 'en', 'fr', 'xx'],
       modelId: 'firefox',
@@ -443,7 +753,7 @@ describe('model browser', () => {
     const english = sttModel('english', 'moonshine', ['en', 'fr']);
     const french = sttModel('french', 'nemotron_asr', ['en', 'fr']);
     const german = ttsModel('german', 'de');
-    const translation = translationModel({
+    const translation = translationModelWithSupport({
       familyId: 'tencent_hy_mt',
       languageTags: ['en', 'ja'],
       modelId: 'hy-mt-2-1.8b',
@@ -742,6 +1052,7 @@ describe('model browser', () => {
         (modal.contentEl as unknown as TestElement).findByClass('search-input-clear-button'),
       ).toBeDefined();
       const row = Setting.named('Pocket TTS en');
+      expect(texts(row.descEl)).toContain('Installed');
       expect(row.extraButtonComponents).toHaveLength(1);
       expect(row.extraButtonComponents[0]?.tooltip).toBe('Details');
       await row.extraButtonComponents[0]?.click();

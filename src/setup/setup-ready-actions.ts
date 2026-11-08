@@ -7,11 +7,13 @@ interface SetupReadyActionDependencies {
   hasDictationTarget: () => boolean;
   isDictationBusy: () => boolean;
   onCompleted: () => Promise<void>;
+  prepareDictationTarget: () => Promise<boolean>;
   startDictation: () => Promise<void>;
 }
 
 export class SetupReadyActions {
   private pending = false;
+  private preparingTarget = false;
 
   constructor(private readonly dependencies: SetupReadyActionDependencies) {}
 
@@ -20,29 +22,50 @@ export class SetupReadyActions {
   }
 
   async tryDictationNow(): Promise<void> {
-    if (this.pending) {
+    if (this.pending || this.preparingTarget) {
       return;
     }
 
-    if (this.dependencies.isDictationBusy()) {
+    this.preparingTarget = true;
+    try {
+      if (this.dependencies.isDictationBusy()) {
+        this.dependencies.feedback.show({
+          intent: 'warning',
+          key: 'setup-wizard-prerequisite',
+          message: t('setup.ready.waitForDictation'),
+        });
+        return;
+      }
+
+      if (!(await this.prepareTarget())) {
+        return;
+      }
+
+      await this.complete(true);
+    } finally {
+      this.preparingTarget = false;
+    }
+  }
+
+  private async prepareTarget(): Promise<boolean> {
+    if (this.dependencies.hasDictationTarget()) return true;
+    try {
+      if (await this.dependencies.prepareDictationTarget()) return true;
+    } catch (cause) {
       this.dependencies.feedback.show({
-        intent: 'warning',
-        key: 'setup-wizard-prerequisite',
-        message: t('setup.ready.waitForDictation'),
+        cause,
+        intent: 'error',
+        key: 'setup-wizard-target-preparation',
+        message: t('setup.ready.targetPreparationFailed'),
       });
-      return;
+      return false;
     }
-
-    if (!this.dependencies.hasDictationTarget()) {
-      this.dependencies.feedback.show({
-        intent: 'warning',
-        key: 'setup-wizard-prerequisite',
-        message: t('setup.ready.openMarkdownNote'),
-      });
-      return;
-    }
-
-    await this.complete(true);
+    this.dependencies.feedback.show({
+      intent: 'warning',
+      key: 'setup-wizard-prerequisite',
+      message: t('setup.ready.openMarkdownNote'),
+    });
+    return false;
   }
 
   private async complete(startDictation: boolean): Promise<void> {

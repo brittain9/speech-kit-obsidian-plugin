@@ -68,6 +68,7 @@ import {
   openSidecarUpdateModal,
   type SidecarInstallActionDeps,
 } from './settings/sidecar-settings-section';
+import { prepareFirstRunDictationTarget } from './setup/first-run-dictation-target';
 import { SetupWizardModal } from './setup/setup-wizard-modal';
 import { formatVoiceLabel } from './shared/format-utils';
 import { t } from './shared/i18n';
@@ -230,9 +231,6 @@ export default class LocalSttPlugin extends Plugin {
         this.requirePresetStateStore().commitPreservingPresetStateIf(condition, createNextSettings),
       getSettings: () => this.settings,
       logger: this.logger,
-      saveSettings: async (nextSettings) => {
-        await this.updateSettings(nextSettings);
-      },
       sidecarConnection: this.sidecarConnection,
       sidecarLifecycleGate: this.sidecarLifecycleGate,
     });
@@ -825,6 +823,7 @@ export default class LocalSttPlugin extends Plugin {
         });
       },
       pluginDirectory,
+      prepareDictationTarget: () => this.prepareFirstRunDictationTarget(),
       sidecarVersion: REQUIRED_SIDECAR_VERSION,
       postSidecarInstalled: async () => {
         await this.restartSidecarConnection();
@@ -838,6 +837,17 @@ export default class LocalSttPlugin extends Plugin {
       startDictation: () => this.requireDictationController().startDictation(),
     });
     modal.open();
+  }
+
+  private prepareFirstRunDictationTarget(): Promise<boolean> {
+    return prepareFirstRunDictationTarget(
+      {
+        hasTarget: () => Session.hasDictationTarget(this.app),
+        vault: this.app.vault,
+        workspace: this.app.workspace,
+      },
+      t('setup.ready.scratchNoteContent'),
+    );
   }
 
   async openModelPicker(options: ModelPickerOptions = {}): Promise<void> {

@@ -29,6 +29,7 @@ function createHarness(
       hasDictationTarget: () => true,
       isDictationBusy: () => false,
       onCompleted,
+      prepareDictationTarget: async () => false,
       startDictation,
       ...overrides,
     }),
@@ -48,6 +49,45 @@ describe('setup ready actions', () => {
 
     expect(harness.events).toEqual(['completed', 'closed', 'started']);
     expect(harness.startDictation).toHaveBeenCalledOnce();
+  });
+
+  it('prepares a safe dictation target before the first attempt when none is open', async () => {
+    const events: string[] = [];
+    const harness = createHarness({
+      hasDictationTarget: () => false,
+      onCompleted: vi.fn(async () => {
+        events.push('completed');
+      }),
+      prepareDictationTarget: vi.fn(async () => {
+        events.push('prepared');
+        return true;
+      }),
+    });
+
+    await harness.actions.tryDictationNow();
+
+    expect(events).toEqual(['prepared', 'completed']);
+    expect(harness.startDictation).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the wizard open with localized recovery when target creation fails', async () => {
+    const cause = new Error('vault create failed');
+    const harness = createHarness({
+      hasDictationTarget: () => false,
+      prepareDictationTarget: vi.fn().mockRejectedValue(cause),
+    });
+
+    await harness.actions.tryDictationNow();
+
+    expect(harness.feedback.show).toHaveBeenCalledWith({
+      cause,
+      intent: 'error',
+      key: 'setup-wizard-target-preparation',
+      message: "Couldn't open a safe dictation note. Try again.",
+    });
+    expect(harness.onCompleted).not.toHaveBeenCalled();
+    expect(harness.closeWizard).not.toHaveBeenCalled();
+    expect(harness.startDictation).not.toHaveBeenCalled();
   });
 
   it('keeps Done as a completion-only path', async () => {
@@ -119,6 +159,7 @@ describe('setup ready actions', () => {
 
     const first = harness.actions.tryDictationNow();
     const second = harness.actions.tryDictationNow();
+    await Promise.resolve();
     completeSetup?.();
     await Promise.all([first, second]);
 
