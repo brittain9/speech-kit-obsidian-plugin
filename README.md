@@ -39,7 +39,7 @@ Speech Kit is not tied to one speech engine or hosted API. It manages a growing 
 | Multilingual live transcription | Nemotron 3.5 ASR                                                  |
 | The most accurate transcripts   | Whisper Large V3 Turbo, Cohere Transcribe, and other batch models |
 | Natural local voices            | Pocket TTS or Supertonic 3                                        |
-| Fast offline translation        | Firefox Translations                                              |
+| Fast offline translation        | Firefox Translations or Tencent HY-MT 2                           |
 
 The setup wizard installs the native engine and your first speech model. From there, Speech Kit manages the downloads and you choose how you work.
 
@@ -55,7 +55,7 @@ To keep the microphone audio, enable **Save microphone recording** in Speech Kit
 
 Both commands can optionally run one of your AI presets on the complete transcript. AI is separate from transcription; if you choose a remote provider, transcript text is sent to that provider. See the [media transcription guide](docs/guides/media-transcription.md) for setup and options.
 
-**Translate.** Translate a selection or a whole note between English and seven other languages. Preview the result before replacing your text, inserting it into the note, or copying it. One local model pack covers every supported direction.
+**Translate.** Translate a selection or a whole note. Firefox Translations supports 96 English-anchored directions. Tencent HY-MT 2 supports direct translation among its 38 catalog languages. Preview the result before replacing your text, inserting it into the note, or copying it.
 
 **Listen.** Read any note aloud with natural local voices. Control the voice, speed, and playback without leaving Obsidian.
 
@@ -95,7 +95,7 @@ Each feature is served by a different model, so coverage is tracked per feature 
 
 ✅ supported · — not yet available
 
-Transcription coverage also depends on the model you select: multilingual models cover the full set above, while some smaller or specialized models are English-only. Translation runs through English in either direction, so every supported pair has English on one side.
+Transcription coverage also depends on the model you select: multilingual models cover the full set above, while some smaller or specialized models are English-only. Translation coverage depends on the selected model. Firefox Translations covers English-anchored directions; Tencent HY-MT 2 supports all-to-all translation among 38 languages, including languages outside the table above.
 
 ## Local-first, private by default
 

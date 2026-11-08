@@ -27,6 +27,14 @@ Close either dialog to continue the job in the background, including the AI step
 
 Both commands check that the intended note is still a safe insertion target before writing. If you navigate to another note while waiting, the result stays associated with the original target.
 
+## Configure an AI provider
+
+1. Open **Settings → Speech Kit → LLM transformation** and enable **Enable LLM features**.
+2. Select **Open sidebar**, then close Settings. In the Speech Kit sidebar, choose a provider and model. For local processing, choose **Ollama**, start Ollama, and select an installed chat model. The sidebar reports when Ollama is unavailable or has no chat models.
+3. Choose an AI preset in the file or YouTube transcription dialog. Choose **Transcript only** to skip AI. Dictation transforms can stay off while you process media transcripts.
+
+A local provider keeps transcript text on your computer. A remote provider receives transcript text and any enabled context. Audio and video files are never sent to the AI provider.
+
 ## Customize the starting presets
 
 Speech Kit ships 16 starting presets. Every preset can be edited, duplicated, or deleted from **Manage presets**, including the shipped ones. Edits and deletions persist across reloads. **Restore transform defaults** resets edited starting presets and restores deleted ones while preserving custom presets and configured models. Deleting every preset turns AI transformation off.
