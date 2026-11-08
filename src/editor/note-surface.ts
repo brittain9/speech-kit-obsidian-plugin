@@ -494,8 +494,17 @@ export class NoteSurface {
     const rewrittenRange = { from: range.from, to: end };
     for (const update of nestedUpdates) {
       let overlaps = false;
+      const insertedAfter = update.transactions
+        .map((transaction) => transaction.annotation(noteSurfaceInsertAfter))
+        .find((value) => value !== undefined);
       update.changes.iterChangedRanges((from, to) => {
-        if (rangeIntersects(from, to, rewrittenRange.from, rewrittenRange.to)) overlaps = true;
+        const recordingAfter =
+          insertedAfter?.order === this.createdAt &&
+          insertedAfter.position === rewrittenRange.to &&
+          from === to &&
+          from === rewrittenRange.to;
+        if (!recordingAfter && rangeIntersects(from, to, rewrittenRange.from, rewrittenRange.to))
+          overlaps = true;
       });
       if (overlaps) return { kind: 'rewritten_modified' };
       rewrittenRange.from = update.changes.mapPos(rewrittenRange.from, 1);
