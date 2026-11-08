@@ -1,6 +1,6 @@
 ---
-status: accepted
----
+
+## status: accepted
 
 # Use a translation-engine registry and isolated HY-MT helper
 

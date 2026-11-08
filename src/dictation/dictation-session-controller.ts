@@ -71,6 +71,7 @@ type ControllerSession = Pick<
   | 'clearSessionProcessingMark'
   | 'dispose'
   | 'getTargetFilePath'
+  | 'insertMicrophoneRecording'
   | 'insertAdjacentToSessionRange'
   | 'markSessionRangeAsProcessing'
   | 'readCurrentSessionText'
@@ -1277,8 +1278,12 @@ export class DictationSessionController {
     const link = entry.microphoneRecordingLink;
     if (link === null) return;
     entry.microphoneRecordingLink = null;
-    if (!entry.session.insertAdjacentToSessionRange(link, 'below')) {
-      void entry.microphoneRecording?.discardSavedFile();
+    if (!entry.session.insertMicrophoneRecording(link)) {
+      this.dependencies.feedback.show({
+        intent: 'warning',
+        key: 'microphone-recording-embed-failed',
+        message: t('notice.microphoneRecordingEmbedFailed', { link }),
+      });
     }
   }
 

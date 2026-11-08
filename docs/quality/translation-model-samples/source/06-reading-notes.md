@@ -1,4 +1,5 @@
 ---
+
 title: Reading notes on reliable systems
 book: Designing for Failure
 rating: 4
@@ -26,11 +27,11 @@ This maps neatly to translation. The preview can look polished while changing Tu
 2. [[Installer Design]] — download to a temporary file, verify SHA-256, then promote atomically.
 3. [[Worker Lifecycle]] — terminate after success, cancellation, or error.
 
-| Concept | Translation example |
-| --- | --- |
-| Idempotency | retrying a model download |
-| Validation | marker order and count |
-| Isolation | inference inside a worker |
+| Concept     | Translation example          |
+| ----------- | ---------------------------- |
+| Idempotency | retrying a model download    |
+| Validation  | marker order and count       |
+| Isolation   | inference inside a worker    |
 | Audit trail | benchmark inputs and outputs |
 
 The book is occasionally repetitive, but its vocabulary is useful. I should revisit the chapter on backpressure before changing the request queue. #reading/reliability

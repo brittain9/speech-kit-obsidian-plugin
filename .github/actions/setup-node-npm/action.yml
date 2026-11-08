@@ -8,11 +8,11 @@ inputs:
   cache:
     description: Set to 'true' to enable actions/setup-node@v6 npm caching.
     required: false
-    default: 'false'
+    default: "false"
   upgrade-npm:
     description: Set to 'true' to globally install npm 11.12.1 after Node setup.
     required: false
-    default: 'false'
+    default: "false"
 
 runs:
   using: composite

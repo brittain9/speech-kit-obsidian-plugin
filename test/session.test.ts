@@ -13,6 +13,7 @@ import type {
   RewriteResult,
   SurfaceDesynchronization,
 } from '../src/editor/note-surface';
+import { noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
 import { provisionalTranscriptExtension } from '../src/editor/provisional-transcript-extension';
 import { RawTranscriptRecovery } from '../src/editor/raw-transcript-recovery';
 import { sessionProcessingExtension } from '../src/editor/session-processing-extension';
@@ -43,6 +44,7 @@ class FakeSurface {
     range: RewriteRange;
   }> = [];
   public readonly dispose = vi.fn();
+  public readonly insertAfterRange = vi.fn(() => true);
   public readonly readNoteGlossary = vi.fn(
     (_maxChars: number): { text: string; truncated: boolean } | null => null,
   );
@@ -807,6 +809,28 @@ describe('Session', () => {
     session.dispose();
   });
 
+  it('keeps the transcript available for cleanup after inserting the recording', () => {
+    const { session, view } = createRecoveryIntegrationHarness('Existing note');
+    session.acceptTranscript(
+      transcript({ sessionId: 'recovery-integration', text: 'raw transcript', utteranceId: 'u1' }),
+    );
+
+    expect(session.insertMicrophoneRecording('![[audio.webm]]')).toBe(true);
+    expect(session.readCurrentSessionText()).toBe('raw transcript');
+    expect(session.replaceSessionRangeWithCleaned('clean transcript')).toMatchObject({
+      kind: 'replaced',
+    });
+    expect(view.state.doc.toString()).toBe('Existing note clean transcript\n\n![[audio.webm]]');
+    session.dispose();
+  });
+
+  it('inserts a recording at the dictation anchor when no transcript was produced', () => {
+    const { session, view } = createRecoveryIntegrationHarness('');
+    expect(session.insertMicrophoneRecording('![[audio.webm]]')).toBe(true);
+    expect(view.state.doc.toString()).toBe('![[audio.webm]]');
+    session.dispose();
+  });
+
   it('omits emptied finalized utterances from joined raw session text', () => {
     const { session } = createSessionHarness();
 
@@ -1097,6 +1121,7 @@ function createRecoveryIntegrationHarness(documentText: string): {
   const view = new StateBackedEditorView(documentText, {
     extensions: [
       dictationAnchorExtension(),
+      noteSurfaceUpdateListenerExtension(),
       provisionalTranscriptExtension(),
       sessionProcessingExtension(),
     ],

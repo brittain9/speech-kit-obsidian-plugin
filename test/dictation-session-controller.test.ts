@@ -79,6 +79,7 @@ class FakeSession {
   });
   public readonly clearSessionProcessingMark = vi.fn();
   public readonly dispose = vi.fn();
+  public readonly insertMicrophoneRecording = vi.fn((_link: string) => true);
   public readonly getTargetFilePath = vi.fn(() => 'Notes/Dictation.md');
   public readonly insertAdjacentToSessionRange = vi.fn(
     (_blockText: string, _placement: 'above' | 'below') => true,
@@ -232,9 +233,8 @@ describe('DictationSessionController', () => {
     const sessionId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId ?? '';
     sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
     await vi.waitFor(() =>
-      expect(sessions[0]?.insertAdjacentToSessionRange).toHaveBeenCalledWith(
+      expect(sessions[0]?.insertMicrophoneRecording).toHaveBeenCalledWith(
         '![[Voice recording.webm]]',
-        'below',
       ),
     );
     expect(recording.start).toHaveBeenCalledOnce();
@@ -265,6 +265,48 @@ describe('DictationSessionController', () => {
 
     expect(recording.stop).toHaveBeenCalledWith(false);
     expect(sessions[0]?.insertAdjacentToSessionRange).not.toHaveBeenCalled();
+  });
+
+  it('keeps the saved audio and informs the user when it cannot insert the embed', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const sessions: FakeSession[] = [];
+    const feedback = { show: vi.fn() };
+    let saveLink = (_link: string) => {};
+    const recording = {
+      discardSavedFile: vi.fn(async () => {}),
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async () => saveLink('![[Voice recording.webm]]')),
+    };
+    const controller = createController({
+      createMicrophoneRecording: (_path, onSaved) => {
+        saveLink = onSaved;
+        return recording;
+      },
+      createSession: (session) => {
+        sessions.push(session);
+        session.insertMicrophoneRecording.mockReturnValue(false);
+      },
+      feedback,
+      getSettings: () =>
+        createSettings({
+          saveMicrophoneRecording: true,
+          selectedModel: createExternalModelSelection(),
+        }),
+      sidecarConnection,
+    });
+
+    await controller.startDictation();
+    await controller.stopDictation();
+    const sessionId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId ?? '';
+    sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await vi.waitFor(() => expect(sessions[0]?.insertMicrophoneRecording).toHaveBeenCalled());
+    expect(recording.discardSavedFile).not.toHaveBeenCalled();
+    expect(feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: 'warning',
+        message: expect.stringContaining('Voice recording.webm'),
+      }),
+    );
   });
 
   it('refuses a start synchronously while sidecar maintenance is active', async () => {

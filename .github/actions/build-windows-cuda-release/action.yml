@@ -69,12 +69,12 @@ runs:
         # explicit extra set includes the stable release inputs but deliberately
         # excludes broad CUDA, which would hash derived CUDA_PATH variables.
         cache-env-vars: ${{ inputs.windows-cuda-rust-cache-env-vars }}
-        cache-on-failure: 'false'
+        cache-on-failure: "false"
 
     - name: Build Windows CUDA release sidecar
       shell: pwsh
       env:
-        CARGO_TIMINGS: '1'
+        CARGO_TIMINGS: "1"
       run: npm run build:sidecar:cuda:windows:release
 
     # Save explicitly after the production build succeeds. The combined cache

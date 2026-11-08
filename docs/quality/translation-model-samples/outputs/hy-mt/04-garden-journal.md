@@ -1,4 +1,5 @@
 ---
+
 title: Balcony garden journal
 season: summer
 ---

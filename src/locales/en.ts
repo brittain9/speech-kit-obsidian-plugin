@@ -183,6 +183,8 @@ export const en = {
   'media.progress.insert': 'Inserting transcript…',
   'notice.dictationStartFailed': 'Could not start dictation.',
   'notice.dictationStopFailed': 'Could not stop dictation.',
+  'notice.microphoneRecordingEmbedFailed':
+    'The recording was saved but could not be added to the note: {link}',
   'notice.microphoneRecordingFailed':
     'Could not save the microphone recording. Dictation continues, but no audio file was added.',
   'notice.finalizedUtteranceAutoCopyFailed':
@@ -325,7 +327,8 @@ export const en = {
   'media.modal.aiPresetNone': 'Transcript only',
   'media.modal.aiPresetDesc': 'Optional: apply the selected AI preset to the complete transcript.',
   'media.modal.aiPresetShortDesc': 'Optional AI preset',
-  'media.modal.aiProviderRequired': 'Choose an AI provider in Settings or select Transcript only.',
+  'media.modal.aiProviderRequired':
+    'Choose an AI provider in the Speech Kit sidebar, or select Transcript only.',
   'media.modal.aiPresetMissing': 'The selected AI preset is no longer available. Choose another.',
   'media.modal.aiNotReady':
     'The selected AI preset could not start. Check your AI provider settings.',
@@ -426,6 +429,10 @@ export const en = {
   'settings.groups.capture': 'Capture',
   'settings.groups.transcriptOutput': 'Transcript output',
   'settings.groups.llmTransformation': 'LLM transformation',
+  'settings.llm.provider.name': 'AI provider and model',
+  'settings.llm.provider.desc':
+    'Choose a provider and model in the Speech Kit sidebar. Close settings to see it.',
+  'settings.llm.provider.button': 'Open sidebar',
   'settings.groups.engine': 'Engine',
   'settings.groups.advanced': 'Advanced',
   'settings.readAloud.hotkey': 'Recommended shortcut',

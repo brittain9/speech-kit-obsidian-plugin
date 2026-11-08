@@ -58,7 +58,7 @@ times (system audio + mic, Whisper large-v3-turbo q8_0).
    `hallucination_filter.rs` (`repeated_ngram_dominates`,
    `repeated_suffix_dominates`) operate **within one segment** and additionally
    require a diagnostics/VAD corroborator. A decoder loop that emits the same
-   sentence as N *separate consecutive segments* — exactly the #160 shape — is
+   sentence as N _separate consecutive segments_ — exactly the #160 shape — is
    invisible to them.
 
 ### Decisions
@@ -75,7 +75,7 @@ times (system audio + mic, Whisper large-v3-turbo q8_0).
   No corroborator required — three back-to-back identical segments is not a
   realistic dictation pattern, and Cohere segments carry no diagnostics.
   Runs on **final revisions only** (consistent with existing non-hard rules).
-- **Deferred:** cross-*utterance* repetition guarding (same phrase accepted
+- **Deferred:** cross-_utterance_ repetition guarding (same phrase accepted
   across successive utterances). Riskier — users legitimately repeat
   themselves across utterances; revisit if A1+A2 don't clear #160 in practice.
 
@@ -90,7 +90,7 @@ capitalizing Every Single Word; a fresh session resets it.
 
 `buildGlossary` emits `Glossary: Nami, Luffy, Obsidian, …` — a colon-labeled,
 Title-Case comma list — and the adapter feeds it verbatim as `initial_prompt`.
-Whisper mimics the *style* of its prompt (OpenAI's Whisper prompting guidance:
+Whisper mimics the _style_ of its prompt (OpenAI's Whisper prompting guidance:
 prompts should read like ordinary transcript prose), so a list of Capitalized
 Tokens pushes the decoder toward Title Case. The loop is self-reinforcing:
 dictated proper nouns land in the note → get scraped into the glossary → the
@@ -178,7 +178,7 @@ accept into it.
   Issue #138's suggestion to also gate `'stopped'` turned out to be wrong:
   `handleSessionStopped` flips the phase to `'stopped'` synchronously, and the
   sidecar can deliver the final `transcript_ready` and `session_stopped` in
-  one I/O chunk — the stop path *drains* those in-flight accepts after the
+  one I/O chunk — the stop path _drains_ those in-flight accepts after the
   flip, so gating `'stopped'` silently drops the last utterance (caught by the
   pre-existing same-turn drain regression test). Neither `'stopping'` nor
   `'stopped'` may be gated. `'cancelling'` alone covers #138: `cancelSession`

@@ -25,6 +25,7 @@ No sandbox, so this is straightforward.
 
 1. Install the CUDA sidecar variant from **Settings → Speech Kit** (sidecar section), or build from source (below).
 2. Confirm the driver:
+
    ```powershell
    nvidia-smi
    ```
@@ -41,11 +42,13 @@ On a native install the sidecar inherits the host environment, so there's usuall
 Flatpak hides the host `/usr`, and a global `LD_LIBRARY_PATH` breaks Electron's audio capture, so it needs a few extra steps.
 
 1. Expose the host filesystem and GPU, then fully restart Obsidian:
+
    ```sh
    flatpak override --user --filesystem=host-os md.obsidian.Obsidian
    flatpak override --user --device=all md.obsidian.Obsidian
    ```
 2. In **Settings → Speech Kit → Advanced: Sidecar**, set **CUDA library path** to the colon-separated host library directories. Use resolved real paths (from `readlink -f /usr/local/cuda`), not the `/usr/local/cuda` symlink — symlinks break across the sandbox boundary. This scopes `LD_LIBRARY_PATH` to the sidecar child process only. For example:
+
    ```text
    /run/host/usr/local/cuda-13.2/targets/x86_64-linux/lib:/run/host/usr/local/cuda-13.2/lib64:/run/host/usr/lib64
    ```

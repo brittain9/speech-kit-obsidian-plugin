@@ -43,11 +43,11 @@ preferred, prioritized, or used as a silent fallback for the other.
 
 Measured on an M2 Pro:
 
-| Runtime/model | Cold/runtime load | Warm translation | Long input | Peak footprint | Download |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| TranslateGemma 4B q4 ONNX, CPU | 3.6–3.9 s model load; ~1.5 s first token | ~3.29 output tokens/s | minutes for long notes | 3.1–3.4 GB RSS | ~3 GB |
-| TranslateGemma 4B Q4_K_M GGUF, Metal | ~10 s cold load | ~60 output tokens/s | viable after load | ~3 GB memory footprint | 2.49 GB |
-| Firefox/Bergamot, CPU WebAssembly | 12 ms runtime; 22–54 ms model load | ~17 ms short warm request | 10,900 chars in 2.33 s | ~418 MB RSS | ~5 MB shared runtime + selected direction |
+| Runtime/model                        |                        Cold/runtime load |          Warm translation |             Long input |         Peak footprint |                                  Download |
+| ------------------------------------ | ---------------------------------------: | ------------------------: | ---------------------: | ---------------------: | ----------------------------------------: |
+| TranslateGemma 4B q4 ONNX, CPU       | 3.6–3.9 s model load; ~1.5 s first token |     ~3.29 output tokens/s | minutes for long notes |         3.1–3.4 GB RSS |                                     ~3 GB |
+| TranslateGemma 4B Q4_K_M GGUF, Metal |                          ~10 s cold load |       ~60 output tokens/s |      viable after load | ~3 GB memory footprint |                                   2.49 GB |
+| Firefox/Bergamot, CPU WebAssembly    |       12 ms runtime; 22–54 ms model load | ~17 ms short warm request | 10,900 chars in 2.33 s |            ~418 MB RSS | ~5 MB shared runtime + selected direction |
 
 The final production-worker smoke test loaded the runtime in 37 ms and
 translated two English→Spanish sentences in 235 ms total. A beam size of four

@@ -10,7 +10,7 @@ Apple-Dictation-quality live transcription: words appear in the note within
 ~1 s of being spoken, and already-visible words revise in place as the model
 hears more context, then lock in ("finalize") when the utterance ends. This is
 not a toggle or a mode — it is what a session feels like when the selected
-model is a *streaming* model. Batch models (Whisper, Cohere Transcribe) are
+model is a _streaming_ model. Batch models (Whisper, Cohere Transcribe) are
 untouched and keep their current behavior.
 
 First streaming model: **Moonshine v2 streaming**
@@ -73,7 +73,7 @@ directory).
 We do **not** link the `moonshine-ai/moonshine` C++ core. Rationale: it embeds
 its own ONNX Runtime (symbol/version clash with the `ort` crate), and it
 duplicates layers we own (VAD, session state, event cadence). Its value to us
-is as a *reference implementation* for streaming cadence and revision
+is as a _reference implementation_ for streaming cadence and revision
 semantics, not as a dependency.
 
 **Phase 0 (pinning, timeboxed):** the exact ONNX asset layout for the
@@ -148,7 +148,7 @@ the default build set exactly like `engine-cohere-transcribe`.
 
 `ListeningSession` keeps owning utterance segmentation (Silero VAD, speaking
 styles, timestamps, `pause_ms_before_utterance`, session states). The live
-path changes *when audio reaches the worker*, not who cuts utterances:
+path changes _when audio reaches the worker_, not who cuts utterances:
 
 - Batch (today): frames buffer in the session; the worker sees one finished
   clip per utterance.
@@ -201,13 +201,13 @@ The journal/session/surface machinery is reused; the gaps to close:
   session ends (whichever first — a session teardown with an utterance still
   provisional must not leave the decoration behind).
 - **Latching under live revision.** If the user edits mid-utterance, the span
-  latches (existing behavior) and every later partial *and* the final for that
+  latches (existing behavior) and every later partial _and_ the final for that
   utterance are denied — verify this holds at partial-revision rates and that
   denial is silent (no error surface, journal still records revisions).
 - **Empty final.** If the hallucination filter empties an utterance that
   already has projected partial text, the final must replace the projected
   text with the empty string (today `session.ts:326` early-returns on empty
-  finals only for *unprojected* utterances — the projected case is new).
+  finals only for _unprojected_ utterances — the projected case is new).
   Leftover boundary whitespace from the append must not accumulate.
 - **LLM cleanup** stays final-gated (already true; pin with a test that feeds
   partials and asserts no cleanup runs until the final).

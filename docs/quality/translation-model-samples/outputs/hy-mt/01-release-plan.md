@@ -1,11 +1,13 @@
 ---
+
 title: Local Translation Release Plan
 status: draft
 owners:
-  - alex
-tags:
-  - local-dictation
-  - release
+- alex
+  tags:
+- local-dictation
+- release
+
 ---
 
 # Plan voor de verwijzing van de lokale vertalingen
@@ -58,9 +60,9 @@ De voorvertoning is een soort veiligheidsgrens, en geen decoratieve interface. V
 
 ```ts
 type TranslationDecision =
-  | { action: "replace"; expectedRevision: number }
-  | { action: "insert-below" }
-  | { action: "copy" };
+  | { action: 'replace'; expectedRevision: number }
+  | { action: 'insert-below' }
+  | { action: 'copy' };
 ```
 
 Het eenvoudigste antwoord is het beste: stuur de kleinste, betrouwbare versie van het model. Bekijk waar het model niet werkt, en vermijd het gebruik van een ‘fluitend overzicht’ als bewijs van semantische nauwkeurigheid. De verdere ontwikkeling vindt plaats op [[Translation Backlog]]. Hier zijn de benodigde invoer- en uitvoergegevens beschikbaar, zodat een toekomstig model tegen deze gegevens kan worden getest.

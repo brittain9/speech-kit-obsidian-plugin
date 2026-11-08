@@ -21,7 +21,7 @@ async function createWriter() {
   const file = { path: 'Attachments/Voice recording.webm' };
   const app = {
     fileManager: {
-      generateMarkdownLink: vi.fn(() => '![[Voice recording.webm]]'),
+      generateMarkdownLink: vi.fn(() => '[[Voice recording.webm]]'),
       getAvailablePathForAttachment: vi.fn(async () => file.path),
       trashFile: vi.fn(async () => {
         await rm(fullPath, { force: true });
@@ -81,6 +81,43 @@ describe('MicrophoneRecordingWriter', () => {
 });
 
 describe('MicrophoneRecording', () => {
+  it('waits for the final chunk when the recorder stops before dictation stops', async () => {
+    const { fullPath, writer } = await createWriter();
+    class FakeMediaRecorder extends EventTarget {
+      mimeType = 'audio/webm';
+      state: RecordingState = 'inactive';
+      static last: FakeMediaRecorder;
+      constructor(_stream: MediaStream) {
+        super();
+        FakeMediaRecorder.last = this;
+      }
+      start(): void {
+        this.state = 'recording';
+      }
+      endTrack(): void {
+        this.state = 'inactive';
+      }
+      flush(): void {
+        this.dispatchEvent(
+          Object.assign(new Event('dataavailable'), { data: new Blob([new Uint8Array([7, 8])]) }),
+        );
+        this.dispatchEvent(new Event('stop'));
+      }
+    }
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    const onSaved = vi.fn();
+    const recording = new MicrophoneRecording(writer, onSaved, vi.fn());
+    await recording.start({} as MediaStream);
+    FakeMediaRecorder.last.endTrack();
+    const stopping = recording.stop(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onSaved).not.toHaveBeenCalled();
+    FakeMediaRecorder.last.flush();
+    await stopping;
+    expect([...(await readFile(fullPath))]).toEqual([7, 8]);
+    expect(onSaved).toHaveBeenCalledOnce();
+  });
+
   it('waits for recorder startup before cancelling during capture startup', async () => {
     const { app, writer } = await createWriter();
     let releaseAttachmentPath = (_path: string) => {};

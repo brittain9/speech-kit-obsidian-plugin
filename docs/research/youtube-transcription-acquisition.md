@@ -66,16 +66,16 @@ The defensible product position is therefore:
 
 ## Capability matrix
 
-| Desired result | Official route? | Authorization and limits | Product disposition |
-| --- | --- | --- | --- |
-| Parse a public watch/Shorts URL to a video ID | Yes, locally | Accept only an allowlisted YouTube host/path and canonical 11-character ID; reject playlist/channel/live control URLs | Safe |
-| Fetch public metadata | Yes, Data API | `videos.list`; public metadata does not imply access to media | Optional metadata only; obey storage/display rules |
-| Fetch a public video's caption track | **No general API** | `captions.list` and `captions.download` require a user who can edit the video | Offer only for the user's authorized/managed videos |
-| Fetch a user's own uploaded media | Yes, YouTube Studio/Takeout | Studio download is 720p or 360p depending on source and has content/download limits; not a Data API media endpoint | Recommend export, then local import |
-| Fetch public media bytes/audio | **No documented official API** | API agreement grants no reproduction/download right; public status is not permission | Do not promise or emulate it in the official connector |
-| Play a public video through the official player | Yes, IFrame Player API | Official playback only; uploader/embed, age, region, and policy restrictions remain | Not a file source; optional user-driven system-audio capture only |
-| Use Premium/purchased content offline | In YouTube apps only | Account-, device-, location-, rental-, and app-managed restrictions | Fail closed; do not extract app-managed copies |
-| Download with yt-dlp | No; unofficial client | Uses undocumented/current site behavior; cookies, PO tokens, JS challenges, and platform changes | Optional helper only, after approval |
+| Desired result                                  | Official route?                | Authorization and limits                                                                                              | Product disposition                                               |
+| ----------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Parse a public watch/Shorts URL to a video ID   | Yes, locally                   | Accept only an allowlisted YouTube host/path and canonical 11-character ID; reject playlist/channel/live control URLs | Safe                                                              |
+| Fetch public metadata                           | Yes, Data API                  | `videos.list`; public metadata does not imply access to media                                                         | Optional metadata only; obey storage/display rules                |
+| Fetch a public video's caption track            | **No general API**             | `captions.list` and `captions.download` require a user who can edit the video                                         | Offer only for the user's authorized/managed videos               |
+| Fetch a user's own uploaded media               | Yes, YouTube Studio/Takeout    | Studio download is 720p or 360p depending on source and has content/download limits; not a Data API media endpoint    | Recommend export, then local import                               |
+| Fetch public media bytes/audio                  | **No documented official API** | API agreement grants no reproduction/download right; public status is not permission                                  | Do not promise or emulate it in the official connector            |
+| Play a public video through the official player | Yes, IFrame Player API         | Official playback only; uploader/embed, age, region, and policy restrictions remain                                   | Not a file source; optional user-driven system-audio capture only |
+| Use Premium/purchased content offline           | In YouTube apps only           | Account-, device-, location-, rental-, and app-managed restrictions                                                   | Fail closed; do not extract app-managed copies                    |
+| Download with yt-dlp                            | No; unofficial client          | Uses undocumented/current site behavior; cookies, PO tokens, JS challenges, and platform changes                      | Optional helper only, after approval                              |
 
 ## Official surfaces in detail
 

@@ -23,24 +23,24 @@ Existing custom presets are preserved. Legacy builtin selections migrate to save
 
 ## All presets at a glance
 
-| Preset | Placement | Timing | Minimum words | Temperature | Note context |
-|---|---|---|---|---|---|
-| Summary | Replace transcript | On completion | 0 | 0.2 | Off |
-| TLDR | Above transcript | On completion | 0 | 0.2 | Off |
-| Key takeaways | Replace transcript | On completion | 0 | 0.2 | Off |
-| Explain simply | Replace transcript | On completion | 0 | 0.2 | Off |
-| Outline | Above transcript | On completion | 0 | 0.2 | Off |
-| YouTube notes | Above transcript | On completion | 0 | 0.2 | Off |
-| Podcast show notes | Above transcript | On completion | 0 | 0.2 | Off |
-| Study notes | Above transcript | On completion | 0 | 0.2 | Off |
-| Meeting notes | Above transcript | On completion | 0 | 0.2 | Off |
-| Claims and evidence | Above transcript | On completion | 0 | 0.2 | Off |
-| Timeline | Above transcript | On completion | 0 | 0.2 | Off |
-| Story version | Replace transcript | On completion | 0 | 0.4 | Off |
-| One-page briefing | Above transcript | On completion | 0 | 0.2 | Off |
-| Explain with analogies | Above transcript | On completion | 0 | 0.4 | Off |
-| Comedy recap | Above transcript | On completion | 0 | 0.5 | Off |
-| Markdown formatting | Replace transcript | On completion | Inherited (default 4) | Inherited (default 0.2) | Inherited (default off) |
+| Preset                 | Placement          | Timing        | Minimum words         | Temperature             | Note context            |
+| ---------------------- | ------------------ | ------------- | --------------------- | ----------------------- | ----------------------- |
+| Summary                | Replace transcript | On completion | 0                     | 0.2                     | Off                     |
+| TLDR                   | Above transcript   | On completion | 0                     | 0.2                     | Off                     |
+| Key takeaways          | Replace transcript | On completion | 0                     | 0.2                     | Off                     |
+| Explain simply         | Replace transcript | On completion | 0                     | 0.2                     | Off                     |
+| Outline                | Above transcript   | On completion | 0                     | 0.2                     | Off                     |
+| YouTube notes          | Above transcript   | On completion | 0                     | 0.2                     | Off                     |
+| Podcast show notes     | Above transcript   | On completion | 0                     | 0.2                     | Off                     |
+| Study notes            | Above transcript   | On completion | 0                     | 0.2                     | Off                     |
+| Meeting notes          | Above transcript   | On completion | 0                     | 0.2                     | Off                     |
+| Claims and evidence    | Above transcript   | On completion | 0                     | 0.2                     | Off                     |
+| Timeline               | Above transcript   | On completion | 0                     | 0.2                     | Off                     |
+| Story version          | Replace transcript | On completion | 0                     | 0.4                     | Off                     |
+| One-page briefing      | Above transcript   | On completion | 0                     | 0.2                     | Off                     |
+| Explain with analogies | Above transcript   | On completion | 0                     | 0.4                     | Off                     |
+| Comedy recap           | Above transcript   | On completion | 0                     | 0.5                     | Off                     |
+| Markdown formatting    | Replace transcript | On completion | Inherited (default 4) | Inherited (default 0.2) | Inherited (default off) |
 
 ## Full settings and prompts
 

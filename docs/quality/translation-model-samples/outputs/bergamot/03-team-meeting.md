@@ -1,4 +1,5 @@
 ---
+
 title: Weekly team meeting
 attendees: [Alex, Morgan, Priya]
 ---
@@ -21,11 +22,11 @@ Morgan meldde dat de Portugese output verkeerd klonk, zelfs wanneer de zin begri
 
 Alex liet de huidige arbeiderstiming zien. Het laden van de bestanden en het starten van de werknemer duurde minder dan een seconde, terwijl een multi-gigabyte decoder had een veel grotere koude start. Iedereen was het erover eens dat `tokens/sec` nuttige diagnostische gegevens zijn, maar niet de productmetriek.
 
-| Eigenaar | Follow-up | verschuldigd |
-| --- | --- | --- |
-| Alex | Run English↔Dutch COMET | Dinsdag |
-| Morgan | Review Portugees dialect | woensdag |
-|Priya | Inspecteren Markdown storingen | vrijdag |
+| Eigenaar | Follow-up                      | verschuldigd |
+| -------- | ------------------------------ | ------------ |
+| Alex     | Run English↔Dutch COMET        | Dinsdag      |
+| Morgan   | Review Portugees dialect       | woensdag     |
+| Priya    | Inspecteren Markdown storingen | vrijdag      |
 
 ## Risico's
 

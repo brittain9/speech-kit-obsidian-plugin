@@ -84,14 +84,14 @@ it into fixed 640-byte frames at 50 fps.
 
 **PCM format** (shared constants, identical in TS and Rust):
 
-| Parameter | Value |
-|-----------|-------|
-| Sample rate | 16,000 Hz |
-| Channels | 1 (mono) |
-| Bit depth | 16-bit signed LE (Int16) |
-| Frame duration | 20 ms |
-| Samples per frame | 320 |
-| Bytes per frame | 640 |
+| Parameter         | Value                    |
+| ----------------- | ------------------------ |
+| Sample rate       | 16,000 Hz                |
+| Channels          | 1 (mono)                 |
+| Bit depth         | 16-bit signed LE (Int16) |
+| Frame duration    | 20 ms                    |
+| Samples per frame | 320                      |
+| Bytes per frame   | 640                      |
 
 This stage is effectively real-time for microphone capture and never a
 bottleneck (~3-6 ms AudioContext latency plus 20 ms frame accumulation).
@@ -207,62 +207,62 @@ sequenceDiagram
 
 The sidecar is spawned as a subprocess of Obsidian (`child_process.spawn`,
 `stdio: 'pipe'`). A custom 5-byte framing header (1 byte kind + 4-byte LE length
-+ payload) multiplexes JSON and raw audio on one bidirectional stream — no HTTP,
-no WebSocket, no IPC library. `FramedMessageParser` (TS) and `read_frame` (Rust)
-reassemble frames across chunk boundaries.
+- payload) multiplexes JSON and raw audio on one bidirectional stream — no HTTP,
+  no WebSocket, no IPC library. `FramedMessageParser` (TS) and `read_frame` (Rust)
+  reassemble frames across chunk boundaries.
 
-- `stdin` (TS → Rust): audio frames (`0x02`) and JSON command frames (`0x01`).
-- `stdout` (Rust → TS): JSON event frames (`0x01`) and read-aloud PCM16LE
+* `stdin` (TS → Rust): audio frames (`0x02`) and JSON command frames (`0x01`).
+* `stdout` (Rust → TS): JSON event frames (`0x01`) and read-aloud PCM16LE
   frames (`0x03`). A synthesis frame starts with little-endian
   `u32 synthesisId` + `u32 seq`, followed by mono PCM.
 
 **Commands (TS → Rust):**
 
-| Command | Purpose |
-|---------|---------|
-| `health` | Liveness ping |
-| `get_system_info` | Enumerate compiled runtimes and family adapters with static capabilities |
-| `start_session` | Begin transcription (model, mode, sessionId, options) |
-| `stop_session` | Graceful stop (drain pending transcriptions) |
-| `cancel_session` | Immediate cancel (discard pending) |
-| `context_response` | Reply to a `context_request` with the plugin-assembled context window |
-| `shutdown` | Hard process exit; call `stop_session` first to drain |
-| `get_model_store` | Query the model store path |
-| `list_model_catalog` | Fetch the built-in model catalog |
-| `list_installed_models` | List locally installed models |
-| `probe_model_selection` | Check whether a model selection is usable |
-| `install_model` | Start a model download + install |
-| `cancel_model_install` | Cancel a pending install |
-| `remove_model` | Delete an installed model |
-| `start_synthesis` | Start read aloud for ordered text chunks, model, voice, language, and speed |
-| `cancel_synthesis` | Cancel the matching synthesis session immediately |
-| `synthesis_playback_position` | Acknowledge the last played chunk for audio-ahead flow control |
+| Command                       | Purpose                                                                     |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `health`                      | Liveness ping                                                               |
+| `get_system_info`             | Enumerate compiled runtimes and family adapters with static capabilities    |
+| `start_session`               | Begin transcription (model, mode, sessionId, options)                       |
+| `stop_session`                | Graceful stop (drain pending transcriptions)                                |
+| `cancel_session`              | Immediate cancel (discard pending)                                          |
+| `context_response`            | Reply to a `context_request` with the plugin-assembled context window       |
+| `shutdown`                    | Hard process exit; call `stop_session` first to drain                       |
+| `get_model_store`             | Query the model store path                                                  |
+| `list_model_catalog`          | Fetch the built-in model catalog                                            |
+| `list_installed_models`       | List locally installed models                                               |
+| `probe_model_selection`       | Check whether a model selection is usable                                   |
+| `install_model`               | Start a model download + install                                            |
+| `cancel_model_install`        | Cancel a pending install                                                    |
+| `remove_model`                | Delete an installed model                                                   |
+| `start_synthesis`             | Start read aloud for ordered text chunks, model, voice, language, and speed |
+| `cancel_synthesis`            | Cancel the matching synthesis session immediately                           |
+| `synthesis_playback_position` | Acknowledge the last played chunk for audio-ahead flow control              |
 
 **Events (Rust → TS):**
 
-| Event | Purpose |
-|-------|---------|
-| `health_ok` | Health reply with version |
-| `system_info` | Compiled runtimes + adapters with declared capabilities |
-| `session_started` | Session confirmed active |
-| `session_state_changed` | State-machine transition |
-| `audio_level` | Periodic input level for the meter |
-| `transcript_ready` | Transcript revision: `isFinal`, monotonic `revision`, segments, timing, `stageResults[]`, and `warnings[]` |
-| `transcription_queue_changed` | Back-pressure queue depth changed |
-| `context_request` | Sidecar asks the plugin for context for the next utterance |
-| `session_stopped` | Session ended, with reason |
-| `warning` | Non-fatal warning |
-| `error` | Fatal error |
-| `model_store` | Model store path info |
-| `model_catalog` | Full catalog payload |
-| `installed_models` | Installed model list |
-| `model_probe_result` | Availability check + merged capabilities for the selection |
-| `model_install_update` | Install progress |
-| `model_removed` | Deletion confirmation |
-| `synthesis_started` | Synthesis accepted, including the output sample rate |
-| `synthesis_chunk_meta` | Sequence, source range, and duration for the following PCM frame |
-| `synthesis_complete` | All synthesis audio has been produced |
-| `synthesis_error` | Typed failure for one synthesis session |
+| Event                         | Purpose                                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `health_ok`                   | Health reply with version                                                                                  |
+| `system_info`                 | Compiled runtimes + adapters with declared capabilities                                                    |
+| `session_started`             | Session confirmed active                                                                                   |
+| `session_state_changed`       | State-machine transition                                                                                   |
+| `audio_level`                 | Periodic input level for the meter                                                                         |
+| `transcript_ready`            | Transcript revision: `isFinal`, monotonic `revision`, segments, timing, `stageResults[]`, and `warnings[]` |
+| `transcription_queue_changed` | Back-pressure queue depth changed                                                                          |
+| `context_request`             | Sidecar asks the plugin for context for the next utterance                                                 |
+| `session_stopped`             | Session ended, with reason                                                                                 |
+| `warning`                     | Non-fatal warning                                                                                          |
+| `error`                       | Fatal error                                                                                                |
+| `model_store`                 | Model store path info                                                                                      |
+| `model_catalog`               | Full catalog payload                                                                                       |
+| `installed_models`            | Installed model list                                                                                       |
+| `model_probe_result`          | Availability check + merged capabilities for the selection                                                 |
+| `model_install_update`        | Install progress                                                                                           |
+| `model_removed`               | Deletion confirmation                                                                                      |
+| `synthesis_started`           | Synthesis accepted, including the output sample rate                                                       |
+| `synthesis_chunk_meta`        | Sequence, source range, and duration for the following PCM frame                                           |
+| `synthesis_complete`          | All synthesis audio has been produced                                                                      |
+| `synthesis_error`             | Typed failure for one synthesis session                                                                    |
 
 Transport latency is sub-millisecond per frame; the main loop polls at 10 ms.
 
@@ -299,11 +299,11 @@ state machine to detect speech boundaries and package completed utterances.
 
 **Speaking-style presets** (Rust-authoritative):
 
-| Preset | `speech_threshold` | `min_speech_frames` | `silence_end_frames` |
-|---|---|---|---|
-| Responsive | 0.40 | 3 (60 ms) | 20 (400 ms) |
-| Balanced (default) | 0.50 | 5 (100 ms) | 50 (1000 ms) |
-| Patient | 0.55 | 6 (120 ms) | 100 (2000 ms) |
+| Preset             | `speech_threshold` | `min_speech_frames` | `silence_end_frames` |
+| ------------------ | ------------------ | ------------------- | -------------------- |
+| Responsive         | 0.40               | 3 (60 ms)           | 20 (400 ms)          |
+| Balanced (default) | 0.50               | 5 (100 ms)          | 50 (1000 ms)         |
+| Patient            | 0.55               | 6 (120 ms)          | 100 (2000 ms)        |
 
 The silence windows track industry streaming-dictation norms: 400 ms
 (AssemblyAI Streaming v2's legacy end-of-turn), 1000 ms (AssemblyAI
@@ -360,13 +360,13 @@ the model, and produces timestamped text segments.
 
 **Three-layer engine abstraction:**
 
-| Layer | Trait | Owns |
-|---|---|---|
-| Runtime | `Runtime` | Execution framework: accelerator probe, supported model formats |
-| Family adapter | `ModelFamilyAdapter` | Model shape: graph I/O, tokenizer, prompt tokens, audio limits, probe rules |
-| Loaded batch model | `LoadedModel` | Per-session batch inference state; `transcribe(&TranscriptionRequest)` |
-| Loaded streaming model | `StreamingModel` | Per-utterance PCM acceptance, partial decode, final decode, reset |
-| Loaded synthesis model | `SynthesisModel` | Text + voice to mono PCM for read aloud |
+| Layer                  | Trait                | Owns                                                                        |
+| ---------------------- | -------------------- | --------------------------------------------------------------------------- |
+| Runtime                | `Runtime`            | Execution framework: accelerator probe, supported model formats             |
+| Family adapter         | `ModelFamilyAdapter` | Model shape: graph I/O, tokenizer, prompt tokens, audio limits, probe rules |
+| Loaded batch model     | `LoadedModel`        | Per-session batch inference state; `transcribe(&TranscriptionRequest)`      |
+| Loaded streaming model | `StreamingModel`     | Per-utterance PCM acceptance, partial decode, final decode, reset           |
+| Loaded synthesis model | `SynthesisModel`     | Text + voice to mono PCM for read aloud                                     |
 
 `EngineRegistry::build()` is the single registration site. Worker dispatch uses
 `adapter.load → loaded.transcribe` for batch families and
@@ -386,10 +386,10 @@ families remain on CPU without an unverified acceleration claim.
 
 **Compiled runtimes and adapters:**
 
-| Runtime | Crate | Model format | Adapter |
-|---|---|---|---|
-| `whisper_cpp` | whisper-rs (whisper.cpp) | GGML `.bin` | `whisper` |
-| `onnx_runtime` | ort (ONNX Runtime) | ONNX / ORT | `cohere_transcribe`, `moonshine`, `nemotron_asr`, `pocket_tts`, `supertonic` |
+| Runtime        | Crate                    | Model format | Adapter                                                                      |
+| -------------- | ------------------------ | ------------ | ---------------------------------------------------------------------------- |
+| `whisper_cpp`  | whisper-rs (whisper.cpp) | GGML `.bin`  | `whisper`                                                                    |
+| `onnx_runtime` | ort (ONNX Runtime)       | ONNX / ORT   | `cohere_transcribe`, `moonshine`, `nemotron_asr`, `pocket_tts`, `supertonic` |
 
 Cargo features: `engine-whisper`, `engine-cohere-transcribe`,
 `engine-moonshine`, `engine-nemotron-asr`, `engine-pocket-tts`,
@@ -421,22 +421,22 @@ than a silent failure.
 
 **Available models:**
 
-| Model | Runtime · Family | Quant | Size | Notes |
-|-------|--------|-------|------|-------|
-| Whisper Tiny EN | `whisper_cpp` · `whisper` | Q8_0 | 42 MB | Fastest, lowest quality |
-| Whisper Base EN | `whisper_cpp` · `whisper` | Q8_0 | 78 MB | |
-| Whisper Small EN | `whisper_cpp` · `whisper` | Q5_1 | 181 MB | Balanced |
-| Whisper Medium EN | `whisper_cpp` · `whisper` | Q5_0 | 514 MB | |
-| Whisper Large V3 Turbo | `whisper_cpp` · `whisper` | Q8_0 | 834 MB | Best with GPU |
-| Cohere Transcribe FP16 | `onnx_runtime` · `cohere_transcribe` | FP16 | 3.8 GB | 2B params |
-| Cohere Transcribe INT8 | `onnx_runtime` · `cohere_transcribe` | INT8 | 2.9 GB | |
-| Cohere Transcribe Q4 | `onnx_runtime` · `cohere_transcribe` | Q4 | 2.0 GB | |
-| Moonshine Tiny | `onnx_runtime` · `moonshine` | Quantized | 49 MB | Streaming (live), 34M params |
-| Moonshine Small | `onnx_runtime` · `moonshine` | Quantized | 157 MB | Streaming (live), balanced, 123M params |
-| Moonshine Medium | `onnx_runtime` · `moonshine` | Quantized | 289 MB | Streaming (live), 245M params |
-| Nemotron 3.5 ASR 560 ms | `onnx_runtime` · `nemotron_asr` | INT8 | 651 MB | Multilingual streaming |
-| Supertonic 3 | `onnx_runtime` · `supertonic` | ONNX | 398 MB | Read aloud in eight app languages, 10 voices |
-| Firefox Translations | `bergamot_wasm` · `firefox_translations` | Bergamot | ~5 MB runtime + 20–67 MB per direction | 96 released English-anchored directions, downloaded on demand |
+| Model                   | Runtime · Family                         | Quant     | Size                                   | Notes                                                         |
+| ----------------------- | ---------------------------------------- | --------- | -------------------------------------- | ------------------------------------------------------------- |
+| Whisper Tiny EN         | `whisper_cpp` · `whisper`                | Q8_0      | 42 MB                                  | Fastest, lowest quality                                       |
+| Whisper Base EN         | `whisper_cpp` · `whisper`                | Q8_0      | 78 MB                                  |                                                               |
+| Whisper Small EN        | `whisper_cpp` · `whisper`                | Q5_1      | 181 MB                                 | Balanced                                                      |
+| Whisper Medium EN       | `whisper_cpp` · `whisper`                | Q5_0      | 514 MB                                 |                                                               |
+| Whisper Large V3 Turbo  | `whisper_cpp` · `whisper`                | Q8_0      | 834 MB                                 | Best with GPU                                                 |
+| Cohere Transcribe FP16  | `onnx_runtime` · `cohere_transcribe`     | FP16      | 3.8 GB                                 | 2B params                                                     |
+| Cohere Transcribe INT8  | `onnx_runtime` · `cohere_transcribe`     | INT8      | 2.9 GB                                 |                                                               |
+| Cohere Transcribe Q4    | `onnx_runtime` · `cohere_transcribe`     | Q4        | 2.0 GB                                 |                                                               |
+| Moonshine Tiny          | `onnx_runtime` · `moonshine`             | Quantized | 49 MB                                  | Streaming (live), 34M params                                  |
+| Moonshine Small         | `onnx_runtime` · `moonshine`             | Quantized | 157 MB                                 | Streaming (live), balanced, 123M params                       |
+| Moonshine Medium        | `onnx_runtime` · `moonshine`             | Quantized | 289 MB                                 | Streaming (live), 245M params                                 |
+| Nemotron 3.5 ASR 560 ms | `onnx_runtime` · `nemotron_asr`          | INT8      | 651 MB                                 | Multilingual streaming                                        |
+| Supertonic 3            | `onnx_runtime` · `supertonic`            | ONNX      | 398 MB                                 | Read aloud in eight app languages, 10 voices                  |
+| Firefox Translations    | `bergamot_wasm` · `firefox_translations` | Bergamot  | ~5 MB runtime + 20–67 MB per direction | 96 released English-anchored directions, downloaded on demand |
 
 Moonshine models are streaming (live-dictation) entries in the managed catalog,
 installed through Manage Models like any other model. Each is a multi-file ORT
@@ -501,7 +501,7 @@ flowchart LR
 ```
 
 A single VAD utterance can contain more than one speaker, so segmentation finds
-*where* speakers change, embedding + a session-scoped registry decide *who* they
+_where_ speakers change, embedding + a session-scoped registry decide _who_ they
 are, and the worker aligns transcript segments to those turns. Speaker indices
 stay stable across the session because turns reconcile by voice.
 
@@ -603,8 +603,42 @@ the selected model runtime and family:
 
 The sidecar catalog owns SHA-256-pinned installation and removal for both
 engines. Translation support is either exact directed pairs or an all-to-all
-language set. Note text never crosses the network; HY-MT protocol and logs do
-not record source or translated text.
+language set. A model-capability helper derives participating translation
+languages from that metadata: all-to-all models expose their declared language
+set, while Firefox models expose only the distinct source and target endpoints
+of independently declared pairs. Manage Models reuses this helper so its
+STT/TTS `languageTags` filters cannot broaden or diverge from translation
+capability. Each task retains its own language filter while the user switches
+tasks.
+
+The modal's localized swap control reverses the draft source and target only
+when the exact selected runtime/family/model is installed and its catalog
+metadata declares the reverse direction. It uses the ordinary language-change
+persistence path and leaves any completed preview visible but stale. Swap,
+language changes, Translate again, and exact-pack installation are disabled
+while inference, local model selection, or any live model install is active.
+The modal observes `ModelInstallManager` state and subscriptions, including the
+short interval before the sidecar emits an install event, so installed options
+and operation state do not become stale while the modal remains open.
+
+The controller owns the active language/model configuration and exposes it to
+open modal generations. Closing one modal does not invalidate a pending probe:
+its replacement subscribes to controller-owned pending/configuration state,
+reconciles any committed selection, and cannot start a conflicting selection.
+After a pack download finishes, that pending scope also covers the installed
+pack model's selection probe before the replacement modal is re-enabled.
+
+Model selection is monotonic. Every requested translation model receives a
+modal and controller generation; only the latest successful, committed probe
+may update draft state, active configuration, or persisted model selection.
+`ModelInstallManager.select()` reports whether its guarded settings commit was
+current, so a late successful probe is ignored rather than treated as a newer
+selection. Post-install selection checks both its committed result and the
+controller generation before changing configuration, closing the old modal, or
+retrying inference. Failed or successful stale completions cannot roll back or
+overwrite a later model choice, and an explicit fresh translation job resolves
+the model from the persisted latest selection. Note text never crosses the
+network; HY-MT protocol and logs do not record source or translated text.
 
 ---
 
@@ -612,10 +646,10 @@ not record source or translated text.
 
 ### Listening Modes
 
-| Mode | Behavior | Auto-stop |
-|------|----------|-----------|
-| `one_sentence` | Capture one utterance, transcribe, stop | Yes (first transcript or 10 s timeout) |
-| `always_on` (default) | Continuous capture, transcribe every utterance | No (manual stop) |
+| Mode                  | Behavior                                       | Auto-stop                              |
+| --------------------- | ---------------------------------------------- | -------------------------------------- |
+| `one_sentence`        | Capture one utterance, transcribe, stop        | Yes (first transcript or 10 s timeout) |
+| `always_on` (default) | Continuous capture, transcribe every utterance | No (manual stop)                       |
 
 ### Ribbon States
 
@@ -644,43 +678,43 @@ message.
 A representative slice of user-facing settings (full list and defaults in
 `src/settings/plugin-settings.ts`):
 
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| `listeningMode` | `always_on` | Dictation trigger behavior |
-| `speakingStyle` | `balanced` | VAD preset (Responsive / Balanced / Patient) |
-| `selectedModel` | `null` | Active model selection |
-| `accelerationPreference` | `auto` | GPU when available vs CPU-only |
-| `includeSystemAudio` | `false` | Capture system output instead of the mic |
-| `diarizationEnabled` | `false` | Label speakers (Speaker 1, 2, …) |
-| `diarizationMaxSpeakers` | `null` | Optional positive cap on session-stable speaker labels; `null` detects automatically |
-| `dictationAnchor` | `at_cursor` | Where transcript text lands (`at_cursor` / `end_of_note`) |
-| `transcriptFormatting` | `smart` | How utterance boundaries render |
-| `timestampsEnabled` | `false` | Render timestamps in the note |
-| `timestampClock` | `elapsed` | `elapsed` session time vs `wallclock` |
-| `timestampDensity` | `sparse` | `sparse` (interval), `every_utterance`, or `paragraph` |
-| `llmPostprocessMode` | `off` | Microphone LLM transform: `off` / `per_utterance` / `batch` |
-| `mediaLlmProcessing` | `false` | Default for optional batch text transforms after local media transcription |
-| `llmRoutingPolicy` | `null` | Fixed provider or optional transcript-size split |
-| `llmProviderConfigurations` | Empty models | Ollama, OpenRouter, and OpenAI-compatible connection settings |
-| `llmNetworkTimeoutSec` | `60` | OpenRouter and custom-endpoint request timeout |
-| `sidecarRequestTimeoutSeconds` | `300` | Command/response timeout |
-| `sidecarStartupTimeoutSeconds` | `4` | Health-check timeout on launch |
-| `developerMode` | `false` | Verbose logging |
+| Setting                        | Default      | Purpose                                                                              |
+| ------------------------------ | ------------ | ------------------------------------------------------------------------------------ |
+| `listeningMode`                | `always_on`  | Dictation trigger behavior                                                           |
+| `speakingStyle`                | `balanced`   | VAD preset (Responsive / Balanced / Patient)                                         |
+| `selectedModel`                | `null`       | Active model selection                                                               |
+| `accelerationPreference`       | `auto`       | GPU when available vs CPU-only                                                       |
+| `includeSystemAudio`           | `false`      | Capture system output instead of the mic                                             |
+| `diarizationEnabled`           | `false`      | Label speakers (Speaker 1, 2, …)                                                     |
+| `diarizationMaxSpeakers`       | `null`       | Optional positive cap on session-stable speaker labels; `null` detects automatically |
+| `dictationAnchor`              | `at_cursor`  | Where transcript text lands (`at_cursor` / `end_of_note`)                            |
+| `transcriptFormatting`         | `smart`      | How utterance boundaries render                                                      |
+| `timestampsEnabled`            | `false`      | Render timestamps in the note                                                        |
+| `timestampClock`               | `elapsed`    | `elapsed` session time vs `wallclock`                                                |
+| `timestampDensity`             | `sparse`     | `sparse` (interval), `every_utterance`, or `paragraph`                               |
+| `llmPostprocessMode`           | `off`        | Microphone LLM transform: `off` / `per_utterance` / `batch`                          |
+| `mediaLlmProcessing`           | `false`      | Default for optional batch text transforms after local media transcription           |
+| `llmRoutingPolicy`             | `null`       | Fixed provider or optional transcript-size split                                     |
+| `llmProviderConfigurations`    | Empty models | Ollama, OpenRouter, and OpenAI-compatible connection settings                        |
+| `llmNetworkTimeoutSec`         | `60`         | OpenRouter and custom-endpoint request timeout                                       |
+| `sidecarRequestTimeoutSeconds` | `300`        | Command/response timeout                                                             |
+| `sidecarStartupTimeoutSeconds` | `4`          | Health-check timeout on launch                                                       |
+| `developerMode`                | `false`      | Verbose logging                                                                      |
 
 ---
 
 ## Technology Reference
 
-| Technology | Role in the system |
-|------------|--------------------|
-| **Obsidian Plugin API** | Host runtime: editor access, commands, settings, UI hooks |
-| **Web Audio API / AudioWorklet** | Microphone capture and PCM frame production at 50 fps |
-| **whisper-rs / whisper.cpp** | Primary engine; runs GGML-quantized Whisper on CPU, Metal, or CUDA |
-| **ort (ONNX Runtime)** | Engine for Cohere Transcribe, Moonshine, and Nemotron; also runs Silero VAD and diarization models |
-| **Silero VAD** | Speech probability per 32 ms window; drives boundary detection |
-| **Node.js child_process** | Spawns and manages the Rust sidecar |
-| **reqwest + sha2** | Downloads model files and verifies their SHA-256 |
-| **Ollama / OpenRouter / OpenAI-compatible APIs** | Optional provider-selected text transformation on the plugin side |
+| Technology                                       | Role in the system                                                                                 |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| **Obsidian Plugin API**                          | Host runtime: editor access, commands, settings, UI hooks                                          |
+| **Web Audio API / AudioWorklet**                 | Microphone capture and PCM frame production at 50 fps                                              |
+| **whisper-rs / whisper.cpp**                     | Primary engine; runs GGML-quantized Whisper on CPU, Metal, or CUDA                                 |
+| **ort (ONNX Runtime)**                           | Engine for Cohere Transcribe, Moonshine, and Nemotron; also runs Silero VAD and diarization models |
+| **Silero VAD**                                   | Speech probability per 32 ms window; drives boundary detection                                     |
+| **Node.js child_process**                        | Spawns and manages the Rust sidecar                                                                |
+| **reqwest + sha2**                               | Downloads model files and verifies their SHA-256                                                   |
+| **Ollama / OpenRouter / OpenAI-compatible APIs** | Optional provider-selected text transformation on the plugin side                                  |
 
 ## Where Things Live
 

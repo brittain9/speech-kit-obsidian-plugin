@@ -128,13 +128,13 @@ Trunk-based development. `main` stays releasable at all times.
 
 Use a prefix that describes the type of change:
 
-| Prefix | Use |
-|---|---|
-| `feat/` | New feature or capability |
-| `fix/` | Bug fix |
+| Prefix      | Use                                        |
+| ----------- | ------------------------------------------ |
+| `feat/`     | New feature or capability                  |
+| `fix/`      | Bug fix                                    |
 | `refactor/` | Code restructuring without behavior change |
-| `docs/` | Documentation only |
-| `chore/` | Build, CI, tooling, or repo maintenance |
+| `docs/`     | Documentation only                         |
+| `chore/`    | Build, CI, tooling, or repo maintenance    |
 
 Examples: `feat/punctuation-stage`, `fix/cohere-segments`, `chore/ci-caching`.
 

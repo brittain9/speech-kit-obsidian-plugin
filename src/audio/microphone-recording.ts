@@ -6,7 +6,6 @@ const MAX_PENDING_RECORDING_BYTES = 8 * 1024 * 1024;
 type RecordingApp = Pick<App, 'fileManager' | 'vault'>;
 
 export interface MicrophoneRecordingLike {
-  discardSavedFile(): Promise<void>;
   start(stream: MediaStream): Promise<void>;
   stop(save: boolean): Promise<void>;
 }
@@ -32,11 +31,8 @@ export class MicrophoneRecording implements MicrophoneRecordingLike {
     await this.startup;
     const recorder = this.recorder;
     this.recorder = null;
-    if (recorder !== null && recorder.state !== 'inactive') {
-      this.stopped = new Promise((resolve) =>
-        recorder.addEventListener('stop', () => resolve(), { once: true }),
-      );
-      recorder.stop();
+    if (recorder !== null) {
+      if (recorder.state !== 'inactive') recorder.stop();
       await this.stopped;
     }
 
@@ -56,10 +52,6 @@ export class MicrophoneRecording implements MicrophoneRecordingLike {
     }
   }
 
-  discardSavedFile(): Promise<void> {
-    return this.writer.discardSavedFile().catch((error: unknown) => this.fail(error));
-  }
-
   private async startRecorder(stream: MediaStream): Promise<void> {
     try {
       const recorder = new MediaRecorder(stream);
@@ -70,9 +62,14 @@ export class MicrophoneRecording implements MicrophoneRecordingLike {
         void this.writer.write(chunk).catch((error: unknown) => this.fail(error));
       });
       recorder.addEventListener('error', (event) => this.fail(event));
+      const stopped = new Promise<void>((resolve) =>
+        recorder.addEventListener('stop', () => resolve(), { once: true }),
+      );
       recorder.start(1_000);
+      this.stopped = stopped;
     } catch (error) {
       this.fail(error);
+      this.recorder = null;
       try {
         await this.writer.cancel();
       } catch (cleanupError) {
@@ -150,15 +147,10 @@ export class MicrophoneRecordingWriter {
       throw this.failure;
     }
     if (this.file === null) throw new Error('Microphone recording has not started.');
-    return this.app.fileManager.generateMarkdownLink(this.file, this.sourcePath);
+    return `!${this.app.fileManager.generateMarkdownLink(this.file, this.sourcePath)}`;
   }
 
   async cancel(): Promise<void> {
-    await this.finishWrites();
-    await this.deleteIncompleteFile();
-  }
-
-  async discardSavedFile(): Promise<void> {
     await this.finishWrites();
     await this.deleteIncompleteFile();
   }

@@ -38,7 +38,7 @@ labeled where the distinction matters.
   dedicated "System Audio Recording Only" permission is prompt-once.
 - **Electron renderer capture is now real** (Electron ≥ 39, CATap-backed
   `getDisplayMedia`) and would reuse our existing renderer→sidecar PCM path, but
-  it depends on the user's *installer* Electron version, which Obsidian only
+  it depends on the user's _installer_ Electron version, which Obsidian only
   updates on manual reinstall — not something the plugin can rely on. Keep the
   sidecar backend as the primary plan; note the renderer path as a possible
   future fallback.
@@ -67,14 +67,14 @@ invisible to plain-C tooling (this matters for bindgen; see §4).
 Per-symbol availability cross-checked against Apple's documentation JSON
 (`developer.apple.com/tutorials/data/documentation/...`):
 
-| Symbol | macOS availability | Source |
-| --- | --- | --- |
-| `AudioHardwareCreateProcessTap` | **14.2** | [docs](https://developer.apple.com/documentation/coreaudio/audiohardwarecreateprocesstap(_:_:)) |
-| `AudioHardwareDestroyProcessTap` | **14.2** (header annotation) | header above |
-| `CATapDescription` (class) | annotated **12.0** (docs and header agree) — but unusable before 14.2 because nothing public consumes it | [docs](https://developer.apple.com/documentation/coreaudio/catapdescription), header `CATapDescription.h` |
-| `CATapDescription.muteBehavior` | annotated 12.0 (enum `CATapMuteBehavior` annotated `macos(13.0)` in header) | [docs](https://developer.apple.com/documentation/coreaudio/catapdescription/mutebehavior) |
-| `NSAudioCaptureUsageDescription` (Info.plist key) | **14.2** | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/nsaudiocaptureusagedescription) |
-| `kAudioAggregateDeviceTapListKey`, `kAudioSubTapUIDKey`, `kAudioTapProperty*`, process-object selectors | plain `#define`/enums, no annotations; absent from the 13.3 SDK's `AudioHardware.h`, present from the 14.x SDKs on (verified by diffing SDK mirrors) | SDK mirror diff (13.3 vs 14.5) |
+| Symbol                                                                                                  | macOS availability                                                                                                                                   | Source                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `AudioHardwareCreateProcessTap`                                                                         | **14.2**                                                                                                                                             | [docs](https://developer.apple.com/documentation/coreaudio/audiohardwarecreateprocesstap(_:_:))                            |
+| `AudioHardwareDestroyProcessTap`                                                                        | **14.2** (header annotation)                                                                                                                         | header above                                                                                                               |
+| `CATapDescription` (class)                                                                              | annotated **12.0** (docs and header agree) — but unusable before 14.2 because nothing public consumes it                                             | [docs](https://developer.apple.com/documentation/coreaudio/catapdescription), header `CATapDescription.h`                  |
+| `CATapDescription.muteBehavior`                                                                         | annotated 12.0 (enum `CATapMuteBehavior` annotated `macos(13.0)` in header)                                                                          | [docs](https://developer.apple.com/documentation/coreaudio/catapdescription/mutebehavior)                                  |
+| `NSAudioCaptureUsageDescription` (Info.plist key)                                                       | **14.2**                                                                                                                                             | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/nsaudiocaptureusagedescription) |
+| `kAudioAggregateDeviceTapListKey`, `kAudioSubTapUIDKey`, `kAudioTapProperty*`, process-object selectors | plain `#define`/enums, no annotations; absent from the 13.3 SDK's `AudioHardware.h`, present from the 14.x SDKs on (verified by diffing SDK mirrors) | SDK mirror diff (13.3 vs 14.5)                                                                                             |
 
 **14.2 vs 14.4**: insidegui's AudioCap README claims "With macOS 14.4, Apple
 introduced new API in CoreAudio…" and the repo description says "macOS 14.4+"
@@ -117,7 +117,7 @@ all follow the same shape:
 4. Create a **private aggregate device** whose
    `kAudioAggregateDeviceTapListKey` contains one dictionary:
    `{ kAudioSubTapUIDKey: <tap UUID string>, kAudioSubTapDriftCompensationKey: YES }`.
-   Chromium's aggregate contains *only* the tap (no sub-devices) plus
+   Chromium's aggregate contains _only_ the tap (no sub-devices) plus
    `kAudioAggregateDeviceIsPrivateKey: YES`, `kAudioAggregateDeviceTapAutoStartKey: NO`;
    AudioCap and cidre's example additionally list the current default output
    device under `kAudioAggregateDeviceSubDeviceListKey` and as
@@ -170,7 +170,7 @@ resample to 16 kHz mono ourselves (the repo already has
 ### Mute behavior
 
 `CATapMuteBehavior` (`CATapDescription.h`): `CATapUnmuted = 0` (default; audio
-captured *and* still played), `CATapMuted = 1` (captured, not played),
+captured _and_ still played), `CATapMuted = 1` (captured, not played),
 `CATapMutedWhenTapped = 2` (muted only while a client reads the tap). For
 dictation we keep the default `CATapUnmuted`. Chromium maps its
 "loopbackWithMute" device to `setMuteBehavior:CATapMuted`.
@@ -212,8 +212,8 @@ dictation we keep the default `CATapUnmuted`. Chromium maps its
   `tccutil reset <service>` resets decisions per the macOS man page; the
   documented service name for screen recording is `ScreenCapture`, and the
   audio-capture service is `AudioCapture` (kTCCService prefix stripped) —
-  *inference from the SPI service name; not verified on hardware in this
-  research pass*.
+  _inference from the SPI service name; not verified on hardware in this
+  research pass_.
 
 ### Missing usage description ⇒ silent failure, not a crash
 
@@ -234,7 +234,7 @@ Quinn (Apple DTS), "On File System Permissions"
 ([developer.apple.com/forums/thread/678819](https://developer.apple.com/forums/thread/678819)):
 
 > "The MAC privilege mechanism is heavily dependent on the concept of
-> *responsible code*. For example, if an app contains a helper tool and the
+> _responsible code_. For example, if an app contains a helper tool and the
 > helper tool triggers a MAC prompt, we want: the app's name and usage
 > description to appear in the alert; the user's decision to be recorded for
 > the whole app, not that specific helper tool; that decision to show up in
@@ -288,7 +288,7 @@ to confirm.
   (`CatapAudioInputStreamSource::ProbeAudioTapPermissions`,
   `catap_audio_input_stream.mm`; feature `kMacCatapProbeTapOnCreation`,
   enabled by default; failure maps to `OpenOutcome::kFailedSystemPermissions`).
-  Note tap *creation itself succeeds without permission* — only the audio is
+  Note tap _creation itself succeeds without permission_ — only the audio is
   withheld, hence the probe.
 - **TCC SPI** (`TCCAccessPreflight`/`TCCAccessRequest` on
   `kTCCServiceAudioCapture` via dlopen of the private TCC framework): gives a
@@ -356,7 +356,7 @@ to confirm.
   **`AudioHardwareCreateProcessTap` and `CATapDescription` are not generated**;
   the plain-C aggregate/tap constants (`kAudioAggregateDeviceTapListKey`,
   `kAudioSubTapUIDKey`, `kAudioTapPropertyFormat`, `AudioHardwareCreateAggregateDevice`,
-  `AudioDeviceCreateIOProcID*`, …) *are* available **iff the build machine's
+  `AudioDeviceCreateIOProcID*`, …) _are_ available **iff the build machine's
   SDK is ≥ 14.x** (bindings are SDK-dependent at compile time). AFFiNE builds
   on exactly this split: constants from `coreaudio::sys`, tap functions via
   hand-rolled `unsafe extern "C"`, `CATapDescription` via `objc2::msg_send!`
@@ -369,7 +369,7 @@ to confirm.
   `AudioHardware` + `objc2`), `CATapDescription`, `kAudioTapPropertyFormat`,
   `AudioHardwareCreateAggregateDevice`, `AudioDeviceCreateIOProcID`. Caveat:
   the tap functions are ordinary link-time imports with no weak-linking
-  support, so a sidecar binary that *calls through the crate's extern* carries
+  support, so a sidecar binary that _calls through the crate's extern_ carries
   a hard symbol dependency — fine only if the symbol exists on our minimum
   supported macOS, which it does **not** (sidecar must still run for mic
   dictation on macOS < 14.2). Usable if we route those two calls through
@@ -381,7 +381,7 @@ to confirm.
   ([hardware_tapping.rs](https://github.com/yury/cidre/blob/main/cidre/src/core_audio/hardware_tapping.rs)),
   and a complete ~100-line system-audio recorder example
   ([examples/core-audio-record](https://github.com/yury/cidre/blob/main/cidre/examples/core-audio-record/main.rs)).
-  Great as *reference code*; as a dependency it drags in a very large
+  Great as _reference code_; as a dependency it drags in a very large
   multi-framework crate, against this repo's dependency posture.
 - **`screencapturekit` crate (8.0.0)** exists and is maintained, but only
   matters if we chose SCK (§3 says don't).
@@ -400,8 +400,8 @@ to confirm.
   - long-standing C API (`AudioHardwareCreateAggregateDevice`,
     `AudioDeviceCreateIOProcID`, `AudioObjectGetPropertyData`, `AudioDeviceStart/Stop`)
     via a small `extern "C"` block (or `objc2-core-audio` for its constants).
-  MSRV/edition: repo is edition 2024 / rust 1.94.1 (`native/Cargo.toml`);
-  `objc2` 0.6.x and `objc2-core-audio` 0.3.x are comfortably below that.
+    MSRV/edition: repo is edition 2024 / rust 1.94.1 (`native/Cargo.toml`);
+    `objc2` 0.6.x and `objc2-core-audio` 0.3.x are comfortably below that.
 
 ## 5. Electron/Chromium loopback (completeness check)
 
@@ -422,12 +422,12 @@ to confirm.
   ([PR #49717](https://github.com/electron/electron/pull/49717)); apps can
   revert via `disable-features=MacCatapLoopbackAudioForScreenShare`. (The
   [session.md](https://github.com/electron/electron/blob/main/docs/api/session.md)
-  note that the `audio: 'loopback'` *string shortcut* is Windows-only is about
+  note that the `audio: 'loopback'` _string shortcut_ is Windows-only is about
   that specific handler API, not about macOS loopback overall.)
 - **Obsidian**: ships Electron 39.8.3 in the 1.12.7 installer
   ([changelog](https://obsidian.md/changelog/2026-03-23-desktop-v1.12.7/)), so
-  a renderer-side `getDisplayMedia` system-audio capture is *technically
-  plausible today* and would flow into our existing renderer→sidecar PCM
+  a renderer-side `getDisplayMedia` system-audio capture is _technically
+  plausible today_ and would flow into our existing renderer→sidecar PCM
   protocol unchanged. But: (a) it depends on the **installer** Electron, which
   users update only by reinstalling; (b) the plugin cannot install the
   display-media request handler (that's app code; Obsidian would have to wire
@@ -438,14 +438,14 @@ to confirm.
 
 ## 6. Prior art to crib from
 
-| Project | Language / shape | What to take |
-| --- | --- | --- |
-| [insidegui/AudioCap](https://github.com/insidegui/AudioCap) — [`ProcessTap.swift`](https://github.com/insidegui/AudioCap/blob/main/AudioCap/ProcessTap/ProcessTap.swift), [`AudioRecordingPermission.swift`](https://github.com/insidegui/AudioCap/blob/main/AudioCap/ProcessTap/AudioRecordingPermission.swift) | Swift app | Canonical minimal tap+aggregate lifecycle; TCC SPI preflight; teardown ordering (`invalidate()`) |
-| Chromium [`media/audio/mac/catap_audio_input_stream.mm`](https://github.com/chromium/chromium/blob/main/media/audio/mac/catap_audio_input_stream.mm) (+`catap_api.h` seam for testing) | C++/ObjC++, production | Permission probe (`ProbeAudioTapPermissions`), default-device-change restart, 60 s prompt-timeout hazard, mono/stereo + resampling strategy per macOS version, tap-only aggregate dict |
-| [yury/cidre `examples/core-audio-record`](https://github.com/yury/cidre/blob/main/cidre/examples/core-audio-record/main.rs) + [`core_audio/hardware_tapping.rs`](https://github.com/yury/cidre/blob/main/cidre/src/core_audio/hardware_tapping.rs) | Rust | Complete end-to-end Rust recorder; RAII guards over tap/aggregate |
-| [AFFiNE `media_capture/src/macos/tap_audio.rs`](https://github.com/toeverything/AFFiNE/blob/canary/packages/frontend/native/media_capture/src/macos/tap_audio.rs), [`ca_tap_description.rs`](https://github.com/toeverything/AFFiNE/blob/canary/packages/frontend/native/media_capture/src/macos/ca_tap_description.rs) | Rust NAPI module inside an **Electron** app | Closest overall architecture to ours: coreaudio-sys constants + hand-rolled extern + `objc2 msg_send!` class glue; device/property-listener handling |
-| [serenorg/seren-desktop `src-tauri/src/audio/capture/macos.rs`](https://github.com/serenorg/seren-desktop/blob/main/src-tauri/src/audio/capture/macos.rs) | Rust (Tauri) | The `dlsym(RTLD_DEFAULT)` lazy-resolution pattern for the 14.2-only symbols — the exact portability trick our single-binary sidecar needs |
-| Chromium [`media/audio/mac/audio_loopback_input_mac_impl.mm`](https://github.com/chromium/chromium/blob/main/media/audio/mac/audio_loopback_input_mac_impl.mm) | C++/ObjC++ | Only if SCK ever becomes relevant: audio-only SCK stream configuration |
+| Project                                                                                                                                                                                                                                                                                                                 | Language / shape                            | What to take                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [insidegui/AudioCap](https://github.com/insidegui/AudioCap) — [`ProcessTap.swift`](https://github.com/insidegui/AudioCap/blob/main/AudioCap/ProcessTap/ProcessTap.swift), [`AudioRecordingPermission.swift`](https://github.com/insidegui/AudioCap/blob/main/AudioCap/ProcessTap/AudioRecordingPermission.swift)        | Swift app                                   | Canonical minimal tap+aggregate lifecycle; TCC SPI preflight; teardown ordering (`invalidate()`)                                                                                       |
+| Chromium [`media/audio/mac/catap_audio_input_stream.mm`](https://github.com/chromium/chromium/blob/main/media/audio/mac/catap_audio_input_stream.mm) (+`catap_api.h` seam for testing)                                                                                                                                  | C++/ObjC++, production                      | Permission probe (`ProbeAudioTapPermissions`), default-device-change restart, 60 s prompt-timeout hazard, mono/stereo + resampling strategy per macOS version, tap-only aggregate dict |
+| [yury/cidre `examples/core-audio-record`](https://github.com/yury/cidre/blob/main/cidre/examples/core-audio-record/main.rs) + [`core_audio/hardware_tapping.rs`](https://github.com/yury/cidre/blob/main/cidre/src/core_audio/hardware_tapping.rs)                                                                      | Rust                                        | Complete end-to-end Rust recorder; RAII guards over tap/aggregate                                                                                                                      |
+| [AFFiNE `media_capture/src/macos/tap_audio.rs`](https://github.com/toeverything/AFFiNE/blob/canary/packages/frontend/native/media_capture/src/macos/tap_audio.rs), [`ca_tap_description.rs`](https://github.com/toeverything/AFFiNE/blob/canary/packages/frontend/native/media_capture/src/macos/ca_tap_description.rs) | Rust NAPI module inside an **Electron** app | Closest overall architecture to ours: coreaudio-sys constants + hand-rolled extern + `objc2 msg_send!` class glue; device/property-listener handling                                   |
+| [serenorg/seren-desktop `src-tauri/src/audio/capture/macos.rs`](https://github.com/serenorg/seren-desktop/blob/main/src-tauri/src/audio/capture/macos.rs)                                                                                                                                                               | Rust (Tauri)                                | The `dlsym(RTLD_DEFAULT)` lazy-resolution pattern for the 14.2-only symbols — the exact portability trick our single-binary sidecar needs                                              |
+| Chromium [`media/audio/mac/audio_loopback_input_mac_impl.mm`](https://github.com/chromium/chromium/blob/main/media/audio/mac/audio_loopback_input_mac_impl.mm)                                                                                                                                                          | C++/ObjC++                                  | Only if SCK ever becomes relevant: audio-only SCK stream configuration                                                                                                                 |
 
 Other Rust codebases found using `AudioHardwareCreateProcessTap` (GitHub code
 search, 2026-07): snolab/CapsLockX, pathorsAI/parley, majorsimon/midium,

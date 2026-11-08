@@ -33,19 +33,21 @@ Dictate an idea. Capture a meeting. Translate a passage. Listen to a note. Refin
 
 Speech Kit is not tied to one speech engine or hosted API. It manages a growing catalog of models. Install only what you need, mix and match, and change models as your language, hardware, or priorities change.
 
-| You want | Choose |
-| --- | --- |
-| Words on screen while you speak | Moonshine streaming models |
-| Multilingual live transcription | Nemotron 3.5 ASR |
-| The most accurate transcripts | Whisper Large V3 Turbo, Cohere Transcribe, and other batch models |
-| Natural local voices | Pocket TTS or Supertonic 3 |
-| Fast offline translation | Firefox Translations |
+| You want                        | Choose                                                            |
+| ------------------------------- | ----------------------------------------------------------------- |
+| Words on screen while you speak | Moonshine streaming models                                        |
+| Multilingual live transcription | Nemotron 3.5 ASR                                                  |
+| The most accurate transcripts   | Whisper Large V3 Turbo, Cohere Transcribe, and other batch models |
+| Natural local voices            | Pocket TTS or Supertonic 3                                        |
+| Fast offline translation        | Firefox Translations                                              |
 
 The setup wizard installs the native engine and your first speech model. From there, Speech Kit manages the downloads and you choose how you work.
 
 ## Dictate, transcribe, translate, listen, and refine
 
 **Dictate.** Streaming words appear and revise in place while you speak. Finished text lands as Markdown at your cursor. Switch to a batch model when accuracy after each pause matters more than immediacy.
+
+To keep the microphone audio, enable **Save microphone recording** in Speech Kit settings. This is off by default. The recording stays in your vault using Obsidian's attachment location, and an audio player is added to the note. If the player cannot be added, Speech Kit keeps the recording and shows its link.
 
 **Transcribe files.** Run **Transcribe local audio file** to turn an audio or video recording into text in the current note. Speech Kit extracts the audio with its media decoder and transcribes it with an installed batch speech model. Choose a language, model, timestamps, speaker labels, and paragraph style for that job. Your media stays on your computer.
 
@@ -63,11 +65,11 @@ Both commands can optionally run one of your AI presets on the complete transcri
 
 Many speech apps are limited to one operating system, one model, or one part of the workflow. Speech Kit brings the same toolkit to macOS, Windows, and Linux, with hardware acceleration and system-audio capture where available.
 
-| Platform | Architecture | Acceleration | System audio |
-| --- | --- | --- | --- |
-| macOS | Apple silicon | Metal for Whisper | macOS 14.2 or later |
-| Windows | x86-64, ARM64 (Snapdragon 8cx or newer) | Optional NVIDIA CUDA (x86-64 only) | Supported |
-| Linux | x86-64, ARM64 glibc (ARMv8.2 or newer, e.g. Raspberry Pi 5) | Optional NVIDIA CUDA (x86-64 only) | PulseAudio or PipeWire |
+| Platform | Architecture                                                | Acceleration                       | System audio           |
+| -------- | ----------------------------------------------------------- | ---------------------------------- | ---------------------- |
+| macOS    | Apple silicon                                               | Metal for Whisper                  | macOS 14.2 or later    |
+| Windows  | x86-64, ARM64 (Snapdragon 8cx or newer)                     | Optional NVIDIA CUDA (x86-64 only) | Supported              |
+| Linux    | x86-64, ARM64 glibc (ARMv8.2 or newer, e.g. Raspberry Pi 5) | Optional NVIDIA CUDA (x86-64 only) | PulseAudio or PipeWire |
 
 Choose your platform. Choose your models. Keep one workflow inside Obsidian.
 
@@ -85,11 +87,11 @@ Optional LLM text tools are separate. You can connect a local or remote provider
 
 Each feature is served by a different model, so coverage is tracked per feature rather than as a single list.
 
-| Language | Transcription | Live dictation | Read aloud | Translation | Interface |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| English, Spanish, German, French, Portuguese, Italian, Dutch, Japanese | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Croatian | ✅ | ✅ | ✅ | — | ✅ |
-| Serbian | ✅ | — | — | — | — |
+| Language                                                               | Transcription | Live dictation | Read aloud | Translation | Interface |
+| ---------------------------------------------------------------------- | :-----------: | :------------: | :--------: | :---------: | :-------: |
+| English, Spanish, German, French, Portuguese, Italian, Dutch, Japanese |      ✅       |       ✅       |     ✅     |     ✅      |    ✅     |
+| Croatian                                                               |      ✅       |       ✅       |     ✅     |      —      |    ✅     |
+| Serbian                                                                |      ✅       |       —        |     —      |      —      |     —     |
 
 ✅ supported · — not yet available
 
@@ -99,11 +101,11 @@ Transcription coverage also depends on the model you select: multilingual models
 
 Speech Kit works without accounts, subscriptions, or required cloud services.
 
-* **Your media stays on your machine.** Dictation, local file transcription, read aloud, and translation run locally and continue working offline once their models are installed. YouTube caption import retrieves text from YouTube without downloading the video.
-* **No account, telemetry, or metered usage.** No API key, credit card, subscription, or usage credits to monitor.
-* **LLM tools are optional.** Add flexible language processing to your workflow using a local model or a remote provider you choose. Text leaves your device only when you explicitly use a remote provider, and audio is never uploaded.
-* **Choose what works for you.** Install high-quality models suited to your language, hardware, and workflow.
-* **Transparent and open.** Downloads are explicit, third-party licenses are documented, and Speech Kit is open source.
+- **Your media stays on your machine.** Dictation, local file transcription, read aloud, and translation run locally and continue working offline once their models are installed. YouTube caption import retrieves text from YouTube without downloading the video.
+- **No account, telemetry, or metered usage.** No API key, credit card, subscription, or usage credits to monitor.
+- **LLM tools are optional.** Add flexible language processing to your workflow using a local model or a remote provider you choose. Text leaves your device only when you explicitly use a remote provider, and audio is never uploaded.
+- **Choose what works for you.** Install high-quality models suited to your language, hardware, and workflow.
+- **Transparent and open.** Downloads are explicit, third-party licenses are documented, and Speech Kit is open source.
 
 ## Support development
 

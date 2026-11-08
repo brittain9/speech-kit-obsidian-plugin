@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - '[0-9][0-9][0-9][0-9].[0-9]+.[0-9]+'
+      - "[0-9][0-9][0-9][0-9].[0-9]+.[0-9]+"
 
 # Read-only at the top level. Each job opts in to the writes it needs.
 permissions:
@@ -99,8 +99,8 @@ jobs:
         uses: ./.github/actions/setup-node-npm
         with:
           node-version: ${{ needs.metadata.outputs.node_version }}
-          cache: 'true'
-          upgrade-npm: 'true'
+          cache: "true"
+          upgrade-npm: "true"
 
       - name: Install JavaScript dependencies
         run: npm ci
@@ -190,7 +190,7 @@ jobs:
           # otherwise persist a partial target-cuda tree under an immutable key
           # that no later successful run can overwrite, permanently poisoning the
           # warm-build path (the Windows-CUDA regression in #143).
-          cache-on-failure: 'false'
+          cache-on-failure: "false"
 
       - name: Install CUDA toolkit
         if: matrix.cuda
@@ -201,7 +201,7 @@ jobs:
 
       - name: Build sidecar
         env:
-          CARGO_TIMINGS: '1'
+          CARGO_TIMINGS: "1"
         run: ${{ matrix.build_command }}
 
       - name: Upload cargo timings
@@ -294,7 +294,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Configure Windows CPU release build
-        if: '!matrix.cuda'
+        if: "!matrix.cuda"
         shell: pwsh
         env:
           CUDA_TOOLKIT_VERSION_INPUT: ${{ needs.metadata.outputs.cuda_toolkit_version }}
@@ -304,13 +304,13 @@ jobs:
           "CUDA_TOOLKIT_VERSION=$env:CUDA_TOOLKIT_VERSION_INPUT" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Setup Node.js + npm
-        if: '!matrix.cuda'
+        if: "!matrix.cuda"
         uses: ./.github/actions/setup-node-npm
         with:
           node-version: ${{ needs.metadata.outputs.node_version }}
 
       - name: Setup Rust
-        if: '!matrix.cuda'
+        if: "!matrix.cuda"
         uses: ./.github/actions/setup-sidecar-rust
         with:
           toolchain: ${{ needs.metadata.outputs.rust_toolchain }}
@@ -320,7 +320,7 @@ jobs:
           # otherwise persist a partial target-cuda tree under an immutable key
           # that no later successful run can overwrite, permanently poisoning the
           # warm-build path (the Windows-CUDA regression in #143).
-          cache-on-failure: 'false'
+          cache-on-failure: "false"
 
       - name: Build Windows CUDA release sidecar
         if: matrix.cuda
@@ -335,10 +335,10 @@ jobs:
           windows-cuda-rust-cache-env-vars: ${{ needs.metadata.outputs.windows_cuda_rust_cache_env_vars }}
 
       - name: Build sidecar
-        if: '!matrix.cuda'
+        if: "!matrix.cuda"
         shell: pwsh
         env:
-          CARGO_TIMINGS: '1'
+          CARGO_TIMINGS: "1"
         run: ${{ matrix.build_command }}
 
       - name: Upload cargo timings
@@ -492,7 +492,7 @@ jobs:
       - name: Render release timing report
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_RELEASE_SECONDS: '1500'
+          TARGET_RELEASE_SECONDS: "1500"
         run: node scripts/release-timing-report.mjs
 
       - name: Upload release timing report
