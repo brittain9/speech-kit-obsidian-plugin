@@ -2,6 +2,59 @@ import type { TranslationCatalog } from '.';
 
 export const ja = {
   'notice.dictationNotActive': 'ディクテーションは現在有効ではありません。',
+  'commands.transcribeAudioFile': 'ローカルの音声ファイルを文字起こし',
+  'commands.cancelAudioFile': 'ローカル音声ファイルの文字起こしをキャンセル',
+  'audio-file-model-required':
+    '「モデルを管理」でローカルの音声認識モデルを選択して検証してから、もう一度お試しください。',
+  'audio-file-model-changed':
+    'ファイル選択中に音声認識モデルが変更されました。「ローカルの音声ファイルを文字起こし」をもう一度実行してください。',
+  'audio-file-language-changed':
+    '音声ファイルを準備している間にディクテーション言語が変わりました。「ローカルの音声ファイルを文字起こし」をもう一度実行してください。',
+  'audio-file-model-not-batch':
+    '音声ファイルにはバッチ音声認識モデルが必要です。ストリーミングではないモデルを選択して再試行してください。',
+  'audio-file-language-unsupported':
+    '選択したモデルは設定済みのディクテーション言語（{language}）に対応していません。対応モデルを選ぶか言語を変更してください。',
+  'audio-file-target-required':
+    '文字起こしを挿入する Markdown ノートを編集モードで開いてから、もう一度お試しください。',
+  'audio-file-target-changed':
+    '音声ファイルを準備している間に書き先が変わりました。元のノートに戻ってコマンドを再実行してください。',
+  'audio-file-desktop-only':
+    '音声ファイルの文字起こしは Obsidian デスクトップアプリでのみ利用できます。続行するには、この保管庫をデスクトップで開いてください。',
+  'audio-file-busy':
+    'マイクのディクテーションまたは別の音声ファイルの文字起こしが実行中です。完了またはキャンセルしてから再試行してください。',
+  'audio-file-maintenance':
+    'ローカル音声エンジンをインストール、再起動、または更新しています。完了までお待ちください。',
+  'audio-file-read-failed':
+    '選択したファイルを読み取れませんでした。ファイルが存在し、アクセス可能か確認して再試行してください。',
+  'audio-file-decode-failed':
+    'Obsidian がこの音声をデコードできませんでした。Obsidian が再生できる形式（通常は WAV）に変換してください。',
+  'audio-file-encoded-size':
+    'エンコード済みファイルが大きすぎます。より短いファイルか低ビットレートのファイル（最大 64 MiB）を選んでください。',
+  'audio-file-duration': '音声が 30 分の安全上限を超えています。短いファイルに分割してください。',
+  'audio-file-model-duration':
+    '選択したモデルが処理できる長さを超えています。分割するか、より長い音声に対応するモデルを選んでください。',
+  'audio-file-decoded-memory':
+    'デコードには大量のメモリを消費します。より短いファイル、低ビットレート、またはチャンネル数の少ないファイルを選んでください。',
+  'audio-file-empty':
+    '選択したファイルに文字起こしできる音声がありません。別の音声ファイルを選んでください。',
+  'audio-file-start-failed':
+    'ローカル音声エンジンを開始できませんでした。選択したモデルを確認して再試行してください。',
+  'audio-file-sidecar-missing':
+    'ローカル音声エンジンをインストールし、音声認識モデルを選択して再試行してください。',
+  'audio-file-shutdown-uncertain':
+    'ローカル音声エンジンは音声ファイルの文字起こしが終了したことを確認できませんでした。音声処理の重複を防ぐため、Speech Kit はセッションを保護しました。ローカル音声エンジンを確認して再試行してください。',
+  'audio-file-sidecar-failed':
+    'ローカル音声エンジンのエラーにより文字起こしを停止しました。モデルを確認して再試行してください。',
+  'audio-file-queue-overload':
+    'ローカル音声エンジンが処理に追いつけなかったため、音声の読み取りを停止しました。録音を分割するか、より高速なモデルを選んでください。',
+  'audio-file-transcript-write-failed':
+    'ノートへ安全に書き込めなかったため、文字起こしを停止しました。ノートを復元して再試行してください。',
+  'audio-file-target-closed':
+    '書き先のノートが閉じられたか置き換えられました。ノートを開き、コマンドを再実行してください。',
+  'audio-file-target-deleted':
+    '書き先のノートが削除されました。復元または再作成してからコマンドを実行してください。',
+  'audio-file-surface-changed':
+    'ノートが Speech Kit で安全に追跡できない形で変更されました。復元してコマンドを再実行してください。',
   'notice.dictationStartFailed': 'ディクテーションを開始できませんでした。',
   'notice.dictationStopFailed': 'ディクテーションを停止できませんでした。',
   'notice.lastUtteranceCleared': '最後に残された発話をクリアしました。',
@@ -407,31 +460,16 @@ export const ja = {
     'ディクテーションは、生のローカル トランスクリプトを挿入します。クリーンアップ、書き換え、または要約が必要な場合は、「変換」をオンにします。',
   'llm.sidebar.off.summary': '未加工の文字起こし',
   'llm.sidebar.active.summary': '{preset}・{timing}',
-  'llm.preset.builtin.cleanUp.label': 'クリーンアップ',
-  'llm.preset.builtin.cleanUp.description':
-    '音声と意味を維持しながら、転写アーティファクト、フィラー、句読点、大文字の使用を修正します。',
-  'llm.preset.builtin.cleanUp.prompt':
-    'ディクテーションによる文字起こしを整えてください。フィラー、言い直し、繰り返し、句読点、大文字・小文字、明らかな認識誤りを修正してください。話者の語調と意味は維持してください。参照コンテキストは表記の確認にのみ使用してください。文字起こし元の言語で記述してください。ユーザーが明示的に翻訳を求めない限り、翻訳しないでください。前置きや解説を付けず、整えたテキストのみを返してください。',
-  'llm.preset.builtin.professionalWriting.label': 'プロフェッショナルなライティング',
-  'llm.preset.builtin.professionalWriting.description':
-    '事実、名前、決定事項、専門用語を維持しながら、簡潔で洗練された専門的な文章に書き直します。',
-  'llm.preset.builtin.professionalWriting.prompt':
-    'ディクテーションされた発話を、簡潔でプロフェッショナルな文章に書き直してください。能動態を使い、フィラーや曖昧な表現を除いてください。事実、名前、用語はすべて維持してください。参照コンテキストは表記の確認に使用してください。文字起こし元の言語で記述してください。ユーザーが明示的に翻訳を求めない限り、翻訳しないでください。前置きや解説を付けず、書き直したテキストのみを返してください。',
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     '手つかずのトランスクリプトの上に短い TLDR 概要を追加します。',
   'llm.preset.builtin.tldr.prompt':
-    'ディクテーションの文字起こしを TLDR として要約してください。「TLDR」という見出しに続けて、要点をまとめた 1～3 個の短い箇条書きを記述してください。文字起こし元の言語で記述してください。ユーザーが明示的に翻訳を求めない限り、翻訳しないでください。文字起こしを繰り返したり、前置きや解説を付けたりせず、見出しと箇条書きのみを返してください。',
+    'ディクテーションの文字起こしを TLDR として要約してください。「TLDR」という見出しに続けて、内容の充実度に応じた数の短い箇条書きで、要点を素早く把握できるようにを記述してください。文字起こし元の言語で記述してください。ユーザーが明示的に翻訳を求めない限り、翻訳しないでください。文字起こしを繰り返したり、前置きや解説を付けたりせず、見出しと箇条書きのみを返してください。',
   'llm.preset.builtin.markdownFormatting.label': 'Markdown フォーマット',
   'llm.preset.builtin.markdownFormatting.description':
     'セッション記録を、見出し、リスト、強調を備えた構造化された Markdown として再フォーマットします。',
   'llm.preset.builtin.markdownFormatting.prompt':
     'ディクテーションされた発話を、適切に構造化された Markdown に整形してください。内容に応じて見出し、箇条書きまたは番号付きリスト、太字、強調、コードブロックを追加してください。フィラー、言い直し、句読点、大文字・小文字は軽く整えつつ、話者の表現、事実、名前、用語はすべて維持してください。文字起こし元の言語で記述してください。ユーザーが明示的に翻訳を求めない限り、翻訳しないでください。前置きや解説を付けず、Markdown のみを返してください。',
-  'llm.preset.builtin.actionItems.label': 'アクションアイテム',
-  'llm.preset.builtin.actionItems.description':
-    '未修正のトランスクリプトの下にアクションアイテムのチェックリストを追加します。',
-  'llm.preset.builtin.actionItems.prompt':
-    'ディクテーションの文字起こしからアクションアイテムを抽出してください。「アクションアイテム」という見出しに続けて、具体的なタスクを Markdown のチェックリストで出力し、話者が担当者に言及している場合はその名前も含めてください。アクションアイテムがない場合は何も返さないでください。文字起こし元の言語で記述してください。ユーザーが明示的に翻訳を求めない限り、翻訳しないでください。文字起こしを繰り返したり、前置きや解説を付けたりせず、見出しとチェックリストのみを返してください。',
   'llm.preset.timing.perUtterance': '各フレーズの後に実行されます',
   'llm.preset.timing.batch': '停止時に1回実行',
   'llm.preset.timing.either': 'どちらのモードでも実行可能',

@@ -2,6 +2,60 @@ import type { TranslationCatalog } from '.';
 
 export const hr = {
   'notice.dictationNotActive': 'Diktiranje trenutačno nije aktivno.',
+  'commands.transcribeAudioFile': 'Transkribiraj lokalnu audio-datoteku',
+  'commands.cancelAudioFile': 'Otkaži transkripciju lokalne audio-datoteke',
+  'audio-file-model-required':
+    'Odaberite i provjerite lokalni model pretvarbe govora u tekst u Upravljanju modelima pa pokušajte ponovno.',
+  'audio-file-model-changed':
+    'Model transkripcije promijenjen je dok je otvoren odabir datoteke. Ponovno pokrenite Transkribiraj lokalnu audio-datoteku.',
+  'audio-file-language-changed':
+    'Jezik diktiranja promijenjen je tijekom pripreme audio-datoteke. Ponovno pokrenite Transkribiraj lokalnu audio-datoteku kako biste koristili trenutačni jezik.',
+  'audio-file-model-not-batch':
+    'Audio-datoteke zahtijevaju batch model. Odaberite model bez streaminga i pokušajte ponovno.',
+  'audio-file-language-unsupported':
+    'Odabrani model ne podržava konfigurirani jezik diktiranja ({language}). Odaberite kompatibilan model ili promijenite jezik diktiranja.',
+  'audio-file-target-required':
+    'Otvorite Markdown bilješku koja treba primiti transkript u načinu uređivanja pa pokušajte ponovno.',
+  'audio-file-target-changed':
+    'Odredište se promijenilo tijekom pripreme. Vratite se na izvornu bilješku i ponovno pokrenite naredbu.',
+  'audio-file-desktop-only':
+    'Transkripcija audio-datoteka dostupna je u Obsidian aplikaciji za računalo. Otvorite ovaj trezor na računalu za nastavak.',
+  'audio-file-busy':
+    'Diktiranje ili druga transkripcija audio-datoteke je aktivna. Završite ili otkažite tu radnju pa pokušajte ponovno.',
+  'audio-file-maintenance':
+    'Lokalni govorni motor se instalira, ponovno pokreće ili ažurira. Pričekajte završetak pa pokušajte ponovno.',
+  'audio-file-read-failed':
+    'Odabrana datoteka nije se mogla pročitati. Provjerite postoji li i ima li pristup pa pokušajte ponovno.',
+  'audio-file-decode-failed':
+    'Obsidian nije mogao dekodirati audio. Pretvorite ga u format koji vaša verzija Obsidiana može reproducir, često WAV.',
+  'audio-file-encoded-size':
+    'Kodirana audio-datoteka je prevelika. Odaberite kraću datoteku ili manju brzinu bitova (najviše 64 MiB).',
+  'audio-file-duration':
+    'Audio je dulji od sigurnosnog ograničenja od 30 minuta. Podijelite ga u kraće datoteke.',
+  'audio-file-model-duration':
+    'Audio je dulji nego što odabrani model može obraditi. Podijelite ga ili odaberite model s većim ograničenjem.',
+  'audio-file-decoded-memory':
+    'Dekodiranje bi potrošilo previše memorije. Odaberite kraću datoteku, manju brzinu bitova ili manje kanala.',
+  'audio-file-empty':
+    'Odabrana datoteka ne sadrži zvuk koji se može transkribirati. Odaberite drugu audio-datoteku.',
+  'audio-file-start-failed':
+    'Lokalni govorni motor nije mogao pokrenuti transkripciju. Provjerite odabrani model pa pokušajte ponovno.',
+  'audio-file-sidecar-missing':
+    'Instalirajte lokalni govorni motor, odaberite model pretvarbe govora u tekst pa pokušajte ponovno.',
+  'audio-file-shutdown-uncertain':
+    'Lokalni govorni motor nije potvrdio da je transkripcija audio-datoteke završena. Speech Kit je zaštitio sesiju kako ne bi došlo do preklapajućih govornih operacija. Provjerite lokalni motor i pokušajte ponovno.',
+  'audio-file-sidecar-failed':
+    'Transkripcija se zaustavila jer lokalni govorni motor nije uspio. Provjerite model pa pokušajte ponovno.',
+  'audio-file-queue-overload':
+    'Lokalni govorni motor nije mogao pratiti obradu. Podijelite snimak ili odaberite brži model.',
+  'audio-file-transcript-write-failed':
+    'Transkripcija se zaustavila jer Speech Kit nije mogao sigurno pisati u bilješku. Vratite bilješku pa pokušajte ponovno.',
+  'audio-file-target-closed':
+    'Ciljna bilješka je zatvorena ili zamijenjena. Ponovno je otvorite i pokrenite naredbu.',
+  'audio-file-target-deleted':
+    'Ciljna bilješka je izbrisana. Vratite je ili stvorite novu pa ponovno pokrenite naredbu.',
+  'audio-file-surface-changed':
+    'Bilješka se promijenila na način koji Speech Kit nije mogao sigurno pratiti. Vratite je i ponovno pokrenite naredbu.',
   'notice.dictationStartFailed': 'Nije moguće pokrenuti diktiranje.',
   'notice.dictationStopFailed': 'Nije moguće zaustaviti diktiranje.',
   'notice.finalizedUtteranceAutoCopyFailed': 'Nije moguće automatski kopirati dovršeni iskaz.',
@@ -624,31 +678,16 @@ export const hr = {
     'Diktiranje umeće izvorni lokalni transkript. Uključite transformaciju kada želite čišćenje, prepisivanje ili sažetke.',
   'llm.sidebar.off.summary': 'Izvorni transkript',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Čišćenje',
-  'llm.preset.builtin.cleanUp.description':
-    'Ispravlja artefakte transkripcije, poštapalice, interpunkciju i velika slova uz očuvanje stila izražavanja i značenja.',
-  'llm.preset.builtin.cleanUp.prompt':
-    'Očisti diktirani tekst dobiven pretvorbom govora u tekst. Ispravi poštapalice, prekinute započete rečenice, ponavljanja, interpunkciju, velika slova i očite pogreške prepoznavanja. Sačuvaj govornikov stil izražavanja i značenje. Referentni kontekst upotrijebi samo za pravopis. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo očišćeni tekst — bez uvoda, bez komentara.',
-  'llm.preset.builtin.professionalWriting.label': 'Profesionalno pisanje',
-  'llm.preset.builtin.professionalWriting.description':
-    'Prepisuje tekst u sažetu, dotjeranu profesionalnu prozu uz očuvanje činjenica, imena, odluka i tehničkih pojmova.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    'Prepiši diktirani govor kao sažetu profesionalnu prozu. Upotrebljavaj aktiv, bez poštapalica i suzdržanih formulacija. Sačuvaj svaku činjenicu, ime i pojam. Referentni kontekst upotrijebi za pravopis. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo prepisani tekst — bez uvoda, bez komentara.',
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Dodaje kratak TLDR sažetak iznad vašeg netaknutog transkripta.',
   'llm.preset.builtin.tldr.prompt':
-    'Napiši TLDR sažetak diktiranog transkripta: naslov „TLDR” nakon kojeg slijedi jedna do tri kratke natuknice s ključnim točkama. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo naslov i natuknice — nemoj ponavljati transkript, bez uvoda, bez komentara.',
+    'Napiši TLDR sažetak diktiranog transkripta: naslov „TLDR” nakon kojeg slijedi kratke natuknice čiji broj odgovara količini bitnog sadržaja i omogućuje brz pregled. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo naslov i natuknice — nemoj ponavljati transkript, bez uvoda, bez komentara.',
   'llm.preset.builtin.markdownFormatting.label': 'Markdown oblikovanje',
   'llm.preset.builtin.markdownFormatting.description':
     'Preoblikuje transkript sesije u strukturirani Markdown s naslovima, popisima i isticanjem.',
   'llm.preset.builtin.markdownFormatting.prompt':
     'Preoblikuj diktirani govor u dobro strukturirani Markdown. Dodaj naslove, natuknice ili numerirane popise, podebljanje, isticanje i ograđene blokove koda ondje gdje sadržaj to opravdava. Lagano očisti poštapalice, prekinute započete rečenice, interpunkciju i velika slova; sačuvaj govornikov izričaj, svaku činjenicu, ime i pojam. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo Markdown — bez uvoda, bez komentara.',
-  'llm.preset.builtin.actionItems.label': 'Zadaci za izvršenje',
-  'llm.preset.builtin.actionItems.description':
-    'Dodaje kontrolni popis zadataka ispod vašeg netaknutog transkripta.',
-  'llm.preset.builtin.actionItems.prompt':
-    'Izdvoji zadatke za izvršenje iz diktiranog transkripta. Ispiši naslov „Zadaci za izvršenje” nakon kojeg slijedi Markdown kontrolni popis konkretnih zadataka, uz navođenje odgovorne osobe kada je govornik spomene. Ako transkript ne sadrži nijedan zadatak za izvršenje, ne vraćaj ništa. Piši na izvornom jeziku transkripta. Nikada nemoj prevoditi osim ako korisnik izričito ne zatraži prijevod. Vrati samo naslov i kontrolni popis — nemoj ponavljati transkript, bez uvoda, bez komentara.',
   'llm.preset.timing.perUtterance': 'Izvodi se nakon svake fraze',
   'llm.preset.timing.batch': 'Izvodi se jednom pri zaustavljanju',
   'llm.preset.timing.either': 'Izvodi se u oba načina rada',

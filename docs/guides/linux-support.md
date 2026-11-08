@@ -1,18 +1,19 @@
 # Linux support
 
-Speech Kit supports desktop Obsidian on x86-64 GNU/Linux. The plugin UI runs inside Obsidian, while transcription runs in a native sidecar built for the `x86_64-unknown-linux-gnu` target.
+Speech Kit supports desktop Obsidian on x86-64 and ARM64 GNU/Linux. The plugin UI runs inside Obsidian, while transcription runs in a native sidecar built for the `x86_64-unknown-linux-gnu` or `aarch64-unknown-linux-gnu` target.
 
 ## What is supported
 
 | Area | Support boundary |
 | --- | --- |
-| CPU transcription | x86-64, glibc-based distributions with a new enough runtime for the current release build |
+| CPU transcription | x86-64 or ARM64, glibc-based distributions with a new enough runtime for the current release build |
+| ARM64 CPUs | ARMv8.2 or newer with the dot-product extension, such as Raspberry Pi 5, AWS Graviton, Ampere, and NVIDIA Jetson Orin. Use a 64-bit OS with glibc 2.39 or newer, such as Raspberry Pi OS Trixie, Debian 13, or Ubuntu 24.04 (Raspberry Pi OS Bookworm is too old); the setup wizard refuses Raspberry Pi 4 and other ARMv8.0 boards |
 | NVIDIA acceleration | x86-64 with a Turing-or-newer GPU and a CUDA 13-compatible driver; see [CUDA setup](cuda-setup.md) |
 | Microphone capture | Obsidian/Electron's audio input through PulseAudio or PipeWire |
 | System audio | The default output monitor through PulseAudio, or PipeWire's PulseAudio compatibility service |
 | Obsidian packages | Native packages and the Flathub build; sandbox changes are needed only when permissions were restricted or CUDA needs host libraries |
 
-ARM64, 32-bit Linux, musl-only systems such as Alpine, and mobile Obsidian are not release targets. The project does not yet publish a frozen minimum glibc version. NixOS and other distributions that do not run ordinary glibc binaries are best-effort rather than first-class until the project has a tested packaging path for them.
+32-bit Linux, musl-only systems such as Alpine, and mobile Obsidian are not release targets. The project does not yet publish a frozen minimum glibc version. NixOS and other distributions that do not run ordinary glibc binaries are best-effort rather than first-class until the project has a tested packaging path for them.
 
 ## Current test coverage
 
@@ -21,7 +22,7 @@ ARM64, 32-bit Linux, musl-only systems such as Alpine, and mobile Obsidian are n
 - Every change builds and tests the sidecar on GitHub's current Ubuntu runner.
 - Linux system-audio integration tests are available, but hardware-dependent cases are not part of routine pull-request CI.
 
-Other x86-64 glibc distributions should work when their audio service exposes the same interfaces, but they are compatibility targets rather than a claim of distro-specific verification. A useful Linux bug report includes the distribution, architecture, Obsidian package, desktop session, audio server, and whether microphone-only dictation works.
+Other x86-64 or ARM64 glibc distributions should work when their audio service exposes the same interfaces, but they are compatibility targets rather than a claim of distro-specific verification. A useful Linux bug report includes the distribution, architecture, Obsidian package, desktop session, audio server, and whether microphone-only dictation works.
 
 ## Native Obsidian packages
 
@@ -73,7 +74,7 @@ Then check `pactl info` and the monitor-source command above. Speech Kit records
 
 ### The sidecar does not start
 
-Run **Speech Kit: Check sidecar health** from the command palette. On an unsupported architecture, use a supported x86-64 machine; selecting a different model cannot change the sidecar architecture.
+Run **Speech Kit: Check sidecar health** from the command palette. On an unsupported architecture, use a supported x86-64 or ARMv8.2+ ARM64 machine; selecting a different model cannot change the sidecar architecture.
 
 For a sandboxed install, avoid pointing **Sidecar path override** at a host path that is not visible inside the sandbox. The managed CPU sidecar is installed inside the plugin directory and should not need an override.
 

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createDefaultPresets } from '../src/llm/presets';
 
 import { LlmPresetStateStore } from '../src/settings/llm-preset-state';
 import { restoreLlmTransformationDefaults } from '../src/settings/llm-transformation-reset';
@@ -41,10 +42,10 @@ describe('restoreLlmTransformationDefaults', () => {
 
     expect(fixture.commit).toHaveBeenCalledOnce();
     expect(fixture.getSettings()).toMatchObject({
-      llmPostprocessActivePresetRef: 'builtin:clean-up',
+      llmPostprocessActivePresetRef: 'user:default:summary',
       llmPostprocessMode: 'off',
       llmPostprocessTemperature: DEFAULT_PLUGIN_SETTINGS.llmPostprocessTemperature,
-      llmPostprocessUserPresets: [preset],
+      llmPostprocessUserPresets: [...createDefaultPresets(), preset],
     });
   });
 

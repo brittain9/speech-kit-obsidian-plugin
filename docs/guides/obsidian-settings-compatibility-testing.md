@@ -1,19 +1,21 @@
 # Obsidian settings compatibility testing
 
-Use this smoke matrix before releasing a settings change. Static checks prevent
+Use this optional smoke matrix when investigating a settings compatibility
+issue or validating a change across Obsidian versions. It is not a release gate.
+Static checks prevent
 production code from drifting above the supported API floor, but they do not
 prove how a specific Obsidian binary renders the page.
 
 ## Versions
 
-| Obsidian | Why it is required | Settings window modes |
+| Obsidian | Why it may be useful | Settings window modes |
 | --- | --- | --- |
 | 1.11.5 | Exact `minAppVersion` | Main window, plus separate window if the toggle is available |
 | 1.12.7 | Final pre-1.13 baseline | Main window, plus separate window if the toggle is available |
 | 1.13.4 | Current 1.13 settings renderer that exposed the empty-page regression | Main window and separate window |
 
-If a newer desktop release is live, add it without removing 1.13.4 until the
-compatibility fix has shipped. Confirm the current target in Obsidian's
+Choose versions relevant to the change or reported issue. These rows are
+examples, not a mandatory release checklist. Find available versions in Obsidian's
 [official desktop release feed](https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/desktop-releases.json).
 
 ## Prepare one build
@@ -33,7 +35,7 @@ and do not open a production vault with a downgraded Obsidian binary.
 
 ## Smoke procedure
 
-Repeat these checks for every applicable version and window mode:
+For each version and window mode you choose to test:
 
 1. Open **Settings → Speech Kit**. Confirm the full page appears immediately,
    including Model, Capture, Transcript output, Read aloud, Translation, LLM
@@ -70,8 +72,8 @@ versions.
 
 ## Evidence record
 
-Copy this table into the release PR or release issue. A blank or assumed result
-does not count as runtime evidence.
+When these checks are run, record the results in the relevant PR or issue.
+A blank or assumed result does not count as runtime evidence.
 
 | Obsidian | Window mode | Platform | Result | Notes/evidence |
 | --- | --- | --- | --- | --- |
@@ -82,5 +84,6 @@ does not count as runtime evidence.
 | 1.13.4 | Main |  | Not run |  |
 | 1.13.4 | Separate |  | Not run |  |
 
-The 1.11.5 row is a release gate. The floor typecheck is valuable regression
-evidence, but it is not a substitute for that exact runtime smoke test.
+No row in this guide blocks tagging or publication. The supported-floor
+typecheck remains useful regression evidence; it does not establish that a
+specific Obsidian binary was tested.

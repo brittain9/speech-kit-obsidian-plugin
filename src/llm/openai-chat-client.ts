@@ -6,6 +6,7 @@ interface OpenAiChatClientOptions {
   apiKey: string;
   baseUrl: string;
   providerName: string;
+  probeRequestJson?: JsonRequester;
   requestJson?: JsonRequester;
   timeoutMs?: number;
 }
@@ -21,6 +22,7 @@ export class OpenAiChatClient {
   private readonly baseUrl: string;
   private readonly providerName: string;
   private readonly request: JsonRequester;
+  private readonly probeRequest: JsonRequester;
   private readonly timeoutMs: number;
 
   constructor(options: OpenAiChatClientOptions) {
@@ -28,6 +30,7 @@ export class OpenAiChatClient {
     this.baseUrl = options.baseUrl.replace(/\/+$/u, '');
     this.providerName = options.providerName;
     this.request = options.requestJson ?? fetchJson;
+    this.probeRequest = options.probeRequestJson ?? this.request;
     this.timeoutMs = options.timeoutMs ?? CLEANUP_TIMEOUT_MS;
   }
 
@@ -63,13 +66,14 @@ export class OpenAiChatClient {
     path: string,
     options: JsonRequestOptions = { timeoutMs: PROBE_TIMEOUT_MS },
   ): Promise<unknown> {
-    return this.requestJson(path, {}, options);
+    return this.requestJson(path, {}, options, this.probeRequest);
   }
 
   private requestJson(
     path: string,
     init: RequestInit,
     options: JsonRequestOptions,
+    request: JsonRequester = this.request,
   ): Promise<unknown> {
     const headers: Record<string, string> = {};
     new Headers(init.headers).forEach((value, key) => {
@@ -82,7 +86,7 @@ export class OpenAiChatClient {
       headers.authorization = `Bearer ${this.apiKey}`;
     }
 
-    return this.request(
+    return request(
       `${this.baseUrl}${path}`,
       { ...init, headers },
       {
@@ -102,11 +106,7 @@ function parseChatContent(response: unknown, providerName: string): string {
   }
 
   const choice: unknown = response.choices[0];
-  if (
-    !isRecord(choice) ||
-    !isRecord(choice.message) ||
-    typeof choice.message.content !== 'string'
-  ) {
+  if (!isRecord(choice)) {
     throw new ProviderError(
       `${providerName} returned an invalid chat message.`,
       'invalid_response',
@@ -115,13 +115,34 @@ function parseChatContent(response: unknown, providerName: string): string {
   if (choice.finish_reason === 'length') {
     throw new ProviderError(
       `${providerName} stopped because the transformed text exceeded the output limit.`,
+      'output_limit',
+    );
+  }
+  if (choice.finish_reason === 'content_filter') {
+    throw new ProviderError(
+      `${providerName} filtered the response before it was complete.`,
+      'content_filtered',
+    );
+  }
+  if (
+    isRecord(choice.message) &&
+    typeof choice.message.refusal === 'string' &&
+    choice.message.refusal.trim().length > 0
+  ) {
+    throw new ProviderError(`${providerName} model refused the request.`, 'model_refusal', {
+      refusalReply: choice.message.refusal.trim(),
+    });
+  }
+  if (!isRecord(choice.message) || typeof choice.message.content !== 'string') {
+    throw new ProviderError(
+      `${providerName} returned an invalid chat message.`,
       'invalid_response',
     );
   }
 
   const content = choice.message.content.trim();
   if (content.length === 0) {
-    throw new ProviderError(`${providerName} returned an empty chat message.`, 'invalid_response');
+    throw new ProviderError(`${providerName} returned an empty chat message.`, 'empty_response');
   }
   return content;
 }

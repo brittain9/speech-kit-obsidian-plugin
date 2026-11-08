@@ -349,7 +349,7 @@ export class NoteSurface {
 
     const preserved = new Set(preservedSpans.map((span) => span.utteranceId));
     const overlappingSpans = [...this.spans.values()].filter((span) =>
-      rangeIntersects(range.from, range.to, span.start, span.end),
+      rangeOverlaps(range.from, range.to, span.start, span.end),
     );
     const spansInRange = overlappingSpans.filter(
       (span) => span.start >= range.from && span.end <= range.to,
@@ -790,6 +790,16 @@ function changeIntersectsSpan(update: ViewUpdate, span: ProjectedSpan): boolean 
   return intersects;
 }
 
+function rangeOverlaps(
+  changeFrom: number,
+  changeTo: number,
+  spanFrom: number,
+  spanTo: number,
+): boolean {
+  if (changeFrom === changeTo) return changeFrom > spanFrom && changeFrom < spanTo;
+  return changeFrom < spanTo && changeTo > spanFrom;
+}
+
 function rangeIntersects(
   changeFrom: number,
   changeTo: number,
@@ -797,10 +807,12 @@ function rangeIntersects(
   spanTo: number,
 ): boolean {
   if (changeFrom === changeTo) {
-    return changeFrom > spanFrom && changeFrom < spanTo;
+    // A user insertion exactly at either boundary still changes the complete
+    // raw range that a pending media transformation is about to replace.
+    return changeFrom >= spanFrom && changeFrom <= spanTo;
   }
 
-  return changeFrom < spanTo && changeTo > spanFrom;
+  return changeFrom <= spanTo && changeTo >= spanFrom;
 }
 
 function cloneSpan(span: ProjectedSpan): ProjectedSpan {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
-  LLM_BUILTIN_PRESETS,
+  isDefaultPreset,
   type LlmPreset,
   type LlmPresetOutput,
   type LlmPresetOverrides,
@@ -189,23 +189,22 @@ export interface PresetSaveOutcome {
 
 // The save contract for the preset editor: editing updates the preset in
 // place; if the edited preset no longer exists (deleted in another window),
-// the edits are saved back under the same id rather than dropped; name
-// collisions with built-ins or other user presets are rejected.
+// the edits are saved back under the same id rather than dropped. New names
+// must be unique; existing labels remain editable across upgrades.
 export function applyPresetDraftSave(
   state: Readonly<LlmPresetState>,
   draft: LlmPresetDraft,
   editedId: string | null,
 ): PresetSaveOutcome {
   const label = draft.label.trim().toLowerCase();
-  if (LLM_BUILTIN_PRESETS.some((preset) => preset.label.toLowerCase() === label)) {
-    return {
-      error: t('llm.preset.validation.builtinName'),
-      state,
-    };
-  }
-
+  const existingPreset = state.userPresets.find((preset) => preset.id === editedId);
+  const keepsExistingName = existingPreset?.label.trim().toLowerCase() === label;
   const existingLabels = state.userPresets
-    .filter((preset) => preset.id !== editedId)
+    .filter(
+      (preset) =>
+        preset.id !== editedId &&
+        !(keepsExistingName && preset.label.trim().toLowerCase() === label),
+    )
     .map((preset) => preset.label);
   const result = validatePresetDraft(draft, existingLabels);
   if (result.kind === 'error') {
@@ -224,7 +223,10 @@ export function applyPresetDraftSave(
     };
   }
 
-  if (state.userPresets.length >= LLM_USER_PRESET_MAX_COUNT) {
+  if (
+    state.userPresets.filter((preset) => !isDefaultPreset(preset)).length >=
+    LLM_USER_PRESET_MAX_COUNT
+  ) {
     return { error: MAX_PRESETS_MESSAGE, state };
   }
   return {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Stage the release directory: copy plugin bundle files into dist/release
 // with an optional, exact set of sidecar archives. Plugin-only releases contain
-// only the three files Obsidian installs. Sidecar releases validate all five
+// only the three files Obsidian installs. Sidecar releases validate all seven
 // archives and emit a deterministic checksums.txt.
 //
 // CLI: node scripts/assemble-release-files.mjs [--sidecars]
@@ -18,9 +18,11 @@ import { join } from 'node:path';
 import process from 'node:process';
 
 export const EXPECTED_SIDECAR_ARCHIVES = Object.freeze([
+  'sidecar-linux-arm64.tar.gz',
   'sidecar-linux-x86_64-cpu.tar.gz',
   'sidecar-linux-x86_64-cuda.tar.gz',
   'sidecar-macos-arm64.tar.gz',
+  'sidecar-windows-arm64.tar.gz',
   'sidecar-windows-x86_64-cpu.tar.gz',
   'sidecar-windows-x86_64-cuda.tar.gz',
 ]);

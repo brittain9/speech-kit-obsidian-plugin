@@ -464,3 +464,19 @@ This is a small release with a few useful improvements:
 Everything remains local and works offline after setup.
 
 ⬇️ [Install Speech Kit](https://obsidian.md/plugins?id=local-dictation) • 📝 [Release notes](https://github.com/brittain9/speech-kit-obsidian-plugin/releases/latest) • 💻 [GitHub](https://github.com/brittain9/speech-kit-obsidian-plugin) • 💜 [Support the project](https://buymeacoffee.com/alexbrittaq)
+
+## September 26, 2026 — draft for 2026.9.3
+
+**Reactions:** Not yet posted.
+
+🎙️ **Speech Kit 2026.9.3: turn videos and recordings into notes**
+
+Speech Kit started with live dictation: a reliable way to capture long sessions in Obsidian with high-quality speech models you choose. This update brings that workflow to audio and video you already have.
+
+Paste a YouTube link and Speech Kit brings the video's available captions into your note. Choose **Transcript only**, or pick one of your AI presets before you start. In a couple of clicks, you can turn a long video or podcast into a summary, outline, or whatever your own prompt calls for. Use a local AI model or a provider you configure with your own API key. With my OpenRouter setup, summaries have cost me a few cents per video; the actual cost depends on the model and transcript length.
+
+You can also drop in an audio or video file and transcribe it locally with an installed speech model. Choose timestamps, speaker labels, and formatting for that recording, then optionally run an AI preset on the complete transcript. The media file stays on your computer.
+
+I've wanted an easy way to turn talks, interviews, and podcasts into notes I'll actually use. Try it and tell me what you make with it—or what you'd like improved next. If Speech Kit is useful to you, a GitHub star helps other Obsidian users find the project.
+
+⬇️ [Install or update Speech Kit](https://obsidian.md/plugins?id=local-dictation) • 📝 [Release notes](https://github.com/brittain9/speech-kit-obsidian-plugin/releases/tag/2026.9.3) • ⭐ [Star on GitHub](https://github.com/brittain9/speech-kit-obsidian-plugin) • 💜 [Support the project](https://buymeacoffee.com/alexbrittaq)

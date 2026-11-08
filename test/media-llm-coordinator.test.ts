@@ -1,0 +1,227 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { MediaLlmEditorSession } from '../src/dictation/audio-file-transcript-adapter';
+import {
+  formatMediaLlmFailure,
+  formatMediaLlmFailureForModal,
+  MediaLlmCoordinator,
+} from '../src/dictation/media-llm-coordinator';
+import { ProviderError } from '../src/llm/provider';
+import type { LlmRouter } from '../src/llm/router';
+import { resolveLlmTransformSnapshot } from '../src/llm/transform-policy';
+import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
+
+function settings(overrides: Partial<PluginSettings> = {}): PluginSettings {
+  return {
+    ...DEFAULT_PLUGIN_SETTINGS,
+    llmFeaturesEnabled: true,
+    llmRoutingPolicy: { kind: 'fixed', providerId: 'ollama' },
+    llmProviderConfigurations: {
+      ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations,
+      ollama: { model: 'local-model' },
+    },
+    mediaLlmProcessing: true,
+    ...overrides,
+  };
+}
+
+function session(): MediaLlmEditorSession {
+  return {
+    clearSessionProcessingMark: vi.fn(),
+    insertAdjacentToSessionRange: vi.fn(() => true),
+    joinRawSessionText: vi.fn(() => 'Raw transcript.'),
+    markSessionRangeAsProcessing: vi.fn(() => true),
+    readNoteText: vi.fn(() => null),
+    replaceSessionRangeWithCleaned: vi.fn(() => ({ kind: 'denied' as const })),
+    setAnchorMode: vi.fn(),
+  };
+}
+
+describe('MediaLlmCoordinator', () => {
+  it('runs an explicitly selected media preset while the legacy global media toggle is off', async () => {
+    const current = settings({ llmFeaturesEnabled: false, mediaLlmProcessing: false });
+    const cleanup = vi.fn(async () => ({
+      model: 'local-model',
+      providerId: 'ollama' as const,
+      text: 'Summary.',
+    }));
+    const editor = session();
+    const coordinator = new MediaLlmCoordinator({
+      createRouter: () => ({ cleanup, selectProviderId: () => 'ollama' }),
+      feedback: { show: vi.fn() },
+      getSettings: () => current,
+    });
+    const snapshot = resolveLlmTransformSnapshot({
+      ...current,
+      llmPostprocessActivePresetRef: 'builtin:tldr',
+    });
+
+    await coordinator.run(editor, { settings: current, snapshot });
+
+    expect(cleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: expect.stringContaining('TLDR summary') }),
+    );
+    expect(editor.insertAdjacentToSessionRange).toHaveBeenCalledWith('Summary.', 'above', {
+      rejectUserEdits: true,
+    });
+    expect(current.llmPostprocessActivePresetRef).toBe(
+      DEFAULT_PLUGIN_SETTINGS.llmPostprocessActivePresetRef,
+    );
+  });
+
+  it('preflights missing remote credentials with a typed localized readiness failure', () => {
+    const feedback = { show: vi.fn() };
+    const coordinator = new MediaLlmCoordinator({
+      createRouter: vi.fn(),
+      feedback,
+      getSettings: () =>
+        settings({
+          llmProviderConfigurations: {
+            ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations,
+            openrouter: { model: 'remote-model', secretId: 'secret-id' },
+          },
+          llmRoutingPolicy: { kind: 'fixed', providerId: 'openrouter' },
+        }),
+    });
+
+    expect(coordinator.preflight()).toBe(false);
+    expect(feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: 'media-llm-readiness-api_key_missing',
+        message: expect.stringContaining('API key'),
+      }),
+    );
+  });
+
+  it.each([
+    ['auth_invalid', 'auth', 'Authentication failed.'],
+    ['connection_failed', 'connection', 'Connection failed.'],
+    ['empty_response', 'empty', 'Provider returned an empty chat message.'],
+    ['output_limit', 'output_limit', 'Provider stopped because the output limit was reached.'],
+    ['content_filtered', 'filtered', 'Provider filtered the response.'],
+    ['rate_limited', 'rate_limited', 'Rate limited.'],
+    ['timeout', 'timeout', 'Timed out.'],
+    ['unknown_model', 'model_unavailable', 'Model was not found.'],
+  ] as const)(
+    'returns a safe, model-specific %s failure',
+    async (code, failureCategory, message) => {
+      const feedback = { show: vi.fn() };
+      const current = settings();
+      const coordinator = new MediaLlmCoordinator({
+        createRouter: () => ({
+          cleanup: async () => {
+            throw new ProviderError(message, code, {
+              responseText: 'private provider response body',
+            });
+          },
+          selectProviderId: () => 'ollama',
+        }),
+        feedback,
+        getSettings: () => current,
+      });
+
+      const result = await coordinator.run(session());
+
+      expect(result).toMatchObject({
+        failureCategory,
+        model: 'local-model',
+        outcome: 'failed',
+        providerId: 'ollama',
+      });
+      expect(feedback.show).not.toHaveBeenCalled();
+      expect(formatMediaLlmFailure(result)).toContain('local-model');
+      expect(formatMediaLlmFailure(result)).not.toContain('private provider response body');
+    },
+  );
+
+  it('uses a provider refusal signal without inferring refusal from response length', async () => {
+    const reply = 'The model explicitly refused the request.';
+    const coordinator = new MediaLlmCoordinator({
+      createRouter: () => ({
+        cleanup: async () => {
+          throw new ProviderError('Model refused.', 'model_refusal', { refusalReply: reply });
+        },
+        selectProviderId: () => 'ollama',
+      }),
+      feedback: { show: vi.fn() },
+      getSettings: () => settings(),
+    });
+
+    const result = await coordinator.run(session());
+
+    expect(result).toMatchObject({ failureCategory: 'refused', refusalReply: reply });
+    expect(formatMediaLlmFailureForModal(result)).toContain(reply);
+    expect(formatMediaLlmFailure(result)).not.toContain(reply);
+  });
+
+  it('shows the recognized refusal reply in the modal while keeping notifications safe', async () => {
+    const reply = 'I cannot complete the request.';
+    const coordinator = new MediaLlmCoordinator({
+      createRouter: () => ({
+        cleanup: async () => ({ model: 'local-model', providerId: 'ollama', text: reply }),
+        selectProviderId: () => 'ollama',
+      }),
+      feedback: { show: vi.fn() },
+      getSettings: () => settings(),
+    });
+
+    const result = await coordinator.run(session());
+
+    expect(result).toMatchObject({ failureCategory: 'refusal_like_reply', refusalReply: reply });
+    expect(formatMediaLlmFailureForModal(result)).toContain(reply);
+    expect(formatMediaLlmFailure(result)).not.toContain(reply);
+  });
+
+  it('aborts an active provider request when media processing is disabled', async () => {
+    let current = settings();
+    const cleanup = vi.fn(
+      (options: { abortSignal?: AbortSignal }) =>
+        new Promise<never>((_resolve, reject) => {
+          options.abortSignal?.addEventListener(
+            'abort',
+            () => reject(new ProviderError('aborted', 'aborted')),
+            { once: true },
+          );
+        }),
+    );
+    const router: LlmRouter = { cleanup, selectProviderId: vi.fn(() => 'ollama' as const) };
+    const feedback = { show: vi.fn() };
+    const editor = session();
+    const coordinator = new MediaLlmCoordinator({
+      createRouter: () => router,
+      feedback,
+      getSettings: () => current,
+      onRawTranscriptRecoveryAvailable: vi.fn(),
+    });
+
+    const running = coordinator.run(editor);
+    await vi.waitFor(() => expect(cleanup).toHaveBeenCalledOnce());
+    current = settings({ mediaLlmProcessing: false });
+    coordinator.settingsChanged();
+    await running;
+
+    expect(editor.replaceSessionRangeWithCleaned).not.toHaveBeenCalled();
+    expect(feedback.show).not.toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'media-llm-failed' }),
+    );
+  });
+
+  it('rechecks settings after the provider returns before applying its result', async () => {
+    let current = settings();
+    const feedback = { show: vi.fn() };
+    const editor = session();
+    const coordinator = new MediaLlmCoordinator({
+      createRouter: () => ({
+        cleanup: vi.fn(async () => {
+          current = settings({ mediaLlmProcessing: false });
+          return { model: 'local-model', providerId: 'ollama' as const, text: 'Clean.' };
+        }),
+        selectProviderId: vi.fn(() => 'ollama' as const),
+      }),
+      feedback,
+      getSettings: () => current,
+    });
+
+    await coordinator.run(editor);
+    expect(editor.replaceSessionRangeWithCleaned).not.toHaveBeenCalled();
+  });
+});

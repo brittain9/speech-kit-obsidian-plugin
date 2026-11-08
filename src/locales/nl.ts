@@ -2,6 +2,60 @@ import type { TranslationCatalog } from '.';
 
 export const nl = {
   'notice.dictationNotActive': 'Dicteren is momenteel niet actief.',
+  'commands.transcribeAudioFile': 'Lokaal audiobestand transcriberen',
+  'commands.cancelAudioFile': 'Transcriptie van lokaal audiobestand annuleren',
+  'audio-file-model-required':
+    'Selecteer en valideer een lokaal spraak-naar-tekstmodel bij Modellen beheren en probeer het opnieuw.',
+  'audio-file-model-changed':
+    'Het transcriptiemodel is gewijzigd terwijl de bestandskiezer open was. Voer Lokaal audiobestand transcriberen opnieuw uit.',
+  'audio-file-language-changed':
+    'De dicteertaal is gewijzigd terwijl het audiobestand werd voorbereid. Voer Lokaal audiobestand transcriberen opnieuw uit om de huidige taal te gebruiken.',
+  'audio-file-model-not-batch':
+    'Audiobestanden vereisen een batchspraakmodel. Kies een model zonder streaming en probeer het opnieuw.',
+  'audio-file-language-unsupported':
+    'Het model ondersteunt de ingestelde dicteertaal ({language}) niet. Kies een compatibel model of wijzig de dicteertaal.',
+  'audio-file-target-required':
+    'Open de Markdown-notitie die het transcript moet ontvangen in bewerkingsmodus en probeer het opnieuw.',
+  'audio-file-target-changed':
+    'Het doel is gewijzigd tijdens de voorbereiding. Keer terug naar de oorspronkelijke notitie en voer de opdracht opnieuw uit.',
+  'audio-file-desktop-only':
+    'Transcriptie van audiobestanden is beschikbaar in de Obsidian-desktopapp. Open deze kluis op een computer om verder te gaan.',
+  'audio-file-busy':
+    'Dicteren of een andere audiobestandtranscriptie is al actief. Voltooi of annuleer die bewerking eerst.',
+  'audio-file-maintenance':
+    'De lokale spraakengine wordt geïnstalleerd, herstart of bijgewerkt. Wacht tot dit klaar is en probeer het opnieuw.',
+  'audio-file-read-failed':
+    'Kan het geselecteerde bestand niet lezen. Controleer of het bestaat en toegankelijk is.',
+  'audio-file-decode-failed':
+    'Obsidian kon de audio niet decoderen. Converteer het naar een formaat dat je Obsidian-versie kan afspelen, vaak WAV.',
+  'audio-file-encoded-size':
+    'Het gecodeerde bestand is te groot. Kies een korter bestand of een lagere bitrate (maximaal 64 MiB).',
+  'audio-file-duration':
+    'De audio overschrijdt de veiligheidslimiet van 30 minuten. Splits het in kortere bestanden.',
+  'audio-file-model-duration':
+    'De audio is langer dan het geselecteerde model aankan. Splits het of kies een model met een hogere limiet.',
+  'audio-file-decoded-memory':
+    'Decodering gebruikt te veel geheugen. Kies een korter bestand, een lagere bitrate of minder kanalen.',
+  'audio-file-empty':
+    'Het geselecteerde bestand bevat geen transcriptieaudio. Kies een ander audiobestand.',
+  'audio-file-start-failed':
+    'De lokale spraakengine kon de transcriptie niet starten. Controleer het geselecteerde model en probeer het opnieuw.',
+  'audio-file-sidecar-missing':
+    'Installeer de lokale spraakengine, selecteer een spraak-naar-tekstmodel en probeer het opnieuw.',
+  'audio-file-shutdown-uncertain':
+    'De lokale spraakengine heeft niet bevestigd dat de transcriptie van het audiobestand is voltooid. Speech Kit heeft de sessie beschermd om overlappende spraakacties te voorkomen. Controleer de lokale engine en probeer het opnieuw.',
+  'audio-file-sidecar-failed':
+    'De transcriptie stopte omdat de lokale spraakengine mislukte. Controleer het model en probeer het opnieuw.',
+  'audio-file-queue-overload':
+    'De spraakengine kon niet bijhouden. Splits de opname of kies een sneller model.',
+  'audio-file-transcript-write-failed':
+    'De transcriptie stopte omdat Speech Kit niet veilig in de notitie kon schrijven. Herstel de notitie en probeer het opnieuw.',
+  'audio-file-target-closed':
+    'De doelnotitie is gesloten of vervangen. Open die opnieuw en voer de opdracht opnieuw uit.',
+  'audio-file-target-deleted':
+    'De doelnotitie is verwijderd. Herstel of maak die opnieuw en voer de opdracht opnieuw uit.',
+  'audio-file-surface-changed':
+    'De notitie is zo veranderd dat Speech Kit die niet veilig kon volgen. Herstel de notitie en voer de opdracht opnieuw uit.',
   'notice.dictationStartFailed': 'Kan het dicteren niet starten.',
   'notice.dictationStopFailed': 'Kan het dicteren niet stoppen.',
   'notice.lastUtteranceCleared': 'De laatst bewaarde uiting gewist.',
@@ -413,31 +467,16 @@ export const nl = {
     'Bij dicteren wordt het onbewerkte lokale transcript ingevoegd. Schakel Transformeren in als u wilt opschonen, herschrijven of samenvattingen wilt maken.',
   'llm.sidebar.off.summary': 'Ruwe transcriptie',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Opruimen',
-  'llm.preset.builtin.cleanUp.description':
-    'Corrigeer transcriptieartefacten, opvullingen, interpunctie en hoofdlettergebruik met behoud van stem en betekenis.',
-  'llm.preset.builtin.cleanUp.prompt':
-    'Schoon gedicteerde spraak-naar-tekst op. Corrigeer stopwoorden, valse starts, herhalingen, interpunctie, hoofdlettergebruik en duidelijke herkenningsfouten. Behoud de toon en betekenis van de spreker. Gebruik de referentiecontext alleen voor spelling. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker daar expliciet om vraagt. Geef alleen de opgeschoonde tekst terug, zonder inleiding of commentaar.',
-  'llm.preset.builtin.professionalWriting.label': 'Professioneel schrijven',
-  'llm.preset.builtin.professionalWriting.description':
-    'Herschrijf in beknopt, gepolijst professioneel proza, met behoud van feiten, namen, beslissingen en technische termen.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    'Herschrijf gedicteerde spraak als beknopte, professionele tekst. Gebruik de actieve vorm en verwijder stopwoorden en afzwakkingen. Behoud elk feit, elke naam en elke term. Gebruik de referentiecontext voor spelling. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker daar expliciet om vraagt. Geef alleen de herschreven tekst terug, zonder inleiding of commentaar.',
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Voeg een korte TLDR-samenvatting toe boven uw onaangeroerde transcript.',
   'llm.preset.builtin.tldr.prompt':
-    "Schrijf een TLDR-samenvatting van het gedicteerde transcript: een kop 'TLDR' gevolgd door 1-3 korte opsommingen die de belangrijkste punten bestrijken. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker expliciet om vertaling vraagt. Geef alleen de kop en de opsommingen terug; herhaal de transcriptie niet, geen preambule, geen commentaar.",
+    "Schrijf een TLDR-samenvatting van het gedicteerde transcript: een kop 'TLDR' gevolgd door korte opsommingen waarvan het aantal past bij de inhoud, zodat de kern snel te overzien is. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker expliciet om vertaling vraagt. Geef alleen de kop en de opsommingen terug; herhaal de transcriptie niet, geen preambule, geen commentaar.",
   'llm.preset.builtin.markdownFormatting.label': 'Markdown-opmaak',
   'llm.preset.builtin.markdownFormatting.description':
     'Formatteer het transcript van de sessie opnieuw als gestructureerd Markdown met kopjes, lijsten en nadruk.',
   'llm.preset.builtin.markdownFormatting.prompt':
     'Formatteer gedicteerde spraak opnieuw als goed gestructureerde Markdown. Voeg waar nodig koppen, lijsten met opsommingstekens of nummers, vetgedrukte tekst, nadruk en afgeschermde codeblokken toe. Schoon stopwoorden, valse starts, interpunctie en hoofdlettergebruik licht op; behoud de formulering van de spreker, elk feit, elke naam en elke term. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker daar expliciet om vraagt. Geef alleen de Markdown terug, zonder inleiding of commentaar.',
-  'llm.preset.builtin.actionItems.label': 'Actiepunten',
-  'llm.preset.builtin.actionItems.description':
-    'Voeg een checklist met actiepunten toe onder uw onaangeroerde transcript.',
-  'llm.preset.builtin.actionItems.prompt':
-    "Haal actiepunten uit het gedicteerde transcript. Geef de kop 'Actiepunten', gevolgd door een Markdown-checklist met concrete taken. Vermeld een verantwoordelijke als de spreker die noemt. Geef niets terug als het transcript geen actiepunten bevat. Schrijf in de oorspronkelijke taal van het transcript. Vertaal nooit tenzij de gebruiker daar expliciet om vraagt. Geef alleen de kop en de checklist terug; herhaal het transcript niet en voeg geen inleiding of commentaar toe.",
   'llm.preset.timing.perUtterance': 'Loopt na elke zin',
   'llm.preset.timing.batch': 'Loopt 1 keer bij stop',
   'llm.preset.timing.either': 'Werkt in beide modi',

@@ -2,6 +2,60 @@ import type { TranslationCatalog } from './index';
 
 export const it = {
   'notice.dictationNotActive': 'La dettatura non è attiva.',
+  'commands.transcribeAudioFile': 'Trascrivi file audio locale',
+  'commands.cancelAudioFile': 'Annulla trascrizione del file audio locale',
+  'audio-file-model-required':
+    'Seleziona e convalida un modello locale di riconoscimento vocale in Gestisci modelli, quindi riprova.',
+  'audio-file-model-changed':
+    'Il modello di trascrizione è cambiato mentre il selettore file era aperto. Riavvia Trascrivi file audio locale.',
+  'audio-file-language-changed':
+    'La lingua di dettatura è cambiata durante la preparazione del file audio. Riavvia Trascrivi file audio locale per usare la lingua attuale.',
+  'audio-file-model-not-batch':
+    'I file audio richiedono un modello batch. Seleziona un modello senza streaming e riprova.',
+  'audio-file-language-unsupported':
+    'Il modello non supporta la lingua di dettatura configurata ({language}). Scegli un modello compatibile o cambia la lingua.',
+  'audio-file-target-required':
+    'Apri in modalità modifica la nota Markdown che deve ricevere la trascrizione, quindi riprova.',
+  'audio-file-target-changed':
+    'La destinazione è cambiata durante la preparazione. Torna alla nota originale e riavvia il comando.',
+  'audio-file-desktop-only':
+    'La trascrizione dei file audio è disponibile nell’app desktop di Obsidian. Apri questo vault su un computer per continuare.',
+  'audio-file-busy':
+    'La dettatura o un’altra trascrizione di file audio è già attiva. Completala o annullala, quindi riprova.',
+  'audio-file-maintenance':
+    'Il motore vocale locale viene installato, riavviato o aggiornato. Attendi il termine e riprova.',
+  'audio-file-read-failed':
+    'Impossibile leggere il file selezionato. Verifica che esista e sia accessibile, quindi riprova.',
+  'audio-file-decode-failed':
+    'Obsidian non ha decodificato l’audio. Convertilo in un formato riproducibile dalla tua versione di Obsidian, spesso WAV.',
+  'audio-file-encoded-size':
+    'Il file codificato è troppo grande. Scegli un file più corto o a bitrate inferiore (massimo 64 MiB).',
+  'audio-file-duration':
+    'L’audio supera il limite di sicurezza di 30 minuti. Dividilo in file più brevi.',
+  'audio-file-model-duration':
+    'L’audio supera la durata massima del modello. Dividilo o scegli un modello con un limite maggiore.',
+  'audio-file-decoded-memory':
+    'La decodifica richiederebbe troppa memoria. Scegli un file più corto, a basso bitrate o con meno canali.',
+  'audio-file-empty':
+    'Il file selezionato non contiene audio trascrivibile. Scegli un altro file audio.',
+  'audio-file-start-failed':
+    'Il motore vocale locale non ha avviato la trascrizione. Controlla il modello selezionato e riprova.',
+  'audio-file-sidecar-missing':
+    'Installa il motore vocale locale, seleziona un modello di riconoscimento vocale e riprova.',
+  'audio-file-shutdown-uncertain':
+    'Il motore vocale locale non ha confermato la chiusura della trascrizione del file audio. Speech Kit ha protetto la sessione per evitare operazioni vocali sovrapposte. Controlla il motore locale e riprova.',
+  'audio-file-sidecar-failed':
+    'La trascrizione si è interrotta perché il motore locale non ha funzionato. Controlla il modello e riprova.',
+  'audio-file-queue-overload':
+    'Il motore non è riuscito a tenere il passo. Dividi la registrazione o scegli un modello più veloce.',
+  'audio-file-transcript-write-failed':
+    'La trascrizione si è interrotta perché Speech Kit non ha potuto scrivere in sicurezza nella nota. Ripristinala e riprova.',
+  'audio-file-target-closed':
+    'La nota di destinazione è stata chiusa o sostituita. Riaprila e riavvia il comando.',
+  'audio-file-target-deleted':
+    'La nota di destinazione è stata eliminata. Ripristinala o ricreala, quindi riavvia il comando.',
+  'audio-file-surface-changed':
+    'La nota è cambiata in un modo che Speech Kit non ha potuto seguire in sicurezza. Ripristinala e riavvia il comando.',
   'notice.dictationStartFailed': 'Impossibile avviare la dettatura.',
   'notice.dictationStopFailed': 'Impossibile interrompere la dettatura.',
   'notice.lastUtteranceCleared': 'L’ultima frase conservata è stata eliminata.',
@@ -416,31 +470,16 @@ export const it = {
     'La dettatura inserisce la trascrizione locale grezza. Attiva Trasformazione quando vuoi ripulire o riscrivere il testo oppure creare riepiloghi.',
   'llm.sidebar.off.summary': 'Trascrizione grezza',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Pulizia',
-  'llm.preset.builtin.cleanUp.description':
-    'Corregge artefatti di trascrizione, intercalari, punteggiatura e maiuscole mantenendo la voce e il significato originali.',
-  'llm.preset.builtin.cleanUp.prompt':
-    'Ripulisci il testo dettato convertito da voce a testo. Correggi intercalari, false partenze, ripetizioni, punteggiatura, uso delle maiuscole ed evidenti errori di riconoscimento. Mantieni la voce e il significato di chi parla. Usa il contesto di riferimento solo per l’ortografia. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto il testo ripulito, senza introduzioni né commenti.',
-  'llm.preset.builtin.professionalWriting.label': 'Scrittura professionale',
-  'llm.preset.builtin.professionalWriting.description':
-    'Riscrive il testo in una prosa professionale concisa e curata, mantenendo fatti, nomi, decisioni e termini tecnici.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    'Riscrivi il testo dettato come prosa professionale concisa. Usa la forma attiva ed elimina intercalari ed espressioni esitanti. Mantieni ogni fatto, nome e termine. Usa il contesto di riferimento per l’ortografia. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto il testo riscritto, senza introduzioni né commenti.',
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Aggiunge un breve riepilogo TLDR sopra la trascrizione inalterata.',
   'llm.preset.builtin.tldr.prompt':
-    'Scrivi un riepilogo TLDR della trascrizione dettata: un’intestazione “TLDR” seguita da 1-3 brevi punti elenco che illustrino gli aspetti principali. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto l’intestazione e i punti elenco: non ripetere la trascrizione e non aggiungere introduzioni o commenti.',
+    'Scrivi un riepilogo TLDR della trascrizione dettata: un’intestazione “TLDR” seguita da brevi punti elenco, in numero proporzionato al contenuto sostanziale, che permettano di cogliere rapidamente gli aspetti principali. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto l’intestazione e i punti elenco: non ripetere la trascrizione e non aggiungere introduzioni o commenti.',
   'llm.preset.builtin.markdownFormatting.label': 'Formattazione Markdown',
   'llm.preset.builtin.markdownFormatting.description':
     'Riformatta la trascrizione della sessione come Markdown strutturato, con intestazioni, elenchi ed enfasi.',
   'llm.preset.builtin.markdownFormatting.prompt':
     'Riformatta il testo dettato come Markdown ben strutturato. Aggiungi intestazioni, elenchi puntati o numerati, grassetto, corsivo e blocchi di codice delimitati quando il contenuto lo richiede. Correggi con moderazione intercalari, false partenze, punteggiatura e uso delle maiuscole; mantieni le parole di chi parla e ogni fatto, nome e termine. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto il Markdown, senza introduzioni né commenti.',
-  'llm.preset.builtin.actionItems.label': 'Attività',
-  'llm.preset.builtin.actionItems.description':
-    'Aggiunge sotto la trascrizione inalterata una checklist delle attività.',
-  'llm.preset.builtin.actionItems.prompt':
-    'Estrai le attività dalla trascrizione dettata. Produci un’intestazione “Attività” seguita da una checklist Markdown di compiti concreti, indicando il responsabile quando viene menzionato. Se la trascrizione non contiene attività, non restituire nulla. Scrivi nella lingua originale della trascrizione. Non tradurre mai, a meno che l’utente non richieda esplicitamente una traduzione. Restituisci soltanto l’intestazione e la checklist: non ripetere la trascrizione e non aggiungere introduzioni o commenti.',
   'llm.preset.timing.perUtterance': 'Viene eseguito dopo ogni frase',
   'llm.preset.timing.batch': 'Viene eseguito una volta all’interruzione',
   'llm.preset.timing.either': 'Viene eseguito in entrambe le modalità',

@@ -32,6 +32,16 @@ describe('classifySidecarAsset', () => {
       arch: 'x86_64',
       accel: 'cuda',
     });
+    expect(classifySidecarAsset('sidecar-linux-arm64.tar.gz')).toEqual({
+      os: 'linux',
+      arch: 'arm64',
+      accel: null,
+    });
+    expect(classifySidecarAsset('sidecar-windows-arm64.tar.gz')).toEqual({
+      os: 'windows',
+      arch: 'arm64',
+      accel: null,
+    });
     expect(classifySidecarAsset('sidecar-macos-arm64.tar.gz')).toEqual({
       os: 'macos',
       arch: 'arm64',

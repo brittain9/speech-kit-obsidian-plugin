@@ -346,6 +346,7 @@ fn start_session_command(
         diarization_enabled,
         diarization_max_speakers: None,
         include_system_audio: false,
+        file_audio_flow_control: false,
         language: language.to_string(),
         mode: ListeningMode::AlwaysOn,
         model_selection,
