@@ -1,4 +1,5 @@
 ---
+
 title: Three days in Lisbon
 travelers: 2
 currency: EUR
@@ -26,12 +27,12 @@ Begin vroeg in Alfama en loop dan langzaam bergopwaarts. De route is kort op een
 1. Ga verder richting Graça en de standpunten.
 2. Neem een tram naar het westen en breng meer tijd binnenshuis door.
 
-| Artikel | Schatting |
-| --- | ---: |
-|doorvoer | €18 |
-|Voedsel | €90 |
-| Tickets | €35 |
-| Buffer | €40 |
+| Artikel  | Schatting |
+| -------- | --------: |
+| doorvoer |       €18 |
+| Voedsel  |       €90 |
+| Tickets  |       €35 |
+| Buffer   |       €40 |
 
 Het ruwe dagbudget is $B = T + F + A + 0.15(T + F + A)$. Bewaar de spreadsheet in `Travel/Lisbon budget.xlsx` en koppel de uiteindelijke reserveringen van [[Portugal 2026]].
 

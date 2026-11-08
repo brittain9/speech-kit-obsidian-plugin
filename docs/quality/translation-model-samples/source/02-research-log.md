@@ -1,8 +1,10 @@
 ---
+
 title: Research log
 date: 2026-07-27
 aliases:
-  - experiment notes
+- experiment notes
+
 ---
 
 # Research log: fragment handling
@@ -23,12 +25,12 @@ Question: does the larger model improve translations because it understands the 
 
 Examples collected from [[Release Notes]]:
 
-| Source fragment | Intended sense |
-| --- | --- |
-| Ready | installation state |
-| Remove | button label |
-| Current | selected model |
-| Charge | battery behavior, not a price |
+| Source fragment | Intended sense                |
+| --------------- | ----------------------------- |
+| Ready           | installation state            |
+| Remove          | button label                  |
+| Current         | selected model                |
+| Charge          | battery behavior, not a price |
 
 The phrase `model is cold` describes an unloaded inference process. It should not become a sentence about temperature. Likewise, $t_{load} + t_{decode}$ is a formula and must remain byte-for-byte unchanged.
 

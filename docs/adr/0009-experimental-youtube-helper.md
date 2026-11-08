@@ -1,6 +1,6 @@
 ---
-status: accepted
----
+
+## status: accepted
 
 # Keep the YouTube helper experimental and behind the media lease boundary
 

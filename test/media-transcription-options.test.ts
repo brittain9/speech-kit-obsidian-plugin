@@ -152,6 +152,7 @@ function modelManagerState(models: CatalogModelRecord[]): ModelManagerState {
     ],
     failedInstall: null,
     installedModels,
+    installRequestPending: false,
     loadError: null,
     loadStatus: 'ready',
     modelStore: { overridePath: null, path: '/models', usingDefaultPath: true },

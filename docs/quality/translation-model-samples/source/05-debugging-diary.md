@@ -1,4 +1,5 @@
 ---
+
 title: Debugging diary
 component: translation-worker
 severity: medium

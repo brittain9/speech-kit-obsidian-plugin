@@ -83,10 +83,10 @@ Primary-source prompt, architecture, runtime, artifact, access, and license
 details are recorded in
 [translation-model-source-research.md](translation-model-source-research.md).
 
-| Candidate | Anonymous access | Runtime result | Quantized size | Outcome |
-| --- | --- | --- | ---: | --- |
-| Tencent HY-MT1.5-1.8B Q4_K_M | one-byte anonymous GET: HTTP 206 | llama.cpp + Metal works | 1,133,080,512 bytes (1.06 GiB) | benchmarked |
-| MADLAD-400-3B-MT Q4_K_M | one-byte anonymous GET: HTTP 206 | llama.cpp assertion before generation | 1,858,124,864 bytes (1.73 GiB) | disqualified |
+| Candidate                    | Anonymous access                 | Runtime result                        |                 Quantized size | Outcome      |
+| ---------------------------- | -------------------------------- | ------------------------------------- | -----------------------------: | ------------ |
+| Tencent HY-MT1.5-1.8B Q4_K_M | one-byte anonymous GET: HTTP 206 | llama.cpp + Metal works               | 1,133,080,512 bytes (1.06 GiB) | benchmarked  |
+| MADLAD-400-3B-MT Q4_K_M      | one-byte anonymous GET: HTTP 206 | llama.cpp assertion before generation | 1,858,124,864 bytes (1.73 GiB) | disqualified |
 
 HY-MT SHA-256:
 `4383ac0c3c8e476de98ff979c2a3f069f8c4fb385e7860cf2d28da896cc477c7`.
@@ -126,11 +126,11 @@ system prompt or hand-written control tokens were added.
 
 Source: `The meeting is scheduled for next Tuesday afternoon.`
 
-| Run | Output |
-| --- | --- |
-| HY-MT, English→Spanish, recommended | `La reunión está programada para la tarde del próximo martes.` |
-| HY-MT, English→Dutch, recommended | `De vergadering wordt gepland voor de volgende tweede dinsdagmiddag.` |
-| HY-MT, English→Dutch, greedy diagnostic | `De vergadering is gepland voor de volgende tweede woensdagmiddag.` |
+| Run                                     | Output                                                                |
+| --------------------------------------- | --------------------------------------------------------------------- |
+| HY-MT, English→Spanish, recommended     | `La reunión está programada para la tarde del próximo martes.`        |
+| HY-MT, English→Dutch, recommended       | `De vergadering wordt gepland voor de volgende tweede dinsdagmiddag.` |
+| HY-MT, English→Dutch, greedy diagnostic | `De vergadering is gepland voor de volgende tweede woensdagmiddag.`   |
 
 The official sampling recipe corrected the greedy run's Tuesday→Wednesday
 error, but the Dutch wording remained unnatural. On the 200-sentence
@@ -163,14 +163,14 @@ reimplemented. The current worker translates in batches of eight, so these
 numbers differ slightly from the pre-review baseline supplied with the task.
 
 | Direction | Bergamot COMET | HY-MT COMET | HY delta | Bergamot chrF++ | HY-MT chrF++ | HY delta |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| en→nl | 0.8651 | 0.8671 | +0.0020 | 56.63 | 50.69 | -5.94 |
-| nl→en | 0.8690 | 0.8649 | -0.0041 | 58.13 | 53.82 | -4.30 |
-| en→es | 0.8534 | 0.8720 | +0.0187 | 54.13 | 53.40 | -0.73 |
-| es→en | 0.8601 | 0.8584 | -0.0017 | 55.30 | 53.84 | -1.46 |
-| en→ja | 0.9058 | 0.9158 | +0.0101 | 31.75 | 29.99 | -1.76 |
-| ja→en | 0.8691 | 0.8709 | +0.0017 | 54.91 | 50.69 | -4.22 |
-| en→pt | 0.8892 | 0.8942 | +0.0050 | 70.70 | 62.36 | -8.34 |
+| --------- | -------------: | ----------: | -------: | --------------: | -----------: | -------: |
+| en→nl     |         0.8651 |      0.8671 |  +0.0020 |           56.63 |        50.69 |    -5.94 |
+| nl→en     |         0.8690 |      0.8649 |  -0.0041 |           58.13 |        53.82 |    -4.30 |
+| en→es     |         0.8534 |      0.8720 |  +0.0187 |           54.13 |        53.40 |    -0.73 |
+| es→en     |         0.8601 |      0.8584 |  -0.0017 |           55.30 |        53.84 |    -1.46 |
+| en→ja     |         0.9058 |      0.9158 |  +0.0101 |           31.75 |        29.99 |    -1.76 |
+| ja→en     |         0.8691 |      0.8709 |  +0.0017 |           54.91 |        50.69 |    -4.22 |
+| en→pt     |         0.8892 |      0.8942 |  +0.0050 |           70.70 |        62.36 |    -8.34 |
 
 HY-MT's best gain is English→Spanish at `+0.0187`, narrowly below the requested
 `+0.02` threshold. It loses COMET in Dutch→English and Spanish→English. It
@@ -212,10 +212,10 @@ the shipping gate.
 
 ### Markdown robustness
 
-| Engine | Notes with changed topology | Protected units kept in source |
-| --- | ---: | ---: |
-| Bergamot | 0 / 10 | 3 units in one note |
-| HY-MT | 8 / 10 | 1 unit in one note |
+| Engine   | Notes with changed topology | Protected units kept in source |
+| -------- | --------------------------: | -----------------------------: |
+| Bergamot |                      0 / 10 |            3 units in one note |
+| HY-MT    |                      8 / 10 |             1 unit in one note |
 
 All eight notes containing Markdown tables had their table topology changed by
 HY-MT. It commonly put individual cells on separate lines, added bullet-like
@@ -235,9 +235,9 @@ immediately before the timed HY-MT runs. The 507-word note was segmented by
 the current plugin pipeline into 31 translation units. Each engine was run
 three times.
 
-| Engine | 500-word runs | Median | Range | Relative |
-| --- | --- | ---: | ---: | ---: |
-| Bergamot WASM | 1.935 s, 1.919 s, 1.919 s | 1.919 s | 0.016 s | 1.0× |
+| Engine                 | 500-word runs                |   Median |   Range |    Relative |
+| ---------------------- | ---------------------------- | -------: | ------: | ----------: |
+| Bergamot WASM          | 1.935 s, 1.919 s, 1.919 s    |  1.919 s | 0.016 s |        1.0× |
 | HY-MT, Metal, one slot | 13.874 s, 13.288 s, 13.318 s | 13.318 s | 0.586 s | 6.9× slower |
 
 HY-MT generated at a median of approximately `109.6 tokens/s`. Its process
@@ -258,13 +258,13 @@ a 1.06 GiB GGUF, plus the sidecar/runtime code.
 The hypothesis is confirmed for Bergamot: generic `pt` output mixes European
 and Brazilian Portuguese.
 
-| English concept | Bergamot | HY-MT |
-| --- | --- | --- |
-| train | `comboio` (pt-PT) | `trem` (pt-BR) |
-| bathroom | `casa de banho` (pt-PT) | `banheiro` (pt-BR) |
-| mobile phone | `telemóvel` (pt-PT) | `celular` (pt-BR) |
-| suit | `fato` (pt-PT) | `terno` (pt-BR) |
-| bus / breakfast / ice cream | Brazilian forms | Brazilian forms |
+| English concept             | Bergamot                | HY-MT              |
+| --------------------------- | ----------------------- | ------------------ |
+| train                       | `comboio` (pt-PT)       | `trem` (pt-BR)     |
+| bathroom                    | `casa de banho` (pt-PT) | `banheiro` (pt-BR) |
+| mobile phone                | `telemóvel` (pt-PT)     | `celular` (pt-BR)  |
+| suit                        | `fato` (pt-PT)          | `terno` (pt-BR)    |
+| bus / breakfast / ice cream | Brazilian forms         | Brazilian forms    |
 
 HY-MT was consistently Brazilian in this ten-sentence probe. Bergamot mixed
 the two locales. This is a product-locale problem separate from aggregate
@@ -274,13 +274,13 @@ the dialect sounds wrong.
 
 ## Gate decisions
 
-| Gate | Requirement | HY-MT result | Decision |
-| --- | --- | --- | --- |
-| Quality | `>= +0.02` COMET over Bergamot on en→nl and nl→en | `+0.0020`, `-0.0041` | **fail** |
-| Speed | `<= 15 s` warm 500-word note | `13.318 s` median | pass |
-| Memory | `<= 4 GB` peak RSS | `1.55 GiB` with one slot | pass |
-| Markdown | no more corruption than Bergamot | `8/10` vs `0/10` topology changes | **fail** |
-| License/distribution | acceptable optional global catalog entry | territory excludes EU, UK, South Korea | **blocker** |
+| Gate                 | Requirement                                       | HY-MT result                           | Decision    |
+| -------------------- | ------------------------------------------------- | -------------------------------------- | ----------- |
+| Quality              | `>= +0.02` COMET over Bergamot on en→nl and nl→en | `+0.0020`, `-0.0041`                   | **fail**    |
+| Speed                | `<= 15 s` warm 500-word note                      | `13.318 s` median                      | pass        |
+| Memory               | `<= 4 GB` peak RSS                                | `1.55 GiB` with one slot               | pass        |
+| Markdown             | no more corruption than Bergamot                  | `8/10` vs `0/10` topology changes      | **fail**    |
+| License/distribution | acceptable optional global catalog entry          | territory excludes EU, UK, South Korea | **blocker** |
 
 MADLAD fails before these gates because no valid translation was produced.
 

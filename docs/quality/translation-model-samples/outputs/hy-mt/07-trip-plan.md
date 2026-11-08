@@ -1,4 +1,5 @@
 ---
+
 title: Three days in Lisbon
 travelers: 2
 currency: EUR

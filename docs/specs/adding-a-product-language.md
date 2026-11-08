@@ -26,14 +26,14 @@ honestly.** A language is not "supported" or "unsupported" — it has a matrix.
 
 Tiers are names for the common shapes that matrix takes. They exist so a request
 can be answered in minutes instead of re-litigating scope every time. A tier is a
-*description* of the derived matrix, never a switch in code — nothing reads a
+_description_ of the derived matrix, never a switch in code — nothing reads a
 tier at runtime.
 
-| Tier | Batch dictation | Live dictation | Read aloud | UI catalog | Translation |
-| --- | --- | --- | --- | --- | --- |
-| **Full** | ✅ | ✅ | ✅ | ✅ localized | when released |
-| **Dictation** | ✅ | if the model has it | if the model has it | English | when released |
-| **Deferred** | — | — | — | — | — |
+| Tier          | Batch dictation | Live dictation      | Read aloud          | UI catalog   | Translation   |
+| ------------- | --------------- | ------------------- | ------------------- | ------------ | ------------- |
+| **Full**      | ✅              | ✅                  | ✅                  | ✅ localized | when released |
+| **Dictation** | ✅              | if the model has it | if the model has it | English      | when released |
+| **Deferred**  | —               | —                   | —                   | —            | —             |
 
 **Full** means all three speech capabilities. That is the tier's definition, and
 it is what earns a UI catalog — see [The localization
@@ -43,7 +43,7 @@ rule](#the-localization-rule). The current eight are Full: `en`, `es`, `de`,
 **Dictation** is the default answer to a request. It solves what people actually
 ask for ("let me dictate in my language") using models we already ship, and
 costs one fixture plus a handful of list entries. Live dictation and read aloud
-are *conditional* here rather than tiers of their own — whether Nemotron or
+are _conditional_ here rather than tiers of their own — whether Nemotron or
 Supertonic happens to cover a language is a property of those artifacts, not a
 product decision worth naming.
 
@@ -72,7 +72,7 @@ English interface is the honest presentation, and dictation still works
 perfectly well.
 
 This is a gate, not an obligation. Full speech coverage makes a catalog
-*eligible*; it does not produce a native reviewer. A Full-tier language without
+_eligible_; it does not produce a native reviewer. A Full-tier language without
 a catalog is a normal state — record it in the matrix and treat it as an open
 call for contributors rather than authoring one speculatively. An unreviewed
 machine-translated catalog is worse than the English fallback, because English
@@ -83,11 +83,11 @@ fallback reads as English while bad Croatian reads as a broken product.
 "What do I get if I pick my language?" gets asked in three places, and all three
 need the same answer:
 
-| Where | Who is asking | State |
-| --- | --- | --- |
-| README | someone deciding whether to install | per-feature table under "Language support" |
-| Settings | someone who already installed | coverage sentences under the dictation language, derived from the catalog |
-| Issue replies | someone requesting a language | point at the matrix below |
+| Where         | Who is asking                       | State                                                                     |
+| ------------- | ----------------------------------- | ------------------------------------------------------------------------- |
+| README        | someone deciding whether to install | per-feature table under "Language support"                                |
+| Settings      | someone who already installed       | coverage sentences under the dictation language, derived from the catalog |
+| Issue replies | someone requesting a language       | point at the matrix below                                                 |
 
 Three hand-maintained copies of one table will drift, and a drifted capability
 claim is exactly the overclaiming this document exists to prevent. So:
@@ -115,18 +115,18 @@ Speech columns are the exact models: batch is Whisper Large V3 Turbo, live is
 Nemotron 3.5 ASR Streaming, read aloud is Supertonic 3. Translation is recorded
 per direction because Mozilla releases directions independently.
 
-| Language | Tag | Tier | Batch | Live | Read aloud | UI | en→ | →en |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| English | `en` | Full | ✅ | ✅ | ✅ | ✅ | — | — |
-| Español | `es` | Full | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Deutsch | `de` | Full | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Français | `fr` | Full | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Português | `pt` | Full | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Italiano | `it` | Full | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Nederlands | `nl` | Full | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 日本語 | `ja` | Full | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Hrvatski | `hr` | Full | ✅ | ✅ | ✅ | ✅ | ⏸ | ❌ |
-| Српски | `sr` | Dictation | ✅ | ❌ | ❌ | ❌ by rule | ⏸ | ❌ |
+| Language   | Tag  | Tier      | Batch | Live | Read aloud | UI         | en→ | →en |
+| ---------- | ---- | --------- | ----- | ---- | ---------- | ---------- | --- | --- |
+| English    | `en` | Full      | ✅    | ✅   | ✅         | ✅         | —   | —   |
+| Español    | `es` | Full      | ✅    | ✅   | ✅         | ✅         | ✅  | ✅  |
+| Deutsch    | `de` | Full      | ✅    | ✅   | ✅         | ✅         | ✅  | ✅  |
+| Français   | `fr` | Full      | ✅    | ✅   | ✅         | ✅         | ✅  | ✅  |
+| Português  | `pt` | Full      | ✅    | ✅   | ✅         | ✅         | ✅  | ✅  |
+| Italiano   | `it` | Full      | ✅    | ✅   | ✅         | ✅         | ✅  | ✅  |
+| Nederlands | `nl` | Full      | ✅    | ✅   | ✅         | ✅         | ✅  | ✅  |
+| 日本語     | `ja` | Full      | ✅    | ✅   | ✅         | ✅         | ✅  | ✅  |
+| Hrvatski   | `hr` | Full      | ✅    | ✅   | ✅         | ✅         | ⏸   | ❌  |
+| Српски     | `sr` | Dictation | ✅    | ❌   | ❌         | ❌ by rule | ⏸   | ❌  |
 
 ✅ shipped · 🔜 planned, [#359](https://github.com/brittain9/speech-kit-obsidian-plugin/issues/359) · ⏸ available upstream, deferred · ❌ no released model
 
@@ -172,12 +172,12 @@ existing policy in [multilingual-support.md](multilingual-support.md).
 Never infer from a family page or a language count. Check the exact pinned
 artifact. These are the four checks, with the authoritative source for each:
 
-| Model | Where to check | What counts as a yes |
-| --- | --- | --- |
-| Whisper Large V3 Turbo | [whisper.cpp language map](https://github.com/ggml-org/whisper.cpp/blob/master/src/whisper.cpp#L2707-L2753) | tag present in the map, artifact is not `.en` |
-| Nemotron 3.5 ASR Streaming | `prompt_dictionary` in the pinned [`processor_config.json`](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b/blob/f3d333391852ba876df169dcc9ba902d25b6ab0b/processor_config.json) | tag present; record its integer index |
-| Supertonic 3 | [model card supported languages](https://huggingface.co/Supertone/supertonic-3#supported-languages) | an explicit language path, not the `na` fallback |
-| Firefox Translations | [Mozilla model registry](https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json) | `releaseStatus: "Release"` on the direction — **check each direction separately** |
+| Model                      | Where to check                                                                                                                                                                                 | What counts as a yes                                                              |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Whisper Large V3 Turbo     | [whisper.cpp language map](https://github.com/ggml-org/whisper.cpp/blob/master/src/whisper.cpp#L2707-L2753)                                                                                    | tag present in the map, artifact is not `.en`                                     |
+| Nemotron 3.5 ASR Streaming | `prompt_dictionary` in the pinned [`processor_config.json`](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b/blob/f3d333391852ba876df169dcc9ba902d25b6ab0b/processor_config.json) | tag present; record its integer index                                             |
+| Supertonic 3               | [model card supported languages](https://huggingface.co/Supertone/supertonic-3#supported-languages)                                                                                            | an explicit language path, not the `na` fallback                                  |
+| Firefox Translations       | [Mozilla model registry](https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json)                                                                  | `releaseStatus: "Release"` on the direction — **check each direction separately** |
 
 Cohere Transcribe, Moonshine, and Pocket TTS are English-only by artifact. They
 are not part of this check and should not be touched by a language PR.

@@ -1,4 +1,5 @@
 ---
+
 title: Monthly finance review
 month: 2026-06
 private: true
@@ -10,12 +11,12 @@ Spending was higher than planned, mostly because two annual bills landed in the 
 
 ## Snapshot
 
-| Category | Plan | Actual | Note |
-| --- | ---: | ---: | --- |
-| Housing | $2,100 | $2,100 | fixed |
-| Groceries | $500 | $574 | delivery fees |
-| Transport | $180 | $143 | below plan |
-| Software | $90 | $212 | annual renewals |
+| Category  |   Plan | Actual | Note            |
+| --------- | -----: | -----: | --------------- |
+| Housing   | $2,100 | $2,100 | fixed           |
+| Groceries |   $500 |   $574 | delivery fees   |
+| Transport |   $180 |   $143 | below plan      |
+| Software  |    $90 |   $212 | annual renewals |
 
 > [!note] Interpretation
 > Do not describe a transfer to savings as spending. It changes account location, not net worth.

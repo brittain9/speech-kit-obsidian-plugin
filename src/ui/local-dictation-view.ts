@@ -167,6 +167,8 @@ export class LocalDictationView extends ItemView {
 
       if (settings.llmPostprocessMode === 'off') {
         this.renderEmptyState(contentEl, presentation);
+        const whereGroup = createSettingGroup(contentEl, t('llm.sidebar.group.model'));
+        this.routingControls.render(whereGroup, settings);
         return;
       }
 

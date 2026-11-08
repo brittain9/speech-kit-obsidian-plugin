@@ -1,8 +1,10 @@
 ---
+
 title: Research log
 date: 2026-07-27
 aliases:
-  - experiment notes
+- experiment notes
+
 ---
 
 # Onderzoekslog: behandeling van fragmenten

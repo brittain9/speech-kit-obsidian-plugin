@@ -1,11 +1,13 @@
 ---
+
 title: Local Translation Release Plan
 status: draft
 owners:
-  - alex
-tags:
-  - local-dictation
-  - release
+- alex
+  tags:
+- local-dictation
+- release
+
 ---
 
 # Lokale vertaling release plan
@@ -28,12 +30,12 @@ Het doel is eenvoudig: laat iemand een selectie of een volledige notitie vertale
 
 De preview is een veiligheidsgrens, niet decoratieve UI. Vertaalsystemen kunnen terminologie, datums, negatie en benoemde entiteiten veranderen terwijl ze zeer vloeiende zinnen produceren. De knop Vervangen wordt daarom niet beschikbaar als de notitie verandert nadat de voorvertoning is gemaakt. Kopiëren en hieronder invoegen blijven beschikbaar omdat ze het vastgelegde bronbereik niet overschrijven.
 
-| Poort | Doel | Bewijs |
-| --- | ---: | --- |
-|warme notitie van 500 woorden | 15 seconden of minder | Drie lokale runs |
-| Piekgeheugen | 4 GB of minder | Procesmeting |
-| Modelintegriteit | SHA-256 match | Installatieprogramma metadata |
-| Markdown overleving | Niet slechter dan baseline | Tien-noot corpus |
+| Poort                         |                       Doel | Bewijs                        |
+| ----------------------------- | -------------------------: | ----------------------------- |
+| warme notitie van 500 woorden |      15 seconden of minder | Drie lokale runs              |
+| Piekgeheugen                  |             4 GB of minder | Procesmeting                  |
+| Modelintegriteit              |              SHA-256 match | Installatieprogramma metadata |
+| Markdown overleving           | Niet slechter dan baseline | Tien-noot corpus              |
 
 ## Open vragen
 
@@ -43,9 +45,9 @@ De preview is een veiligheidsgrens, niet decoratieve UI. Vertaalsystemen kunnen 
 
 ```ts
 type TranslationDecision =
-  | { action: "replace"; expectedRevision: number }
-  | { action: "insert-below" }
-  | { action: "copy" };
+  | { action: 'replace'; expectedRevision: number }
+  | { action: 'insert-below' }
+  | { action: 'copy' };
 ```
 
 Het smalle antwoord verdient de voorkeur: verzend de kleinste betrouwbare lus, meet waar deze uitvalt en vermijd het behandelen van een vloeiende preview als bewijs van semantische nauwkeurigheid. Vervolgwerkzaamheden horen thuis in [[Translation Backlog]], met de benchmarkinputs en outputs eraan verbonden zodat een toekomstig model kan worden getest tegen hetzelfde bewijs.

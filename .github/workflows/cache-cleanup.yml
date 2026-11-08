@@ -12,7 +12,7 @@ on:
     types: [closed]
   schedule:
     # Mondays 04:17 UTC. Off-peak; minute offset avoids the top-of-hour rush.
-    - cron: '17 4 * * 1'
+    - cron: "17 4 * * 1"
   workflow_dispatch:
 
 permissions:
