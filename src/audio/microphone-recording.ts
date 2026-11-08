@@ -15,6 +15,7 @@ export class MicrophoneRecording implements MicrophoneRecordingLike {
   private failed = false;
   private startup: Promise<void> = Promise.resolve();
   private stopped: Promise<void> | null = null;
+  private stopRequested = false;
 
   constructor(
     private readonly writer: MicrophoneRecordingWriter,
@@ -28,6 +29,7 @@ export class MicrophoneRecording implements MicrophoneRecordingLike {
   }
 
   async stop(save: boolean): Promise<void> {
+    this.stopRequested = true;
     await this.startup;
     const recorder = this.recorder;
     this.recorder = null;
@@ -36,7 +38,7 @@ export class MicrophoneRecording implements MicrophoneRecordingLike {
       await this.stopped;
     }
 
-    if (!save || this.failed) {
+    if (!save || this.failed || this.stopped === null) {
       try {
         await this.writer.cancel();
       } catch (error) {
@@ -57,6 +59,7 @@ export class MicrophoneRecording implements MicrophoneRecordingLike {
       const recorder = new MediaRecorder(stream);
       this.recorder = recorder;
       await this.writer.start(recorder.mimeType || 'audio/webm');
+      if (this.stopRequested) return;
       recorder.addEventListener('dataavailable', (event) => {
         const chunk = event.data;
         void this.writer.write(chunk).catch((error: unknown) => this.fail(error));
