@@ -1,4 +1,4 @@
-import { type Editor, Platform, type Plugin } from 'obsidian';
+import { type Editor, type MarkdownFileInfo, Platform, type Plugin } from 'obsidian';
 import { t } from '../shared/i18n';
 
 const START_DICTATION_COMMAND_ID = 'start-dictation-session';
@@ -32,8 +32,8 @@ interface CommandDependencies {
   stopReadAloud: () => void;
   transcribeAudioFile: () => Promise<void>;
   transcribeYouTube?: () => Promise<void>;
-  translateNote: (editor: Editor) => void;
-  translateSelection: (editor: Editor) => void;
+  translateNote: (editor: Editor, view: MarkdownFileInfo) => void;
+  translateSelection: (editor: Editor, view: MarkdownFileInfo) => void;
   toggleReadAloudPaused: () => Promise<void>;
   startDictation: () => Promise<void>;
   stopDictation: () => Promise<void>;
@@ -44,9 +44,9 @@ export function registerCommands(dependencies: CommandDependencies): void {
   dependencies.plugin.addCommand({
     id: 'translate-selection',
     name: t('commands.translateSelection'),
-    editorCheckCallback: (checking, editor) => {
+    editorCheckCallback: (checking, editor, view) => {
       if (!editor.somethingSelected()) return false;
-      if (!checking) dependencies.translateSelection(editor);
+      if (!checking) dependencies.translateSelection(editor, view);
       return true;
     },
   });
@@ -54,7 +54,7 @@ export function registerCommands(dependencies: CommandDependencies): void {
   dependencies.plugin.addCommand({
     id: 'translate-note',
     name: t('commands.translateNote'),
-    editorCallback: (editor) => dependencies.translateNote(editor),
+    editorCallback: (editor, view) => dependencies.translateNote(editor, view),
   });
 
   dependencies.plugin.addCommand({

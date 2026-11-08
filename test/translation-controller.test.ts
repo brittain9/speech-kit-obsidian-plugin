@@ -12,6 +12,8 @@ import { SidecarLifecycleGate } from '../src/sidecar/sidecar-lifecycle-gate';
 import { TranslationController } from '../src/translation/translation-controller';
 import { Modal, Setting, type TestElement } from './__mocks__/obsidian';
 
+const testView = { file: { path: 'Notes/source.md' } };
+
 describe('TranslationController', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -34,7 +36,7 @@ describe('TranslationController', () => {
       getValue: () => ' \n ',
     };
 
-    controller.translateNote(editor as never);
+    controller.translateNote(editor as never, testView as never);
 
     expect(show).toHaveBeenCalledExactlyOnceWith({
       intent: 'warning',
@@ -73,7 +75,7 @@ describe('TranslationController', () => {
       replaceRange,
     };
 
-    controller.translateNote(editor as never);
+    controller.translateNote(editor as never, testView as never);
 
     await vi.waitFor(() => {
       expect(Modal.instances).toHaveLength(1);
@@ -145,7 +147,7 @@ describe('TranslationController', () => {
     });
     const editor = { getValue: () => 'Translate this note.', replaceRange: vi.fn() };
 
-    controller.translateNote(editor as never);
+    controller.translateNote(editor as never, testView as never);
     await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledTimes(1));
     expect(startTranslation.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
@@ -159,7 +161,7 @@ describe('TranslationController', () => {
       expect.any(Function),
     );
 
-    controller.translateNote(editor as never);
+    controller.translateNote(editor as never, testView as never);
     expect(startTranslation).toHaveBeenCalledTimes(1);
     expect(Modal.instances).toHaveLength(2);
     listeners[0]?.({ type: 'translation_progress', translationId, completed: 1, total: 1 });
@@ -231,7 +233,7 @@ describe('TranslationController', () => {
     let note = 'First version.';
     const editor = { getValue: () => note, replaceRange: vi.fn() };
 
-    controller.translateNote(editor as never);
+    controller.translateNote(editor as never, testView as never);
     await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledTimes(1));
     const firstTranslationId = startTranslation.mock.calls[0]?.[0].translationId;
     if (firstTranslationId === undefined)
@@ -294,10 +296,13 @@ describe('TranslationController', () => {
       } as never,
     });
 
-    controller.translateNote({
-      getValue: () => 'Translate this note.',
-      replaceRange: vi.fn(),
-    } as never);
+    controller.translateNote(
+      {
+        getValue: () => 'Translate this note.',
+        replaceRange: vi.fn(),
+      } as never,
+      testView as never,
+    );
     await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledOnce());
     listeners[0]?.({
       type: 'translation_complete',
@@ -403,6 +408,63 @@ describe('TranslationController', () => {
     expect(race.startTranslation).toHaveBeenCalledOnce();
     expect(race.modelDropdownDisabled()).toBe(false);
     expect(race.latestAction('Replace').disabled).toBe(false);
+  });
+
+  it('preserves edited output and blocks applying it to a different note with identical text', async () => {
+    const race = createControllerSelectionRace();
+    await race.openCompletedPreview();
+    const firstModal = Modal.instances.at(-1);
+    if (firstModal === undefined) throw new Error('Expected a preview.');
+    const output = (firstModal.contentEl as unknown as TestElement).querySelector('textarea');
+    if (output === null) throw new Error('Expected editable output.');
+    (output as unknown as HTMLTextAreaElement).value = 'Reviewed wording.';
+    output.dispatchEvent({ type: 'input' });
+    firstModal.close();
+    race.openOtherNote();
+
+    const reopened = Modal.instances.at(-1);
+    if (reopened === undefined) throw new Error('Expected a reopened preview.');
+    const content = reopened.contentEl as unknown as TestElement;
+    expect((content.querySelector('textarea') as unknown as HTMLTextAreaElement).value).toBe(
+      'Reviewed wording.',
+    );
+    expect(content.findByText('Source: Notes/original.md')).toBeDefined();
+    expect(
+      content.findByText(
+        'This preview belongs to another note. Copy or dismiss it, then run Translate note in the note you want to translate.',
+      ),
+    ).toBeDefined();
+    expect(race.actionNames()).not.toContain('Replace');
+    expect(race.actionNames()).not.toContain('Insert below');
+    expect(race.actionNames()).not.toContain('Translate again');
+    expect(race.startTranslation).toHaveBeenCalledOnce();
+  });
+
+  it('does not rerun against a third note when the source view changes after rendering', async () => {
+    const race = createControllerSelectionRace();
+    await race.openCompletedPreview();
+    race.changeText('Changed in the original note.');
+    Modal.instances.at(-1)?.close();
+    race.reopen();
+    const retry = race.latestAction('Translate again');
+    race.openThirdNoteInSourceView();
+
+    await retry.click();
+
+    expect(race.startTranslation).toHaveBeenCalledOnce();
+    expect(race.actionNames()).not.toContain('Translate again');
+    const modal = Modal.instances.at(-1);
+    if (modal === undefined) throw new Error('Expected a retained preview.');
+    expect(
+      (modal.contentEl as unknown as TestElement).findByText('Source: Notes/original.md'),
+    ).toBeDefined();
+    expect(
+      (
+        (modal.contentEl as unknown as TestElement).querySelector(
+          'textarea',
+        ) as unknown as HTMLTextAreaElement
+      ).value,
+    ).toBe('Translated with Model A.');
   });
 
   it('reconciles a closed modal with a selection committed after reopen', async () => {
@@ -526,7 +588,7 @@ describe('TranslationController', () => {
     });
     const editor = { getValue: () => 'Translate this note.', replaceRange: vi.fn() };
 
-    controller.translateNote(editor as never);
+    controller.translateNote(editor as never, testView as never);
     await vi.waitFor(() =>
       expect(Setting.buttonNamed('Download language pack · 10 B')).toBeDefined(),
     );
@@ -535,7 +597,7 @@ describe('TranslationController', () => {
     expect(modelManager.select).not.toHaveBeenCalled();
 
     Modal.instances.at(-1)?.close();
-    controller.translateNote(editor as never);
+    controller.translateNote(editor as never, testView as never);
     expect(startTranslation).not.toHaveBeenCalled();
     expect(
       Setting.instances.filter((setting) => setting.name === 'Translation model').at(-1)
@@ -640,7 +702,7 @@ describe('TranslationController', () => {
     });
     const editor = { getValue: () => 'Translate this note.', replaceRange: vi.fn() };
 
-    controller.translateNote(editor as never);
+    controller.translateNote(editor as never, testView as never);
     await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledOnce());
     listeners[0]?.({
       type: 'translation_complete',
@@ -744,6 +806,9 @@ function createControllerSelectionRace() {
     } as never,
   });
 
+  let sourceText = 'Translate this note.';
+  const editor = { getValue: () => sourceText, replaceRange: vi.fn() };
+  const sourceView = { file: { path: 'Notes/original.md' } };
   return {
     modelB,
     modelC,
@@ -752,10 +817,7 @@ function createControllerSelectionRace() {
     },
     startTranslation,
     async openCompletedPreview() {
-      controller.translateNote({
-        getValue: () => 'Translate this note.',
-        replaceRange: vi.fn(),
-      } as never);
+      controller.translateNote(editor as never, sourceView as never);
       await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledOnce());
       listeners[0]?.({
         type: 'translation_complete',
@@ -765,10 +827,28 @@ function createControllerSelectionRace() {
       await vi.waitFor(() => expect(Setting.buttonNamed('Replace')).toBeDefined());
     },
     reopen() {
-      controller.translateNote({
-        getValue: () => 'Translate this note.',
-        replaceRange: vi.fn(),
-      } as never);
+      controller.translateNote(editor as never, sourceView as never);
+    },
+    openOtherNote() {
+      sourceView.file = { path: 'Notes/third.md' };
+      const otherEditor = { getValue: () => sourceText, replaceRange: vi.fn() };
+      const otherView = { file: { path: 'Notes/other.md' } };
+      controller.translateNote(otherEditor as never, otherView as never);
+    },
+    changeText(text: string) {
+      sourceText = text;
+    },
+    openThirdNoteInSourceView() {
+      sourceView.file = { path: 'Notes/third.md' };
+      sourceText = 'Third note.';
+    },
+    actionNames() {
+      return (
+        Setting.instances
+          .filter((setting) => setting.buttonComponents.length > 0)
+          .at(-1)
+          ?.buttonComponents.map((button) => button.text) ?? []
+      );
     },
     modelDropdownDisabled() {
       return (
