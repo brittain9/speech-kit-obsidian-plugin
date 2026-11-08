@@ -8,6 +8,7 @@ import type { CatalogModelRecord } from '../src/models/model-management-types';
 import type { PluginSettings } from '../src/settings/plugin-settings';
 import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import type { SidecarEvent } from '../src/sidecar/protocol';
+import { SidecarLifecycleGate } from '../src/sidecar/sidecar-lifecycle-gate';
 import { TranslationController } from '../src/translation/translation-controller';
 import { Modal, Setting, type TestElement } from './__mocks__/obsidian';
 
@@ -19,6 +20,7 @@ describe('TranslationController', () => {
   it('explains why an empty note cannot be translated', () => {
     const show = vi.fn();
     const controller = new TranslationController({
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
       app: {} as never,
       canReadAloud: () => false,
       feedback: { show },
@@ -48,6 +50,7 @@ describe('TranslationController', () => {
     vi.stubGlobal('Worker', worker);
     const replaceRange = vi.fn();
     const controller = new TranslationController({
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
       app: {} as never,
       canReadAloud: () => false,
       feedback: { show: vi.fn() },
@@ -109,6 +112,7 @@ describe('TranslationController', () => {
       translationSupport: { kind: 'all_to_all', languages: ['en', 'es'] },
     };
     const controller = new TranslationController({
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
       app: {} as never,
       canReadAloud: () => false,
       feedback: { show: vi.fn() },
@@ -131,6 +135,7 @@ describe('TranslationController', () => {
       setDetachedStatus,
       sidecarConnection: {
         cancelTranslation,
+        subscribeProcessStop: () => () => {},
         startTranslation,
         subscribe: (next: (event: SidecarEvent) => void) => {
           listeners.push(next);
@@ -183,6 +188,7 @@ describe('TranslationController', () => {
       },
     };
     const controller = new TranslationController({
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
       app: {} as never,
       canReadAloud: () => false,
       feedback: { show: vi.fn() },
@@ -214,6 +220,7 @@ describe('TranslationController', () => {
       saveSettings: vi.fn(async () => {}),
       sidecarConnection: {
         cancelTranslation: vi.fn(),
+        subscribeProcessStop: () => () => {},
         startTranslation,
         subscribe: (next: (event: SidecarEvent) => void) => {
           listeners.push(next);
@@ -258,6 +265,7 @@ describe('TranslationController', () => {
     };
     const saveSettings = vi.fn(async () => {});
     const controller = new TranslationController({
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
       app: {} as never,
       canReadAloud: () => false,
       feedback: { show: vi.fn() },
@@ -277,6 +285,7 @@ describe('TranslationController', () => {
       saveSettings,
       sidecarConnection: {
         cancelTranslation: vi.fn(),
+        subscribeProcessStop: () => () => {},
         startTranslation,
         subscribe: (next: (event: SidecarEvent) => void) => {
           listeners.push(next);
@@ -496,6 +505,7 @@ describe('TranslationController', () => {
       },
     };
     const controller = new TranslationController({
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
       app: {} as never,
       canReadAloud: () => false,
       feedback: { show: vi.fn() },
@@ -506,6 +516,7 @@ describe('TranslationController', () => {
       saveSettings: vi.fn(async () => {}),
       sidecarConnection: {
         cancelTranslation: vi.fn(),
+        subscribeProcessStop: () => () => {},
         startTranslation,
         subscribe: (next: (event: SidecarEvent) => void) => {
           listeners.push(next);
@@ -599,6 +610,7 @@ describe('TranslationController', () => {
       selectedTranslationModel: selectionFor(firstModel),
     };
     const controller = new TranslationController({
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
       app: {} as never,
       canReadAloud: () => false,
       feedback: { show: vi.fn() },
@@ -618,6 +630,7 @@ describe('TranslationController', () => {
       saveSettings: vi.fn(async () => {}),
       sidecarConnection: {
         cancelTranslation: vi.fn(),
+        subscribeProcessStop: () => () => {},
         startTranslation,
         subscribe: (next: (event: SidecarEvent) => void) => {
           listeners.push(next);
@@ -711,6 +724,7 @@ function createControllerSelectionRace() {
     },
   };
   const controller = new TranslationController({
+    sidecarLifecycleGate: new SidecarLifecycleGate(),
     app: {} as never,
     canReadAloud: () => false,
     feedback: { show: vi.fn() },
@@ -721,6 +735,7 @@ function createControllerSelectionRace() {
     saveSettings,
     sidecarConnection: {
       cancelTranslation: vi.fn(),
+      subscribeProcessStop: () => () => {},
       startTranslation,
       subscribe: (next: (event: SidecarEvent) => void) => {
         listeners.push(next);

@@ -11,6 +11,7 @@ import { t } from '../shared/i18n';
 import type { PluginLogger } from '../shared/plugin-logger';
 import type { UserFeedback } from '../shared/user-feedback';
 import type { SidecarConnection } from '../sidecar/sidecar-connection';
+import type { SidecarLifecycleGate } from '../sidecar/sidecar-lifecycle-gate';
 import { TranslationCancelledError, translateWithBergamot } from './bergamot-client';
 import { translateWithHyMt } from './hy-mt-client';
 import {
@@ -42,8 +43,12 @@ interface TranslationAdapterContext {
   options: TranslationJobRunOptions;
   settings: PluginSettings;
   sidecarConnection:
-    | Pick<SidecarConnection, 'cancelTranslation' | 'startTranslation' | 'subscribe'>
+    | Pick<
+        SidecarConnection,
+        'cancelTranslation' | 'startTranslation' | 'subscribe' | 'subscribeProcessStop'
+      >
     | undefined;
+  sidecarLifecycleGate: SidecarLifecycleGate;
   sourceLanguage: TranslationLanguage;
   styleInstruction?: string;
   targetLanguage: TranslationLanguage;
@@ -72,6 +77,7 @@ const TRANSLATION_ADAPTERS: Readonly<Record<string, TranslationAdapter>> = {
     options,
     settings,
     sidecarConnection,
+    sidecarLifecycleGate,
     sourceLanguage,
     styleInstruction,
     targetLanguage,
@@ -92,6 +98,7 @@ const TRANSLATION_ADAPTERS: Readonly<Record<string, TranslationAdapter>> = {
         : { modelStorePathOverride: settings.modelStorePathOverride }),
       ...options,
       sidecarConnection,
+      sidecarLifecycleGate,
       sourceLanguage,
       ...(styleInstruction === undefined ? {} : { styleInstruction }),
       targetLanguage,
@@ -112,8 +119,9 @@ interface TranslationControllerDependencies {
   saveSettings: (settings: PluginSettings) => Promise<void>;
   sidecarConnection?: Pick<
     SidecarConnection,
-    'cancelTranslation' | 'startTranslation' | 'subscribe'
+    'cancelTranslation' | 'startTranslation' | 'subscribe' | 'subscribeProcessStop'
   >;
+  sidecarLifecycleGate: SidecarLifecycleGate;
   setDetachedStatus?: (state: TranslationJobState | null, reopen: () => void) => void;
 }
 interface ActiveTranslation {
@@ -520,6 +528,7 @@ export class TranslationController {
         options,
         settings: this.dependencies.getSettings(),
         sidecarConnection: this.dependencies.sidecarConnection,
+        sidecarLifecycleGate: this.dependencies.sidecarLifecycleGate,
         sourceLanguage,
         ...(model.familyId === 'tencent_hy_mt' && styleInstruction.length > 0
           ? { styleInstruction }

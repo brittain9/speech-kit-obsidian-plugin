@@ -116,6 +116,7 @@ interface SidecarConnectionOptions {
 
 export class SidecarConnection {
   private readonly eventListeners = new Set<SidecarEventListener>();
+  private readonly processStopListeners = new Set<(unexpected: boolean) => void>();
   private readonly synthesisAudioListeners = new Set<SynthesisAudioListener>();
   private readonly frameParser = new FramedMessageParser(parseEventFrame);
   private readonly pendingWaiters = new Set<PendingEventWaiter>();
@@ -141,6 +142,7 @@ export class SidecarConnection {
         }
         this.expectedStop = false;
         this.frameParser.reset();
+        this.notifyProcessStopped(!expectedStop);
         this.rejectPendingWaiters(
           new Error(
             `Sidecar exited unexpectedly (code: ${String(code)}, signal: ${String(signal)}).`,
@@ -405,7 +407,10 @@ export class SidecarConnection {
     // guarantees buffering, not that bytes flushed to the OS pipe. stop() also
     // waits for an in-flight launch, so shutdown cannot orphan a late child.
     await this.process.stop();
-    if (!this.process.isRunning()) this.expectedStop = false;
+    if (!this.process.isRunning() && !this.process.isStarting()) {
+      this.expectedStop = false;
+      this.notifyProcessStopped(false);
+    }
   }
 
   sendAudioFrame(sessionId: string, frameBytes: Uint8Array): void {
@@ -431,6 +436,9 @@ export class SidecarConnection {
   }
 
   dispose(): void {
+    if (!this.process.isRunning() && !this.process.isStarting()) {
+      this.notifyProcessStopped(false);
+    }
     this.eventListeners.clear();
     this.synthesisAudioListeners.clear();
     this.rejectPendingWaiters(new Error('SidecarConnection disposed'));
@@ -442,6 +450,17 @@ export class SidecarConnection {
     return () => {
       this.eventListeners.delete(listener);
     };
+  }
+
+  subscribeProcessStop(listener: (unexpected: boolean) => void): () => void {
+    this.processStopListeners.add(listener);
+    return () => this.processStopListeners.delete(listener);
+  }
+
+  private notifyProcessStopped(unexpected: boolean): void {
+    const listeners = [...this.processStopListeners];
+    this.processStopListeners.clear();
+    for (const listener of listeners) listener(unexpected);
   }
 
   subscribeSynthesisAudio(listener: SynthesisAudioListener): () => void {

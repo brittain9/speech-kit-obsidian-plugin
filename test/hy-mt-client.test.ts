@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { SidecarEvent } from '../src/sidecar/protocol';
+import { SidecarLifecycleGate } from '../src/sidecar/sidecar-lifecycle-gate';
 import { translateWithHyMt } from '../src/translation/hy-mt-client';
 
 describe('translateWithHyMt', () => {
@@ -19,12 +20,14 @@ describe('translateWithHyMt', () => {
       onReady: vi.fn(),
       sidecarConnection: {
         cancelTranslation: vi.fn(),
+        subscribeProcessStop: () => () => {},
         startTranslation,
         subscribe: (next: (event: SidecarEvent) => void) => {
           listener = next;
           return vi.fn();
         },
       } as never,
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
       signal: new AbortController().signal,
       sourceLanguage: 'en',
       targetLanguage: 'es',
@@ -67,12 +70,14 @@ describe('translateWithHyMt', () => {
       onReady: vi.fn(),
       sidecarConnection: {
         cancelTranslation: vi.fn(),
+        subscribeProcessStop: () => () => {},
         startTranslation,
         subscribe: (next: (event: SidecarEvent) => void) => {
           listener = next;
           return vi.fn();
         },
       } as never,
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
       signal: new AbortController().signal,
       sourceLanguage: 'en',
       styleInstruction: 'Use a formal register appropriate to the target language.',
@@ -112,12 +117,14 @@ describe('translateWithHyMt', () => {
       onReady: vi.fn(),
       sidecarConnection: {
         cancelTranslation: vi.fn(),
+        subscribeProcessStop: () => () => {},
         startTranslation,
         subscribe: (next: (event: SidecarEvent) => void) => {
           listener = next;
           return unsubscribe;
         },
       } as never,
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
       signal: new AbortController().signal,
       sourceLanguage: 'en',
       targetLanguage: 'es',
