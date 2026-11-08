@@ -61,6 +61,7 @@
     "esbuild": "0.28.2",
     "eslint": "^10.14.0",
     "eslint-plugin-obsidianmd": "^0.4.2",
+    "jsdom": "31.0.0",
     "obsidian": "1.13.1",
     "obsidian-floor": "npm:obsidian@1.11.4",
     "tslib": "2.9.1",

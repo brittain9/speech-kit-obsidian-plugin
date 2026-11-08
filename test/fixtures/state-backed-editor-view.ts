@@ -11,6 +11,7 @@ import { vi } from 'vitest';
 export class StateBackedEditorView {
   state: EditorState;
   private readonly updateListeners: Array<(update: ViewUpdate) => void> = [];
+  private readonly trackingListeners: Array<(update: ViewUpdate) => void> = [];
   private readonly history: Array<{ startState: EditorState; transaction: Transaction }> = [];
   readonly dispatch = vi.fn((spec: TransactionSpec) => {
     this.apply(spec, true);
@@ -26,6 +27,10 @@ export class StateBackedEditorView {
       selection: EditorSelection.cursor(options.selectionHead ?? 0),
     });
     this.updateListeners.push(...this.state.facet(EditorView.updateListener));
+  }
+
+  addTrackingListener(listener: (update: ViewUpdate) => void): void {
+    this.trackingListeners.push(listener);
   }
 
   undo(): boolean {
@@ -56,6 +61,7 @@ export class StateBackedEditorView {
       transactions: [transaction],
       view: this,
     } as unknown as ViewUpdate;
+    for (const listener of this.trackingListeners) listener(update);
     for (const listener of this.updateListeners) listener(update);
   }
 }

@@ -1,6 +1,6 @@
 import type { Extension, StateEffect } from '@codemirror/state';
 import { Annotation, Transaction } from '@codemirror/state';
-import { EditorView, type ViewUpdate } from '@codemirror/view';
+import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 
 import type { UtteranceId } from '../session/session-journal';
 import type { DictationAnchor } from '../settings/plugin-settings';
@@ -138,16 +138,28 @@ function unregisterNoteSurface(surface: NoteSurface): void {
 }
 
 export function noteSurfaceUpdateListenerExtension(): Extension {
-  return EditorView.updateListener.of((update) => {
-    const surfaces = noteSurfacesByView.get(update.view);
-    if (surfaces === undefined) {
-      return;
-    }
+  const trackingPlugin = ViewPlugin.fromClass(
+    class {
+      update(update: ViewUpdate): void {
+        for (const surface of [...(noteSurfacesByView.get(update.view) ?? [])]) {
+          surface.observeTransaction(update);
+        }
+      }
+    },
+  );
+  return [
+    trackingPlugin,
+    EditorView.updateListener.of((update) => {
+      const surfaces = noteSurfacesByView.get(update.view);
+      if (surfaces === undefined) {
+        return;
+      }
 
-    for (const surface of [...surfaces]) {
-      surface.observeTransaction(update);
-    }
-  });
+      for (const surface of [...surfaces]) {
+        surface.flushNotifications();
+      }
+    }),
+  ];
 }
 
 export class NoteSurface {
@@ -158,6 +170,8 @@ export class NoteSurface {
   private readonly initialBoundaryPos: number;
   private pendingInitialPrefix = '';
   private readonly spans = new Map<UtteranceId, ProjectedSpan>();
+  private readonly pendingProvisionalClears = new Set<UtteranceId>();
+  private pendingFailure: SurfaceDesynchronization | null = null;
 
   constructor(
     readonly view: EditorView,
@@ -187,7 +201,7 @@ export class NoteSurface {
 
     const desynchronization = this.detectOwnedDesynchronization(update.startState.doc.length);
     if (desynchronization !== null) {
-      this.onSurfaceDesynchronized?.(desynchronization);
+      this.pendingFailure = desynchronization;
       return desynchronization;
     }
 
@@ -213,8 +227,17 @@ export class NoteSurface {
       }
     }
 
-    this.clearProvisional(latchedUtteranceIds);
+    for (const utteranceId of latchedUtteranceIds) this.pendingProvisionalClears.add(utteranceId);
     return null;
+  }
+
+  flushNotifications(): void {
+    const failure = this.pendingFailure;
+    this.pendingFailure = null;
+    const utteranceIds = [...this.pendingProvisionalClears];
+    this.pendingProvisionalClears.clear();
+    if (failure !== null) this.onSurfaceDesynchronized?.(failure);
+    if (!this.disposed) this.clearProvisional(utteranceIds);
   }
 
   readProjectionContext(): NoteProjectionContext {

@@ -14,7 +14,7 @@ import type {
   RewriteResult,
   SurfaceDesynchronization,
 } from '../src/editor/note-surface';
-import { noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
+import { NoteSurface, noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
 import { provisionalTranscriptExtension } from '../src/editor/provisional-transcript-extension';
 import { RawTranscriptRecovery } from '../src/editor/raw-transcript-recovery';
 import { sessionProcessingExtension } from '../src/editor/session-processing-extension';
@@ -1307,6 +1307,11 @@ function createRecoveryIntegrationHarness(documentText: string): {
     },
     leafPinManager: new TemporaryLeafPinLeaseManager(),
     lockedFile,
+    noteSurfaceFactory: (editor, placement, onFailure) => {
+      const surface = new NoteSurface(editor, placement, onFailure);
+      view.addTrackingListener((update) => surface.observeTransaction(update));
+      return surface;
+    },
     placement: { anchor: 'at_cursor' },
     rendererOptions: renderOptions(),
     sessionId: 'recovery-integration',
