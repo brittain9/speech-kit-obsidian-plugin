@@ -4,7 +4,7 @@ import type { App, EventRef, TFile } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
 import { processMediaLlm } from '../src/dictation/media-llm-processor';
 import { dictationAnchorExtension } from '../src/editor/dictation-anchor-extension';
-import { noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
+import { NoteSurface, noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
 import { RawTranscriptRecovery } from '../src/editor/raw-transcript-recovery';
 import { sessionProcessingExtension } from '../src/editor/session-processing-extension';
 import { TemporaryLeafPinLeaseManager } from '../src/editor/temporary-leaf-pin';
@@ -56,6 +56,11 @@ function createMediaSession() {
     },
     leafPinManager: new TemporaryLeafPinLeaseManager(),
     lockedFile: file,
+    noteSurfaceFactory: (editor, placement, onFailure) => {
+      const surface = new NoteSurface(editor, placement, onFailure);
+      view.addTrackingListener((update) => surface.observeTransaction(update));
+      return surface;
+    },
     placement: { anchor: 'end_of_note' },
     rendererOptions: renderOptions(),
     sessionId: 'session-1',

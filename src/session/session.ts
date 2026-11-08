@@ -61,6 +61,7 @@ export type SessionAcceptResult =
 
 export type SessionRangeReplacementResult =
   | { kind: 'denied' }
+  | { kind: 'replaced_without_recovery' }
   | { kind: 'replaced'; recovery: RawTranscriptRecoveryReceipt };
 
 export interface SessionLifecycleCallbacks {
@@ -334,6 +335,9 @@ export class Session {
       return { kind: 'denied' };
     }
 
+    if (result.kind === 'rewritten_modified') {
+      return { kind: 'replaced_without_recovery' };
+    }
     if (result.kind !== 'rewritten') {
       return { kind: 'denied' };
     }
@@ -391,7 +395,7 @@ export class Session {
       return false;
     }
 
-    return result.kind === 'rewritten';
+    return result.kind === 'rewritten' || result.kind === 'rewritten_modified';
   }
 
   setAnchorMode(mode: DictationAnchorMode): void {

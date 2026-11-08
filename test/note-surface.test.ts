@@ -37,6 +37,7 @@ class FakeEditorView {
   public lastUpdate: ViewUpdate | null = null;
   public state: EditorState;
   private readonly updateListeners: Array<(update: ViewUpdate) => void> = [];
+  private readonly trackingListeners: Array<(update: ViewUpdate) => void> = [];
 
   constructor(doc: string, selectionHead: number, extensions: Extension = []) {
     this.state = EditorState.create({
@@ -51,20 +52,26 @@ class FakeEditorView {
     const startState = this.state;
     const transaction = startState.update(spec);
     this.state = transaction.state;
-    this.lastUpdate = {
+    const update = {
       changes: transaction.changes,
       docChanged: transaction.docChanged,
       startState,
       transactions: [transaction],
       view: this,
     } as unknown as ViewUpdate;
+    this.lastUpdate = update;
+    for (const listener of this.trackingListeners) listener(update);
     for (const listener of this.updateListeners) {
-      listener(this.lastUpdate);
+      listener(update);
     }
   }
 
   addUpdateListener(listener: (update: ViewUpdate) => void): void {
     this.updateListeners.push(listener);
+  }
+
+  addTrackingListener(listener: (update: ViewUpdate) => void): void {
+    this.trackingListeners.push(listener);
   }
 
   apply(spec: TransactionSpec): ViewUpdate {
@@ -100,6 +107,7 @@ function createSurface({
   extensions = [],
   selectionHead = 0,
   onSurfaceDesynchronized,
+  tracking = false,
 }: {
   anchor?: DictationAnchor;
   doc?: string;
@@ -110,6 +118,7 @@ function createSurface({
     kind: 'surface_desynchronized';
     trackedPosition: number;
   }) => void;
+  tracking?: boolean;
 } = {}): { surface: NoteSurface; view: FakeEditorView } {
   const view = new FakeEditorView(doc, selectionHead, extensions);
   const surface = new NoteSurface(
@@ -117,6 +126,7 @@ function createSurface({
     { anchor },
     onSurfaceDesynchronized,
   );
+  if (tracking) view.addTrackingListener((update) => surface.observeTransaction(update));
 
   return { surface, view };
 }
@@ -248,6 +258,7 @@ describe('NoteSurface', () => {
       kind: 'surface_desynchronized',
       trackedPosition: 4314,
     });
+    surface.flushNotifications();
     expect(onSurfaceDesynchronized).toHaveBeenCalledOnce();
     expect(onSurfaceDesynchronized).toHaveBeenCalledWith(failure);
     expect(doc(view)).toBe(`!${externalReplacement}`);
@@ -496,6 +507,7 @@ describe('NoteSurface', () => {
         changes: { from: 1, to: 2, insert: 'I' },
       }),
     );
+    surface.flushNotifications();
     expect(provisionalDecorationCount(view.state)).toBe(0);
 
     expect(append(surface, 'u2', 'more words').kind).toBe('appended');
@@ -543,7 +555,10 @@ describe('NoteSurface', () => {
 
   it('latches exact start and end boundary edits through the real NoteSurface extension', () => {
     for (const position of [0, 5]) {
-      const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+      const { surface, view } = createSurface({
+        extensions: noteSurfaceUpdateListenerExtension(),
+        tracking: true,
+      });
       expect(append(surface, 'u1', 'first').kind).toBe('appended');
       view.dispatch({
         annotations: Transaction.userEvent.of('input.type'),
@@ -555,7 +570,10 @@ describe('NoteSurface', () => {
   });
 
   it('preserves pasted text inside a partial and continues dictating after it', () => {
-    const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+    const { surface, view } = createSurface({
+      extensions: noteSurfaceUpdateListenerExtension(),
+      tracking: true,
+    });
     append(surface, 'u1', 'live words');
     view.dispatch({
       annotations: Transaction.userEvent.of('input.paste'),
@@ -569,7 +587,10 @@ describe('NoteSurface', () => {
   });
 
   it('preserves text typed at the end of a partial and continues after it', () => {
-    const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+    const { surface, view } = createSurface({
+      extensions: noteSurfaceUpdateListenerExtension(),
+      tracking: true,
+    });
     append(surface, 'u1', 'live words');
     view.dispatch({
       annotations: Transaction.userEvent.of('input.type'),
@@ -586,6 +607,7 @@ describe('NoteSurface', () => {
     const { surface, view } = createSurface({
       doc: 'other text',
       extensions: noteSurfaceUpdateListenerExtension(),
+      tracking: true,
       selectionHead: 10,
     });
     append(surface, 'u1', 'live words');

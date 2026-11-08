@@ -1470,7 +1470,9 @@ export class DictationSessionController {
           'batch cleanup replacement skipped; session range no longer available',
         );
       } else {
-        this.dependencies.onRawTranscriptRecoveryAvailable?.(replacement.recovery);
+        if (replacement.kind === 'replaced') {
+          this.dependencies.onRawTranscriptRecoveryAvailable?.(replacement.recovery);
+        }
         this.dependencies.onBatchTranscriptReplacementAccepted?.(cleanedText);
         this.dependencies.logger?.debug('llm', 'batch cleanup complete', {
           chars: cleanedText.length,
