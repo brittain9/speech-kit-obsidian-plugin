@@ -142,10 +142,12 @@ the tag workflow run the metadata gate. The explicit tag check must print
 `<version>` with no error. The third command prints the sidecar release the
 plugin will use; it matches `<version>` only for a sidecar-bearing release.
 
-When a release changes settings behavior or its Obsidian API usage, also
-complete the [Obsidian settings compatibility matrix](../guides/obsidian-settings-compatibility-testing.md).
-Its exact 1.11.5 runtime row remains required while `manifest.json` declares
-1.11.5, even when the supported-floor typecheck passes.
+For changes to settings behavior or Obsidian API usage, the
+[Obsidian settings compatibility smoke guide](../guides/obsidian-settings-compatibility-testing.md)
+provides optional checks for investigating compatibility risks. No fixed
+Obsidian version matrix or exact-runtime row is required to tag a release.
+Record the runtime versions actually tested; do not describe untested versions
+as verified.
 
 ## Cut it
 
@@ -171,7 +173,7 @@ This architecture is based on measured end-to-end evidence from issue #306. For
 already-running tagged build; merge-to-publication took 36m48s while the tagged
 workflow itself took 17m. For `2026.8.0`, the same two-stage path spent 18m35s
 warming before a 16m45s tagged release. Removing the gate eliminates that duplicate
-critical-path work while leaving the authoritative tagged build, five native assets,
+critical-path work while leaving the authoritative tagged build, seven native assets,
 checksums, and provenance unchanged.
 
 ```bash
@@ -191,7 +193,7 @@ git push origin <version>                               # fires .github/workflow
 
 The workflow always validates metadata and builds the production plugin. When
 the plugin and required sidecar versions match, it also builds the native matrix
-(macOS arm64, Linux x86_64 cpu+cuda, Windows cpu+cuda), packages the archives,
+(macOS arm64, Linux x86_64 cpu+cuda, Linux arm64, Windows x86_64 cpu+cuda, Windows arm64), packages the archives,
 and generates checksums. When they differ, every native job is skipped. Both
 paths attest the plugin assets, create a **draft** release with the notes file
 as the body, publish it, and produce the timing report.
@@ -216,8 +218,10 @@ A sidecar-bearing release additionally carries:
 
 - `sidecar-macos-arm64.tar.gz` — Whisper Metal + ONNX model families on CPU.
 - `sidecar-linux-x86_64-cpu.tar.gz`, `sidecar-linux-x86_64-cuda.tar.gz`.
+- `sidecar-linux-arm64.tar.gz` — CPU-only; ggml targets the ARMv8.2 + dotprod floor (`GGML_CPU_ARM_ARCH` in `setup-sidecar-rust`).
 - `sidecar-windows-x86_64-cpu.tar.gz`, `sidecar-windows-x86_64-cuda.tar.gz`.
-- `checksums.txt` — SHA-256 of every sidecar archive, exactly five lines, sorted.
+- `sidecar-windows-arm64.tar.gz` — CPU-only; built with clang-cl because ggml does not support MSVC on ARM64, targeting the same ARMv8.2 + dotprod floor, with the ARM64 Visual C++ runtime DLLs bundled next to the executables.
+- `checksums.txt` — SHA-256 of every sidecar archive, exactly seven lines, sorted.
 
 CUDA archives bundle the reviewed whisper.cpp CUDA runtime libraries declared in
 `native/cuda-artifacts.json`. Current ONNX model families run on CPU in every

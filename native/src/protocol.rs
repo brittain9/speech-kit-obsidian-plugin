@@ -310,6 +310,8 @@ pub enum Command {
         diarization_max_speakers: Option<u32>,
         #[serde(default)]
         include_system_audio: bool,
+        #[serde(default)]
+        file_audio_flow_control: bool,
         language: String,
         mode: ListeningMode,
         model_selection: SelectedModel,
@@ -561,6 +563,10 @@ pub enum Event {
         queued_utterances: usize,
         session_id: String,
         tier: QueueBackpressureTier,
+    },
+    FileAudioProgress {
+        frames_consumed: u64,
+        session_id: String,
     },
     ContextRequest {
         budget_chars: u32,
@@ -874,6 +880,7 @@ mod tests {
                 diarization_enabled: false,
                 diarization_max_speakers: None,
                 include_system_audio: true,
+                file_audio_flow_control: false,
                 language: "en".to_string(),
                 mode: ListeningMode::AlwaysOn,
                 model_selection: SelectedModel::ExternalFile {
@@ -1221,6 +1228,19 @@ mod tests {
                 serde_json::from_value(json).expect("event should parse back");
             assert_eq!(round_tripped, event);
         }
+    }
+
+    #[test]
+    fn file_audio_progress_round_trips() {
+        let event = Event::FileAudioProgress {
+            frames_consumed: 25,
+            session_id: "session-1".to_string(),
+        };
+        let json = serde_json::to_value(&event).expect("event should serialize");
+        assert_eq!(json["type"], "file_audio_progress");
+        assert_eq!(json["framesConsumed"], 25);
+        let round_tripped: Event = serde_json::from_value(json).expect("event should parse back");
+        assert_eq!(round_tripped, event);
     }
 
     #[test]

@@ -34,8 +34,10 @@ normal `gh` token (read-only, public repo). Derivations:
   whether the user installs, which inflates it relative to actual installs
   (verified 2026.7.2: manifest 85 vs main.js 83 — small but consistent gap).
 - **Platform / acceleration split**: sidecar archive filenames encode this
-  directly — `sidecar-{linux,windows,macos}-{x86_64,arm64}-{cpu,cuda}.tar.gz`.
-  Summing across releases gives an OS and CPU-vs-CUDA breakdown.
+  directly — `sidecar-{linux,windows}-x86_64-{cpu,cuda}.tar.gz` plus the
+  single-variant `sidecar-{linux,windows,macos}-arm64.tar.gz`. Summing across
+  releases gives an OS, architecture, and CPU-vs-CUDA breakdown; the
+  `linux-cpu`/`windows-cpu` buckets are x86-64 only.
 - **Limitation**: counts are cumulative snapshots at fetch time, not a time
   series. Two fetches days apart are needed to see a delta — hence snapshotting
   (below).

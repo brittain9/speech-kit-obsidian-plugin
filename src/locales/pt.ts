@@ -2,6 +2,60 @@ import type { TranslationCatalog } from './index';
 
 export const pt = {
   'notice.dictationNotActive': 'O ditado não está ativo de momento.',
+  'commands.transcribeAudioFile': 'Transcrever ficheiro de áudio local',
+  'commands.cancelAudioFile': 'Cancelar transcrição do ficheiro de áudio local',
+  'audio-file-model-required':
+    'Selecione e valide um modelo local de voz para texto em Gerir modelos e tente novamente.',
+  'audio-file-model-changed':
+    'O modelo de transcrição mudou enquanto o seletor de ficheiro estava aberto. Execute novamente Transcrever ficheiro de áudio local.',
+  'audio-file-language-changed':
+    'O idioma de ditado mudou enquanto o ficheiro de áudio era preparado. Execute novamente Transcrever ficheiro de áudio local para usar o idioma atual.',
+  'audio-file-model-not-batch':
+    'Ficheiros de áudio exigem um modelo por lotes. Selecione um modelo sem streaming e tente novamente.',
+  'audio-file-language-unsupported':
+    'O modelo não suporta o idioma de ditado configurado ({language}). Escolha um modelo compatível ou altere o idioma de ditado.',
+  'audio-file-target-required':
+    'Abra em modo de edição a nota Markdown que deve receber a transcrição e tente novamente.',
+  'audio-file-target-changed':
+    'O destino mudou durante a preparação. Volte à nota original e execute novamente o comando.',
+  'audio-file-desktop-only':
+    'A transcrição de ficheiros de áudio está disponível na aplicação de ambiente de trabalho do Obsidian. Abra este cofre num computador para continuar.',
+  'audio-file-busy':
+    'O ditado ou outra transcrição de ficheiro de áudio já está ativo. Conclua ou cancele essa operação e tente novamente.',
+  'audio-file-maintenance':
+    'O motor de voz local está a ser instalado, reiniciado ou atualizado. Aguarde e tente novamente.',
+  'audio-file-read-failed':
+    'Não foi possível ler o ficheiro selecionado. Verifique se existe e se está acessível e tente novamente.',
+  'audio-file-decode-failed':
+    'O Obsidian não conseguiu descodificar o áudio. Converta-o para um formato que a sua versão do Obsidian consiga reproduzir, frequentemente WAV.',
+  'audio-file-encoded-size':
+    'O ficheiro codificado é demasiado grande. Escolha um ficheiro mais curto ou com menor taxa de bits (máximo 64 MiB).',
+  'audio-file-duration':
+    'O áudio excede o limite de segurança de 30 minutos. Divida-o em ficheiros mais curtos.',
+  'audio-file-model-duration':
+    'O áudio excede a duração máxima do modelo. Divida-o ou escolha um modelo com um limite maior.',
+  'audio-file-decoded-memory':
+    'A descodificação consumiria memória em excesso. Escolha um ficheiro mais curto, com menor taxa de bits ou menos canais.',
+  'audio-file-empty':
+    'O ficheiro selecionado não contém áudio transcrevível. Escolha outro ficheiro de áudio.',
+  'audio-file-start-failed':
+    'O motor de voz local não conseguiu iniciar a transcrição. Verifique o modelo selecionado e tente novamente.',
+  'audio-file-sidecar-missing':
+    'Instale o motor de voz local, selecione um modelo de voz para texto e tente novamente.',
+  'audio-file-shutdown-uncertain':
+    'O motor de voz local não confirmou que a transcrição do ficheiro de áudio terminou. O Speech Kit protegeu a sessão para evitar operações de voz sobrepostas. Verifique o motor local e tente novamente.',
+  'audio-file-sidecar-failed':
+    'A transcrição parou porque o motor local falhou. Verifique o modelo e tente novamente.',
+  'audio-file-queue-overload':
+    'O motor local não conseguiu acompanhar. Divida a gravação ou escolha um modelo mais rápido.',
+  'audio-file-transcript-write-failed':
+    'A transcrição parou porque o Speech Kit não conseguiu escrever com segurança na nota. Restaure-a e tente novamente.',
+  'audio-file-target-closed':
+    'A nota de destino foi fechada ou substituída. Reabra-a e execute novamente o comando.',
+  'audio-file-target-deleted':
+    'A nota de destino foi eliminada. Restaure-a ou crie-a novamente e execute o comando.',
+  'audio-file-surface-changed':
+    'A nota alterou-se de uma forma que o Speech Kit não conseguiu seguir em segurança. Restaure-a e execute novamente o comando.',
   'notice.dictationStartFailed': 'Não foi possível iniciar o ditado.',
   'notice.dictationStopFailed': 'Não foi possível parar o ditado.',
   'notice.lastUtteranceCleared': 'A última frase guardada foi eliminada.',
@@ -414,31 +468,16 @@ export const pt = {
     'O ditado insere a transcrição local original. Ative Transformar quando pretender fazer limpeza, reescrever ou resumir.',
   'llm.sidebar.off.summary': 'Transcrição original',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Limpeza',
-  'llm.preset.builtin.cleanUp.description':
-    'Corrigir artefactos da transcrição, palavras de preenchimento, pontuação e maiúsculas, preservando o estilo e o significado.',
-  'llm.preset.builtin.cleanUp.prompt':
-    'Limpa o texto ditado. Corrige palavras de preenchimento, falsos arranques, repetições, pontuação, maiúsculas e erros óbvios de reconhecimento. Preserva o estilo e o significado do orador. Utiliza o contexto de referência apenas para a ortografia. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o texto limpo — sem introdução nem comentários.',
-  'llm.preset.builtin.professionalWriting.label': 'Escrita profissional',
-  'llm.preset.builtin.professionalWriting.description':
-    'Reescrever como prosa profissional, concisa e cuidada, preservando factos, nomes, decisões e termos técnicos.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    'Reescreve o discurso ditado como prosa profissional concisa. Utiliza a voz ativa, sem palavras de preenchimento nem linguagem evasiva. Preserva todos os factos, nomes e termos. Utiliza o contexto de referência para a ortografia. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o texto reescrito — sem introdução nem comentários.',
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Adicionar um breve resumo TLDR acima da transcrição sem a alterar.',
   'llm.preset.builtin.tldr.prompt':
-    'Escreve um resumo TLDR da transcrição ditada: um título «TLDR» seguido de 1 a 3 pontos curtos que abranjam os aspetos principais. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o título e os pontos — não repitas a transcrição, não incluas introdução nem comentários.',
+    'Escreve um resumo TLDR da transcrição ditada: um título «TLDR» seguido de pontos curtos, em número proporcional ao conteúdo relevante, que permitam captar rapidamente os aspetos principais. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o título e os pontos — não repitas a transcrição, não incluas introdução nem comentários.',
   'llm.preset.builtin.markdownFormatting.label': 'Formatação Markdown',
   'llm.preset.builtin.markdownFormatting.description':
     'Reformatar a transcrição da sessão como Markdown estruturado, com títulos, listas e ênfase.',
   'llm.preset.builtin.markdownFormatting.prompt':
     'Reformata o discurso ditado como Markdown bem estruturado. Adiciona títulos, listas com marcadores ou numeradas, negrito, ênfase e blocos de código delimitados onde o conteúdo o justificar. Corrige ligeiramente as palavras de preenchimento, os falsos arranques, a pontuação e as maiúsculas; preserva as palavras do orador e todos os factos, nomes e termos. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o Markdown — sem introdução nem comentários.',
-  'llm.preset.builtin.actionItems.label': 'Tarefas',
-  'llm.preset.builtin.actionItems.description':
-    'Adicionar uma lista de tarefas abaixo da transcrição sem a alterar.',
-  'llm.preset.builtin.actionItems.prompt':
-    'Extrai tarefas da transcrição ditada. Produz um título «Tarefas» seguido de uma lista de verificação Markdown com tarefas concretas, indicando um responsável quando o orador mencionar um. Se a transcrição não contiver tarefas, não devolvas nada. Escreve no idioma original da transcrição. Nunca traduz, a menos que o utilizador peça explicitamente uma tradução. Devolve apenas o título e a lista de verificação — não repitas a transcrição, não incluas introdução nem comentários.',
   'llm.preset.timing.perUtterance': 'É executada após cada frase',
   'llm.preset.timing.batch': 'É executada uma vez ao parar',
   'llm.preset.timing.either': 'É executada em qualquer dos modos',

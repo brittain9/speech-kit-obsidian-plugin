@@ -24,11 +24,13 @@ import type { SidecarInstallManager } from '../sidecar/sidecar-install-manager';
 import type { SidecarLifecycleGate } from '../sidecar/sidecar-lifecycle-gate';
 import { ConfirmModal } from '../ui/confirm-modal';
 import { styleDestructiveButton } from '../ui/destructive-button';
+import { MediaToolInstallModal } from '../ui/media-tool-install-modal';
 import { diarizationSettingDescription } from './diarization-setting';
 import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
 import { changeHardwareAcceleration } from './hardware-acceleration-action';
 import { renderHardwareAccelerationSetting } from './hardware-acceleration-setting';
+import { renderMediaToolSetting } from './media-tool-setting';
 import { renderMicrophonePicker } from './microphone-picker';
 import { renderModelSection } from './model-settings-section';
 import { openFilteredHotkeySettings } from './open-hotkey-settings';
@@ -144,6 +146,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
   private disposeDiarizationDesc: (() => void) | null = null;
   private disposeEngineSection: (() => void) | null = null;
   private disposeMicrophoneSection: (() => void) | null = null;
+  private disposeMediaToolSetting: (() => void) | null = null;
   private disposeModelSection: (() => void) | null = null;
   private disposeReadAloudSection: (() => void) | null = null;
   private disposeSidecarSurfaces: (() => void) | null = null;
@@ -485,7 +488,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
 
     new Setting(llmCard)
       .setName(t('settings.llm.restoreDefaults.name'))
-      .setDesc(t('settings.llm.restoreDefaults.desc'))
+      .setDesc(t('settings.llm.restoreDefaults.editableDesc'))
       .addButton((button) => {
         styleDestructiveButton(
           button.setButtonText(t('settings.llm.restoreDefaults.button')),
@@ -493,7 +496,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
           new ConfirmModal(this.app, {
             confirmLabel: t('settings.llm.restoreDefaults.button'),
             destructive: true,
-            message: t('settings.llm.restoreDefaults.confirmMessage'),
+            message: t('settings.llm.restoreDefaults.confirmEditableMessage'),
             onConfirm: async () => {
               await this.dependencies.resetLlmTransformation();
               this.refreshSettingsTab();
@@ -564,6 +567,15 @@ export class LocalSttSettingTab extends PluginSettingTab {
       },
     );
 
+    this.disposeMediaToolSetting = renderMediaToolSetting(advancedSection, {
+      feedback: this.dependencies.feedback,
+      isDictationBusy: this.dependencies.isDictationBusy,
+      openInstaller: (pluginDirectory, callbacks) => {
+        new MediaToolInstallModal(this.app, pluginDirectory, callbacks).open();
+      },
+      resolvePluginDirectory: this.dependencies.resolvePluginDirectory,
+    });
+
     addToggleSetting(advancedSection, this.access, {
       name: t('settings.recoveryMemory.name'),
       desc: t('settings.recoveryMemory.desc'),
@@ -618,6 +630,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
     this.disposeEngineSection = null;
     this.disposeMicrophoneSection?.();
     this.disposeMicrophoneSection = null;
+    this.disposeMediaToolSetting?.();
+    this.disposeMediaToolSetting = null;
     this.disposeSidecarSurfaces?.();
     this.disposeSidecarSurfaces = null;
   }

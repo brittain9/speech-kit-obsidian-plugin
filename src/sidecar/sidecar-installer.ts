@@ -1,5 +1,5 @@
 import { createHash, type Hash } from 'node:crypto';
-import { createReadStream, createWriteStream, type WriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, readFileSync, type WriteStream } from 'node:fs';
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import { get as httpsGet, type RequestOptions } from 'node:https';
@@ -71,18 +71,50 @@ export function detectPlatformAsset(
     return 'sidecar-macos-arm64.tar.gz';
   }
 
-  if (arch !== 'x64') {
-    throw new Error(`Unsupported ${platform} architecture for sidecar: ${arch}.`);
+  const os = platform === 'linux' ? 'linux' : 'windows';
+
+  if (arch === 'arm64') {
+    if (variant === 'cuda') {
+      throw new Error('CUDA sidecar is not available on ARM64.');
+    }
+
+    return `sidecar-${os}-arm64.tar.gz`;
   }
 
-  if (platform === 'linux') {
-    return `sidecar-linux-x86_64-${variant}.tar.gz`;
+  if (arch === 'x64') {
+    return `sidecar-${os}-x86_64-${variant}.tar.gz`;
   }
 
-  return `sidecar-windows-x86_64-${variant}.tar.gz`;
+  // `arch` is narrowed to `never` here, but process.arch can still be another
+  // value (e.g. ia32) at runtime.
+  throw new Error(`Unsupported ${platform} architecture for sidecar: ${String(arch)}.`);
+}
+
+// Linux ARM64 sidecars target ARMv8.2 with the int8 dot product and fp16
+// (GGML_CPU_ARM_ARCH in setup-sidecar-rust). Older cores such as the Raspberry
+// Pi 4 would crash with an illegal instruction on first inference, so reject
+// them before downloading. Every Windows 11 ARM device meets the floor.
+export function linuxArm64CpuMeetsFloor(cpuinfo: string): boolean {
+  return cpuinfo
+    .split('\n')
+    .filter((line) => /^Features\s*:/u.test(line))
+    .every((line) => {
+      const features = line.split(':')[1]?.trim().split(/\s+/u) ?? [];
+      return features.includes('asimddp') && features.includes('asimdhp');
+    });
 }
 
 export function detectPlatformAssetForCurrentEnv(variant: SidecarInstallVariant): string {
+  if (
+    process.platform === 'linux' &&
+    process.arch === 'arm64' &&
+    !linuxArm64CpuMeetsFloor(readFileSync('/proc/cpuinfo', 'utf8'))
+  ) {
+    throw new Error(
+      'Speech Kit on ARM64 Linux requires an ARMv8.2 CPU with dot-product support (e.g. Raspberry Pi 5).',
+    );
+  }
+
   return detectPlatformAsset(
     process.platform as TargetPlatform,
     process.arch as TargetArch,
@@ -351,11 +383,12 @@ const PROGRESS_REPORT_BYTE_DELTA = 256 * 1024;
 const PROGRESS_REPORT_INTERVAL_MS = 100;
 const DOWNLOAD_IDLE_TIMEOUT_MS = 60_000;
 
-async function downloadToFile(
+export async function downloadToFile(
   url: string,
   destPath: string,
   onProgress: (bytesDownloaded: number, totalBytes: number | null) => void,
   signal?: AbortSignal,
+  maxBytes?: number,
 ): Promise<string> {
   const stream = await openHttpsStream(url, signal, 0);
   const contentLengthHeader = stream.headers['content-length'];
@@ -363,6 +396,10 @@ async function downloadToFile(
     typeof contentLengthHeader === 'string' && /^\d+$/.test(contentLengthHeader)
       ? Number.parseInt(contentLengthHeader, 10)
       : null;
+  if (maxBytes !== undefined && totalBytes !== null && totalBytes > maxBytes) {
+    stream.destroy();
+    throw new Error('Download exceeds the allowed size.');
+  }
 
   const fileStream = createWriteStream(destPath);
   const hash: Hash = createHash('sha256');
@@ -406,6 +443,10 @@ async function downloadToFile(
       throwIfWriteFailed();
       const buffer = chunk as Buffer;
       bytesDownloaded += buffer.length;
+      if (maxBytes !== undefined && bytesDownloaded > maxBytes) {
+        stream.destroy();
+        throw new Error('Download exceeds the allowed size.');
+      }
       hash.update(buffer);
 
       const now = Date.now();
@@ -439,7 +480,7 @@ async function downloadToFile(
   return hash.digest('hex');
 }
 
-async function markExecutable(path: string): Promise<void> {
+export async function markExecutable(path: string): Promise<void> {
   if (process.platform === 'win32') return;
   await chmod(path, 0o755);
 }
@@ -478,7 +519,7 @@ function resolveSidecarExecutableName(): string {
   return formatSidecarExecutableName(process.platform === 'win32');
 }
 
-async function extractTarGz(
+export async function extractTarGz(
   archivePath: string,
   destDir: string,
   signal?: AbortSignal,

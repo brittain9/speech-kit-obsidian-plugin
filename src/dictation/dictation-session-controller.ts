@@ -15,10 +15,15 @@ import {
   type LlmPostprocessMode,
   type LlmPresetOutput,
   resolveActivePresetEntry,
-  resolveEffectiveLlmGlobals,
 } from '../llm/presets';
 import { type LlmCleanupFailure, type LlmProviderId, ProviderError } from '../llm/provider';
 import type { LlmRouter } from '../llm/router';
+import {
+  renderBatchProviderUserMessage,
+  resolveLlmOutputBehavior,
+  resolveLlmPostprocessMode,
+  resolveLlmTransformSnapshot,
+} from '../llm/transform-policy';
 import type { Session, SessionAcceptResult } from '../session/session';
 import type { StageId, StageOutcome, TranscriptRevision } from '../session/session-journal';
 import type { PluginSettings, SmartParagraphPauseSettings } from '../settings/plugin-settings';
@@ -148,6 +153,7 @@ interface DictationSessionControllerDependencies {
   feedback: Pick<UserFeedback, 'show'>;
   getSettings: () => PluginSettings;
   hasDictationTarget: () => boolean;
+  isAudioFileTranscriptionActive: () => boolean;
   logger?: PluginLogger;
   onBatchTranscriptReplacementAccepted?: (text: string) => void;
   onLlmCleanupFailure?: (failure: LlmCleanupFailure) => void;
@@ -312,6 +318,14 @@ export class DictationSessionController {
 
   async startDictation(): Promise<void> {
     if (this.isCaptureActive() || this.sessions.size >= MAX_CONTROLLER_SESSIONS) {
+      return;
+    }
+    if (this.dependencies.isAudioFileTranscriptionActive()) {
+      this.dependencies.feedback.show({
+        intent: 'warning',
+        key: 'audio-file-busy',
+        message: t('audio-file-busy'),
+      });
       return;
     }
 
@@ -1369,7 +1383,8 @@ export class DictationSessionController {
     cleanedText: string,
     transcriptText: string,
   ): void {
-    if (entry.snapshot.llmPostprocessOutput === 'replace') {
+    const outputBehavior = resolveLlmOutputBehavior(entry.snapshot.llmPostprocessOutput);
+    if (outputBehavior.kind === 'replace') {
       if (cleanedText.length === 0) {
         throw new ProviderError('Provider returned empty cleaned text.', 'invalid_response');
       }
@@ -1408,8 +1423,10 @@ export class DictationSessionController {
       return;
     }
 
-    const placement = entry.snapshot.llmPostprocessOutput === 'add_above' ? 'above' : 'below';
-    const inserted = entry.session.insertAdjacentToSessionRange(cleanedText, placement);
+    const inserted = entry.session.insertAdjacentToSessionRange(
+      cleanedText,
+      outputBehavior.placement,
+    );
     if (this.stopTerminatedBatchCleanup(sessionId, entry)) {
       return;
     }
@@ -1422,7 +1439,7 @@ export class DictationSessionController {
     } else {
       this.dependencies.logger?.debug('llm', 'additive batch insert complete', {
         chars: cleanedText.length,
-        placement,
+        placement: outputBehavior.placement,
       });
     }
   }
@@ -1688,26 +1705,16 @@ function createSessionSnapshot(
   selectedModel: NonNullable<PluginSettings['selectedModel']>,
   llmRouter: LlmRouter | null,
 ): ActiveSessionSnapshot {
+  const transform = resolveLlmTransformSnapshot(settings);
   const activePreset = resolveActivePresetEntry(
     settings.llmPostprocessActivePresetRef,
     settings.llmPostprocessUserPresets,
   ).preset;
-  const effective = resolveEffectiveLlmGlobals(
-    {
-      minWords: settings.llmPostprocessSkipMinWords,
-      temperature: settings.llmPostprocessTemperature,
-      useNoteContext: settings.useLlmNoteContext,
-    },
-    activePreset,
-  );
   // A preset with pinned timing forces the effective mode without overwriting
   // the stored user choice.
-  const llmPostprocessMode: LlmPostprocessMode =
-    settings.llmPostprocessMode === 'off'
-      ? 'off'
-      : (activePreset.timing ?? settings.llmPostprocessMode);
+  const llmPostprocessMode: LlmPostprocessMode = resolveLlmPostprocessMode(settings, activePreset);
   const sessionStartUnixMs = Date.now();
-  const noteContextChars = effective.useNoteContext ? settings.llmPostprocessNoteContextChars : 0;
+  const noteContextChars = transform.noteContextChars;
 
   return {
     accelerationPreference: settings.accelerationPreference,
@@ -1721,13 +1728,13 @@ function createSessionSnapshot(
     llmRouter,
     llmPostprocessMode,
     llmPostprocessNoteContextChars: noteContextChars,
-    llmPostprocessOutput: activePreset.output,
-    llmPostprocessPrompt: activePreset.prompt,
-    llmPostprocessPriorUtterancesN: settings.llmPostprocessPriorUtterancesN,
-    llmPostprocessShowRawBelow: settings.llmPostprocessShowRawBelow,
-    llmPostprocessSkipMinWords: effective.minWords,
-    llmPostprocessTemperature: effective.temperature,
-    llmPostprocessTotalContextCap: settings.llmPostprocessTotalContextCap,
+    llmPostprocessOutput: transform.output,
+    llmPostprocessPrompt: transform.prompt,
+    llmPostprocessPriorUtterancesN: transform.priorUtterancesN,
+    llmPostprocessShowRawBelow: transform.showRawBelow,
+    llmPostprocessSkipMinWords: transform.skipMinWords,
+    llmPostprocessTemperature: transform.temperature,
+    llmPostprocessTotalContextCap: transform.totalContextCap,
     modelSelection: selectedModel,
     modelStorePathOverride: settings.modelStorePathOverride,
     sessionStartUnixMs,
@@ -1862,20 +1869,6 @@ function renderProviderUserMessage(
     sections.push(`<prior_utterances>\n${priorUtterances}\n</prior_utterances>`);
   }
   sections.push(`<utterance>\n${utterance}\n</utterance>`);
-
-  return sections.join('\n\n');
-}
-
-function renderBatchProviderUserMessage(
-  noteContext: string | null,
-  transcriptText: string,
-): string {
-  const sections: string[] = [];
-
-  if (noteContext !== null && noteContext.trim().length > 0) {
-    sections.push(`<note_context>\n${noteContext.trim()}\n</note_context>`);
-  }
-  sections.push(`<session_transcript>\n${transcriptText.trim()}\n</session_transcript>`);
 
   return sections.join('\n\n');
 }

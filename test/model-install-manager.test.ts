@@ -249,6 +249,34 @@ describe('ModelInstallManager', () => {
       );
     });
 
+    it('exposes the install request before the first sidecar event', async () => {
+      const response = deferred<ReturnType<typeof sampleInstallUpdate>>();
+      harness.sidecarConnection.installModel.mockReturnValueOnce(response.promise);
+
+      const installing = harness.manager.install(sampleSelection());
+      expect(harness.manager.getState()).toMatchObject({
+        activeInstall: null,
+        installRequestPending: true,
+      });
+
+      response.resolve(sampleInstallUpdate({ state: 'queued' }));
+      await installing;
+      expect(harness.manager.getState().installRequestPending).toBe(true);
+
+      const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected an install request.');
+      harness.sidecarConnection.listInstalledModels.mockResolvedValueOnce({
+        models: [sampleInstalledModel()],
+      });
+      emitInstallUpdate(harness, {
+        installId: request.installId,
+        state: 'completed',
+      });
+      await vi.waitFor(() => {
+        expect(harness.manager.getState().installRequestPending).toBe(false);
+      });
+    });
+
     it('resolves a pack install only after completion and artifact refresh', async () => {
       const model = sampleTranslationCatalogModel();
       harness.manager.getState().catalog.models.push(model);
@@ -486,7 +514,7 @@ describe('ModelInstallManager', () => {
         expect.stringContaining('failed before progress'),
         error,
       );
-      expect(onStateChange).toHaveBeenCalledOnce();
+      expect(onStateChange).toHaveBeenCalledTimes(2);
     });
 
     it('publishes failed state before rejecting installAndWait', async () => {
@@ -515,7 +543,7 @@ describe('ModelInstallManager', () => {
         selection: sampleSelection(),
       });
       await expect(completion).rejects.toThrow(error.message);
-      expect(onStateChange).toHaveBeenCalledOnce();
+      expect(onStateChange).toHaveBeenCalledTimes(2);
     });
 
     it('resumes a rejected request when same-ID progress arrives late', async () => {
@@ -1516,6 +1544,28 @@ describe('ModelInstallManager', () => {
       commitBlock.release();
       await Promise.all([selectingFirst, selectingNewer]);
 
+      expect(harness.getSettings().selectedModel).toEqual(newerSelection);
+    });
+
+    it('reports which out-of-order probe actually committed', async () => {
+      await harness.manager.init();
+      const firstProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
+      const newerProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
+      harness.sidecarConnection.probeModelSelection
+        .mockReturnValueOnce(firstProbe.promise)
+        .mockReturnValueOnce(newerProbe.promise);
+      const firstSelection = sampleSelection('whisper_small_en_q5_1');
+      const newerSelection = sampleSelection();
+
+      const selectingFirst = harness.manager.select(firstSelection);
+      const selectingNewer = harness.manager.select(newerSelection);
+      newerProbe.resolve(sampleReadyProbeResult(newerSelection));
+      const newerResult = await selectingNewer;
+      firstProbe.resolve(sampleReadyProbeResult(firstSelection));
+      const firstResult = await selectingFirst;
+
+      expect(newerResult.committed).toBe(true);
+      expect(firstResult.committed).toBe(false);
       expect(harness.getSettings().selectedModel).toEqual(newerSelection);
     });
 
@@ -2726,6 +2776,7 @@ function createManagerHarness(settingsOverride?: Partial<PluginSettings>): Manag
         if (block !== null) {
           block.started.resolve(undefined);
           await block.release.promise;
+          if (!condition(settings)) return false;
         }
         return true;
       }),

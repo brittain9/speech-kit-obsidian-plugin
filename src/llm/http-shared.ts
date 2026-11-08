@@ -2,6 +2,7 @@ import { requestUrl } from 'obsidian';
 
 import { formatErrorMessage } from '../shared/format-utils';
 import { ProviderError } from './provider';
+import { BoundedResponseCollector, MAX_ERROR_BODY_BYTES } from './response-collector';
 
 export const CLEANUP_TIMEOUT_MS = 60_000;
 export const PROBE_TIMEOUT_MS = 3_000;
@@ -90,9 +91,8 @@ export async function fetchJson(
 
 // Obsidian's renderer fetch is subject to browser CORS, which many local
 // OpenAI-compatible servers (including LM Studio) do not enable. requestUrl is
-// the supported CORS-free transport. It cannot cancel its underlying request,
-// but the caller still receives timeout/abort failures promptly and ignores any
-// later response, matching the observable provider contract.
+// retained for non-chat model probes only. Custom chat completions use the
+// Node streaming transport so byte caps and aborts reach the underlying socket.
 export async function requestUrlJson(
   url: string,
   init: RequestInit = {},
@@ -180,30 +180,23 @@ async function readResponseText(response: Response, maxBytes: number): Promise<s
   }
 
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let totalBytes = 0;
-  let text = '';
+  const collector = new BoundedResponseCollector(
+    maxBytes,
+    response.ok ? maxBytes : MAX_ERROR_BODY_BYTES,
+  );
 
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      totalBytes += value.byteLength;
-      if (totalBytes > maxBytes) {
+      if (done) break;
+      try {
+        collector.append(value);
+      } catch (error) {
         await reader.cancel();
-        throw new ProviderError(
-          `Provider response exceeded ${maxBytes} bytes.`,
-          'invalid_response',
-        );
+        throw error;
       }
-
-      text += decoder.decode(value, { stream: true });
     }
-    text += decoder.decode();
-    return text;
+    return collector.text();
   } finally {
     reader.releaseLock();
   }

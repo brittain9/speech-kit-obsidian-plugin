@@ -137,7 +137,7 @@ describe('Ollama client', () => {
         userMessage: '<session_transcript>raw</session_transcript>',
       }),
     ).rejects.toMatchObject({
-      code: 'invalid_response',
+      code: 'output_limit',
       name: 'OllamaClientError',
     } satisfies Partial<OllamaClientError>);
   });

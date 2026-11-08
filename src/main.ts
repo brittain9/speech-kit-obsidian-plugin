@@ -1,14 +1,27 @@
 import { dirname, join } from 'node:path';
 import { IS_PRODUCTION_BUILD } from 'virtual:build-mode';
 import { shell } from 'electron';
-import { FileSystemAdapter, getLanguage, Menu, Platform, Plugin, setIcon } from 'obsidian';
+import {
+  FileSystemAdapter,
+  getLanguage,
+  Menu,
+  Platform,
+  Plugin,
+  requestUrl,
+  setIcon,
+} from 'obsidian';
 
 import { AudioCaptureStream } from './audio/audio-capture-stream';
+import { AudioFileError, FfmpegAudioFileDecoder } from './audio/audio-file-decoder';
+import { pickLocalAudioFile } from './audio/local-audio-file-picker';
+import { isMediaToolInstalled } from './audio/media-tool-installer';
 import { SidecarAudioLevelMeter } from './audio/sidecar-audio-level-meter';
 import { registerCommands } from './commands/register-commands';
+import { AudioFileTranscriptionController } from './dictation/audio-file-transcription-controller';
 import { DictationSessionController } from './dictation/dictation-session-controller';
 import { FinalizedUtteranceAutoCopy } from './dictation/finalized-utterance-auto-copy';
 import { LastUtteranceRecovery } from './dictation/last-utterance-recovery';
+import { formatMediaLlmCompletion, formatMediaLlmFailure } from './dictation/media-llm-coordinator';
 import { dictationAnchorExtension } from './editor/dictation-anchor-extension';
 import { noteSurfaceUpdateListenerExtension } from './editor/note-surface';
 import { provisionalTranscriptExtension } from './editor/provisional-transcript-extension';
@@ -22,6 +35,11 @@ import { TemporaryLeafPinLeaseManager } from './editor/temporary-leaf-pin';
 import { syncDictationLanguageWithObsidian } from './language/dictation-language-sync';
 import type { LlmCleanupFailure } from './llm/provider';
 import { createConfiguredLlmRouter } from './llm/runtime';
+import { LocalMediaSource } from './media/local-media-source';
+import type { LocalMediaAcquireRequest, MediaTranscriptionEntry } from './media/media-source';
+import { getMediaTranscriptionModelOptions } from './media/media-transcription-options';
+import { CaptionAcquisitionError, fetchDirectYouTubeCaptions } from './media/youtube-captions';
+import { parseYouTubeVideoUrl } from './media/youtube-url';
 import { ManageModelsModal, type ModelPickerOptions } from './models/manage-models-modal';
 import { ModelInstallManager } from './models/model-install-manager';
 import {
@@ -89,9 +107,17 @@ import { ReadAloudController, type ReadAloudState } from './tts/read-aloud-contr
 import { didReadAloudSettingsChange, resolveReadAloudVoiceId } from './tts/read-aloud-selection';
 import { DictationRibbonController } from './ui/dictation-ribbon';
 import { LOCAL_DICTATION_VIEW_TYPE, LocalDictationView } from './ui/local-dictation-view';
+import { renderMediaProgressStatus } from './ui/media-progress-presenter';
+import { MediaToolInstallModal } from './ui/media-tool-install-modal';
+import { MediaTranscriptionModalRegistry } from './ui/media-transcription-modal';
+import { PresetManagerModal } from './ui/preset-manager-modal';
+import { YouTubeTranscriptModalRegistry } from './ui/youtube-transcript-modal';
 
 export default class LocalSttPlugin extends Plugin {
   private audioCaptureStream: AudioCaptureStream | null = null;
+  private audioFileTranscriptionController: AudioFileTranscriptionController | null = null;
+  private readonly mediaTranscriptionModals = new MediaTranscriptionModalRegistry();
+  private readonly youtubeTranscriptModals = new YouTubeTranscriptModalRegistry();
   private audioLevelMeter: SidecarAudioLevelMeter | null = null;
   private dictationController: DictationSessionController | null = null;
   /**
@@ -129,6 +155,7 @@ export default class LocalSttPlugin extends Plugin {
   private readAloudFollowAlong: ReadAloudFollowAlong | null = null;
   private releaseReadAloudModelSubscription: (() => void) | null = null;
   private readAloudStatus: HTMLElement | null = null;
+  private mediaTranscriptionStatus: HTMLElement | null = null;
   override settings: PluginSettings = DEFAULT_PLUGIN_SETTINGS;
   private sidecarConnection: SidecarConnection | null = null;
   private sidecarInstallManager: SidecarInstallManager | null = null;
@@ -259,6 +286,8 @@ export default class LocalSttPlugin extends Plugin {
         createConfiguredLlmRouter(settings, (secretId) => this.getSecret(secretId)),
       getSettings: () => this.settings,
       hasDictationTarget: () => Session.hasDictationTarget(this.app),
+      isAudioFileTranscriptionActive: () =>
+        this.audioFileTranscriptionController?.isCaptureActive() ?? false,
       feedback: this.feedback,
       logger: this.logger,
       onBatchTranscriptReplacementAccepted: (text) => {
@@ -301,13 +330,18 @@ export default class LocalSttPlugin extends Plugin {
     });
     this.readAloudStatus = this.addStatusBarItem();
     this.translationStatus = this.addStatusBarItem();
+    this.mediaTranscriptionStatus = this.addStatusBarItem();
     this.readAloudStatus.addClass('local-stt-read-aloud-status');
+    this.mediaTranscriptionStatus.addClass('local-stt-media-transcription-status');
+    renderMediaProgressStatus(this.mediaTranscriptionStatus, null);
     this.readAloudController = new ReadAloudController({
       feedback: this.feedback,
       followAlong: this.requireReadAloudFollowAlong(),
       getCatalog: () => this.requireModelInstallManager().getState().catalog,
       getInstalledModels: () => this.requireModelInstallManager().getState().installedModels,
       getSettings: () => this.settings,
+      isAudioFileTranscriptionActive: () =>
+        this.audioFileTranscriptionController?.isCaptureActive() ?? false,
       isDictationBusy: () => this.requireDictationController().isCaptureActive(),
       logger: this.logger,
       onModelMissing: () => this.openModelPicker(READ_ALOUD_MODEL_PICKER_OPTIONS),
@@ -317,6 +351,175 @@ export default class LocalSttPlugin extends Plugin {
       stopDictation: () => this.requireDictationController().stopDictation(),
     });
     this.renderReadAloudStatus('idle');
+    const localMediaSource = new LocalMediaSource({
+      pickFile: (signal) => pickLocalAudioFile(signal),
+    });
+    const localMediaEntry: MediaTranscriptionEntry<
+      { readonly file: File | null },
+      LocalMediaAcquireRequest
+    > = {
+      createRequest: (context, request) => ({ ...request, provider: { file: context.file } }),
+      id: localMediaSource.id,
+      isEnabled: () => true,
+      source: localMediaSource,
+    };
+    const openAudioFileModal = (): void => {
+      this.mediaTranscriptionModals.open(this.app, {
+        cancel: () => this.requireAudioFileTranscriptionController().cancel(),
+        getModels: (language) =>
+          getMediaTranscriptionModelOptions(this.requireModelInstallManager().getState(), language),
+        getProgress: () => this.requireAudioFileTranscriptionController().getMediaProgress(),
+        getLastError: () => this.requireAudioFileTranscriptionController().getMediaError(),
+        getLastMediaAiResult: () => {
+          const controller = this.requireAudioFileTranscriptionController();
+          return controller.getLastMediaResultSource() === 'local_audio'
+            ? controller.getLastMediaAiResult()
+            : null;
+        },
+        getPartialTranscript: () =>
+          this.requireAudioFileTranscriptionController().getPartialTranscript(),
+        insertPartialTranscript: () =>
+          this.requireAudioFileTranscriptionController().insertPartialTranscript(),
+        getSettings: () => this.settings,
+        isTranscribing: () => this.requireAudioFileTranscriptionController().isBusy(),
+        isDecoderInstalled: async () =>
+          isMediaToolInstalled(await this.resolvePluginDirectoryPath()),
+        openDecoderInstaller: (onInstalled) => {
+          void this.resolvePluginDirectoryPath()
+            .then((pluginDirectory) =>
+              new MediaToolInstallModal(this.app, pluginDirectory, { onInstalled }).open(),
+            )
+            .catch(() => {
+              this.feedback.show({
+                intent: 'error',
+                message: t('media.tools.failed'),
+              });
+            });
+        },
+        isJobActive: () =>
+          this.requireAudioFileTranscriptionController().isMediaJobActive('local_file'),
+        wasLastJobCancelled: () =>
+          this.requireAudioFileTranscriptionController().wasLastMediaJobCancelled(),
+        onManageModels: () => void this.openModelPicker(),
+        onManagePresets: (onClosed) => void this.openMediaPresetManager(onClosed),
+        startFile: async (file, options) => {
+          const controller = this.requireAudioFileTranscriptionController();
+          if (controller.isBusy()) throw new Error(t('media.modal.alreadyRunning'));
+          controller.clearMediaError();
+          try {
+            await controller.transcribeProvider(localMediaEntry, { file }, options);
+            rethrowMediaError(controller.getMediaError());
+          } catch (error) {
+            if (!this.mediaTranscriptionModals.isOpen() && !controller.wasLastMediaJobCancelled()) {
+              this.feedback.show({
+                intent: 'error',
+                key: 'media-background-failed',
+                message: t('media.background.failed', {
+                  reason:
+                    error instanceof AudioFileError
+                      ? error.message
+                      : t('media.modal.unknownFailure'),
+                }),
+              });
+            }
+            throw error;
+          }
+          if (controller.wasLastMediaJobCancelled() || this.mediaTranscriptionModals.isOpen())
+            return;
+          const result = controller.getLastMediaAiResult();
+          if (result?.outcome === 'failed') {
+            this.feedback.show({
+              intent: 'warning',
+              key: 'media-background-ai-failed',
+              message: formatMediaLlmFailure(result),
+            });
+          } else {
+            this.feedback.show({
+              intent: result?.outcome === 'cancelled' ? 'warning' : 'success',
+              key: 'media-background-completed',
+              message:
+                result === null
+                  ? t('media.background.completed')
+                  : formatMediaLlmCompletion(result),
+            });
+          }
+        },
+        subscribeProgress: (listener) =>
+          this.requireAudioFileTranscriptionController().subscribeMediaProgress(listener),
+      });
+    };
+    this.audioFileTranscriptionController = new AudioFileTranscriptionController({
+      backpressureTimeoutMs: 30_000,
+      createLlmRouter: (settings) =>
+        createConfiguredLlmRouter(settings, (secretId) => this.getSecret(secretId)),
+      mediaEntry: localMediaEntry,
+      createSession: ({ callbacks, placement, rendererOptions, sessionId, target }) =>
+        Session.createFromTarget(this.app, target, {
+          callbacks,
+          leafPinManager: this.temporaryLeafPinLeaseManager,
+          logger: this.logger,
+          placement,
+          rendererOptions,
+          sessionId,
+        }),
+      decoder: new FfmpegAudioFileDecoder({
+        getExecutables: async () => {
+          const mediaToolsDirectory = join(
+            await this.resolvePluginDirectoryPath(),
+            'data',
+            'media-tools',
+            'ffmpeg',
+          );
+          const executableSuffix = process.platform === 'win32' ? '.exe' : '';
+          return {
+            ffmpegPath: join(mediaToolsDirectory, `ffmpeg${executableSuffix}`),
+            ffprobePath: join(mediaToolsDirectory, `ffprobe${executableSuffix}`),
+          };
+        },
+        logger: this.logger,
+      }),
+      feedback: this.feedback,
+      fetchYouTubeCaptions: async (context, language, signal) => {
+        const http = {
+          request: async (input: {
+            url: string;
+            method: 'GET' | 'POST';
+            headers?: Record<string, string>;
+            body?: string;
+          }) => (await requestUrl(input)).text,
+        };
+        return await fetchDirectYouTubeCaptions(context, language, http, signal);
+      },
+      getModelCapabilities: () =>
+        this.requireModelInstallManager().getState().selectedModelCapabilities,
+      getMediaTranscriptionModels: (language) =>
+        getMediaTranscriptionModelOptions(this.requireModelInstallManager().getState(), language),
+      getSecret: (secretId) => this.getSecret(secretId),
+      getSettings: () => this.settings,
+      getTarget: () => Session.getDictationTarget(this.app),
+      isDictationBusy: () => this.requireDictationController().isCaptureActive(),
+      logger: this.logger,
+      onModelMissing: () => {
+        void this.openModelPicker();
+      },
+      onMediaProgress: (progress) => {
+        if (this.mediaTranscriptionStatus !== null) {
+          renderMediaProgressStatus(this.mediaTranscriptionStatus, progress);
+        }
+      },
+      onRawTranscriptRecoveryAvailable: (receipt) => {
+        this.rawTranscriptRecovery.record(receipt);
+      },
+      onSidecarMissing: () => {
+        void this.openSetupWizard();
+      },
+      sessionStopTimeoutMs: this.settings.sidecarRequestTimeoutSeconds * 1_000,
+      sidecarConnection: this.requireSidecarConnection(),
+      sidecarLifecycleGate: this.sidecarLifecycleGate,
+      stopConflictingSpeech: () => {
+        this.readAloudController?.stop();
+      },
+    });
     this.releaseReadAloudModelSubscription = this.requireModelInstallManager().subscribe(() => {
       this.renderReadAloudStatus(this.readAloudController?.getState() ?? 'idle');
     });
@@ -338,7 +541,9 @@ export default class LocalSttPlugin extends Plugin {
       new LocalSttSettingTab(this.app, this, {
         feedback: this.feedback,
         getSettings: () => this.settings,
-        isDictationBusy: () => this.dictationController?.isBusy() ?? false,
+        isDictationBusy: () =>
+          (this.dictationController?.isBusy() ?? false) ||
+          (this.audioFileTranscriptionController?.isBusy() ?? false),
         logger: this.logger,
         modelInstallManager: this.requireModelInstallManager(),
         openModelPicker: (options) => this.openModelPicker(options),
@@ -362,6 +567,7 @@ export default class LocalSttPlugin extends Plugin {
     );
 
     registerCommands({
+      cancelAudioFile: async () => this.requireAudioFileTranscriptionController().cancel(),
       cancelDictation: async () => this.requireDictationController().cancelDictation(),
       clearLastUtterance: () => {
         this.lastUtteranceRecovery.clear();
@@ -383,6 +589,8 @@ export default class LocalSttPlugin extends Plugin {
       },
       hasLastUtterance: () => this.lastUtteranceRecovery.hasUtterance(),
       hasRawTranscriptRecovery: () => this.rawTranscriptRecovery.hasRecovery(),
+      isAudioFileTranscriptionActive: () =>
+        this.audioFileTranscriptionController?.isCaptureActive() ?? false,
       isReadAloudActive: () => this.requireReadAloudController().isActive(),
       plugin: this,
       readAloud: (editor) => this.requireReadAloudController().read(editor),
@@ -398,6 +606,78 @@ export default class LocalSttPlugin extends Plugin {
       startDictation: async () => this.requireDictationController().startDictation(),
       stopReadAloud: () => this.requireReadAloudController().stop(),
       stopDictation: async () => this.requireDictationController().stopDictation(),
+      transcribeAudioFile: async () => openAudioFileModal(),
+      transcribeYouTube: async () => {
+        this.youtubeTranscriptModals.open(this.app, {
+          cancel: () =>
+            this.requireAudioFileTranscriptionController().cancelProvider('youtube_captions'),
+          getProgress: () => this.requireAudioFileTranscriptionController().getMediaProgress(),
+          getError: () => this.requireAudioFileTranscriptionController().getMediaError(),
+          getPartialTranscript: () =>
+            this.requireAudioFileTranscriptionController().getPartialTranscript(),
+          getResultSource: () => {
+            const source =
+              this.requireAudioFileTranscriptionController().getLastMediaResultSource();
+            return source === 'local_audio' ? null : source;
+          },
+          getAiResult: () => this.requireAudioFileTranscriptionController().getLastMediaAiResult(),
+          getCompletedVideoId: () =>
+            this.requireAudioFileTranscriptionController().getLastImportedYouTubeVideoId(),
+          getSettings: () => this.settings,
+          isBusy: () => this.requireAudioFileTranscriptionController().isBusy(),
+          isJobActive: () =>
+            this.requireAudioFileTranscriptionController().isMediaJobActive('youtube_captions'),
+          wasLastJobCancelled: () =>
+            this.requireAudioFileTranscriptionController().wasLastMediaJobCancelled(),
+          onManagePresets: (onClosed) => void this.openMediaPresetManager(onClosed),
+          insertPartialTranscript: () =>
+            this.requireAudioFileTranscriptionController().insertPartialTranscript(),
+          start: async (url, options) => {
+            const controller = this.requireAudioFileTranscriptionController();
+            try {
+              await controller.transcribeYouTubeCaptions(parseYouTubeVideoUrl(url), options);
+            } catch (error) {
+              if (
+                !this.youtubeTranscriptModals.isOpen() &&
+                !controller.wasLastMediaJobCancelled()
+              ) {
+                this.feedback.show({
+                  intent: 'error',
+                  key: 'youtube-background-failed',
+                  message: t('youtube.modal.backgroundFailed', {
+                    reason:
+                      error instanceof CaptionAcquisitionError
+                        ? error.message
+                        : t('media.modal.unknownFailure'),
+                  }),
+                });
+              }
+              throw error;
+            }
+            if (!this.youtubeTranscriptModals.isOpen() && !controller.wasLastMediaJobCancelled()) {
+              const result = controller.getLastMediaAiResult();
+              if (result?.outcome === 'failed') {
+                this.feedback.show({
+                  intent: 'warning',
+                  key: 'youtube-background-ai-failed',
+                  message: formatMediaLlmFailure(result),
+                });
+              } else {
+                this.feedback.show({
+                  intent: result?.outcome === 'cancelled' ? 'warning' : 'success',
+                  key: 'youtube-background-completed',
+                  message:
+                    result === null
+                      ? t('youtube.modal.backgroundCompleted')
+                      : formatMediaLlmCompletion(result),
+                });
+              }
+            }
+          },
+          subscribeProgress: (listener) =>
+            this.requireAudioFileTranscriptionController().subscribeMediaProgress(listener),
+        });
+      },
       translateNote: (editor) => this.requireTranslationController().translateNote(editor),
       translateSelection: (editor) =>
         this.requireTranslationController().translateSelection(editor),
@@ -518,7 +798,9 @@ export default class LocalSttPlugin extends Plugin {
       feedback: this.feedback,
       hasDictationTarget: () => Session.hasDictationTarget(this.app),
       hasSelectedModel: () => this.settings.selectedModel !== null,
-      isDictationBusy: () => this.requireDictationController().isBusy(),
+      isDictationBusy: () =>
+        this.requireDictationController().isBusy() ||
+        this.requireAudioFileTranscriptionController().isBusy(),
       isSidecarInstalled: () => this.isSidecarInstalled(),
       logger: this.logger,
       modelInstallManager: this.requireModelInstallManager(),
@@ -604,6 +886,8 @@ export default class LocalSttPlugin extends Plugin {
   }
 
   private async disposeAll(): Promise<void> {
+    this.mediaTranscriptionModals.closeAll();
+    this.youtubeTranscriptModals.closeAll();
     this.finalizedUtteranceAutoCopy.dispose();
     this.lastUtteranceRecovery.clear();
     this.rawTranscriptRecovery.clear();
@@ -639,6 +923,12 @@ export default class LocalSttPlugin extends Plugin {
       this.translationController?.dispose();
     } catch (error) {
       this.logger.error('translation', 'failed to dispose translation controller cleanly', error);
+    }
+
+    try {
+      await this.audioFileTranscriptionController?.dispose();
+    } catch (error) {
+      this.logger.error('audio', 'failed to dispose audio-file transcription cleanly', error);
     }
 
     try {
@@ -766,7 +1056,11 @@ export default class LocalSttPlugin extends Plugin {
       await this.readAloudController?.restartRemainingPlayback(this.settings.ttsSpeed);
       this.renderReadAloudStatus(this.readAloudController?.getState() ?? 'idle');
     }
-    if (previousSettings.llmFeaturesEnabled !== this.settings.llmFeaturesEnabled) {
+    if (
+      previousSettings.llmFeaturesEnabled !== this.settings.llmFeaturesEnabled ||
+      previousSettings.mediaLlmProcessing !== this.settings.mediaLlmProcessing
+    ) {
+      this.audioFileTranscriptionController?.onSettingsChanged();
       await this.syncLocalDictationSidebar();
       return;
     }
@@ -792,6 +1086,14 @@ export default class LocalSttPlugin extends Plugin {
     }
 
     return this.dictationController;
+  }
+
+  private requireAudioFileTranscriptionController(): AudioFileTranscriptionController {
+    if (this.audioFileTranscriptionController === null) {
+      throw new Error('Audio-file transcription controller has not been initialized.');
+    }
+
+    return this.audioFileTranscriptionController;
   }
 
   private requireReadAloudController(): ReadAloudController {
@@ -1009,6 +1311,16 @@ export default class LocalSttPlugin extends Plugin {
     return this.presetStateStore;
   }
 
+  private async openMediaPresetManager(onClosed: () => void): Promise<void> {
+    await this.requirePresetStateStore().synchronize();
+    new PresetManagerModal(this.app, {
+      feedback: this.feedback,
+      getSettings: () => this.settings,
+      mutatePresetState: (mutation) => this.requirePresetStateStore().mutate(mutation),
+      onClose: onClosed,
+    }).open();
+  }
+
   private requireSidecarConnection(): SidecarConnection {
     if (this.sidecarConnection === null) {
       throw new Error('Sidecar connection has not been initialized.');
@@ -1204,4 +1516,10 @@ export default class LocalSttPlugin extends Plugin {
 
 function getSidecarExecutableName(): string {
   return formatSidecarExecutableName(Platform.isWin);
+}
+
+function rethrowMediaError(error: unknown): void {
+  if (error === null) return;
+  if (error instanceof Error) throw error;
+  throw new Error(t('media.modal.unknownFailure'));
 }

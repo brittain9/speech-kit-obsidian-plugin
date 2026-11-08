@@ -2,6 +2,60 @@ import type { TranslationCatalog } from '.';
 
 export const fr = {
   'notice.dictationNotActive': "La dictée n'est pas active actuellement.",
+  'commands.transcribeAudioFile': 'Transcrire un fichier audio local',
+  'commands.cancelAudioFile': 'Annuler la transcription du fichier audio local',
+  'audio-file-model-required':
+    'Sélectionnez et validez un modèle local de reconnaissance vocale dans Gérer les modèles, puis réessayez.',
+  'audio-file-model-changed':
+    "Le modèle de transcription a changé pendant l'ouverture du sélecteur. Relancez Transcrire un fichier audio local.",
+  'audio-file-language-changed':
+    'La langue de dictée a changé pendant la préparation du fichier audio. Relancez Transcrire un fichier audio local pour utiliser la langue actuelle.',
+  'audio-file-model-not-batch':
+    'Les fichiers audio nécessitent un modèle par lots. Sélectionnez un modèle sans streaming et réessayez.',
+  'audio-file-language-unsupported':
+    'Le modèle ne prend pas en charge la langue de dictée configurée ({language}). Choisissez un modèle compatible ou changez de langue.',
+  'audio-file-target-required':
+    'Ouvrez en mode édition la note Markdown qui doit recevoir la transcription, puis réessayez.',
+  'audio-file-target-changed':
+    "La cible a changé pendant la préparation. Revenez à la note d'origine et relancez la commande.",
+  'audio-file-desktop-only':
+    "La transcription de fichiers audio est disponible dans l'application de bureau Obsidian. Ouvrez ce coffre sur un ordinateur pour continuer.",
+  'audio-file-busy':
+    "Une dictée ou une autre transcription de fichier est déjà active. Terminez-la ou annulez-la d'abord.",
+  'audio-file-maintenance':
+    "Le moteur vocal local est en cours d'installation, de redémarrage ou de mise à jour. Attendez la fin puis réessayez.",
+  'audio-file-read-failed':
+    "Impossible de lire le fichier sélectionné. Vérifiez qu'il existe et que vous y avez accès.",
+  'audio-file-decode-failed':
+    "Obsidian n'a pas pu décoder ce fichier. Convertissez-le dans un format lisible par votre version d'Obsidian, souvent WAV.",
+  'audio-file-encoded-size':
+    'Le fichier encodé est trop volumineux. Choisissez un fichier plus court ou à faible débit (64 Mio maximum).',
+  'audio-file-duration':
+    "L'audio dépasse la limite de sécurité de 30 minutes. Divisez-le en fichiers plus courts.",
+  'audio-file-model-duration':
+    "L'audio dépasse la durée maximale du modèle. Divisez-le ou choisissez un modèle avec une limite plus élevée.",
+  'audio-file-decoded-memory':
+    'Le décodage demanderait trop de mémoire. Choisissez un fichier plus court, à faible débit ou avec moins de canaux.',
+  'audio-file-empty':
+    'Le fichier ne contient aucun audio transcriptible. Choisissez un autre fichier.',
+  'audio-file-start-failed':
+    "Le moteur vocal local n'a pas pu démarrer la transcription. Vérifiez le modèle et réessayez.",
+  'audio-file-sidecar-missing':
+    'Installez le moteur vocal local, sélectionnez un modèle de reconnaissance vocale et réessayez.',
+  'audio-file-shutdown-uncertain':
+    "Le moteur vocal local n'a pas confirmé l'arrêt de la transcription du fichier audio. Speech Kit a protégé la session pour éviter les travaux vocaux simultanés. Vérifiez le moteur local, puis réessayez.",
+  'audio-file-sidecar-failed':
+    "La transcription s'est arrêtée car le moteur local a échoué. Vérifiez le modèle et réessayez.",
+  'audio-file-queue-overload':
+    "Le moteur n'a pas pu suivre le rythme. Divisez l'enregistrement ou choisissez un modèle plus rapide.",
+  'audio-file-transcript-write-failed':
+    "La transcription s'est arrêtée car Speech Kit ne pouvait pas écrire en toute sécurité dans la note. Restaurez-la et réessayez.",
+  'audio-file-target-closed':
+    'La note cible a été fermée ou remplacée. Rouvrez-la et relancez la commande.',
+  'audio-file-target-deleted':
+    'La note cible a été supprimée. Restaurez-la ou recréez-la, puis relancez la commande.',
+  'audio-file-surface-changed':
+    "La note a changé d'une manière que Speech Kit ne pouvait pas suivre. Restaurez-la et relancez la commande.",
   'notice.dictationStartFailed': 'Impossible de démarrer la dictée.',
   'notice.dictationStopFailed': "Impossible d'arrêter la dictée.",
   'notice.lastUtteranceCleared': 'Effacement du dernier énoncé retenu.',
@@ -416,31 +470,16 @@ export const fr = {
     'La dictée insère la transcription locale brute. Activez Transformer lorsque vous souhaitez un nettoyage, une réécriture ou des résumés.',
   'llm.sidebar.off.summary': 'Transcription brute',
   'llm.sidebar.active.summary': '{preset} · {timing}',
-  'llm.preset.builtin.cleanUp.label': 'Nettoyer',
-  'llm.preset.builtin.cleanUp.description':
-    'Corrigez les artefacts de transcription, les remplissages, la ponctuation et les majuscules tout en préservant la voix et le sens.',
-  'llm.preset.builtin.cleanUp.prompt':
-    "Nettoyez le texte dicté. Corrigez les mots de remplissage, les faux départs, les répétitions, la ponctuation, les majuscules et les erreurs de reconnaissance évidentes. Préservez la voix et le sens du locuteur. Utilisez le contexte de référence uniquement pour l'orthographe. Écrivez dans la langue d'origine de la transcription. Ne traduisez pas sauf si l'utilisateur le demande explicitement. Renvoyez uniquement le texte nettoyé, sans préambule ni commentaire.",
-  'llm.preset.builtin.professionalWriting.label': 'Écriture professionnelle',
-  'llm.preset.builtin.professionalWriting.description':
-    'Réécrivez dans une prose professionnelle concise et soignée tout en préservant les faits, les noms, les décisions et les termes techniques.',
-  'llm.preset.builtin.professionalWriting.prompt':
-    "Réécrivez le texte dicté en une prose professionnelle concise. Utilisez la voix active, sans mots de remplissage ni formulations évasives. Préservez chaque fait, nom et terme. Utilisez le contexte de référence pour l'orthographe. Écrivez dans la langue d'origine de la transcription. Ne traduisez pas sauf si l'utilisateur le demande explicitement. Renvoyez uniquement le texte réécrit, sans préambule ni commentaire.",
   'llm.preset.builtin.tldr.label': 'TLDR',
   'llm.preset.builtin.tldr.description':
     'Ajoutez un court résumé TLDR au-dessus de votre transcription intacte.',
   'llm.preset.builtin.tldr.prompt':
-    "Rédigez un résumé TLDR de la transcription dictée : un en-tête « TLDR » suivi de 1 à 3 puces courtes couvrant les points clés. Écrivez dans la langue d'origine de la transcription. Ne traduisez jamais à moins que l'utilisateur ne demande explicitement une traduction. Ne renvoyez que le titre et les puces — ne répétez pas la transcription, pas de préambule, pas de commentaire.",
+    "Rédigez un résumé TLDR de la transcription dictée : un en-tête « TLDR » suivi de puces courtes dont le nombre est adapté au contenu substantiel, pour en saisir rapidement l’essentiel. Écrivez dans la langue d'origine de la transcription. Ne traduisez jamais à moins que l'utilisateur ne demande explicitement une traduction. Ne renvoyez que le titre et les puces — ne répétez pas la transcription, pas de préambule, pas de commentaire.",
   'llm.preset.builtin.markdownFormatting.label': 'Formatage Markdown',
   'llm.preset.builtin.markdownFormatting.description':
     'Reformatez la transcription de la session sous la forme structurée Markdown avec des titres, des listes et une emphase.',
   'llm.preset.builtin.markdownFormatting.prompt':
     "Reformatez le texte dicté en Markdown bien structuré. Ajoutez des titres, des listes à puces ou numérotées, du gras, de l'emphase et des blocs de code délimités lorsque le contenu l'exige. Corrigez légèrement les mots de remplissage, les faux départs, la ponctuation et les majuscules ; préservez la formulation du locuteur ainsi que chaque fait, nom et terme. Écrivez dans la langue d'origine de la transcription. Ne traduisez pas sauf si l'utilisateur le demande explicitement. Renvoyez uniquement le Markdown, sans préambule ni commentaire.",
-  'llm.preset.builtin.actionItems.label': "Éléments d'action",
-  'llm.preset.builtin.actionItems.description':
-    "Ajoutez une liste de contrôle d'éléments d'action sous votre transcription intacte.",
-  'llm.preset.builtin.actionItems.prompt':
-    "Extrayez les éléments d’action de la transcription dictée. Affichez un en-tête « Éléments d'action » suivi d'une liste de contrôle Markdown de tâches concrètes, nommant un propriétaire lorsque l'orateur en mentionne un. Si la transcription ne contient aucune action, ne renvoyez rien. Écrivez dans la langue originale de la transcription. Ne traduisez jamais à moins que l’utilisateur ne demande explicitement une traduction. Renvoyez uniquement le titre et la liste de contrôle – ne répétez pas la transcription, pas de préambule, pas de commentaire.",
   'llm.preset.timing.perUtterance': "S'exécute après chaque phrase",
   'llm.preset.timing.batch': "Fonctionne une fois à l'arrêt",
   'llm.preset.timing.either': 'Fonctionne dans les deux modes',

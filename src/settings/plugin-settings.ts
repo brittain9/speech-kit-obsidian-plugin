@@ -5,8 +5,10 @@ import {
   isDictationLanguage,
 } from '../language/dictation-language';
 import {
+  createDefaultPresets,
   DEFAULT_LLM_BUILTIN_PRESET_ID,
   formatStyleRef,
+  isDefaultPreset,
   isLlmPostprocessMode,
   isLlmPresetOutput,
   isLlmPresetTiming,
@@ -16,8 +18,10 @@ import {
   type LlmPresetOverrides,
   type LlmPresetTiming,
   listPresetEntries,
+  reconcileStartingPresets,
   resolveActivePresetEntry,
   resolvePresetEntry,
+  restoreDefaultPresets,
 } from '../llm/presets';
 import type { LlmProviderConfigurations, LlmRoutingPolicy } from '../llm/provider';
 import { normalizeLlmRoutingPolicy } from '../llm/routing-policy';
@@ -114,8 +118,8 @@ const TRANSLATION_STYLE_INSTRUCTIONS: Readonly<Record<TranslationStyle, string>>
 };
 
 export const DEFAULT_LLM_ACTIVE_PRESET_REF = formatStyleRef({
-  kind: 'builtin',
-  id: DEFAULT_LLM_BUILTIN_PRESET_ID,
+  kind: 'user',
+  id: `default:${DEFAULT_LLM_BUILTIN_PRESET_ID}`,
 });
 
 export const DEFAULT_LLM_POSTPROCESS_CONTEXT = {
@@ -183,14 +187,16 @@ export interface PluginSettings {
   llmPostprocessTemperature: number;
   llmPostprocessTotalContextCap: number;
   llmPostprocessUserPresets: LlmPreset[];
+  llmPostprocessPresetsInitialized: boolean;
   llmProviderConfigurations: LlmProviderConfigurations;
   llmRoutingPolicy: LlmRoutingPolicy | null;
   lastObsidianLanguage: string | null;
   localTranscriptSidebarBootstrapped: boolean;
+  mediaLlmProcessing: boolean;
   modelStorePathOverride: string;
   readAloudLanguage: DictationLanguage;
   retainLastUtterance: boolean;
-  schemaVersion: 10;
+  schemaVersion: 11;
   selectedModel: SelectedModel | null;
   // Last-known-good capabilities for `selectedModel`, captured on a successful
   // probe. Lets startup skip re-probing the sidecar (which forces a full
@@ -246,7 +252,8 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   llmPostprocessSkipMinWords: DEFAULT_LLM_POSTPROCESS_SKIP.minWords,
   llmPostprocessTemperature: DEFAULT_LLM_POSTPROCESS_GENERATION.temperature,
   llmPostprocessTotalContextCap: DEFAULT_LLM_POSTPROCESS_CONTEXT.totalContextCap,
-  llmPostprocessUserPresets: [],
+  llmPostprocessUserPresets: createDefaultPresets(),
+  llmPostprocessPresetsInitialized: true,
   llmProviderConfigurations: {
     ollama: { model: '' },
     openrouter: { model: '', secretId: '' },
@@ -259,10 +266,11 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   llmRoutingPolicy: null,
   lastObsidianLanguage: null,
   localTranscriptSidebarBootstrapped: false,
+  mediaLlmProcessing: false,
   modelStorePathOverride: '',
   readAloudLanguage: 'auto',
   retainLastUtterance: true,
-  schemaVersion: 10,
+  schemaVersion: 11,
   selectedModel: null,
   selectedModelCapabilitiesSnapshot: null,
   selectedTtsModel: null,
@@ -299,10 +307,20 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
     lineBreakPauseMs: raw.smartParagraphLineBreakPauseMs,
     paragraphPauseMs: raw.smartParagraphParagraphPauseMs,
   });
+  const savedPresets = reconcileStartingPresets(readUserPresets(raw.llmPostprocessUserPresets));
+  const initializedPresets =
+    raw.llmPostprocessPresetsInitialized === true
+      ? savedPresets
+      : [
+          ...savedPresets,
+          ...createDefaultPresets().filter(
+            (preset) => !savedPresets.some((saved) => saved.id === preset.id),
+          ),
+        ];
   const { activeRef, userPresets } = migrateLlmPresetState({
     legacyPrompt: raw.llmPostprocessPrompt,
     storedRef: raw.llmPostprocessActivePresetRef,
-    userPresets: readUserPresets(raw.llmPostprocessUserPresets),
+    userPresets: reconcileStartingPresets(initializedPresets),
   });
   const legacyModel =
     typeof raw.llmPostprocessModel === 'string' ? raw.llmPostprocessModel.trim() : '';
@@ -342,7 +360,8 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.llmPostprocessLastEnabledMode,
       raw.llmPostprocessMode,
     ),
-    llmPostprocessMode: readLlmPostprocessMode(raw.llmPostprocessMode),
+    llmPostprocessMode:
+      userPresets.length === 0 ? 'off' : readLlmPostprocessMode(raw.llmPostprocessMode),
     llmPostprocessNoteContextChars: readClampedInteger(
       raw.llmPostprocessNoteContextChars,
       DEFAULT_PLUGIN_SETTINGS.llmPostprocessNoteContextChars,
@@ -378,12 +397,17 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       LLM_TOTAL_CONTEXT_CAP_MAX,
     ),
     llmPostprocessUserPresets: userPresets,
+    llmPostprocessPresetsInitialized: true,
     llmProviderConfigurations,
     llmRoutingPolicy: resolveLlmRoutingPolicy(raw, isFreshInstall),
     lastObsidianLanguage: readLastObsidianLanguage(raw.lastObsidianLanguage),
     localTranscriptSidebarBootstrapped: readBoolean(
       raw.localTranscriptSidebarBootstrapped,
       DEFAULT_PLUGIN_SETTINGS.localTranscriptSidebarBootstrapped,
+    ),
+    mediaLlmProcessing: readBoolean(
+      raw.mediaLlmProcessing,
+      DEFAULT_PLUGIN_SETTINGS.mediaLlmProcessing,
     ),
     modelStorePathOverride: readString(
       raw.modelStorePathOverride,
@@ -397,7 +421,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       DEFAULT_PLUGIN_SETTINGS.retainLastUtterance,
     ),
     // Bump `schemaVersion` and add a migration step when renaming a key or changing default semantics.
-    schemaVersion: 10,
+    schemaVersion: 11,
     selectedModel: readSelectedModel(raw.selectedModel),
     // Automatic detection became a capability separate from language tags in
     // schema 4. Older snapshots cannot prove that exact-model behavior, so
@@ -409,7 +433,8 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.schemaVersion === 7 ||
       raw.schemaVersion === 8 ||
       raw.schemaVersion === 9 ||
-      raw.schemaVersion === 10
+      raw.schemaVersion === 10 ||
+      raw.schemaVersion === 11
         ? readSelectedModelCapabilitiesSnapshot(raw.selectedModelCapabilitiesSnapshot)
         : null,
     selectedTtsModel: readSelectedModel(raw.selectedTtsModel),
@@ -418,7 +443,8 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.schemaVersion === 7 ||
       raw.schemaVersion === 8 ||
       raw.schemaVersion === 9 ||
-      raw.schemaVersion === 10
+      raw.schemaVersion === 10 ||
+      raw.schemaVersion === 11
         ? readSelectedModelCapabilitiesSnapshot(raw.selectedTtsModelCapabilitiesSnapshot)
         : null,
     selectedTtsVoice:
@@ -528,6 +554,8 @@ export function normalizeSmartParagraphPauseSettings(value: {
 export function resetLlmPostprocessDefaults(settings: PluginSettings): PluginSettings {
   return {
     ...settings,
+    llmPostprocessUserPresets: restoreDefaultPresets(settings.llmPostprocessUserPresets),
+    llmPostprocessPresetsInitialized: true,
     llmPostprocessLastEnabledMode: 'per_utterance',
     // Resetting configuration must not change whether transformation is enabled.
     llmPostprocessMode:
@@ -679,19 +707,16 @@ function migrateLlmPresetState(args: {
   const storedRef = typeof args.storedRef === 'string' ? args.storedRef : null;
   const resolvedRef = resolvePresetEntry(storedRef, args.userPresets)?.ref ?? null;
   const fallbackRef = resolveActivePresetEntry(null, args.userPresets).ref;
+  // A stored built-in ref made the old prompt a mirror, including removed defaults.
+  if (storedRef?.startsWith('builtin:')) {
+    return { activeRef: resolvedRef ?? fallbackRef, userPresets: args.userPresets };
+  }
   const prompt = typeof args.legacyPrompt === 'string' ? args.legacyPrompt.trim() : '';
 
   if (prompt.length === 0) {
     return { activeRef: resolvedRef ?? fallbackRef, userPresets: args.userPresets };
   }
   if (resolvedRef !== null) {
-    // Pre-redesign code nulled the ref whenever the prompt diverged from the
-    // selected preset, so a stored builtin ref is an explicit user choice and
-    // the legacy prompt is just a stale mirror of that builtin's old text —
-    // trust the ref even when the builtin's prompt changed across versions.
-    if (resolvedRef.startsWith('builtin:')) {
-      return { activeRef: resolvedRef, userPresets: args.userPresets };
-    }
     const active = resolveActivePresetEntry(resolvedRef, args.userPresets);
     if (active.preset.prompt === prompt) {
       return { activeRef: resolvedRef, userPresets: args.userPresets };
@@ -703,7 +728,10 @@ function migrateLlmPresetState(args: {
   if (matching !== undefined) {
     return { activeRef: matching.ref, userPresets: args.userPresets };
   }
-  if (args.userPresets.length >= LLM_USER_PRESET_MAX_COUNT) {
+  if (
+    args.userPresets.filter((preset) => !isDefaultPreset(preset)).length >=
+    LLM_USER_PRESET_MAX_COUNT
+  ) {
     console.warn(
       '[Speech Kit] Custom LLM prompt could not be migrated into a preset: the preset limit is reached. The prompt was dropped.',
     );
@@ -850,10 +878,6 @@ function readUserPresets(value: unknown): LlmPreset[] {
   const seenIds = new Set<string>();
 
   for (const entry of value) {
-    if (accepted.length >= LLM_USER_PRESET_MAX_COUNT) {
-      break;
-    }
-
     if (!isRecord(entry)) {
       continue;
     }
@@ -903,7 +927,7 @@ function readUserPresets(value: unknown): LlmPreset[] {
       ...(useNoteContext !== undefined ? { useNoteContext } : {}),
     };
 
-    accepted.push({
+    const candidate: LlmPreset = {
       ...(description.length > 0
         ? { description: description.slice(0, LLM_USER_PRESET_MAX_DESCRIPTION_CHARS) }
         : {}),
@@ -913,7 +937,15 @@ function readUserPresets(value: unknown): LlmPreset[] {
       ...(Object.keys(overrides).length > 0 ? { overrides } : {}),
       prompt,
       ...(timing !== undefined ? { timing } : {}),
-    });
+    };
+    if (reconcileStartingPresets([candidate]).length === 0) continue;
+    if (
+      !isDefaultPreset({ id, label, prompt, output }) &&
+      accepted.filter((preset) => !isDefaultPreset(preset)).length >= LLM_USER_PRESET_MAX_COUNT
+    ) {
+      continue;
+    }
+    accepted.push(candidate);
     seenIds.add(id);
   }
 

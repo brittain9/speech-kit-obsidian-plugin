@@ -18,7 +18,7 @@ export async function assertSidecarExecutableIsFresh(
 
     if (watchedStats.mtimeMs > executableStats.mtimeMs) {
       throw new Error(
-        `Sidecar executable is stale. ${watchedPath.displayPath} is newer than ${executablePath}. Rebuild with \`npm run build\` or \`cargo build --manifest-path native/Cargo.toml\`.`,
+        `Sidecar executable is stale. ${watchedPath.displayPath} is newer than ${executablePath}. Rebuild with \`npm run build:sidecar\` or \`cargo build --manifest-path native/Cargo.toml\`.`,
       );
     }
   }

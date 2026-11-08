@@ -48,6 +48,7 @@ function modelManagerState(overrides: Partial<ModelManagerState> = {}): ModelMan
   const catalogModel = model('moonshine-tiny', 'Moonshine Tiny', 50, ['fast', 'lightweight']);
   return {
     activeInstall: null,
+    installRequestPending: false,
     catalog: {
       catalogVersion: 1,
       collections: [],

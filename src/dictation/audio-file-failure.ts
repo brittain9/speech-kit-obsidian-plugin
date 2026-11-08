@@ -1,0 +1,230 @@
+import { AudioFileBackpressureTimeoutError } from '../audio/audio-file-backpressure';
+import { AudioFileError, isAudioFileCancellation } from '../audio/audio-file-decoder';
+import { t } from '../shared/i18n';
+import type { FeedbackRequest, UserFeedback } from '../shared/user-feedback';
+import { SidecarError } from '../sidecar/sidecar-connection';
+import { SidecarNotInstalledError } from '../sidecar/sidecar-paths';
+
+export type FileWorkflowTranslationKey =
+  | 'audio-file-busy'
+  | 'audio-file-decoded-memory'
+  | 'audio-file-decode-failed'
+  | 'audio-file-decoder-missing'
+  | 'audio-file-desktop-only'
+  | 'audio-file-duration'
+  | 'audio-file-empty'
+  | 'audio-file-encoded-size'
+  | 'audio-file-language-unsupported'
+  | 'audio-file-language-changed'
+  | 'audio-file-maintenance'
+  | 'audio-file-model-changed'
+  | 'audio-file-model-duration'
+  | 'audio-file-model-not-batch'
+  | 'audio-file-model-required'
+  | 'audio-file-queue-overload'
+  | 'audio-file-read-failed'
+  | 'audio-file-sidecar-failed'
+  | 'audio-file-shutdown-uncertain'
+  | 'audio-file-sidecar-missing'
+  | 'audio-file-start-failed'
+  | 'audio-file-target-changed'
+  | 'audio-file-target-closed'
+  | 'audio-file-target-deleted'
+  | 'audio-file-target-required'
+  | 'audio-file-transcript-write-failed'
+  | 'audio-file-surface-changed';
+
+export interface ExternalFailureFeedback {
+  readonly intent: FeedbackRequest['intent'];
+  readonly key: string;
+  readonly message: string;
+}
+
+export interface MediaFailureAdapter {
+  readonly isCancellation: (error: unknown) => boolean;
+  readonly map: (error: unknown) => ExternalFailureFeedback | null;
+  readonly sanitize?: (error: unknown) => unknown;
+}
+
+export class AudioFileWorkflowError extends Error {
+  constructor(
+    readonly translationKey: FileWorkflowTranslationKey,
+    readonly parameters: Record<string, string> = {},
+    options?: { cause?: unknown },
+  ) {
+    super(translationKey, options);
+    this.name = 'AudioFileWorkflowError';
+  }
+}
+
+interface FeedbackClaim {
+  claimFeedback(): boolean;
+}
+
+interface AudioFileFailureMapperDependencies {
+  readonly feedback: Pick<UserFeedback, 'show'>;
+  readonly mediaFailureAdapters?: readonly MediaFailureAdapter[];
+  readonly onModelMissing?: () => void;
+  readonly onSidecarMissing?: () => void;
+}
+
+export class AudioFileFailureMapper {
+  constructor(private readonly dependencies: AudioFileFailureMapperDependencies) {}
+
+  reportFailure(error: unknown, claim?: FeedbackClaim): void {
+    for (const adapter of this.dependencies.mediaFailureAdapters ?? []) {
+      const externalFeedback = adapter.map(error);
+      if (externalFeedback !== null) {
+        this.reportExternal(externalFeedback, adapter.sanitize?.(error) ?? error, claim);
+        return;
+      }
+    }
+    if (error instanceof SidecarNotInstalledError) {
+      this.report('audio-file-sidecar-missing', error, claim);
+      return;
+    }
+    this.report(resolveWorkflowTranslationKey(error), error, claim);
+  }
+
+  reportTranslation(
+    translationKey: FileWorkflowTranslationKey,
+    cause: unknown,
+    claim?: FeedbackClaim,
+  ): void {
+    this.report(translationKey, cause, claim);
+  }
+
+  isCancellation(error: unknown): boolean {
+    return (
+      isAudioFileCancellation(error) ||
+      (this.dependencies.mediaFailureAdapters ?? []).some((adapter) =>
+        adapter.isCancellation(error),
+      )
+    );
+  }
+
+  isQueueAbort(error: unknown): boolean {
+    return error instanceof AudioFileError && error.code === 'queue_overload';
+  }
+
+  isNoActiveSession(error: unknown, expectedSessionId?: string): boolean {
+    return (
+      error instanceof SidecarError &&
+      error.code === 'no_active_session' &&
+      (expectedSessionId === undefined || error.sessionId === expectedSessionId)
+    );
+  }
+
+  private reportExternal(
+    feedback: ExternalFailureFeedback,
+    cause: unknown,
+    claim?: FeedbackClaim,
+  ): void {
+    if (claim !== undefined && !claim.claimFeedback()) {
+      return;
+    }
+    this.dependencies.feedback.show({
+      cause,
+      intent: feedback.intent,
+      key: feedback.key,
+      message: feedback.message,
+    });
+  }
+
+  private report(
+    translationKey: FileWorkflowTranslationKey,
+    cause: unknown,
+    claim?: FeedbackClaim,
+  ): void {
+    if (claim !== undefined && !claim.claimFeedback()) {
+      return;
+    }
+    this.dependencies.feedback.show({
+      cause,
+      intent: resolveFeedbackIntent(translationKey),
+      key: translationKey,
+      message: t(translationKey, translationParameters(translationKey, cause)),
+    });
+    if (translationKey === 'audio-file-sidecar-missing') {
+      this.dependencies.onSidecarMissing?.();
+    }
+    if (translationKey === 'audio-file-model-required') {
+      this.dependencies.onModelMissing?.();
+    }
+  }
+}
+
+function resolveWorkflowTranslationKey(error: unknown): FileWorkflowTranslationKey {
+  if (error instanceof AudioFileWorkflowError) {
+    return error.translationKey;
+  }
+  if (error instanceof SidecarError) {
+    return error.code === 'session_capacity_exceeded'
+      ? 'audio-file-start-failed'
+      : 'audio-file-sidecar-failed';
+  }
+  if (error instanceof AudioFileError) {
+    switch (error.code) {
+      case 'cancelled':
+        return 'audio-file-busy';
+      case 'decoded_memory':
+        return 'audio-file-decoded-memory';
+      case 'decode_failed':
+      case 'invalid_decode':
+        return 'audio-file-decode-failed';
+      case 'decoder_missing':
+        return 'audio-file-decoder-missing';
+      case 'duration':
+        return 'audio-file-duration';
+      case 'encoded_size':
+        return 'audio-file-encoded-size';
+      case 'empty':
+        return 'audio-file-empty';
+      case 'model_duration':
+        return 'audio-file-model-duration';
+      case 'queue_overload':
+        return 'audio-file-queue-overload';
+      case 'read_failed':
+        return 'audio-file-read-failed';
+      case 'sidecar_failed':
+        return 'audio-file-sidecar-failed';
+    }
+  }
+  if (error instanceof AudioFileBackpressureTimeoutError) {
+    return 'audio-file-queue-overload';
+  }
+  return 'audio-file-start-failed';
+}
+
+function resolveFeedbackIntent(
+  translationKey: FileWorkflowTranslationKey,
+): FeedbackRequest['intent'] {
+  if (
+    translationKey === 'audio-file-maintenance' ||
+    translationKey === 'audio-file-queue-overload'
+  ) {
+    return 'warning';
+  }
+  if (
+    translationKey === 'audio-file-language-unsupported' ||
+    translationKey === 'audio-file-model-changed' ||
+    translationKey === 'audio-file-model-not-batch' ||
+    translationKey === 'audio-file-model-required'
+  ) {
+    return 'action-required';
+  }
+  return 'error';
+}
+
+function translationParameters(
+  translationKey: FileWorkflowTranslationKey,
+  error: unknown,
+): Record<string, string> {
+  if (
+    translationKey === 'audio-file-language-unsupported' &&
+    error instanceof AudioFileWorkflowError
+  ) {
+    return error.parameters;
+  }
+  return {};
+}

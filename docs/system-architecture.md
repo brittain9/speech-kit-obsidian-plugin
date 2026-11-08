@@ -72,6 +72,10 @@ it into fixed 640-byte frames at 50 fps.
   `AudioWorklet` runs on a dedicated real-time thread; `PcmFrameProcessor` does
   linear-interpolation resampling from the browser's native rate (44.1/48 kHz)
   down to 16 kHz.
+- **Local audio and video files** are selected through a renderer-local file
+  input. A bounded FFmpeg process extracts 16 kHz mono PCM from the audio
+  stream and writes frames to the sidecar with backpressure and cancellation.
+  The decoded recording is not loaded into Web Audio memory.
 - **System audio** (this computer's output) is captured natively by the sidecar
   on Windows (WASAPI loopback), Linux (the default PulseAudio/PipeWire monitor),
   and macOS 14.2+ (CoreAudio process taps attached to a private aggregate
@@ -89,8 +93,94 @@ it into fixed 640-byte frames at 50 fps.
 | Samples per frame | 320 |
 | Bytes per frame | 640 |
 
-This stage is effectively real-time and never a bottleneck (~3-6 ms AudioContext
-latency plus 20 ms frame accumulation).
+This stage is effectively real-time for microphone capture and never a
+bottleneck (~3-6 ms AudioContext latency plus 20 ms frame accumulation).
+
+#### Local audio-file workflow
+
+The **Transcribe local audio file** command is deliberately separate from live
+microphone capture. It is available only in the Obsidian desktop app and uses a
+renderer-local `File`; there is no URL fetch, upload, or remote fallback.
+
+The file picker is the first `MediaSource` adapter. It emits provider-neutral
+plan/progress/ready events and returns a short-lived `MediaLease` implemented by
+`LocalMediaLease`, with an opaque pull-driven `ReadableStream` and typed
+provenance. Interactive acquisition opens the picker once and does not retain an
+abandoned `File` or expose a local token/reference API. The lease is released
+immediately after decode/VAD/ASR transcript projection and before optional
+post-completion AI work, with an idempotent cleanup promise covering success,
+failure, cancellation, and disposal. The ASR, renderer, and LLM layers never
+receive a provider URL, path, credential, subprocess, or remote response body.
+The YouTube command is a separate caption import. It fetches player metadata
+and timed captions through Obsidian's `requestUrl`, then validates, formats,
+and inserts the complete result once. It needs no media lease, speech model,
+sidecar, or helper executable. If suitable captions are unavailable, the note
+is unchanged. The optional LLM preset receives caption text only after the
+raw transcript is safely inserted. See ADR 0010 for this text-source boundary.
+
+The local-file transcription coordinator owns the sequence:
+acquire → local decode
+→ the existing VAD/batch-ASR `Session` → timestamps, diarization, and smart
+formatting → safe editor insertion. Progress exposes `acquire`, `decode`,
+`transcribe`, `format`, `AI processing`, and `insert` independently. Existing
+encoded/decoded budgets, bounded frame work, sidecar drain/backpressure,
+speech-lease quarantine, exact target ownership, retry, and localization
+behavior are unchanged.
+
+When `mediaLlmProcessing` is explicitly enabled, a dedicated media LLM
+coordinator preflights provider/model/key/base-URL readiness before expensive
+local transcription, then re-reads settings at post-completion and before
+application. It uses the existing configured provider, active preset, and
+provider/model/data-egress disclosure. The provider receives only the recorded
+transcript text and explicitly bounded current-note context—never media, a
+media path/name, source URL, provenance, cookies, or tokens. The raw media
+range remains the source of truth. Selecting a preset for the job applies its
+replace or additive output automatically; empty/refused/failure leaves raw text and reports
+actionable feedback. Disabling media processing or all LLM features aborts an
+in-flight provider request. A user edit latches the range and wins over pending
+AI output. Replacement is one undoable editor operation, raw recovery restores
+the pre-AI range, and additive outputs leave the raw range and citation boundary
+untouched. Custom OpenAI-compatible chat uses a CORS-free Node HTTP(S) stream
+with bounded response reads, early Content-Length rejection, timeout, and
+AbortSignal propagation; model discovery retains the existing requestUrl probe.
+The setting defaults to off, so file behavior is unchanged unless the user opts
+in.
+
+1. The command captures the exact active Markdown target, selects an installed
+   compatible batch model, and opens the file picker. Model and target identity
+   are checked again before the sidecar session starts.
+2. The selected file has a 2 GiB encoded-size limit. The pinned FFmpeg helper
+   probes its audio stream and duration, then decodes at most four hours into
+   16 kHz mono PCM. Missing audio, unsupported codecs, corrupt data, and a
+   material decoded/probed duration mismatch produce typed, recoverable errors.
+   The full decoded recording is never held in JavaScript memory.
+3. PCM frames are sent through the drain-aware sidecar pipe. Batch flow control
+   pauses the decoder while the speech queue catches up and resumes below its
+   low-water mark. Cancellation and unload unblock waiting work, terminate owned
+   processes, and release the media lease.
+4. Normal decoder exit allows stdout and queued consumers to drain. The job
+   succeeds only after every frame is delivered, the sidecar completes, and the
+   transcript is safely inserted once. A subprocess failure uses a bounded
+   termination deadline; it is not reported as a codec error.
+5. An uncertain native cancellation keeps the speech lease quarantined until a
+   correlated acknowledgement or process exit. The editor target is rechecked
+   before insertion, and failed jobs retain recoverable partial text outside the
+   note.
+
+The file workflow keeps the existing microphone LLM behavior separate. With
+`mediaLlmProcessing` off, media transcription never invokes a provider and
+retains the existing raw insertion behavior. With it on, only the completed
+media transcript text is considered by the job's selected media transform;
+audio bytes never cross the local sidecar pipe or an LLM request.
+
+#### Verification boundary
+
+Generated WAV fixtures exercise stereo channel mixing, real linear resampling,
+fixed frame output, encoded/decoded budgets, cancellation, and backpressure.
+Fake platform decoders stand in for Electron's codec implementation. Manual
+real-Electron codec/file-picker smoke testing and real Node stream backpressure
+against a running sidecar remain release verification tasks; the TypeScript
+suite cannot prove those platform integrations.
 
 ---
 
@@ -513,8 +603,42 @@ the selected model runtime and family:
 
 The sidecar catalog owns SHA-256-pinned installation and removal for both
 engines. Translation support is either exact directed pairs or an all-to-all
-language set. Note text never crosses the network; HY-MT protocol and logs do
-not record source or translated text.
+language set. A model-capability helper derives participating translation
+languages from that metadata: all-to-all models expose their declared language
+set, while Firefox models expose only the distinct source and target endpoints
+of independently declared pairs. Manage Models reuses this helper so its
+STT/TTS `languageTags` filters cannot broaden or diverge from translation
+capability. Each task retains its own language filter while the user switches
+tasks.
+
+The modal's localized swap control reverses the draft source and target only
+when the exact selected runtime/family/model is installed and its catalog
+metadata declares the reverse direction. It uses the ordinary language-change
+persistence path and leaves any completed preview visible but stale. Swap,
+language changes, Translate again, and exact-pack installation are disabled
+while inference, local model selection, or any live model install is active.
+The modal observes `ModelInstallManager` state and subscriptions, including the
+short interval before the sidecar emits an install event, so installed options
+and operation state do not become stale while the modal remains open.
+
+The controller owns the active language/model configuration and exposes it to
+open modal generations. Closing one modal does not invalidate a pending probe:
+its replacement subscribes to controller-owned pending/configuration state,
+reconciles any committed selection, and cannot start a conflicting selection.
+After a pack download finishes, that pending scope also covers the installed
+pack model's selection probe before the replacement modal is re-enabled.
+
+Model selection is monotonic. Every requested translation model receives a
+modal and controller generation; only the latest successful, committed probe
+may update draft state, active configuration, or persisted model selection.
+`ModelInstallManager.select()` reports whether its guarded settings commit was
+current, so a late successful probe is ignored rather than treated as a newer
+selection. Post-install selection checks both its committed result and the
+controller generation before changing configuration, closing the old modal, or
+retrying inference. Failed or successful stale completions cannot roll back or
+overwrite a later model choice, and an explicit fresh translation job resolves
+the model from the persisted latest selection. Note text never crosses the
+network; HY-MT protocol and logs do not record source or translated text.
 
 ---
 
@@ -606,7 +730,8 @@ A representative slice of user-facing settings (full list and defaults in
 | `timestampsEnabled` | `false` | Render timestamps in the note |
 | `timestampClock` | `elapsed` | `elapsed` session time vs `wallclock` |
 | `timestampDensity` | `sparse` | `sparse` (interval), `every_utterance`, or `paragraph` |
-| `llmPostprocessMode` | `off` | LLM transform: `off` / `per_utterance` / `batch` |
+| `llmPostprocessMode` | `off` | Microphone LLM transform: `off` / `per_utterance` / `batch` |
+| `mediaLlmProcessing` | `false` | Default for optional batch text transforms after local media transcription |
 | `llmRoutingPolicy` | `null` | Fixed provider or optional transcript-size split |
 | `llmProviderConfigurations` | Empty models | Ollama, OpenRouter, and OpenAI-compatible connection settings |
 | `llmNetworkTimeoutSec` | `60` | OpenRouter and custom-endpoint request timeout |
@@ -643,3 +768,9 @@ A representative slice of user-facing settings (full list and defaults in
   - Windows: `%LOCALAPPDATA%\obsidian-local-stt\models`
   - macOS: `~/Library/Application Support/obsidian-local-stt/models`
   - Linux: `~/.local/share/obsidian-local-stt/models`
+
+## Editable AI starting presets
+
+The shipped preset catalog is a set of templates, not an immutable runtime list. Settings migration seeds saved preset copies once and maps legacy built-in selections to those copies. The initialized marker preserves intentional deletions, including an empty list. Runtime selection resolves only saved presets; an empty list disables transformation. Preset mutations and restoration use the serialized preset state store. Restore transform defaults replaces template-owned IDs with fresh copies and retains independently created preset IDs, including duplicates and colliding labels.
+
+The transcription controller owns media job lifetime. Modal dismissal detaches its presentation without cancelling the job; explicit cancellation and plugin disposal stop work. Transcript insertion and optional AI transformation are separate stages, and AI failures retain the raw transcript with provider/model-specific feedback.

@@ -66,8 +66,7 @@ For macOS testing, `npm run build:sidecar` builds the Metal-capable sidecar auto
 
 **Build:**
 ```sh
-npm run build            # build sidecar + bundle plugin
-npm run build:frontend   # bundle plugin only (skip sidecar rebuild)
+npm run build            # bundle plugin (main.js); the sidecar builds separately
 npm run build:sidecar    # build sidecar only
 npm run build:sidecar:cuda            # Linux CUDA sidecar
 npm run build:sidecar:cuda:windows    # Windows CUDA sidecar

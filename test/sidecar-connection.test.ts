@@ -22,6 +22,12 @@ interface SidecarProcessHandlers {
 
 class FakeSidecarProcess {
   readonly writtenFrames: Uint8Array[] = [];
+  readonly writeAudioFrame = vi.fn(
+    async (frameBytes: Uint8Array, signal?: AbortSignal): Promise<void> => {
+      signal?.throwIfAborted();
+      this.write(frameBytes);
+    },
+  );
   startCalls = 0;
   stopCalls = 0;
   private handlers: SidecarProcessHandlers | null = null;
@@ -34,6 +40,10 @@ class FakeSidecarProcess {
 
   isRunning(): boolean {
     return this.running;
+  }
+
+  isStarting(): boolean {
+    return false;
   }
 
   async start(): Promise<void> {
@@ -367,6 +377,140 @@ describe('SidecarConnection', () => {
 
     expect(process.startCalls).toBe(0);
     expect(process.writtenFrames).toHaveLength(0);
+  });
+
+  it('uses the abort-aware bounded audio writer for file-frame backpressure', async () => {
+    const { connection, process } = createHarness();
+    await connection.ensureStarted();
+    const abortController = new AbortController();
+    const frame = new Uint8Array(640);
+
+    await connection.sendAudioFrameWithBackpressure(
+      '123e4567-e89b-42d3-a456-426614174000',
+      frame,
+      abortController.signal,
+    );
+
+    expect(process.writeAudioFrame).toHaveBeenCalledWith(
+      expect.any(Uint8Array),
+      abortController.signal,
+    );
+    expect(process.writeAudioFrame.mock.calls[0]?.[0].byteLength).toBe(661);
+    expect(process.writeAudioFrame).toHaveBeenCalledOnce();
+  });
+
+  it('tracks controlled start issuance and aborts before writing an unissued command', async () => {
+    const { connection, process } = createHarness();
+    await connection.ensureStarted();
+    const sessionId = '123e4567-e89b-42d3-a456-426614174000';
+    const issued = vi.fn();
+
+    const result = connection.startSessionWithControl(
+      {
+        accelerationPreference: 'auto',
+        detailedTimestampsEnabled: false,
+        diarizationEnabled: false,
+        diarizationMaxSpeakers: null,
+        includeSystemAudio: false,
+        language: 'en',
+        mode: 'always_on',
+        modelSelection: {
+          familyId: 'whisper',
+          filePath: '/models/test.bin',
+          kind: 'external_file',
+          runtimeId: 'whisper_cpp',
+        },
+        sessionId,
+        sessionStartUnixMs: Date.now(),
+        speakingStyle: 'balanced',
+      },
+      { onCommandIssued: issued },
+    );
+    await vi.waitFor(() => expect(issued).toHaveBeenCalledOnce());
+    process.deliver({ mode: 'always_on', sessionId, type: 'session_started' });
+    await expect(result).resolves.toMatchObject({ sessionId, type: 'session_started' });
+
+    const abortController = new AbortController();
+    abortController.abort();
+    await expect(
+      connection.startSessionWithControl(
+        {
+          accelerationPreference: 'auto',
+          detailedTimestampsEnabled: false,
+          diarizationEnabled: false,
+          diarizationMaxSpeakers: null,
+          includeSystemAudio: false,
+          language: 'en',
+          mode: 'always_on',
+          modelSelection: {
+            familyId: 'whisper',
+            filePath: '/models/test.bin',
+            kind: 'external_file',
+            runtimeId: 'whisper_cpp',
+          },
+          sessionId: '123e4567-e89b-42d3-a456-426614174001',
+          sessionStartUnixMs: Date.now(),
+          speakingStyle: 'balanced',
+        },
+        { abortSignal: abortController.signal, onCommandIssued: issued },
+      ),
+    ).rejects.toBeDefined();
+    expect(issued).toHaveBeenCalledOnce();
+  });
+
+  it('revalidates immediately before start_session write without issuing a command on failure', async () => {
+    const { connection, process } = createHarness();
+    const sessionId = '123e4567-e89b-42d3-a456-426614174000';
+    const issued = vi.fn();
+    const result = connection.startSessionWithControl(
+      {
+        accelerationPreference: 'auto',
+        detailedTimestampsEnabled: false,
+        diarizationEnabled: false,
+        diarizationMaxSpeakers: null,
+        includeSystemAudio: false,
+        language: 'en',
+        mode: 'always_on',
+        modelSelection: {
+          familyId: 'whisper',
+          filePath: '/models/test.bin',
+          kind: 'external_file',
+          runtimeId: 'whisper_cpp',
+        },
+        sessionId,
+        sessionStartUnixMs: Date.now(),
+        speakingStyle: 'balanced',
+      },
+      {
+        beforeCommandWrite: () => {
+          throw new Error('target changed');
+        },
+        onCommandIssued: issued,
+      },
+    );
+
+    await expect(result).rejects.toThrow('target changed');
+    expect(issued).not.toHaveBeenCalled();
+    expect(process.writtenFrames).toHaveLength(0);
+  });
+
+  it('treats a correlated no_active_session warning as successful cancellation', async () => {
+    const { connection, process } = createHarness();
+    const sessionId = '123e4567-e89b-42d3-a456-426614174000';
+    const cancellation = connection.cancelSession(sessionId);
+    await flushMicrotasks();
+
+    process.deliver({
+      code: 'no_active_session',
+      message: 'No active session',
+      sessionId,
+      type: 'warning',
+    });
+
+    await expect(cancellation).resolves.toMatchObject({
+      code: 'no_active_session',
+      type: 'warning',
+    });
   });
 
   it('does not mirror routine session lifecycle or transcript events into protocol logs', () => {

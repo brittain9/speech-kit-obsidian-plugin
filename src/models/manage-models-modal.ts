@@ -84,8 +84,11 @@ const MODEL_LANGUAGE_ORDER = ['auto', 'en', 'fr', 'de', 'es', 'pt', 'it', 'nl', 
 
 export function deriveModelLanguageOptions(
   models: readonly CatalogModelRecord[],
+  task: ModelPickerTask,
 ): ModelLanguageOption[] {
-  const languageTags = new Set(models.flatMap((model) => modelLanguageTagsForDiscovery(model)));
+  const languageTags = new Set(
+    models.filter((model) => model.task === task).flatMap(modelLanguageTagsForDiscovery),
+  );
   const knownTags = MODEL_LANGUAGE_ORDER.filter((tag) => languageTags.delete(tag));
   const remainingTags = [...languageTags].sort((left, right) => left.localeCompare(right));
 
@@ -236,9 +239,9 @@ function adapterTabId(key: AdapterTabKey): string {
 export class ManageModelsModal extends Modal {
   private actionInProgress = false;
   private capabilityRetryPending = false;
+  private readonly activeLanguages = new Map<ModelPickerTask, ModelLanguageFilter>();
   private readonly activeTabs = new Map<ModelPickerTask, AdapterTabKey>();
   private activeTask: ModelPickerTask;
-  private activeLanguage: ModelLanguageFilter = ALL_MODEL_LANGUAGES;
   private browserEl: HTMLDivElement | null = null;
   private navigationEl: HTMLDivElement | null = null;
   private navigationSignature = '';
@@ -441,9 +444,13 @@ export class ManageModelsModal extends Modal {
     this.navigationEl.addClass('local-stt-language-rail');
     this.navigationEl.setAttribute('role', 'tablist');
     this.navigationEl.setAttribute('aria-label', t('models.manage.languagesLabel'));
-    const options = deriveModelLanguageOptions(this.getRunnableRows().map((row) => row.model));
+    const options = deriveModelLanguageOptions(
+      this.getRunnableRows().map((row) => row.model),
+      this.activeTask,
+    );
+    const activeLanguage = this.getActiveLanguage();
     for (const [index, language] of options.entries()) {
-      const selected = languageFiltersEqual(language.filter, this.activeLanguage);
+      const selected = languageFiltersEqual(language.filter, activeLanguage);
       const button = this.navigationEl.createEl('button', {
         attr: {
           'aria-selected': String(selected),
@@ -475,8 +482,8 @@ export class ManageModelsModal extends Modal {
   }
 
   private selectLanguage(language: ModelLanguageFilter): void {
-    if (languageFiltersEqual(language, this.activeLanguage)) return;
-    this.activeLanguage = language;
+    if (languageFiltersEqual(language, this.getActiveLanguage())) return;
+    this.activeLanguages.set(this.activeTask, language);
     this.renderNavigation();
     this.renderModelList();
   }
@@ -497,7 +504,7 @@ export class ManageModelsModal extends Modal {
     // downloadable models, and catalog alone doesn't guarantee the sidecar can
     // run them.
     const adapters = derivePickerFamilyTabs(deriveModelFamilyTabs(state), rows, {
-      language: this.activeLanguage,
+      language: this.getActiveLanguage(),
       task: this.activeTask,
     });
     const activeTab = this.getActiveTab();
@@ -579,16 +586,17 @@ export class ManageModelsModal extends Modal {
   // -------------------------------------------------------------------------
 
   private renderLanguageAvailability(): void {
-    if (this.listContainer === null || this.activeLanguage.kind === 'all') return;
+    const activeLanguage = this.getActiveLanguage();
+    if (this.listContainer === null || activeLanguage.kind === 'all') return;
     const panel = this.listContainer.createDiv({ cls: 'local-stt-language-availability' });
     panel.createEl('h3', {
       text: t('models.manage.languageAvailabilityTitle', {
-        language: modelLanguageLabel(this.activeLanguage.tag),
+        language: modelLanguageLabel(activeLanguage.tag),
       }),
     });
     for (const availability of deriveTaskModelAvailability(
       this.getRunnableRows(),
-      this.activeLanguage.tag,
+      activeLanguage.tag,
     )) {
       panel.createEl('p', {
         text: `${taskLabel(availability.task)}: ${formatTaskModelAvailability(availability)}`,
@@ -629,7 +637,7 @@ export class ManageModelsModal extends Modal {
       this.listContainer.createEl('p', {
         cls: 'local-stt-empty-state',
         text:
-          this.activeLanguage.kind === 'all'
+          this.getActiveLanguage().kind === 'all'
             ? t('models.manage.noneAvailable')
             : t('models.manage.noneForLanguage'),
       });
@@ -652,7 +660,7 @@ export class ManageModelsModal extends Modal {
     const rows = this.getRunnableRows();
     const tabRows = filterModelRowsForPicker(rows, {
       activeFamily: activeTab,
-      language: this.activeLanguage,
+      language: this.getActiveLanguage(),
       query: this.searchQuery,
       task: this.activeTask,
     });
@@ -768,13 +776,15 @@ export class ManageModelsModal extends Modal {
               .onClick(() => {
                 void this.runAction(
                   async () => {
-                    await this.deps.manager.select({
+                    const result = await this.deps.manager.select({
                       familyId: row.model.familyId,
                       kind: 'catalog_model',
                       modelId: row.model.modelId,
                       runtimeId: row.model.runtimeId,
                     });
+                    if (!result.committed) return false;
                     this.close();
+                    return true;
                   },
                   {
                     failureMessage: t('models.manage.selectFailed'),
@@ -1069,7 +1079,7 @@ export class ManageModelsModal extends Modal {
       const activeTab = this.getActiveTab();
       const visible =
         installingModel?.task === this.activeTask &&
-        modelMatchesLanguageFilter(installingModel, this.activeLanguage) &&
+        modelMatchesLanguageFilter(installingModel, this.getActiveLanguage()) &&
         activeTab !== null &&
         activeInstall.installUpdate.runtimeId === activeTab.runtimeId &&
         activeInstall.installUpdate.familyId === activeTab.familyId;
@@ -1086,7 +1096,7 @@ export class ManageModelsModal extends Modal {
   // -------------------------------------------------------------------------
 
   private async runAction(
-    action: () => Promise<void>,
+    action: () => Promise<unknown>,
     messages: { failureMessage?: string; successMessage?: string } = {},
   ): Promise<void> {
     if (this.actionInProgress) {
@@ -1097,7 +1107,8 @@ export class ManageModelsModal extends Modal {
     this.renderModelList();
 
     try {
-      await action();
+      const committed = await action();
+      if (committed === false) return;
       if (messages.successMessage !== undefined) {
         this.deps.feedback.show({ intent: 'success', message: messages.successMessage });
       }
@@ -1163,13 +1174,17 @@ export class ManageModelsModal extends Modal {
 
     this.setActiveTask(model.task);
     this.activeTabs.set(model.task, { familyId: model.familyId, runtimeId: model.runtimeId });
-    if (!modelMatchesLanguageFilter(model, this.activeLanguage)) {
-      this.activeLanguage = ALL_MODEL_LANGUAGES;
+    if (!modelMatchesLanguageFilter(model, this.getActiveLanguage())) {
+      this.activeLanguages.set(this.activeTask, ALL_MODEL_LANGUAGES);
     }
     if (this.searchQuery.trim().length > 0) {
       this.searchQuery = '';
       this.search?.setValue('');
     }
+  }
+
+  private getActiveLanguage(): ModelLanguageFilter {
+    return this.activeLanguages.get(this.activeTask) ?? ALL_MODEL_LANGUAGES;
   }
 
   private getActiveTab(): AdapterTabKey | null {
@@ -1218,10 +1233,11 @@ export class ManageModelsModal extends Modal {
     tagsContainer.createSpan({
       text: t(installed ? 'models.manage.installed' : 'models.manage.downloadable'),
     });
-    if (this.activeLanguage.kind !== 'all') {
+    const activeLanguage = this.getActiveLanguage();
+    if (activeLanguage.kind !== 'all') {
       tagsContainer.createSpan({
         text: t('models.manage.compatibleLanguage', {
-          language: modelLanguageLabel(this.activeLanguage.tag),
+          language: modelLanguageLabel(activeLanguage.tag),
         }),
       });
     }
