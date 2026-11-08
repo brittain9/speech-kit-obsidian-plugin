@@ -1,11 +1,13 @@
 ---
+
 title: Local Translation Release Plan
 status: draft
 owners:
-  - alex
-tags:
-  - local-dictation
-  - release
+- alex
+  tags:
+- local-dictation
+- release
+
 ---
 
 # Local translation release plan
@@ -28,12 +30,12 @@ The goal is simple: let someone translate a selection or a complete note without
 
 The preview is a safety boundary, not decorative UI. Translation systems can change terminology, dates, negation, and named entities while producing very fluent sentences. The Replace button therefore becomes unavailable if the note changes after the preview was created. Copy and Insert below remain available because they do not overwrite the captured source range.
 
-| Gate | Target | Evidence |
-| --- | ---: | --- |
-| Warm 500-word note | 15 seconds or less | Three local runs |
-| Peak memory | 4 GB or less | Process measurement |
-| Model integrity | SHA-256 match | Installer metadata |
-| Markdown survival | No worse than baseline | Ten-note corpus |
+| Gate               |                 Target | Evidence            |
+| ------------------ | ---------------------: | ------------------- |
+| Warm 500-word note |     15 seconds or less | Three local runs    |
+| Peak memory        |           4 GB or less | Process measurement |
+| Model integrity    |          SHA-256 match | Installer metadata  |
+| Markdown survival  | No worse than baseline | Ten-note corpus     |
 
 ## Open questions
 
@@ -43,9 +45,9 @@ The preview is a safety boundary, not decorative UI. Translation systems can cha
 
 ```ts
 type TranslationDecision =
-  | { action: "replace"; expectedRevision: number }
-  | { action: "insert-below" }
-  | { action: "copy" };
+  | { action: 'replace'; expectedRevision: number }
+  | { action: 'insert-below' }
+  | { action: 'copy' };
 ```
 
 The narrow answer is preferable: ship the smallest trustworthy loop, measure where it fails, and avoid treating a fluent preview as proof of semantic accuracy. Follow-up work belongs in [[Translation Backlog]], with the benchmark inputs and outputs attached so that a future model can be tested against the same evidence.

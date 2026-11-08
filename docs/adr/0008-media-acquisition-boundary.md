@@ -1,6 +1,6 @@
 ---
-status: accepted
----
+
+## status: accepted
 
 # Keep media acquisition behind a provider-neutral lease boundary
 

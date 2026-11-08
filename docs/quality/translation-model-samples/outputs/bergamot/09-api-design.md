@@ -1,4 +1,5 @@
 ---
+
 title: Translation adapter API sketch
 status: exploratory
 ---
@@ -34,11 +35,11 @@ interface TranslationRequest {
 
 Een nuttig resultaattype kan vertalingen plus timings dragen, maar het mag geen lama.cpp JSON-reactie blootleggen. Houd de diagnostiek achter een gestructureerd veld of log ze apart.
 
-| Aan de slag | Eigenaar |
-| --- | --- |
-|Markdownsegmentatie | controller |
-|prompte constructie | motoradapter |
-| Artefactintegriteit | installateur |
-| Editormutatie | voorbeeldworkflow |
+| Aan de slag         | Eigenaar          |
+| ------------------- | ----------------- |
+| Markdownsegmentatie | controller        |
+| prompte constructie | motoradapter      |
+| Artefactintegriteit | installateur      |
+| Editormutatie       | voorbeeldworkflow |
 
 Gerelateerd: [[Deep Modules]], [[Translation Controller]], en `src/translation/bergamot-client.ts`. #architecture/api

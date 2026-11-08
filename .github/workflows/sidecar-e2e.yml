@@ -34,8 +34,8 @@ jobs:
         uses: ./.github/actions/setup-node-npm
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'true'
-          upgrade-npm: 'true'
+          cache: "true"
+          upgrade-npm: "true"
 
       - name: Setup Rust
         uses: ./.github/actions/setup-sidecar-rust
@@ -81,8 +81,8 @@ jobs:
         uses: ./.github/actions/setup-node-npm
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'true'
-          upgrade-npm: 'true'
+          cache: "true"
+          upgrade-npm: "true"
 
       - name: Setup Rust
         uses: ./.github/actions/setup-sidecar-rust
@@ -127,8 +127,8 @@ jobs:
         uses: ./.github/actions/setup-node-npm
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'true'
-          upgrade-npm: 'true'
+          cache: "true"
+          upgrade-npm: "true"
 
       - name: Setup Rust
         uses: ./.github/actions/setup-sidecar-rust
@@ -163,8 +163,8 @@ jobs:
         uses: ./.github/actions/setup-node-npm
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'true'
-          upgrade-npm: 'true'
+          cache: "true"
+          upgrade-npm: "true"
 
       - name: Setup Rust
         uses: ./.github/actions/setup-sidecar-rust

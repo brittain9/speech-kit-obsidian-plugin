@@ -2,14 +2,14 @@
 
 Two tiers of tests live here, on top of the per-module unit tests in `src/`:
 
-| File | Tier | Needs a model? | Runs in `cargo test`? |
-| ---- | ---- | -------------- | --------------------- |
-| `registry_smoke.rs` | Smoke | no | yes |
-| `harness_unit.rs` | Unit (harness + fixtures) | no | yes |
-| `transcription_e2e.rs` | End-to-end accuracy (in-process) | yes | only with `--ignored` |
-| `sidecar_protocol_e2e.rs` | End-to-end contract (real binary, wire protocol) | yes | only with `--ignored` |
-| `nemotron_asr_e2e.rs` | Nemotron VAD/worker/revision quality | yes (651 MiB) | only with `--ignored` |
-| `nemotron_asr_tails.rs` | Nemotron arbitrary-finalize regression | yes (651 MiB) | only with `--ignored` |
+| File                      | Tier                                             | Needs a model? | Runs in `cargo test`? |
+| ------------------------- | ------------------------------------------------ | -------------- | --------------------- |
+| `registry_smoke.rs`       | Smoke                                            | no             | yes                   |
+| `harness_unit.rs`         | Unit (harness + fixtures)                        | no             | yes                   |
+| `transcription_e2e.rs`    | End-to-end accuracy (in-process)                 | yes            | only with `--ignored` |
+| `sidecar_protocol_e2e.rs` | End-to-end contract (real binary, wire protocol) | yes            | only with `--ignored` |
+| `nemotron_asr_e2e.rs`     | Nemotron VAD/worker/revision quality             | yes (651 MiB)  | only with `--ignored` |
+| `nemotron_asr_tails.rs`   | Nemotron arbitrary-finalize regression           | yes (651 MiB)  | only with `--ignored` |
 
 The end-to-end tier is the quality suite: it feeds known audio fixtures through
 the **full sidecar** and asserts the transcript. The benchmark in

@@ -14,7 +14,7 @@ on:
   schedule:
     # Mondays ~06:00 UTC. Off-peak; minute offset avoids the top-of-hour rush
     # (same reasoning as cache-cleanup.yml).
-    - cron: '13 6 * * 1'
+    - cron: "13 6 * * 1"
   workflow_dispatch:
 
 permissions:

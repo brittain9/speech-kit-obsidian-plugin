@@ -13,21 +13,21 @@ install or invoke Python, PyTorch, NeMo, or sherpa-onnx.
 
 The selected model is pinned at every published boundary:
 
-| Input | Revision | SHA-256 / role |
-| --- | --- | --- |
-| [NVIDIA checkpoint](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b/tree/f3d333391852ba876df169dcc9ba902d25b6ab0b) | `f3d333391852ba876df169dcc9ba902d25b6ab0b` | `.nemo`: `210214ed94039bf6bfbb9a047c7fa289628db75b103e2bf6381fa78285436a74` (2,368,284,501 bytes) |
-| [NeMo parity implementation](https://github.com/NVIDIA/NeMo/tree/06312c963ce69c308d67ec7f129800ba594d9565) | `06312c963ce69c308d67ec7f129800ba594d9565` | Reference frontend and cache-aware streaming inference |
-| [sherpa-onnx exporter](https://github.com/k2-fsa/sherpa-onnx/tree/f71d85ff2f07422014f55fa89cb083fa52cce71f/scripts/nemo/nemotron-3.5-asr-streaming-0.6b) | `f71d85ff2f07422014f55fa89cb083fa52cce71f` (merged as `6a204636c4b8d97b45e8c4ab4a22e0067162b637`) | Exact source used by the [successful public export run](https://github.com/csukuangfj/sherpa-onnx/actions/runs/28933312668) |
-| [Published 560 ms int8 package](https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11/tree/ab43d895f5985b1bbab8b6eac8607fcdc05343f3) | `ab43d895f5985b1bbab8b6eac8607fcdc05343f3` | Exact catalog source |
+| Input                                                                                                                                                                               | Revision                                                                                          | SHA-256 / role                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| [NVIDIA checkpoint](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b/tree/f3d333391852ba876df169dcc9ba902d25b6ab0b)                                                    | `f3d333391852ba876df169dcc9ba902d25b6ab0b`                                                        | `.nemo`: `210214ed94039bf6bfbb9a047c7fa289628db75b103e2bf6381fa78285436a74` (2,368,284,501 bytes)                           |
+| [NeMo parity implementation](https://github.com/NVIDIA/NeMo/tree/06312c963ce69c308d67ec7f129800ba594d9565)                                                                          | `06312c963ce69c308d67ec7f129800ba594d9565`                                                        | Reference frontend and cache-aware streaming inference                                                                      |
+| [sherpa-onnx exporter](https://github.com/k2-fsa/sherpa-onnx/tree/f71d85ff2f07422014f55fa89cb083fa52cce71f/scripts/nemo/nemotron-3.5-asr-streaming-0.6b)                            | `f71d85ff2f07422014f55fa89cb083fa52cce71f` (merged as `6a204636c4b8d97b45e8c4ab4a22e0067162b637`) | Exact source used by the [successful public export run](https://github.com/csukuangfj/sherpa-onnx/actions/runs/28933312668) |
+| [Published 560 ms int8 package](https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11/tree/ab43d895f5985b1bbab8b6eac8607fcdc05343f3) | `ab43d895f5985b1bbab8b6eac8607fcdc05343f3`                                                        | Exact catalog source                                                                                                        |
 
 The four required runtime artifacts total 682,215,356 bytes (about 651 MiB):
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
+| File                |       Bytes | SHA-256                                                            |
+| ------------------- | ----------: | ------------------------------------------------------------------ |
 | `encoder.int8.onnx` | 657,601,403 | `012e9321373af99021415e0b0eb3ec827b4be3153be6f30d9b448fe65e896e68` |
-| `decoder.int8.onnx` | 14,978,075 | `19f9c98fc6d0a2c33a65a43b36fdb2e914c26c0aa9764be3aebc502a1e982fb0` |
-| `joiner.int8.onnx` | 9,504,438 | `4101c7c679a0bc30483794b27a059e34e79232aa2068d78d51231a22c8b0d7ce` |
-| `tokens.txt` | 131,440 | `729cc103155bafa785f9cd45746cd41cabe97eab7182fc04d594129587958f8a` |
+| `decoder.int8.onnx` |  14,978,075 | `19f9c98fc6d0a2c33a65a43b36fdb2e914c26c0aa9764be3aebc502a1e982fb0` |
+| `joiner.int8.onnx`  |   9,504,438 | `4101c7c679a0bc30483794b27a059e34e79232aa2068d78d51231a22c8b0d7ce` |
+| `tokens.txt`        |     131,440 | `729cc103155bafa785f9cd45746cd41cabe97eab7182fc04d594129587958f8a` |
 
 The ONNX hashes and sizes were verified against the downloaded files. Hugging
 Face exposes LFS SHA-256 metadata for the three graphs; `tokens.txt` is a normal
@@ -160,10 +160,10 @@ A production-readiness audit on Linux x86_64 (Intel i5-12600K, release build,
 CPU only) repeated the equivalent worker tests for this PR and the superseded
 Parakeet PR #258 with their exact pinned artifacts. `/usr/bin/time -v` recorded:
 
-| Engine | CPU time (user + system) | Wall | Peak RSS | Worker WER |
-| --- | ---: | ---: | ---: | ---: |
-| Nemotron 3.5 int8 | 11.72 s | 13.60 s | 2.022 GB | 0.038 |
-| Parakeet Unified int8 | 62.88 s | 17.83 s | 2.383 GB | 0.000 |
+| Engine                | CPU time (user + system) |    Wall | Peak RSS | Worker WER |
+| --------------------- | -----------------------: | ------: | -------: | ---------: |
+| Nemotron 3.5 int8     |                  11.72 s | 13.60 s | 2.022 GB |      0.038 |
+| Parakeet Unified int8 |                  62.88 s | 17.83 s | 2.383 GB |      0.000 |
 
 Nemotron used about 81% less CPU time, 24% less wall time, and 15% less peak
 RSS on that host. The Nemotron measurement includes 0.35 CPU-seconds of catalog

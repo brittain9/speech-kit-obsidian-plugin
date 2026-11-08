@@ -1,4 +1,5 @@
 ---
+
 title: Monthly finance review
 month: 2026-06
 private: true
@@ -10,12 +11,12 @@ De uitgaven waren hoger dan gepland, vooral omdat twee jaarlijkse rekeningen in 
 
 ## Snapshot
 
-| Categorie | Plan | Werkelijke | Opmerking |
-| --- | ---: | ---: | --- |
-| Housing | $2,100 | $2,100 | fixed |
-|) Boodschappen | $500 | $574 | verzendkosten |
-| Transport | $180 | $143 | below plan |
-| Software | $90 | $212 | annual renewals |
+| Categorie      |   Plan | Werkelijke | Opmerking       |
+| -------------- | -----: | ---------: | --------------- |
+| Housing        | $2,100 |     $2,100 | fixed           |
+| ) Boodschappen |   $500 |       $574 | verzendkosten   |
+| Transport      |   $180 |       $143 | below plan      |
+| Software       |    $90 |       $212 | annual renewals |
 
 > [!note] Interpretatie
 > Omschrijf een overdracht naar spaargeld niet als uitgaven. Het verandert de accountlocatie, niet van de waarde.

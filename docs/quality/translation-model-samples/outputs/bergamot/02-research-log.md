@@ -1,8 +1,10 @@
 ---
+
 title: Research log
 date: 2026-07-27
 aliases:
-  - experiment notes
+- experiment notes
+
 ---
 
 # Onderzoekslogboek: fragmentbehandeling
@@ -23,12 +25,12 @@ Vraag: verbetert het grotere model vertalingen omdat het het document begrijpt, 
 
 Voorbeelden verzameld van [[Release Notes]]:
 
-| Bronfragment | Beoogde zin |
-| --- | --- |
-| Klaar | installatie staat |
-| verwijderen | knooplabel | verwijderen
-| Huidige | geselecteerd model |
-|opladen | batterijgedrag, geen prijs |
+| Bronfragment | Beoogde zin                |
+| ------------ | -------------------------- |
+| Klaar        | installatie staat          |
+| verwijderen  | knooplabel                 | verwijderen |
+| Huidige      | geselecteerd model         |
+| opladen      | batterijgedrag, geen prijs |
 
 De zin `model is cold` beschrijft een gelost gevolgtrekkingsproces. Het mag geen zin worden over temperatuur. Evenzo is $t_{load} + t_{decode}$ een formule en moet deze ongewijzigd blijven.
 

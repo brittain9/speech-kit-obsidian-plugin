@@ -13,18 +13,18 @@ This is a **surface rebrand**. User-visible brand strings change; persisted and 
 
 These break users if touched. Any occurrence of `local-dictation` below stays exactly as is:
 
-| Identifier | Where | Why it must stay |
-| --- | --- | --- |
-| Plugin ID `local-dictation` | `manifest.json` `id`, `package.json` `name` | Obsidian plugin IDs are immutable. Changing the ID makes it a new plugin: settings, hotkeys, download count (~1k), and the listing URL are all keyed to it. |
-| Command IDs (`toggle-dictation`, `translate-note`, …) | `src/commands/register-commands.ts` | User hotkeys are persisted as `local-dictation:<command-id>`. Only display names (locale strings) may change. |
-| View type `local-dictation-sidebar` | `src/ui/local-dictation-view.ts` | Persisted in workspace layout. |
-| Settings keys / `data.json` shape | `src/settings/plugin-settings.ts` | Existing user settings must load unchanged. No migration code for a rename. |
-| Secret ID `local-dictation-openrouter-api-key` | `src/settings/openrouter-secret-storage.ts` | Stored in Obsidian secret storage; renaming loses user keys. |
-| Sidecar binary name `local-dictation-sidecar` + release asset names | `native/Cargo.toml`, `.github/workflows/release.yml`, `src/sidecar/sidecar-executable.ts` | Installer matching, attestation subjects, e2e harnesses, existing installs. Renaming is deferred (see Deferred section). |
-| CSS class prefixes `local-dictation-*` | `styles.css`, `src/ui/*` | Internal; renaming is churn with zero user value. May collide with user CSS snippets if changed. |
-| Model/cache directory names, temp-dir prefixes | `native/src/*` | Existing installed models and caches must be found. |
-| Sidecar protocol strings and HTTP user-agent | `src/sidecar/*`, `native/src/*` | Internal contract; not worth a compatibility dance. |
-| Historical docs | `docs/release/notes/*`, `docs/quality/**`, existing `docs/specs/*`, `docs/marketing/readme-variants/*` | They are records of the past. Never mass-sed them. |
+| Identifier                                                          | Where                                                                                                  | Why it must stay                                                                                                                                            |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plugin ID `local-dictation`                                         | `manifest.json` `id`, `package.json` `name`                                                            | Obsidian plugin IDs are immutable. Changing the ID makes it a new plugin: settings, hotkeys, download count (~1k), and the listing URL are all keyed to it. |
+| Command IDs (`toggle-dictation`, `translate-note`, …)               | `src/commands/register-commands.ts`                                                                    | User hotkeys are persisted as `local-dictation:<command-id>`. Only display names (locale strings) may change.                                               |
+| View type `local-dictation-sidebar`                                 | `src/ui/local-dictation-view.ts`                                                                       | Persisted in workspace layout.                                                                                                                              |
+| Settings keys / `data.json` shape                                   | `src/settings/plugin-settings.ts`                                                                      | Existing user settings must load unchanged. No migration code for a rename.                                                                                 |
+| Secret ID `local-dictation-openrouter-api-key`                      | `src/settings/openrouter-secret-storage.ts`                                                            | Stored in Obsidian secret storage; renaming loses user keys.                                                                                                |
+| Sidecar binary name `local-dictation-sidecar` + release asset names | `native/Cargo.toml`, `.github/workflows/release.yml`, `src/sidecar/sidecar-executable.ts`              | Installer matching, attestation subjects, e2e harnesses, existing installs. Renaming is deferred (see Deferred section).                                    |
+| CSS class prefixes `local-dictation-*`                              | `styles.css`, `src/ui/*`                                                                               | Internal; renaming is churn with zero user value. May collide with user CSS snippets if changed.                                                            |
+| Model/cache directory names, temp-dir prefixes                      | `native/src/*`                                                                                         | Existing installed models and caches must be found.                                                                                                         |
+| Sidecar protocol strings and HTTP user-agent                        | `src/sidecar/*`, `native/src/*`                                                                        | Internal contract; not worth a compatibility dance.                                                                                                         |
+| Historical docs                                                     | `docs/release/notes/*`, `docs/quality/**`, existing `docs/specs/*`, `docs/marketing/readme-variants/*` | They are records of the past. Never mass-sed them.                                                                                                          |
 
 Corollary: **do not run a repo-wide sed**. Every replacement must be in the explicit scope below.
 
@@ -43,7 +43,7 @@ Replace the user-visible brand string `Local Dictation` → `Speech Kit` in:
 7. **Tests** — update assertions that pin the brand string: `test/i18n.test.ts`, `test/dictation-ribbon.test.ts`, `test/dictation-session-controller.test.ts`, and any others `rg -l "Local Dictation" test/` finds.
 8. **Release note** for the rebrand release (`docs/release/notes/<next-version>.md`): lead with "Local Dictation is now Speech Kit", explain nothing changes for existing users (settings, hotkeys, models, listing URL all carry over), then the release's functional changes.
 
-Optional in the same PR (cheap, internal, safe): rename TypeScript class `LocalDictationView` and similar class/type names. Do NOT rename files or exported constants whose string values are invariants (`LOCAL_DICTATION_VIEW_TYPE`'s *value* stays; the constant name may stay too to avoid noise).
+Optional in the same PR (cheap, internal, safe): rename TypeScript class `LocalDictationView` and similar class/type names. Do NOT rename files or exported constants whose string values are invariants (`LOCAL_DICTATION_VIEW_TYPE`'s _value_ stays; the constant name may stay too to avoid noise).
 
 ### Acceptance for Stage 1
 

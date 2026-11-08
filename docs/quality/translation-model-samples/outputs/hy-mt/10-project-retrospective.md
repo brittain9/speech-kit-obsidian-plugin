@@ -1,4 +1,5 @@
 ---
+
 title: Translation project retrospective
 participants: 3
 ---
@@ -19,7 +20,7 @@ Het testen van het echte modelpakket was ook nuttig. Een nepgekoppelde vertaler 
 - Licenties veranderden in een productbeperking, en niet langer slechts een kwestie van het indienen van een formulier.
 
 > Probeer dit de volgende keer te vermijden.
-[!failure]
+> [!failure]
 > Begin geen volledige benchmark-testen voordat de regels voor het uitvoeren van de testen en de instructies zijn geaccepteerd.
 
 ## Wat moet er veranderen?

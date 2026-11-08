@@ -32,8 +32,8 @@ jobs:
         uses: ./.github/actions/setup-node-npm
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'true'
-          upgrade-npm: 'true'
+          cache: "true"
+          upgrade-npm: "true"
 
       - name: Install JavaScript dependencies
         run: npm ci

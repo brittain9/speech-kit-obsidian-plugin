@@ -1,4 +1,5 @@
 ---
+
 title: Reading notes on reliable systems
 book: Designing for Failure
 rating: 4
@@ -26,11 +27,11 @@ Dit brengt netjes in kaart voor vertaling. De preview kan er gepolijst uitzien t
 2. [[Installer Design]] — download naar een tijdelijk bestand, verifieer SHA-256 en promoot vervolgens atoomachtig.
 3. [[Worker Lifecycle]] — beëindigen na succes, annulering of fout.
 
-| Concept | Vertaalvoorbeeld |
-| --- | --- |
-| Idempotentie | opnieuw een model downloaden | opnieuw proberen
-| Validatie | marker bestellen en tellen |
-| Isolatie | gevolgtrekking binnen een werknemer |
-| Audit trail | benchmark inputs en outputs |
+| Concept      | Vertaalvoorbeeld                    |
+| ------------ | ----------------------------------- |
+| Idempotentie | opnieuw een model downloaden        | opnieuw proberen |
+| Validatie    | marker bestellen en tellen          |
+| Isolatie     | gevolgtrekking binnen een werknemer |
+| Audit trail  | benchmark inputs en outputs         |
 
 Het boek is af en toe repetitief, maar de woordenschat is nuttig. Ik moet het hoofdstuk over de tegendruk opnieuw bekijken voordat ik de aanvraagwachtrij verwissel. #reading/reliability
