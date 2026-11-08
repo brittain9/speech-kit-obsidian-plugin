@@ -860,6 +860,20 @@ export class ManageModelsModal extends Modal {
           });
           break;
 
+        case 'recover':
+          setting.descEl.createDiv({ text: t('models.manage.reinstallRecoveryDesc') });
+          setting.addButton((button) => {
+            button
+              .setButtonText(t('models.manage.reinstallRecover'))
+              .setDisabled(this.actionInProgress)
+              .onClick(() => {
+                void this.runAction(async () => this.deps.manager.dismissCancelStuck(), {
+                  failureMessage: t('models.manage.reinstallRecoveryFailed'),
+                });
+              });
+          });
+          break;
+
         case 'retry':
           setting.addButton((button) => {
             const failureId = row.failedInstall?.failureId ?? null;
@@ -869,7 +883,8 @@ export class ManageModelsModal extends Modal {
               .setDisabled(
                 this.actionInProgress ||
                   failureId === null ||
-                  this.deps.manager.getState().activeInstall !== null,
+                  this.deps.manager.getState().activeInstall !== null ||
+                  this.deps.manager.getState().installRequestPending,
               )
               .onClick(() => {
                 if (failureId === null) return;
@@ -888,7 +903,11 @@ export class ManageModelsModal extends Modal {
             const failureId = row.failedInstall?.failureId ?? null;
             button
               .setButtonText(t('models.manage.dismissInstallFailure'))
-              .setDisabled(this.actionInProgress || failureId === null)
+              .setDisabled(
+                this.actionInProgress ||
+                  failureId === null ||
+                  this.deps.manager.getState().installRequestPending,
+              )
               .onClick(() => {
                 if (failureId === null) return;
                 this.deps.manager.dismissFailedInstall(failureId);
@@ -1090,7 +1109,11 @@ export class ManageModelsModal extends Modal {
       const key = installTripleKey(activeInstall.installUpdate);
       const existingProgressEl = this.progressElements.get(key);
 
-      if (existingProgressEl !== null && existingProgressEl !== undefined) {
+      if (
+        existingProgressEl !== null &&
+        existingProgressEl !== undefined &&
+        activeInstall.phase !== 'cancelStuck'
+      ) {
         updateInstallProgressElement(existingProgressEl, {
           ...activeInstall.installUpdate,
           isCancelling: isCancellingPhase(activeInstall.phase),

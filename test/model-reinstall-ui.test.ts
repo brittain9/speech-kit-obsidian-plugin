@@ -4,7 +4,7 @@ import { ManageModelsModal } from '../src/models/manage-models-modal';
 import { ModelInstallManager } from '../src/models/model-install-manager';
 import type { EngineCapabilitiesRecord } from '../src/models/model-management-types';
 import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
-import type { SidecarEvent } from '../src/sidecar/protocol';
+import type { ModelProbeResultEvent, SidecarEvent } from '../src/sidecar/protocol';
 import { SidecarLifecycleGate } from '../src/sidecar/sidecar-lifecycle-gate';
 import { Setting, TestElement } from './__mocks__/obsidian';
 import { sampleCatalog } from './fixtures/catalog';
@@ -82,7 +82,24 @@ async function openSingleModelPicker() {
     })),
     listInstalledModels: vi.fn().mockResolvedValue({ models: [sampleMoonshineInstalledModel()] }),
     listModelCatalog: vi.fn().mockResolvedValue(catalog),
-    probeModelSelection: vi.fn(),
+    probeModelSelection: vi.fn(
+      async (): Promise<ModelProbeResultEvent> => ({
+        available: true,
+        details: null,
+        displayName: 'Moonshine Tiny',
+        familyId: selection.familyId,
+        installed: true,
+        mergedCapabilities: capabilities,
+        message: 'ready',
+        modelId: selection.modelId,
+        resolvedPath: '/models/moonshine/frontend.ort',
+        runtimeId: selection.runtimeId,
+        selection,
+        sizeBytes: 700,
+        status: 'ready',
+        type: 'model_probe_result',
+      }),
+    ),
     removeModel: vi.fn(),
     shutdown: vi.fn(async () => {}),
     subscribe: (listener: (event: SidecarEvent) => void) => {
@@ -124,6 +141,76 @@ async function openSingleModelPicker() {
 }
 
 describe('model reinstall UI', () => {
+  it('offers Reinstall again after a completed replacement refreshes selected capabilities', async () => {
+    const picker = await openSingleModelPicker();
+    try {
+      await Setting.buttonNamed('Reinstall').click();
+      await vi.waitFor(() => expect(picker.sidecar.installModel).toHaveBeenCalledOnce());
+      const request = picker.sidecar.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected a reinstall request');
+      picker.emit({
+        ...sampleMoonshineInstallUpdate({ installId: request.installId, state: 'completed' }),
+        type: 'model_install_update',
+      });
+      await vi.waitFor(() => expect(picker.manager.getState().installRequestPending).toBe(false));
+      const currentReinstall = () =>
+        Setting.instances
+          .flatMap((setting) => setting.buttonComponents)
+          .reverse()
+          .find((button) => button.text === 'Reinstall');
+      await vi.waitFor(() => expect(currentReinstall()?.disabled).toBe(false));
+      await currentReinstall()?.click();
+      await vi.waitFor(() => expect(picker.sidecar.installModel).toHaveBeenCalledTimes(2));
+    } finally {
+      picker.modal.close();
+      picker.manager.dispose();
+    }
+  });
+
+  it('offers stuck cancellation recovery and explains an unconfirmed stop without permitting retry', async () => {
+    vi.useFakeTimers();
+    const picker = await openSingleModelPicker();
+    try {
+      await Setting.buttonNamed('Reinstall').click();
+      await vi.waitFor(() => expect(picker.sidecar.installModel).toHaveBeenCalledOnce());
+      const request = picker.sidecar.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected a reinstall request');
+      picker.emit({
+        ...sampleMoonshineInstallUpdate({ installId: request.installId }),
+        type: 'model_install_update',
+      });
+      const latestButton = (text: string) =>
+        Setting.instances
+          .flatMap((setting) => setting.buttonComponents)
+          .reverse()
+          .find((button) => button.text === text);
+      await vi.waitFor(() => expect(latestButton('Cancel')?.disabled).toBe(false));
+      await latestButton('Cancel')?.click();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(latestButton('Stop engine and recover')).toBeDefined();
+      picker.sidecar.shutdown.mockRejectedValueOnce(new Error('shutdown unconfirmed'));
+      await latestButton('Stop engine and recover')?.click();
+      await vi.waitFor(() => expect(picker.manager.getState().activeInstall).toBeNull());
+      expect(
+        Setting.instances.some(
+          (setting) =>
+            setting.descEl.findByText(
+              'Could not confirm that model reinstallation stopped. Restart Obsidian before starting speech work.',
+            ) !== undefined,
+        ),
+      ).toBe(true);
+      expect(latestButton('Retry')?.disabled).toBe(true);
+      expect(latestButton('Dismiss')?.disabled).toBe(true);
+      expect(picker.manager.getState().selectedModel).toEqual(picker.selection);
+      expect(picker.sidecar.removeModel).not.toHaveBeenCalled();
+      expect(() => picker.gate.acquireSpeech()).toThrow();
+    } finally {
+      picker.modal.close();
+      picker.manager.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it.each(['speech', 'use'] as const)(
     'explains active %s work without starting or removing a model',
     async (activeKind) => {

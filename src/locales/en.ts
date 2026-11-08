@@ -1239,6 +1239,11 @@ export const en = {
   'models.manage.reinstallDesc':
     'Download this model again. Your installed copy stays in place until the replacement is ready.',
   'models.manage.reinstallStartFailed': 'Could not start model reinstallation.',
+  'models.manage.reinstallRecover': 'Stop engine and recover',
+  'models.manage.reinstallRecoveryDesc':
+    'Cancellation has not finished. Stop the engine to check the installed copy.',
+  'models.manage.reinstallRecoveryFailed':
+    'Could not confirm that model reinstallation stopped. Restart Obsidian before starting speech work.',
   'models.manage.cancelling': 'Cancelling…',
   'models.manage.details': 'Details',
   'models.manage.retryInstall': 'Retry',

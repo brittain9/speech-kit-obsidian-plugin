@@ -29,6 +29,7 @@ type ModelRowAction =
   | 'cancel'
   | 'remove'
   | 'reinstall'
+  | 'recover'
   | 'retry'
   | 'dismiss'
   | 'details';
@@ -166,6 +167,7 @@ function deriveRowState(
     hasFailed,
     hasOtherActiveInstall,
     canReinstall: model.task === 'stt' && !installRequestPending && !hasOtherActiveInstall,
+    canRecover: installed && model.task === 'stt' && thisInstall?.phase === 'cancelStuck',
   });
 
   return {
@@ -187,6 +189,7 @@ function deriveAllowedActions(flags: {
   hasFailed: boolean;
   hasOtherActiveInstall: boolean;
   canReinstall: boolean;
+  canRecover: boolean;
 }): ModelRowAction[] {
   const {
     installed,
@@ -196,11 +199,11 @@ function deriveAllowedActions(flags: {
     hasFailed,
     hasOtherActiveInstall,
     canReinstall,
+    canRecover,
   } = flags;
 
-  // Currently canceling or cancelStuck — only details allowed.
   if (isCanceling) {
-    return ['details'];
+    return canRecover ? ['recover', 'details'] : ['details'];
   }
 
   // Currently installing — cancel and details.

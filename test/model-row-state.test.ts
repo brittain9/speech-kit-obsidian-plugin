@@ -153,6 +153,19 @@ describe('deriveModelRowStates', () => {
   });
 
   describe('per-row allowed actions', () => {
+    it('offers recovery for a stuck reinstall of an installed speech model', () => {
+      const row = getRow(
+        deriveModelRowStates(
+          buildState({
+            activeInstall: sampleActiveInstall('cancelStuck'),
+            installedModels: [sampleInstalledModel()],
+          }),
+        ),
+        'whisper_large_v3_turbo_q8_0',
+      );
+      expect(row.allowedActions).toEqual(['recover', 'details']);
+    });
+
     it('idle, not installed → [install, details]', () => {
       const row = getRow(deriveModelRowStates(buildState()), 'whisper_large_v3_turbo_q8_0');
 

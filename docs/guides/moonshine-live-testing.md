@@ -29,7 +29,7 @@ replacement passes verification and validation. A failure or cancellation
 before activation preserves that copy. Your model selection stays the same.
 After completion, dictate a short sentence, stop, and repeat to check both runs.
 
-If cancellation does not finish, use the offered recovery control. Speech Kit
+If cancellation does not finish, select **Stop engine and recover**. Speech Kit
 stops the engine and checks the installed model before allowing new speech
 work. If it cannot confirm that the engine stopped, restart Obsidian as the
 message directs.

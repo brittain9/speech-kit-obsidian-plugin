@@ -227,6 +227,7 @@ interface ReplacementInstall {
   lease: SidecarLifecycleLease;
   lifecycleGeneration: number;
   phase: 'installing' | 'stopping' | 'unconfirmed' | 'reconciling';
+  stopConfirmed: boolean;
   request: InstallRequest;
   unsubscribe: () => void;
 }
@@ -1293,6 +1294,7 @@ export class ModelInstallManager {
       lease: this.deps.sidecarLifecycleGate.acquireMutation(),
       lifecycleGeneration: this.lifecycleGeneration,
       phase: 'installing',
+      stopConfirmed: false,
       request,
       unsubscribe: () => {},
     };
@@ -1308,10 +1310,12 @@ export class ModelInstallManager {
       }
     });
     const unsubscribeStop = this.deps.sidecarConnection.subscribeProcessStop(() => {
+      operation.stopConfirmed = true;
       if (operation.phase === 'stopping' || operation.phase === 'reconciling') return;
       if (
         operation.lifecycleGeneration === this.lifecycleGeneration &&
-        this.currentInstallRequest?.installId === request.installId
+        (this.currentInstallRequest?.installId === request.installId ||
+          this.failedInstall?.failureId === request.installId)
       ) {
         const error = new Error('The sidecar stopped before the model reinstall completed.');
         this.currentInstallRequest = null;
@@ -1349,11 +1353,17 @@ export class ModelInstallManager {
     try {
       await this.deps.sidecarConnection.shutdown();
     } catch (error) {
+      if (operation.stopConfirmed) {
+        await this.refreshStoppedReplacement(operation);
+        return;
+      }
       operation.phase = 'unconfirmed';
-      this.failedInstall = createFailedInstall(
-        operation.request,
-        'Could not confirm that model reinstallation stopped. Restart Obsidian before starting speech work.',
-      );
+      this.currentInstallRequest = null;
+      this.clearActiveInstall(installId);
+      const message =
+        'Could not confirm that model reinstallation stopped. Restart Obsidian before starting speech work.';
+      this.failedInstall = createFailedInstall(operation.request, message);
+      this.rejectInstallWaiter(installId, new Error(message));
       this.notify();
       throw error;
     }
@@ -1736,6 +1746,7 @@ export class ModelInstallManager {
       this.resolveCompletedInstallWaiter(installId, refreshed);
     } finally {
       this.releaseReplacementInstall(installId, proof);
+      if (this.lifecycleGeneration === refresh.expectedLifecycleGeneration) this.notify();
     }
   }
 

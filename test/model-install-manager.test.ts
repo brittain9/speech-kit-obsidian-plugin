@@ -1123,6 +1123,7 @@ describe('ModelInstallManager', () => {
   describe('reinstall()', () => {
     it.each([
       'acknowledgement failure',
+      'confirmed stop then shutdown rejection',
       'process stop',
       'process stop before acknowledgement',
       'stuck cancellation',
@@ -1157,7 +1158,13 @@ describe('ModelInstallManager', () => {
             recoveryFinished = expect(starting).rejects.toThrow('lost acknowledgement');
             harness.emitProcessStop(true);
             acknowledgement.reject(new Error('lost acknowledgement'));
-          } else if (recovery === 'acknowledgement failure') {
+          } else if (
+            recovery === 'acknowledgement failure' ||
+            recovery === 'confirmed stop then shutdown rejection'
+          ) {
+            const stopped = deferred<void>();
+            if (recovery === 'confirmed stop then shutdown rejection')
+              harness.sidecarConnection.shutdown.mockReturnValueOnce(stopped.promise);
             harness.sidecarConnection.installModel.mockReset();
             harness.sidecarConnection.installModel.mockRejectedValueOnce(
               new Error('lost acknowledgement'),
@@ -1165,6 +1172,16 @@ describe('ModelInstallManager', () => {
             recoveryFinished = expect(harness.manager.reinstall(selection)).rejects.toThrow(
               'lost acknowledgement',
             );
+            if (recovery === 'confirmed stop then shutdown rejection') {
+              await vi.waitFor(() =>
+                expect(harness.sidecarConnection.shutdown).toHaveBeenCalledOnce(),
+              );
+              harness.emitProcessStop(false);
+              expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+                SidecarLifecycleConflictError,
+              );
+              stopped.reject(new Error('shutdown rejected after exit'));
+            }
           } else {
             await harness.manager.reinstall(selection);
             const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
