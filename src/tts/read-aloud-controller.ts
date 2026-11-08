@@ -294,9 +294,9 @@ export class ReadAloudController {
     this.activeSynthesisId = synthesisId;
     this.lastPlayedSequence = -1;
     this.sampleRate = null;
-    this.playback.start();
-    this.setState('reading');
     try {
+      this.playback.start();
+      this.setState('reading');
       await this.deps.sidecarConnection.startSynthesis({
         chunks,
         ...configuration,
