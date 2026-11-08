@@ -191,7 +191,7 @@ args=(
   --locked
   --manifest-path "$MANIFEST"
   --target-dir "$target_dir"
-  --features engine-whisper,engine-cohere-transcribe,engine-hy-mt,engine-moonshine,engine-nemotron-asr,engine-pocket-tts,engine-supertonic,gpu-cuda
+  --features engine-whisper,engine-cohere-transcribe,engine-hy-mt,engine-moonshine,engine-nemotron-asr,engine-parakeet-unified,engine-pocket-tts,engine-supertonic,gpu-cuda
   --bins
   -j "$jobs"
   --config "host.linker=\"${CC}\""

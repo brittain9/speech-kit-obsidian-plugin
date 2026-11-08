@@ -1412,6 +1412,8 @@ export const en = {
     'Balanced live-dictation model at 123M parameters.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Most accurate Moonshine streaming model at 245M parameters.',
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+    'English buffered live transcription with the NVIDIA Parakeet Unified model.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     "NVIDIA's 0.6B multilingual RNNT, exported to int8 ONNX for cache-aware live transcription in eight verified languages.",
   'catalog.pocket_tts_english_2026_04_int8.summary':
@@ -1434,6 +1436,8 @@ export const en = {
     'High-quality batch transcription with multi-gigabyte download and memory requirements.',
   'catalog.family.moonshine.summary':
     'Shows words while you speak. Tiny favors lower resource use, Small balances speed and quality, and Medium favors quality.',
+  'catalog.family.parakeet_unified.summary':
+    'English buffered live transcription. This model requires substantial CPU resources.',
   'catalog.family.nemotron_asr.summary':
     'High-accuracy multilingual streaming with a larger download and higher resource use. Moonshine Small remains the recommended English live-dictation default.',
   'catalog.family.supertonic.summary':

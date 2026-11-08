@@ -849,6 +849,8 @@ export const ja = {
     '1 億 2,300 万パラメータのバランスのとれたライブ ディクテーション モデル。',
   'catalog.moonshine_medium_streaming_en.summary':
     '245M パラメーターで最も正確な Moonshine ストリーミング モデル。',
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+    'NVIDIA Parakeet Unified を使用した英語のバッファ付きライブ文字起こし。',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'NVIDIA の 0.6B 多言語 RNNT。8 つの検証済み言語でのキャッシュ対応ライブ文字起こしのために int8 ONNX にエクスポートされます。',
   'catalog.family.whisper.summary':
@@ -857,6 +859,8 @@ export const ja = {
     '数ギガバイトのダウンロードとメモリ要件を伴う高品質のバッチ転写。',
   'catalog.family.moonshine.summary':
     '話しているときに単語を表示します。 Tiny はリソース使用量の削減を優先し、Small は速度と品質のバランスをとり、Medium は品質を優先します。',
+  'catalog.family.parakeet_unified.summary':
+    '英語をバッファ付きでライブ文字起こしします。このモデルは多くの CPU リソースを使用します。',
   'catalog.family.nemotron_asr.summary':
     '高精度多言語ストリーミング。ダウンロード量とリソース使用量が増加します。Moonshine Small は、推奨される英語のライブ ディクテーションのデフォルトのままです。',
   'setup.sidecar.modal.unsupportedPlatform':

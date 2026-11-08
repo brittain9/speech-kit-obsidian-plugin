@@ -363,6 +363,8 @@ function resolveFamilyDisplayName(
       return 'Moonshine';
     case 'nemotron_asr':
       return 'NVIDIA Nemotron 3.5 ASR';
+    case 'parakeet_unified':
+      return 'NVIDIA Parakeet Unified';
     case 'pocket_tts':
       return 'Pocket TTS';
     case 'supertonic':

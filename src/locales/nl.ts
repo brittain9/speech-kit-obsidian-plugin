@@ -849,6 +849,8 @@ export const nl = {
     'Gebalanceerd live-dicteermodel met 123 miljoen parameters.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Meest nauwkeurige Moonshine-streamingmodel met 245 miljoen parameters.',
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+    'Engelse live transcriptie met buffer via NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     "NVIDIA's 0,6B meertalige RNNT, geëxporteerd naar int8 ONNX voor cachebewuste live transcriptie in acht geverifieerde talen.",
   'catalog.family.whisper.summary':
@@ -857,6 +859,8 @@ export const nl = {
     'Hoogwaardige batchtranscriptie met download- en geheugenvereisten van meerdere gigabytes.',
   'catalog.family.moonshine.summary':
     'Toont woorden terwijl u spreekt. Tiny is voorstander van een lager gebruik van hulpbronnen, Small is voorstander van een evenwicht tussen snelheid en kwaliteit, en Medium is voorstander van kwaliteit.',
+  'catalog.family.parakeet_unified.summary':
+    'Engelse live transcriptie met buffer. Dit model vraagt veel CPU-capaciteit.',
   'catalog.family.nemotron_asr.summary':
     'Zeer nauwkeurige meertalige streaming met een grotere download en meer resourcegebruik. Moonshine Small blijft de aanbevolen standaard voor Engels live dicteren.',
   'setup.sidecar.modal.unsupportedPlatform':

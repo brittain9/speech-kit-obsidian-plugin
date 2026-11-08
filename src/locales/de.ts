@@ -868,6 +868,8 @@ export const de = {
     'Ausgewogenes Live-Diktiermodell mit 123 Millionen Parametern.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Genauestes Moonshine-Streaming-Modell mit 245 M Parametern.',
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+    'Gepufferte englische Live-Transkription mit NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'NVIDIAs mehrsprachiges RNNT mit 0,6 Milliarden Parametern, als int8-ONNX exportiert für cachegestützte Live-Transkription in acht geprüften Sprachen.',
   'catalog.family.whisper.summary':
@@ -876,6 +878,8 @@ export const de = {
     'Hochwertige Batch-Transkription mit Download- und Speicherbedarf von mehreren Gigabyte.',
   'catalog.family.moonshine.summary':
     'Zeigt Wörter an, während du sprichst. Tiny begünstigt einen geringeren Ressourcenverbrauch, Small balanciert Geschwindigkeit und Qualität und Medium begünstigt Qualität.',
+  'catalog.family.parakeet_unified.summary':
+    'Gepufferte englische Live-Transkription. Dieses Modell benötigt viel CPU-Leistung.',
   'catalog.family.nemotron_asr.summary':
     'Hochpräzises mehrsprachiges Streaming mit größerem Download und höherer Ressourcennutzung. Moonshine Small bleibt der empfohlene englische Live-Diktat-Standard.',
   'setup.sidecar.modal.unsupportedPlatform':

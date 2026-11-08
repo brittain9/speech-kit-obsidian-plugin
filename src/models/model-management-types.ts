@@ -10,6 +10,7 @@ export const MODEL_FAMILY_IDS = [
   'cohere_transcribe',
   'moonshine',
   'nemotron_asr',
+  'parakeet_unified',
   'pocket_tts',
   'supertonic',
   'whisper',

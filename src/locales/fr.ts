@@ -856,6 +856,8 @@ export const fr = {
     'Modèle de dictée en direct équilibré avec 123 millions de paramètres.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Modèle de streaming Moonshine le plus précis à 245M paramètres.',
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+    'Transcription en direct en anglais avec tampon par NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'RNNT multilingue 0,6B de NVIDIA, exporté vers int8 ONNX pour une transcription en direct prenant en compte le cache dans huit langues vérifiées.',
   'catalog.family.whisper.summary':
@@ -864,6 +866,8 @@ export const fr = {
     'Transcription par lots de haute qualité avec des besoins de téléchargement et de mémoire de plusieurs gigaoctets.',
   'catalog.family.moonshine.summary':
     'Affiche les mots pendant que vous parlez. Tiny favorise une moindre utilisation des ressources, Small équilibre vitesse et qualité, et Medium favorise la qualité.',
+  'catalog.family.parakeet_unified.summary':
+    'Transcription en direct en anglais avec tampon. Ce modèle sollicite fortement le processeur.',
   'catalog.family.nemotron_asr.summary':
     'Streaming multilingue de haute précision avec un téléchargement plus important et une utilisation plus importante des ressources. Moonshine Small reste la version par défaut recommandée pour la dictée en direct en anglais.',
   'setup.sidecar.modal.unsupportedPlatform':
