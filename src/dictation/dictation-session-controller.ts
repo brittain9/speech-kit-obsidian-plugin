@@ -572,11 +572,11 @@ export class DictationSessionController {
 
       if (this.activeSessionId === sessionId) {
         this.applyUiState('listening');
-      } else if (this.dependencies.captureStream.isCapturing()) {
-        await this.dependencies.captureStream.stop(false);
       }
     } catch (error) {
-      await this.cleanupFailedStart(sessionId, error);
+      if (this.activeSessionId === sessionId) {
+        await this.cleanupFailedStart(sessionId, error);
+      }
     }
   }
 

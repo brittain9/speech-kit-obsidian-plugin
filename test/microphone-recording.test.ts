@@ -81,6 +81,37 @@ describe('MicrophoneRecordingWriter', () => {
 });
 
 describe('MicrophoneRecording', () => {
+  it('discards an unstarted recording when stopped during attachment setup', async () => {
+    const { app, writer } = await createWriter();
+    let releaseAttachmentPath = (_path: string) => {};
+    app.fileManager.getAvailablePathForAttachment.mockImplementationOnce(
+      () => new Promise((resolve) => (releaseAttachmentPath = resolve)),
+    );
+    const startRecorder = vi.fn(() => {
+      throw new Error('inactive stream');
+    });
+    class FakeMediaRecorder extends EventTarget {
+      mimeType = 'audio/webm';
+      state: RecordingState = 'inactive';
+      start = startRecorder;
+      constructor(_stream: MediaStream) {
+        super();
+      }
+    }
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    const onSaved = vi.fn();
+    const onError = vi.fn();
+    const recording = new MicrophoneRecording(writer, onSaved, onError);
+    const starting = recording.start({} as MediaStream);
+    const stopping = recording.stop(true);
+    releaseAttachmentPath('Attachments/Voice recording.webm');
+    await Promise.all([starting, stopping]);
+    expect(startRecorder).not.toHaveBeenCalled();
+    expect(app.fileManager.trashFile).toHaveBeenCalledOnce();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('waits for the final chunk when the recorder stops before dictation stops', async () => {
     const { fullPath, writer } = await createWriter();
     class FakeMediaRecorder extends EventTarget {
