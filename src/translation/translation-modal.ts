@@ -44,6 +44,8 @@ interface TranslationModalDependencies {
     targetLanguage: TranslationLanguage;
   };
   editor: Editor;
+  sourcePath: string;
+  sourceIsAvailable: () => boolean;
   feedback: Pick<UserFeedback, 'show'>;
   getStyle?: () => TranslationStyle;
   getStyleInstruction?: () => string;
@@ -85,6 +87,7 @@ interface TranslationModalDependencies {
     styleInstruction: string,
   ) => void;
   snapshot: TranslationSnapshot;
+  reviewedOutput: { text: string | null };
   translationInstallRequirement: (
     model: CatalogModelRecord,
     source: TranslationLanguage,
@@ -100,7 +103,6 @@ export class TranslationModal extends Modal {
   private outputHeaderEl: HTMLElement | null = null;
   private outputSurfaceEl: HTMLElement | null = null;
   private readAloudButtonEl: HTMLElement | null = null;
-  private reviewedOutput: string | null = null;
   private releaseJob: (() => void) | null = null;
   private releaseModelManager: (() => void) | null = null;
   private releaseConfiguration: (() => void) | null = null;
@@ -177,6 +179,9 @@ export class TranslationModal extends Modal {
     this.contentEl.empty();
     this.headingEl = this.contentEl.createEl('h2');
     this.contentEl.createEl('p', {
+      text: t('translation.modal.sourcePath', { path: this.dependencies.sourcePath }),
+    });
+    this.contentEl.createEl('p', {
       cls: 'local-stt-translation-modal__privacy',
       text: t('translation.modal.privacy'),
     });
@@ -218,8 +223,8 @@ export class TranslationModal extends Modal {
       cls: 'local-stt-translation-modal__output',
     });
     this.outputEl.addEventListener('input', () => {
-      if (this.outputEl !== null && this.reviewedOutput !== null)
-        this.reviewedOutput = this.outputEl.value;
+      if (this.outputEl !== null && this.dependencies.reviewedOutput.text !== null)
+        this.dependencies.reviewedOutput.text = this.outputEl.value;
       this.renderReadAloudAction();
     });
     this.actionsEl = this.contentEl.createDiv();
@@ -552,11 +557,11 @@ export class TranslationModal extends Modal {
   private renderState(): void {
     if (this.outputEl !== null) {
       if (this.state.phase === 'completed') {
-        this.reviewedOutput ??= this.state.text;
-        this.outputEl.value = this.reviewedOutput;
+        this.dependencies.reviewedOutput.text ??= this.state.text;
+        this.outputEl.value = this.dependencies.reviewedOutput.text;
         this.outputEl.removeAttribute('readonly');
       } else {
-        this.reviewedOutput = null;
+        this.dependencies.reviewedOutput.text = null;
         this.outputEl.value = '';
         this.outputEl.setAttribute('readonly', '');
       }
@@ -634,9 +639,12 @@ export class TranslationModal extends Modal {
       this.outputHeaderEl === null ||
       this.state.phase !== 'completed' ||
       this.state.sourceUnitsKept > 0 ||
-      this.reviewedOutput === null ||
+      this.dependencies.reviewedOutput.text === null ||
       this.configurationIsDirty() ||
-      !this.dependencies.canReadAloud(this.reviewedOutput, this.draftTargetLanguage)
+      !this.dependencies.canReadAloud(
+        this.dependencies.reviewedOutput.text,
+        this.draftTargetLanguage,
+      )
     )
       return;
     const language = translationLanguageLabel(this.draftTargetLanguage);
@@ -651,8 +659,11 @@ export class TranslationModal extends Modal {
     });
     setIcon(button, 'volume-2');
     button.addEventListener('click', () => {
-      if (this.reviewedOutput !== null)
-        void this.dependencies.onReadAloud(this.reviewedOutput, this.draftTargetLanguage);
+      if (this.dependencies.reviewedOutput.text !== null)
+        void this.dependencies.onReadAloud(
+          this.dependencies.reviewedOutput.text,
+          this.draftTargetLanguage,
+        );
     });
     this.readAloudButtonEl = button;
   }
@@ -687,6 +698,21 @@ export class TranslationModal extends Modal {
         button
           .setButtonText(t('translation.modal.cancel'))
           .onClick(() => this.dependencies.job.cancel()),
+      );
+      return;
+    }
+    if (!this.dependencies.sourceIsAvailable()) {
+      this.renderStatus(t('translation.modal.otherNote'));
+      if (this.state.phase === 'completed') {
+        actions.addButton((button) =>
+          button.setButtonText(t('translation.modal.copy')).onClick(() => void this.copy()),
+        );
+      }
+      actions.addButton((button) =>
+        button.setButtonText(t('translation.modal.dismiss')).onClick(() => {
+          this.dependencies.onDismissed();
+          this.close();
+        }),
       );
       return;
     }
@@ -805,6 +831,10 @@ export class TranslationModal extends Modal {
     );
   }
   private requestFreshTranslation(): void {
+    if (!this.dependencies.sourceIsAvailable()) {
+      this.renderActions();
+      return;
+    }
     if (this.modelSelectionPending || this.dependencies.isModelSelectionPending()) return;
     this.close();
     this.dependencies.onTranslateCurrent(
@@ -814,6 +844,10 @@ export class TranslationModal extends Modal {
     );
   }
   private restart(source: TranslationLanguage, target: TranslationLanguage): void {
+    if (!this.dependencies.sourceIsAvailable()) {
+      this.renderActions();
+      return;
+    }
     if (
       this.state.phase === 'loading' ||
       this.state.phase === 'translating' ||
@@ -910,14 +944,15 @@ export class TranslationModal extends Modal {
   }
   private sourceIsCurrent(): boolean {
     const { editor, snapshot } = this.dependencies;
+    if (!this.dependencies.sourceIsAvailable()) return false;
     return snapshot.kind === 'note'
       ? editor.getValue() === snapshot.source
       : editor.getRange(snapshot.from, snapshot.to) === snapshot.source;
   }
   private async copy(): Promise<void> {
-    if (this.state.phase !== 'completed' || this.reviewedOutput === null) return;
+    if (this.state.phase !== 'completed' || this.dependencies.reviewedOutput.text === null) return;
     try {
-      await navigator.clipboard.writeText(this.reviewedOutput);
+      await navigator.clipboard.writeText(this.dependencies.reviewedOutput.text);
       this.dependencies.feedback.show({
         intent: 'success',
         key: 'translation-copied',
@@ -935,7 +970,7 @@ export class TranslationModal extends Modal {
   private replace(): void {
     if (
       this.state.phase !== 'completed' ||
-      this.reviewedOutput === null ||
+      this.dependencies.reviewedOutput.text === null ||
       this.state.sourceUnitsKept > 0
     )
       return;
@@ -944,7 +979,7 @@ export class TranslationModal extends Modal {
       return;
     }
     this.dependencies.editor.replaceRange(
-      this.reviewedOutput,
+      this.dependencies.reviewedOutput.text,
       this.dependencies.snapshot.from,
       this.dependencies.snapshot.to,
     );
@@ -954,7 +989,7 @@ export class TranslationModal extends Modal {
   private insertBelow(): void {
     if (
       this.state.phase !== 'completed' ||
-      this.reviewedOutput === null ||
+      this.dependencies.reviewedOutput.text === null ||
       this.state.sourceUnitsKept > 0
     )
       return;
@@ -963,7 +998,7 @@ export class TranslationModal extends Modal {
       return;
     }
     this.dependencies.editor.replaceRange(
-      `\n\n${this.reviewedOutput}`,
+      `\n\n${this.dependencies.reviewedOutput.text}`,
       this.dependencies.snapshot.to,
     );
     this.dependencies.onApplied();

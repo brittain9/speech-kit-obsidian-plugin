@@ -1133,6 +1133,8 @@ function createModal({
       ...configuration,
     },
     editor: editor as never,
+    sourcePath: 'Notes/source.md',
+    sourceIsAvailable: () => true,
     feedback: { show: vi.fn() },
     getStyle,
     getStyleInstruction,
@@ -1153,6 +1155,7 @@ function createModal({
     onTranslateCurrent,
     onRestart,
     snapshot: SNAPSHOT,
+    reviewedOutput: { text: null },
     translationInstallRequirement: translationInstallRequirement ?? (() => ({ kind: 'ready' })),
   });
 }
