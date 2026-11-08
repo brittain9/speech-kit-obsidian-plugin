@@ -218,6 +218,23 @@ describe('resolveReadRange', () => {
 });
 
 describe('ReadAloudController', () => {
+  it('releases its speech lease when playback cannot start', async () => {
+    const gate = new SidecarLifecycleGate();
+    const harness = controllerHarness({ selected: true, sidecarLifecycleGate: gate });
+    playback.start.mockImplementationOnce(() => {
+      throw new Error('audio unavailable');
+    });
+
+    await expect(harness.controller.readText('Hello.', 'en')).resolves.toBeUndefined();
+    expect(harness.feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({ intent: 'error' }),
+    );
+    expect(harness.startSynthesis).not.toHaveBeenCalled();
+    expect(harness.controller.getState()).toBe('idle');
+    const lease = gate.acquireMutation();
+    lease.release();
+  });
+
   it('does not start while a local audio file owns speech input', async () => {
     const harness = controllerHarness({ audioFileActive: true, selected: true });
 
