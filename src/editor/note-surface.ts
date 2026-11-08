@@ -115,6 +115,7 @@ export type RewriteResult =
     };
 
 const noteSurfaceInsertOrder = Annotation.define<number>();
+const noteSurfaceInsertAfter = Annotation.define<{ order: number; position: number }>();
 const noteSurfacesByView = new WeakMap<EditorView, Set<NoteSurface>>();
 let nextSurfaceOrder = 0;
 
@@ -339,6 +340,27 @@ export class NoteSurface {
 
   readDocumentText(): string {
     return this.view.state.doc.toString();
+  }
+
+  insertAfterRange(range: RewriteRange | null, text: string): boolean {
+    if (
+      this.disposed ||
+      this.detectDesynchronization() !== null ||
+      (range !== null && !this.isValidRange(range))
+    ) {
+      return false;
+    }
+    const position = range?.to ?? this.writingRegionTail();
+    const prefix = position === 0 ? '' : '\n\n';
+    const suffix = position === this.view.state.doc.length ? '' : '\n\n';
+    this.view.dispatch({
+      annotations: [
+        noteSurfaceInsertOrder.of(this.createdAt),
+        noteSurfaceInsertAfter.of({ order: this.createdAt, position }),
+      ],
+      changes: { from: position, insert: `${prefix}${text}${suffix}` },
+    });
+    return true;
   }
 
   rewriteRegion(
@@ -733,6 +755,9 @@ export class NoteSurface {
   }
 
   private mapSpans(update: ViewUpdate): void {
+    const insertedAfter = update.transactions
+      .map((transaction) => transaction.annotation(noteSurfaceInsertAfter))
+      .find((value) => value !== undefined);
     const insertOrder = update.transactions
       .map((transaction) => transaction.annotation(noteSurfaceInsertOrder))
       .find((order) => order !== undefined);
@@ -745,7 +770,9 @@ export class NoteSurface {
       // Text bias: insertions at textEnd land outside the span, so a sibling
       // append at writingRegionTail() doesn't swallow the next utterance.
       span.textEnd = update.changes.mapPos(span.textEnd, -1);
-      span.end = update.changes.mapPos(span.end, 1);
+      const endBias =
+        insertedAfter?.order === this.createdAt && insertedAfter.position === span.end ? -1 : 1;
+      span.end = update.changes.mapPos(span.end, endBias);
     }
 
     // Tail bias: insertions at the initial anchor extend the writing region.

@@ -1,6 +1,7 @@
 import { asError } from '../shared/error-utils';
 import { PCM_BYTES_PER_FRAME, PCM_CHANNEL_COUNT } from '../shared/pcm-format';
 import type { PluginLogger } from '../shared/plugin-logger';
+import type { MicrophoneRecordingLike } from './microphone-recording';
 import { PCM_RECORDER_WORKLET_NAME } from './pcm-recorder-worklet-shared';
 import { PCM_RECORDER_WORKLET_SOURCE } from './pcm-recorder-worklet-source';
 
@@ -39,6 +40,7 @@ export class AudioCaptureStream {
     listener: () => void;
     tracks: MediaStreamTrack[];
   } | null = null;
+  private microphoneRecording: MicrophoneRecordingLike | null = null;
 
   constructor(private readonly options: AudioCaptureStreamOptions) {}
 
@@ -46,7 +48,11 @@ export class AudioCaptureStream {
     return this.mediaStream !== null;
   }
 
-  async start(options: AudioCaptureStartOptions, frameListener: AudioFrameListener): Promise<void> {
+  async start(
+    options: AudioCaptureStartOptions,
+    frameListener: AudioFrameListener,
+    microphoneRecording?: MicrophoneRecordingLike,
+  ): Promise<void> {
     const { sessionId, audioInputDeviceId } = options;
 
     if (this.isCapturing()) {
@@ -107,7 +113,11 @@ export class AudioCaptureStream {
       this.muteNode = muteNode;
       this.recorderNode = recorderNode;
       this.sourceNode = sourceNode;
+      this.microphoneRecording = microphoneRecording ?? null;
       this.observeUnexpectedTrackEnd(mediaStream, sessionId);
+      if (microphoneRecording !== undefined) {
+        await microphoneRecording.start(mediaStream);
+      }
       this.options.logger?.debug('audio', 'capture started');
 
       if (unavailableDeviceId !== null) {
@@ -125,12 +135,12 @@ export class AudioCaptureStream {
     }
   }
 
-  async stop(): Promise<void> {
+  async stop(saveRecording = true): Promise<void> {
     if (!this.isCapturing()) {
       return;
     }
 
-    await this.releaseCapture();
+    await this.releaseCapture(saveRecording);
     this.options.logger?.debug('audio', 'capture stopped');
   }
 
@@ -195,12 +205,13 @@ export class AudioCaptureStream {
     }
   }
 
-  private async releaseCapture(): Promise<void> {
+  private async releaseCapture(saveRecording: boolean): Promise<void> {
     const audioContext = this.audioContext;
     const mediaStream = this.mediaStream;
     const muteNode = this.muteNode;
     const recorderNode = this.recorderNode;
     const sourceNode = this.sourceNode;
+    const microphoneRecording = this.microphoneRecording;
 
     this.clearTrackEndListener();
     this.audioContext = null;
@@ -209,6 +220,7 @@ export class AudioCaptureStream {
     this.muteNode = null;
     this.recorderNode = null;
     this.sourceNode = null;
+    this.microphoneRecording = null;
 
     try {
       recorderNode?.disconnect();
@@ -224,6 +236,14 @@ export class AudioCaptureStream {
 
     if (recorderNode !== null) {
       recorderNode.port.onmessage = null;
+    }
+
+    if (microphoneRecording !== null) {
+      try {
+        await microphoneRecording.stop(saveRecording);
+      } catch (error) {
+        this.options.logger?.warn('audio', 'failed to finish microphone recording', error);
+      }
     }
 
     if (mediaStream !== null) {

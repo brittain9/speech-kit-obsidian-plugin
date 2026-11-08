@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { formatMicrophonePermissionDeniedMessage } from '../src/audio/microphone-permission-message';
+import type { MicrophoneRecordingLike } from '../src/audio/microphone-recording';
 import {
   type DictationControllerState,
   DictationSessionController,
@@ -29,20 +30,29 @@ class FakeCaptureStream {
   public capturing = false;
   public frameListener: ((sessionId: string, frameBytes: Uint8Array) => void) | null = null;
   public sessionId: string | null = null;
+  private recording: {
+    start(stream: MediaStream): Promise<void>;
+    stop(save: boolean): Promise<void>;
+  } | null = null;
   public start = vi.fn(
     async (
       options: { sessionId: string; audioInputDeviceId?: string | null },
       listener: (sessionId: string, frameBytes: Uint8Array) => void,
+      recording?: { start(stream: MediaStream): Promise<void>; stop(save: boolean): Promise<void> },
     ) => {
       this.capturing = true;
       this.sessionId = options.sessionId;
       this.frameListener = listener;
+      this.recording = recording ?? null;
+      if (recording !== undefined) await recording.start({} as MediaStream);
     },
   );
-  public stop = vi.fn(async () => {
+  public stop = vi.fn(async (save = false) => {
+    await this.recording?.stop(save);
     this.capturing = false;
     this.sessionId = null;
     this.frameListener = null;
+    this.recording = null;
   });
 
   emitFrame(frameBytes: Uint8Array): void {
@@ -69,6 +79,8 @@ class FakeSession {
   });
   public readonly clearSessionProcessingMark = vi.fn();
   public readonly dispose = vi.fn();
+  public readonly insertMicrophoneRecording = vi.fn((_link: string) => true);
+  public readonly getTargetFilePath = vi.fn(() => 'Notes/Dictation.md');
   public readonly insertAdjacentToSessionRange = vi.fn(
     (_blockText: string, _placement: 'above' | 'below') => true,
   );
@@ -186,6 +198,232 @@ describe('DictationSessionController', () => {
     expect(captureStream.start).not.toHaveBeenCalled();
     expect(sidecarConnection.startSession).not.toHaveBeenCalled();
     expect(feedback.show).toHaveBeenCalledWith(expect.objectContaining({ key: 'audio-file-busy' }));
+  });
+
+  it('saves and embeds the optional microphone recording after the session stops', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const captureStream = new FakeCaptureStream();
+    const sessions: FakeSession[] = [];
+    let saveLink = (_link: string) => {};
+    const recording = {
+      discardSavedFile: vi.fn(async () => {}),
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async (save: boolean) => {
+        if (save) saveLink('![[Voice recording.webm]]');
+      }),
+    };
+    const controller = createController({
+      captureStream,
+      createMicrophoneRecording: (sourcePath, onSaved) => {
+        expect(sourcePath).toBe('Notes/Dictation.md');
+        saveLink = onSaved;
+        return recording;
+      },
+      createSession: (session) => sessions.push(session),
+      getSettings: () =>
+        createSettings({
+          saveMicrophoneRecording: true,
+          selectedModel: createExternalModelSelection(),
+        }),
+      sidecarConnection,
+    });
+
+    await controller.startDictation();
+    await controller.stopDictation();
+    const sessionId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId ?? '';
+    sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await vi.waitFor(() =>
+      expect(sessions[0]?.insertMicrophoneRecording).toHaveBeenCalledWith(
+        '![[Voice recording.webm]]',
+      ),
+    );
+    expect(recording.start).toHaveBeenCalledOnce();
+    expect(recording.stop).toHaveBeenCalledWith(true);
+  });
+
+  it('discards the microphone recording when dictation is cancelled', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const sessions: FakeSession[] = [];
+    const recording = {
+      discardSavedFile: vi.fn(async () => {}),
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async (_save: boolean) => {}),
+    };
+    const controller = createController({
+      createMicrophoneRecording: () => recording,
+      createSession: (session) => sessions.push(session),
+      getSettings: () =>
+        createSettings({
+          saveMicrophoneRecording: true,
+          selectedModel: createExternalModelSelection(),
+        }),
+      sidecarConnection,
+    });
+
+    await controller.startDictation();
+    await controller.cancelDictation();
+
+    expect(recording.stop).toHaveBeenCalledWith(false);
+    expect(sessions[0]?.insertAdjacentToSessionRange).not.toHaveBeenCalled();
+  });
+
+  it('keeps the saved audio and informs the user when it cannot insert the embed', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const sessions: FakeSession[] = [];
+    const feedback = { show: vi.fn() };
+    let saveLink = (_link: string) => {};
+    const recording = {
+      discardSavedFile: vi.fn(async () => {}),
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async () => saveLink('![[Voice recording.webm]]')),
+    };
+    const controller = createController({
+      createMicrophoneRecording: (_path, onSaved) => {
+        saveLink = onSaved;
+        return recording;
+      },
+      createSession: (session) => {
+        sessions.push(session);
+        session.insertMicrophoneRecording.mockReturnValue(false);
+      },
+      feedback,
+      getSettings: () =>
+        createSettings({
+          saveMicrophoneRecording: true,
+          selectedModel: createExternalModelSelection(),
+        }),
+      sidecarConnection,
+    });
+
+    await controller.startDictation();
+    await controller.stopDictation();
+    const sessionId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId ?? '';
+    sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await vi.waitFor(() => expect(sessions[0]?.insertMicrophoneRecording).toHaveBeenCalled());
+    expect(recording.discardSavedFile).not.toHaveBeenCalled();
+    expect(feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: 'warning',
+        message: expect.stringContaining('Voice recording.webm'),
+      }),
+    );
+  });
+
+  it('saves the recording when the sidecar stops for queue overload before the recorder flushes', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const sessions: FakeSession[] = [];
+    let saveLink = (_link: string) => {};
+    let finishRecording = () => {};
+    const recording = {
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async (save: boolean) => {
+        await new Promise<void>((resolve) => {
+          finishRecording = resolve;
+        });
+        if (save) saveLink('![[Voice recording.webm]]');
+      }),
+    };
+    const controller = createController({
+      createMicrophoneRecording: (_path, onSaved) => {
+        saveLink = onSaved;
+        return recording;
+      },
+      createSession: (session) => sessions.push(session),
+      getSettings: () =>
+        createSettings({
+          saveMicrophoneRecording: true,
+          selectedModel: createExternalModelSelection(),
+        }),
+      sidecarConnection,
+    });
+    await controller.startDictation();
+    const sessionId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId ?? '';
+    sidecarConnection.emit({
+      code: 'utterance_queue_overload',
+      message: 'overload',
+      sessionId,
+      type: 'error',
+    });
+    sidecarConnection.emit({ reason: 'queue_overload', sessionId, type: 'session_stopped' });
+    expect(recording.stop).toHaveBeenCalledWith(true);
+    expect(sessions[0]?.dispose).not.toHaveBeenCalled();
+    finishRecording();
+    await vi.waitFor(() =>
+      expect(sessions[0]?.insertMicrophoneRecording).toHaveBeenCalledWith(
+        '![[Voice recording.webm]]',
+      ),
+    );
+  });
+
+  it('saves the recording when the sidecar reports a session failure', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const sessions: FakeSession[] = [];
+    let saveLink = (_link: string) => {};
+    const recording = {
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async (save: boolean) => {
+        if (save) saveLink('![[Voice recording.webm]]');
+      }),
+    };
+    const controller = createController({
+      createMicrophoneRecording: (_path, onSaved) => {
+        saveLink = onSaved;
+        return recording;
+      },
+      createSession: (session) => sessions.push(session),
+      getSettings: () =>
+        createSettings({
+          saveMicrophoneRecording: true,
+          selectedModel: createExternalModelSelection(),
+        }),
+      sidecarConnection,
+    });
+    await controller.startDictation();
+    const sessionId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId ?? '';
+    sidecarConnection.emit({
+      code: 'internal_error',
+      message: 'engine failed',
+      sessionId,
+      type: 'error',
+    });
+    sidecarConnection.emit({ reason: 'user_cancel', sessionId, type: 'session_stopped' });
+    await vi.waitFor(() => expect(recording.stop).toHaveBeenCalledWith(true));
+    await vi.waitFor(() =>
+      expect(sessions[0]?.insertMicrophoneRecording).toHaveBeenCalledWith(
+        '![[Voice recording.webm]]',
+      ),
+    );
+  });
+
+  it('keeps the recording linked if sending stop to the sidecar fails', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const sessions: FakeSession[] = [];
+    let saveLink = (_link: string) => {};
+    const recording = {
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async () => saveLink('![[Voice recording.webm]]')),
+    };
+    const controller = createController({
+      createMicrophoneRecording: (_path, onSaved) => {
+        saveLink = onSaved;
+        return recording;
+      },
+      createSession: (session) => sessions.push(session),
+      getSettings: () =>
+        createSettings({
+          saveMicrophoneRecording: true,
+          selectedModel: createExternalModelSelection(),
+        }),
+      sidecarConnection,
+    });
+    await controller.startDictation();
+    sidecarConnection.requestStopSession.mockImplementationOnce(() => {
+      throw new Error('sidecar unavailable');
+    });
+    await controller.stopDictation();
+    expect(sessions[0]?.insertMicrophoneRecording).toHaveBeenCalledWith(
+      '![[Voice recording.webm]]',
+    );
   });
 
   it('refuses a start synchronously while sidecar maintenance is active', async () => {
@@ -3347,6 +3585,7 @@ describe('DictationSessionController', () => {
 function createController({
   audioLevelMeter = new FakeAudioLevelMeter(),
   captureStream = new FakeCaptureStream(),
+  createMicrophoneRecording,
   countAudioInputDevices,
   createSession,
   llmRouter = createFakeLlmRouter(),
@@ -3366,6 +3605,11 @@ function createController({
 }: {
   audioLevelMeter?: FakeAudioLevelMeter;
   captureStream?: FakeCaptureStream;
+  createMicrophoneRecording?: (
+    sourcePath: string,
+    onSaved: (link: string) => void,
+    onError: (error: unknown) => void,
+  ) => MicrophoneRecordingLike;
   countAudioInputDevices?: () => Promise<number | null>;
   createSession?: (session: FakeSession, options: CreateSessionOptions) => void;
   getSettings?: () => PluginSettings;
@@ -3387,6 +3631,7 @@ function createController({
     captureStream,
     audioLevelMeter,
     ...(countAudioInputDevices !== undefined ? { countAudioInputDevices } : {}),
+    ...(createMicrophoneRecording !== undefined ? { createMicrophoneRecording } : {}),
     createSession: (_options: CreateSessionOptions) => {
       const session = new FakeSession();
       createSession?.(session, _options);

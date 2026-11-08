@@ -58,6 +58,13 @@ describe('resolvePluginSettings', () => {
     expect(resolvePluginSettings({}).schemaVersion).toBe(11);
   });
 
+  it('keeps microphone recording opt-in', () => {
+    expect(resolvePluginSettings({}).saveMicrophoneRecording).toBe(false);
+    expect(resolvePluginSettings({ saveMicrophoneRecording: true }).saveMicrophoneRecording).toBe(
+      true,
+    );
+  });
+
   it('defaults and normalizes HY-MT2 translation styles', () => {
     expect(resolvePluginSettings({}).translationStyle).toBe('default');
     expect(resolvePluginSettings({}).translationStyleInstruction).toBe('');

@@ -4,6 +4,7 @@ import { Platform } from 'obsidian';
 
 import type { AudioCaptureStream } from '../audio/audio-capture-stream';
 import { formatMicrophoneCaptureErrorMessage } from '../audio/microphone-permission-message';
+import type { MicrophoneRecordingLike } from '../audio/microphone-recording';
 import type { SidecarAudioLevelMeter } from '../audio/sidecar-audio-level-meter';
 import {
   formatSystemAudioErrorMessage,
@@ -69,6 +70,8 @@ type ControllerSession = Pick<
   | 'acceptTranscript'
   | 'clearSessionProcessingMark'
   | 'dispose'
+  | 'getTargetFilePath'
+  | 'insertMicrophoneRecording'
   | 'insertAdjacentToSessionRange'
   | 'markSessionRangeAsProcessing'
   | 'readCurrentSessionText'
@@ -85,6 +88,7 @@ interface ActiveSessionSnapshot {
   diarizationMaxSpeakers: PluginSettings['diarizationMaxSpeakers'];
   dictationLanguage: PluginSettings['dictationLanguage'];
   includeSystemAudio: PluginSettings['includeSystemAudio'];
+  saveMicrophoneRecording: PluginSettings['saveMicrophoneRecording'];
   dictationAnchor: PluginSettings['dictationAnchor'];
   listeningMode: PluginSettings['listeningMode'];
   llmFeaturesEnabled: PluginSettings['llmFeaturesEnabled'];
@@ -124,6 +128,9 @@ interface ManagedSession {
   // the user turns it back on. Provider/routing snapshots only refresh next session.
   llmDisabled: boolean;
   llmFailureLogged: boolean;
+  microphoneRecording: MicrophoneRecordingLike | null;
+  microphoneRecordingLink: string | null;
+  captureStop: Promise<void> | null;
   pendingTranscriptWork: Set<Promise<void>>;
   phase: SessionPhase;
   session: ControllerSession;
@@ -139,6 +146,11 @@ function rejectsTranscriptWork(entry: ManagedSession): boolean {
 interface DictationSessionControllerDependencies {
   audioLevelMeter: Pick<SidecarAudioLevelMeter, 'bindSession' | 'clearSession' | 'update'>;
   captureStream: Pick<AudioCaptureStream, 'isCapturing' | 'start' | 'stop'>;
+  createMicrophoneRecording?: (
+    sourcePath: string,
+    onSaved: (link: string) => void,
+    onError: (error: unknown) => void,
+  ) => MicrophoneRecordingLike;
   createSession: (options: {
     callbacks: {
       onLockedNoteClosed: () => void;
@@ -464,6 +476,9 @@ export class DictationSessionController {
         llmDisableRevisionAtStart !== this.llmDisableRevision ||
         !this.dependencies.getSettings().llmFeaturesEnabled,
       llmFailureLogged: false,
+      microphoneRecording: null,
+      microphoneRecordingLink: null,
+      captureStop: null,
       pendingTranscriptWork: new Set(),
       phase: 'starting',
       session,
@@ -508,6 +523,26 @@ export class DictationSessionController {
       // Read the saved deviceId at session-start time so a settings change
       // applies on the next dictation rather than mid-session.
       const audioInputDeviceId = this.dependencies.getSettings().audioInputDevice?.deviceId ?? null;
+      if (
+        snapshot.saveMicrophoneRecording &&
+        this.dependencies.createMicrophoneRecording !== undefined
+      ) {
+        entry.microphoneRecording = this.dependencies.createMicrophoneRecording(
+          entry.session.getTargetFilePath(),
+          (link) => {
+            entry.microphoneRecordingLink = link;
+          },
+          (error) => {
+            this.dependencies.logger?.warn('audio', 'could not save microphone recording', error);
+            this.dependencies.feedback.show({
+              cause: error,
+              intent: 'warning',
+              key: 'microphone-recording-save-failed',
+              message: t('notice.microphoneRecordingFailed'),
+            });
+          },
+        );
+      }
 
       await this.dependencies.captureStream.start(
         { sessionId, audioInputDeviceId },
@@ -529,15 +564,16 @@ export class DictationSessionController {
               'stopping audio capture: sidecar rejected an audio frame',
               error,
             );
-            void this.cancelSession(frameSessionId);
+            void this.cancelSession(frameSessionId, true);
           }
         },
+        entry.microphoneRecording ?? undefined,
       );
 
       if (this.activeSessionId === sessionId) {
         this.applyUiState('listening');
       } else if (this.dependencies.captureStream.isCapturing()) {
-        await this.dependencies.captureStream.stop();
+        await this.dependencies.captureStream.stop(false);
       }
     } catch (error) {
       await this.cleanupFailedStart(sessionId, error);
@@ -566,11 +602,12 @@ export class DictationSessionController {
       // and the anchor timer is cleaned up there too.
     }
 
-    await this.clearActiveSession(sessionId);
+    await this.clearActiveSession(sessionId, true);
 
     try {
       this.dependencies.sidecarConnection.requestStopSession(sessionId);
     } catch (error) {
+      if (entry !== undefined) this.appendMicrophoneRecording(entry);
       this.disposeLocalSession(sessionId);
       this.handleError(FEEDBACK_FAILURES.stopDictation, error, entry);
     }
@@ -645,7 +682,7 @@ export class DictationSessionController {
     }
   }
 
-  private cancelSession(sessionId: string): Promise<void> {
+  private cancelSession(sessionId: string, saveRecording = false): Promise<void> {
     const inFlightCancellation = this.cancellationPromises.get(sessionId);
     if (inFlightCancellation !== undefined) {
       return inFlightCancellation;
@@ -662,7 +699,10 @@ export class DictationSessionController {
     entry.terminalArbitration = 'cancelled';
     entry.phase = 'cancelling';
     this.abortProviderCleanups(entry);
-    const cancellation = Promise.resolve().then(() => this.completeSessionCancellation(sessionId));
+    const captureStop = this.clearActiveSession(sessionId, saveRecording);
+    const cancellation = Promise.resolve().then(() =>
+      this.completeSessionCancellation(sessionId, captureStop),
+    );
     this.cancellationPromises.set(sessionId, cancellation);
     void cancellation.then(
       () => {
@@ -679,18 +719,23 @@ export class DictationSessionController {
     return cancellation;
   }
 
-  private async completeSessionCancellation(sessionId: string): Promise<void> {
-    await this.clearActiveSession(sessionId);
+  private async completeSessionCancellation(
+    sessionId: string,
+    captureStop: Promise<void>,
+  ): Promise<void> {
+    await captureStop;
 
     try {
       await this.dependencies.sidecarConnection.cancelSession(sessionId);
     } catch (error) {
       this.dependencies.logger?.warn('session', 'failed to cancel dictation cleanly', error);
+      const entry = this.sessions.get(sessionId);
+      if (entry !== undefined) this.appendMicrophoneRecording(entry);
       this.disposeLocalSession(sessionId);
     }
   }
 
-  private async clearActiveSession(sessionId: string): Promise<void> {
+  private async clearActiveSession(sessionId: string, saveRecording = false): Promise<void> {
     if (this.activeSessionId !== sessionId) {
       return;
     }
@@ -698,10 +743,14 @@ export class DictationSessionController {
     this.dependencies.audioLevelMeter.clearSession(sessionId);
     this.applyUiState('idle');
     this.resetQueueTier();
-    await this.stopCaptureForTeardown();
+    const captureStop = this.stopCaptureForTeardown(saveRecording);
+    const entry = this.sessions.get(sessionId);
+    if (entry !== undefined) entry.captureStop = captureStop;
+    await captureStop;
+    if (entry?.captureStop === captureStop) entry.captureStop = null;
   }
 
-  private async stopCaptureForTeardown(): Promise<void> {
+  private async stopCaptureForTeardown(saveRecording = false): Promise<void> {
     if (!this.dependencies.captureStream.isCapturing()) {
       return;
     }
@@ -710,7 +759,7 @@ export class DictationSessionController {
     // throwing) must not stop stopDictation/cancelSession/dispose from sending the
     // sidecar stop/cancel command or disposing the local session afterward.
     try {
-      await this.dependencies.captureStream.stop();
+      await this.dependencies.captureStream.stop(saveRecording);
     } catch (error) {
       this.dependencies.logger?.warn(
         'audio',
@@ -1231,11 +1280,26 @@ export class DictationSessionController {
   }
 
   private async disposeAfterPendingWork(sessionId: string, entry: ManagedSession): Promise<void> {
+    if (entry.captureStop !== null) await entry.captureStop;
     if (entry.pendingTranscriptWork.size > 0) {
       await this.drainPendingTranscriptWork(entry);
     }
     if (this.sessions.get(sessionId) === entry) {
+      this.appendMicrophoneRecording(entry);
       this.disposeLocalSession(sessionId);
+    }
+  }
+
+  private appendMicrophoneRecording(entry: ManagedSession): void {
+    const link = entry.microphoneRecordingLink;
+    if (link === null) return;
+    entry.microphoneRecordingLink = null;
+    if (!entry.session.insertMicrophoneRecording(link)) {
+      this.dependencies.feedback.show({
+        intent: 'warning',
+        key: 'microphone-recording-embed-failed',
+        message: t('notice.microphoneRecordingEmbedFailed', { link }),
+      });
     }
   }
 
@@ -1251,6 +1315,7 @@ export class DictationSessionController {
   }
 
   private async runBatchCleanup(sessionId: string, entry: ManagedSession): Promise<void> {
+    if (entry.captureStop !== null) await entry.captureStop;
     // The sidecar can emit the final transcript_ready and session_stopped in the
     // same I/O chunk, so drain in-flight per-utterance accepts before reading the
     // transcript — otherwise the batch rewrite would miss the last utterance(s).
@@ -1260,6 +1325,8 @@ export class DictationSessionController {
     if (this.stopTerminatedBatchCleanup(sessionId, entry)) {
       return;
     }
+
+    this.appendMicrophoneRecording(entry);
 
     if (entry.llmDisabled || entry.snapshot.llmRouter === null) {
       this.disposeLocalSession(sessionId);
@@ -1497,7 +1564,7 @@ export class DictationSessionController {
       this.dependencies.logger?.warn('session', rawDetail);
     }
 
-    await this.cancelSession(event.sessionId);
+    await this.cancelSession(event.sessionId, true);
   }
 
   // Queue overload is a sidecar-initiated graceful stop: capture is already
@@ -1540,7 +1607,7 @@ export class DictationSessionController {
     }
 
     entry.phase = 'stopping';
-    await this.clearActiveSession(sessionId);
+    await this.clearActiveSession(sessionId, true);
   }
 
   private maybeLogLlmStageFailure(entry: ManagedSession, message: string): void {
@@ -1722,6 +1789,7 @@ function createSessionSnapshot(
     diarizationMaxSpeakers: settings.diarizationMaxSpeakers,
     dictationLanguage: settings.dictationLanguage,
     includeSystemAudio: settings.includeSystemAudio,
+    saveMicrophoneRecording: settings.saveMicrophoneRecording,
     dictationAnchor: settings.dictationAnchor,
     listeningMode: settings.listeningMode,
     llmFeaturesEnabled: settings.llmFeaturesEnabled,

@@ -15,6 +15,7 @@ import { AudioCaptureStream } from './audio/audio-capture-stream';
 import { AudioFileError, FfmpegAudioFileDecoder } from './audio/audio-file-decoder';
 import { pickLocalAudioFile } from './audio/local-audio-file-picker';
 import { isMediaToolInstalled } from './audio/media-tool-installer';
+import { MicrophoneRecording, MicrophoneRecordingWriter } from './audio/microphone-recording';
 import { SidecarAudioLevelMeter } from './audio/sidecar-audio-level-meter';
 import { registerCommands } from './commands/register-commands';
 import { AudioFileTranscriptionController } from './dictation/audio-file-transcription-controller';
@@ -273,6 +274,12 @@ export default class LocalSttPlugin extends Plugin {
     this.dictationController = new DictationSessionController({
       audioLevelMeter: this.audioLevelMeter,
       captureStream: this.audioCaptureStream,
+      createMicrophoneRecording: (sourcePath, onSaved, onError) =>
+        new MicrophoneRecording(
+          new MicrophoneRecordingWriter(this.app, sourcePath),
+          onSaved,
+          onError,
+        ),
       createSession: ({ callbacks, placement, rendererOptions, sessionId }) =>
         Session.createFromActiveEditor(this.app, {
           callbacks,
