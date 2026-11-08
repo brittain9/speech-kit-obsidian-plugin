@@ -47,6 +47,8 @@ The setup wizard installs the native engine and your first speech model. From th
 
 **Dictate.** Streaming words appear and revise in place while you speak. Finished text lands as Markdown at your cursor. Switch to a batch model when accuracy after each pause matters more than immediacy.
 
+To keep the microphone audio, enable **Save microphone recording** in Speech Kit settings. This is off by default. The recording stays in your vault using Obsidian's attachment location, and an audio player is added to the note. Speech Kit saves the audio if the sidecar stops the dictation session because of an error or backlog. If the player cannot be added, Speech Kit keeps the recording and shows its link. If the recording itself cannot be completed, Speech Kit removes the incomplete file and shows a warning.
+
 **Transcribe files.** Run **Transcribe local audio file** to turn an audio or video recording into text in the current note. Speech Kit extracts the audio with its media decoder and transcribes it with an installed batch speech model. Choose a language, model, timestamps, speaker labels, and paragraph style for that job. Your media stays on your computer.
 
 **Import YouTube captions.** Run **Transcribe YouTube video**, paste a video link, and add its available captions to the current note. Choose the caption language and optional linked timestamps. This fast path needs an internet connection, but no speech model or video download. Videos without usable captions leave the note unchanged.

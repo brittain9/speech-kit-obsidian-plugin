@@ -122,6 +122,30 @@ it('preserves a nested user edit inside newly inserted speech', () => {
   view.destroy();
 });
 
+it('keeps a recording inserted during speech projection outside its tracked range', () => {
+  let surface: NoteSurface;
+  let nested = false;
+  const early = EditorView.updateListener.of((update) => {
+    if (update.docChanged && !nested) {
+      nested = true;
+      expect(surface.insertAfterRange({ from: 0, to: 5 }, '![[recording.webm]]')).toBe(true);
+    }
+  });
+  const view = new EditorView({
+    state: EditorState.create({ extensions: [early, noteSurfaceUpdateListenerExtension()] }),
+    parent: document.body,
+  });
+  surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  expect(surface.appendProjection('u1', projection('hello')).kind).toBe('appended');
+  const span = surface.getSpan('u1');
+  expect(span).toBeDefined();
+  if (span === undefined) throw new Error('expected tracked speech');
+  expect(surface.readRange({ from: span.start, to: span.end })).toBe('hello');
+  expect(view.state.doc.toString()).toBe('hello\n\n![[recording.webm]]');
+  surface.dispose();
+  view.destroy();
+});
+
 it('does not register a span if the surface is disposed during insertion', () => {
   let surface: NoteSurface;
   const early = EditorView.updateListener.of((update) => {

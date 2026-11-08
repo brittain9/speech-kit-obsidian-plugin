@@ -92,6 +92,7 @@ interface NoteSurfaceLike {
   appendContinuation(text: string): SurfaceDesynchronization | null;
   dispose(): void;
   getSpan(utteranceId: UtteranceId): ProjectedSpan | undefined;
+  insertAfterRange(range: RewriteRange | null, text: string): boolean;
   readRange(range: RewriteRange): string | null;
   readNoteGlossary(maxChars: number): { text: string; truncated: boolean } | null;
   readNoteText(maxChars: number): { text: string; truncated: boolean } | null;
@@ -275,6 +276,17 @@ export class Session {
     }
 
     return (this.surface.readRange(range) ?? '').trim();
+  }
+
+  getTargetFilePath(): string {
+    return this.dependencies.lockedFile.path;
+  }
+
+  insertMicrophoneRecording(link: string): boolean {
+    if (this.surface === null) return false;
+    const range = this.resolveSessionRange();
+    if (range === null && this.rawSessionEntries.length > 0) return false;
+    return this.surface.insertAfterRange(range, link);
   }
 
   replaceSessionRangeWithCleaned(
