@@ -78,7 +78,7 @@ Correct misleading documentation as part of the affected workflow. Do not add co
 
 ### Model research and integration
 
-Use parallel research agents and primary sources: official model cards, model repositories, runtime documentation, source code, licenses, and release notes. Compare candidates with the current catalog before proposing additions.
+Use primary sources: official model cards, model repositories, runtime documentation, source code, licenses, and release notes. Compare candidates with the current catalog before proposing additions.
 
 For each serious candidate, record:
 
@@ -95,17 +95,17 @@ Implement the strongest practical candidates when the evidence supports them. Va
 ## Execution loop
 
 1. **Baseline:** inspect git, installed build, toolchains, process state, test-vault configuration, and existing checks. Keep prior maintenance results and unfinished follow-ups distinct.
-2. **Parallel discovery:** delegate model research, security/version review, and code audits. Rotate agents through distinct areas within the environment's concurrency limit. Use GPT-6.1 agents with extra-high reasoning for deep code and architecture work; use lighter agents where they are sufficient.
+2. **Parallel discovery:** investigate model options, security and supported versions, and code quality as distinct workstreams. Review architecture and resource ownership before making structural changes.
 3. **Triage:** reduce findings to a concrete user failure, violated invariant, measured cost, or useful capability. Rank data loss, security, hangs, and resource leaks first; then daily-workflow reliability and UX; then model opportunities and polish.
 4. **Reproduce:** build a tight failing test or repeatable measurement before changing behavior. Test through the public interface or the real integration seam.
 5. **Implement:** make the smallest complete root-cause fix. Remove superseded code. Avoid compatibility shims, silent fallbacks, speculative options, and commented-out code.
-6. **Review:** have a separate agent review material changes, especially lifecycle, editor, concurrency, filesystem, and protocol work. Reproduce its findings and resolve them with tests.
+6. **Review:** independently review material changes, especially lifecycle, editor, concurrency, filesystem, and protocol work. Reproduce review findings and resolve them with tests.
 7. **Exercise:** use the changed feature in native Obsidian. Include successful use, cancellation, failure, note safety, repeated use, and interactions with adjacent features. Keep one owner for the shared QA UI.
 8. **Validate and merge:** run the relevant checks, then the repository's required gates. Merge focused PRs only after their checks pass. Re-test interactions when integration changes behavior.
 9. **Soak and reassess:** repeat representative workflows and bounded longer sessions. Update priorities from new evidence rather than expanding the task without limit.
 10. **Handoff:** install the exact verified build in the test vault, leave capture and recording off, organize evidence, and provide the final brief. Do not release.
 
-Each implementation agent owns an isolated checkout. Agents must coordinate before touching shared resources. Keep one authoritative findings log with the finding, priority, evidence, owner, branch/PR, validation, and disposition. Research recommendations must distinguish implemented, validated, proposed, and rejected candidates.
+Use an isolated checkout for each implementation. Coordinate changes to shared resources. Keep one authoritative findings log with the finding, priority, evidence, owner, branch/PR, validation, and disposition. Research recommendations must distinguish implemented, validated, proposed, and rejected candidates.
 
 ## Validation requirements
 
