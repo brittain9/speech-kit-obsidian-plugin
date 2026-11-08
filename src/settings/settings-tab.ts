@@ -261,6 +261,12 @@ export class LocalSttSettingTab extends PluginSettingTab {
       logger: this.dependencies.logger,
     });
 
+    addToggleSetting(captureCard, this.access, {
+      name: t('settings.saveMicrophoneRecording.name'),
+      desc: t('settings.saveMicrophoneRecording.desc'),
+      key: 'saveMicrophoneRecording',
+    });
+
     const selectedLanguage = settings.dictationLanguage;
     const coverage = languageFeatureCoverage(modelState.catalog.models, selectedLanguage);
     const languageLabel = dictationLanguageLabel(selectedLanguage);

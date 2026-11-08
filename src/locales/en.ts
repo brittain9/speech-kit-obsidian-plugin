@@ -183,6 +183,8 @@ export const en = {
   'media.progress.insert': 'Inserting transcript…',
   'notice.dictationStartFailed': 'Could not start dictation.',
   'notice.dictationStopFailed': 'Could not stop dictation.',
+  'notice.microphoneRecordingFailed':
+    'Could not save the microphone recording. Dictation continues, but no audio file was added.',
   'notice.finalizedUtteranceAutoCopyFailed':
     'Could not automatically copy the finalized utterance.',
   'notice.lastUtteranceCleared': 'Cleared the last retained utterance.',
@@ -548,6 +550,9 @@ export const en = {
   'settings.systemAudio.name': 'Include system audio',
   'settings.systemAudio.desc':
     "Also capture this computer's default audio output for meetings, calls, and videos.",
+  'settings.saveMicrophoneRecording.name': 'Save microphone recording',
+  'settings.saveMicrophoneRecording.desc':
+    'Save microphone audio to your attachment folder and embed it with the transcript. System audio is not included.',
   'settings.systemAudio.ready': 'System audio is ready.',
   'settings.systemAudio.testFailed':
     'Could not test system audio. Check that the speech engine is installed and try again.',

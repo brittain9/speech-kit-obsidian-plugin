@@ -165,6 +165,7 @@ export interface PluginSettings {
   accelerationPreference: AccelerationPreference;
   audioInputDevice: AudioInputDevice | null;
   includeSystemAudio: boolean;
+  saveMicrophoneRecording: boolean;
   cudaLibraryPath: string;
   developerMode: boolean;
   diarizationEnabled: boolean;
@@ -233,6 +234,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   accelerationPreference: 'auto',
   audioInputDevice: null,
   includeSystemAudio: false,
+  saveMicrophoneRecording: false,
   cudaLibraryPath: '',
   developerMode: false,
   diarizationEnabled: false,
@@ -330,6 +332,10 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
     accelerationPreference: readAccelerationPreference(raw.accelerationPreference),
     audioInputDevice: readAudioInputDevice(raw.audioInputDevice),
     includeSystemAudio: readIncludeSystemAudio(raw),
+    saveMicrophoneRecording: readBoolean(
+      raw.saveMicrophoneRecording,
+      DEFAULT_PLUGIN_SETTINGS.saveMicrophoneRecording,
+    ),
     cudaLibraryPath: readString(raw.cudaLibraryPath, DEFAULT_PLUGIN_SETTINGS.cudaLibraryPath),
     developerMode: readBoolean(raw.developerMode, DEFAULT_PLUGIN_SETTINGS.developerMode),
     diarizationEnabled: readDiarizationEnabled(raw),

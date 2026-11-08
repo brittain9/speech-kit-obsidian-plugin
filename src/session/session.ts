@@ -275,6 +275,10 @@ export class Session {
     return (this.surface.readRange(range) ?? '').trim();
   }
 
+  getTargetFilePath(): string {
+    return this.dependencies.lockedFile.path;
+  }
+
   replaceSessionRangeWithCleaned(
     cleanText: string,
     options: {

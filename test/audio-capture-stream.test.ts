@@ -113,6 +113,28 @@ describe('AudioCaptureStream', () => {
     expect(track.listenerCount()).toBe(1);
   });
 
+  it('starts and finalizes an optional microphone recording with capture', async () => {
+    const track = new FakeMediaStreamTrack();
+    const mediaStream = new FakeMediaStream(track);
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: vi.fn(async () => mediaStream as unknown as MediaStream) },
+    });
+    const recording = {
+      discardSavedFile: vi.fn(async () => {}),
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async () => {}),
+    };
+    const capture = new AudioCaptureStream({});
+
+    await capture.start({ sessionId: 'session-recording' }, vi.fn(), recording);
+    await capture.stop(true);
+
+    expect(recording.start).toHaveBeenCalledOnce();
+    expect(recording.start).toHaveBeenCalledWith(mediaStream);
+    expect(recording.stop).toHaveBeenCalledOnce();
+    expect(recording.stop).toHaveBeenCalledWith(true);
+  });
+
   it('reports a device that ends while the capture graph is being initialized', async () => {
     const track = new FakeMediaStreamTrack();
     track.readyState = 'ended';
