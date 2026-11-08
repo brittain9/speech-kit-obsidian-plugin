@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: 24.14.1
+  NODE_VERSION: 24.22.2
   RUST_TOOLCHAIN: 1.94.1
   MODEL_CACHE_DIR: ${{ github.workspace }}/.test-models
 
@@ -54,7 +54,7 @@ jobs:
           key: whisper-test-model-tiny-en-q8_0
 
       - name: Install JavaScript dependencies
-        run: npm ci
+        run: npm ci --engine-strict
 
       - name: Run sidecar e2e quality suite
         env:
@@ -145,7 +145,7 @@ jobs:
           key: pocket-tts-english-${{ runner.os }}-${{ hashFiles('native/catalog.json') }}
 
       - name: Install JavaScript dependencies
-        run: npm ci
+        run: npm ci --engine-strict
 
       - name: Run English Pocket TTS real-model smoke
         env:
@@ -181,7 +181,7 @@ jobs:
           key: supertonic-${{ hashFiles('native/catalog.json') }}
 
       - name: Install JavaScript dependencies
-        run: npm ci
+        run: npm ci --engine-strict
 
       - name: Run Supertonic real-model smoke
         env:

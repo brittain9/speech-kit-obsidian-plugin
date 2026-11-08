@@ -103,7 +103,7 @@ jobs:
           upgrade-npm: "true"
 
       - name: Install JavaScript dependencies
-        run: npm ci
+        run: npm ci --engine-strict
 
       - name: Build frontend bundle
         run: npm run build:frontend

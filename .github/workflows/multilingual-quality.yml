@@ -50,7 +50,7 @@ jobs:
           key: pocket-tts-multilingual-${{ hashFiles('native/catalog.json') }}
 
       - name: Install JavaScript dependencies
-        run: npm ci
+        run: npm ci --engine-strict
 
       - name: Run six-language Pocket TTS certification
         env:
@@ -103,7 +103,7 @@ jobs:
           key: multilingual-asr-${{ hashFiles('native/catalog.json') }}
 
       - name: Install JavaScript dependencies
-        run: npm ci
+        run: npm ci --engine-strict
 
       - name: Run multilingual product-path quality suite
         env:
