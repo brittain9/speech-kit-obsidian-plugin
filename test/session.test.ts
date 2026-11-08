@@ -349,6 +349,39 @@ describe('Session', () => {
     session.dispose();
   });
 
+  it('includes the link and final suffix in the batch cleanup range', () => {
+    const { session, view } = createRecoveryIntegrationHarness('Existing note');
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: false,
+        revision: 0,
+        text: 'hello',
+        utteranceId: 'u1',
+      }),
+    );
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.paste'),
+      changes: { from: view.state.doc.length, insert: ' https://example.com' },
+    });
+    session.acceptTranscript(
+      transcript({
+        sessionId: 'recovery-integration',
+        isFinal: true,
+        revision: 1,
+        text: 'hello world',
+        utteranceId: 'u1',
+      }),
+    );
+    expect(session.readCurrentSessionText()).toBe('hello https://example.com world');
+    const result = session.replaceSessionRangeWithCleaned('cleaned');
+    expect(result.kind).toBe('replaced');
+    if (result.kind === 'replaced')
+      expect(result.recovery.rawText).toBe(' hello https://example.com world');
+    expect(view.state.doc.toString()).toBe('Existing note cleaned');
+    session.dispose();
+  });
+
   it('uses the last visible partial when later partials arrive after a boundary edit', () => {
     const { session, view } = createRecoveryIntegrationHarness('Existing note');
     session.acceptTranscript(
