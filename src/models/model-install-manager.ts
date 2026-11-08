@@ -15,7 +15,10 @@ import type {
   SystemInfoEvent,
 } from '../sidecar/protocol';
 import type { SidecarConnection } from '../sidecar/sidecar-connection';
-import type { SidecarLifecycleGate } from '../sidecar/sidecar-lifecycle-gate';
+import type {
+  SidecarLifecycleGate,
+  SidecarLifecycleLease,
+} from '../sidecar/sidecar-lifecycle-gate';
 import { resolveEngineCapabilities } from './capability-view';
 import { validateExternalModelFilePath } from './external-model-file';
 import {
@@ -106,9 +109,11 @@ interface ModelInstallManagerDependencies {
     | 'listModelCatalog'
     | 'probeModelSelection'
     | 'removeModel'
+    | 'shutdown'
     | 'subscribe'
+    | 'subscribeProcessStop'
   >;
-  sidecarLifecycleGate: Pick<SidecarLifecycleGate, 'runMutation'>;
+  sidecarLifecycleGate: Pick<SidecarLifecycleGate, 'acquireMutation' | 'runMutation'>;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +223,15 @@ interface InstallWaiter extends InstallRequest {
   resolve: () => void;
 }
 
+interface ReplacementInstall {
+  lease: SidecarLifecycleLease;
+  lifecycleGeneration: number;
+  phase: 'installing' | 'stopping' | 'unconfirmed' | 'reconciling';
+  stopConfirmed: boolean;
+  request: InstallRequest;
+  unsubscribe: () => void;
+}
+
 interface InstallRefresh {
   completed: CatalogModelSelection | null;
   expectedInstallGeneration: number;
@@ -295,6 +309,7 @@ export class ModelInstallManager {
   private modelStore: ModelStoreRecord = EMPTY_MODEL_STORE;
   private probeGenerations: Record<CapabilityTask, number> = { stt: 0, tts: 0 };
   private releaseSidecarSubscription: (() => void) | null = null;
+  private replacementInstall: ReplacementInstall | null = null;
   private selectedModelCapabilities: SelectedModelCapabilities = { status: 'none' };
   private selectionGenerations: SelectionGenerations = createSelectionGenerations();
   private selectedTtsModelCapabilities: SelectedModelCapabilities = { status: 'none' };
@@ -496,7 +511,8 @@ export class ModelInstallManager {
       compiledRuntimes: this.compiledRuntimes,
       failedInstall: this.failedInstall === null ? null : copyFailedInstall(this.failedInstall),
       installedModels: this.installedModels,
-      installRequestPending: this.currentInstallRequest !== null,
+      installRequestPending:
+        this.currentInstallRequest !== null || this.replacementInstall !== null,
       loadError: this.loadError,
       loadStatus: this.loadStatus,
       modelStore: this.modelStore,
@@ -542,8 +558,26 @@ export class ModelInstallManager {
     });
   }
 
+  async reinstall(selection: CatalogModelSelection): Promise<ModelInstallUpdateEvent> {
+    const model = this.catalog.models.find((candidate) =>
+      matchesModelTriple(candidate, selection.runtimeId, selection.familyId, selection.modelId),
+    );
+    const installed = this.installedModels.some((candidate) =>
+      matchesModelTriple(candidate, selection.runtimeId, selection.familyId, selection.modelId),
+    );
+    if (model?.task !== 'stt' || !installed) {
+      throw new Error('Only an installed speech-to-text model can be reinstalled.');
+    }
+
+    return this.install(selection);
+  }
+
   private async startInstall(request: InstallRequest): Promise<ModelInstallUpdateEvent> {
-    if (this.activeInstall !== null || this.currentInstallRequest !== null) {
+    if (
+      this.activeInstall !== null ||
+      this.currentInstallRequest !== null ||
+      this.replacementInstall !== null
+    ) {
       throw new Error('Another model is already being installed.');
     }
     const model = this.catalog.models.find((candidate) =>
@@ -557,6 +591,20 @@ export class ModelInstallManager {
     const language = this.getDictationLanguage();
     if (model?.task === 'stt' && !catalogModelSupportsLanguage(model, language)) {
       throw incompatibleLanguageError(model.displayName, language);
+    }
+    let replacement: ReplacementInstall | null = null;
+    if (
+      model?.task === 'stt' &&
+      this.installedModels.some((installed) =>
+        matchesModelTriple(
+          installed,
+          request.selection.runtimeId,
+          request.selection.familyId,
+          request.selection.modelId,
+        ),
+      )
+    ) {
+      replacement = this.beginReplacementInstall(request);
     }
 
     this.installGeneration += 1;
@@ -578,6 +626,9 @@ export class ModelInstallManager {
         ...createModelStoreOverridePayload(this.deps.getSettings().modelStorePathOverride),
       });
     } catch (error) {
+      if (replacement !== null && replacement.phase !== 'reconciling') {
+        await this.stopReplacementInstall(request.installId);
+      }
       if (this.currentInstallRequest?.installId === request.installId) {
         this.currentInstallRequest = null;
         this.clearActiveInstall(request.installId);
@@ -673,16 +724,20 @@ export class ModelInstallManager {
       return;
     }
     const dismissedInstallId = this.activeInstall.installUpdate.installId;
-
-    // Refresh installed models from sidecar to check if the model actually
-    // completed while we were stuck.
-    const overridePayload = createModelStoreOverridePayload(
-      this.deps.getSettings().modelStorePathOverride,
-    );
-    const installedEvent = await this.deps.sidecarConnection.listInstalledModels(
-      overridePayload.modelStorePathOverride,
-    );
-    this.installedModels = installedEvent.models;
+    const replacing = this.replacementInstall?.request.installId === dismissedInstallId;
+    if (replacing) {
+      await this.stopReplacementInstall(dismissedInstallId);
+      this.rejectInstallWaiter(dismissedInstallId, new ModelInstallCancelledError());
+    } else {
+      // A terminal event can be lost after the installer has promoted files.
+      const overridePayload = createModelStoreOverridePayload(
+        this.deps.getSettings().modelStorePathOverride,
+      );
+      const installedEvent = await this.deps.sidecarConnection.listInstalledModels(
+        overridePayload.modelStorePathOverride,
+      );
+      this.installedModels = installedEvent.models;
+    }
 
     // Clear the stuck timer if it is somehow still pending.
     if (this.cancelStuckTimer !== null) {
@@ -1236,6 +1291,106 @@ export class ModelInstallManager {
     }
   }
 
+  private beginReplacementInstall(request: InstallRequest): ReplacementInstall {
+    const operation: ReplacementInstall = {
+      lease: this.deps.sidecarLifecycleGate.acquireMutation(),
+      lifecycleGeneration: this.lifecycleGeneration,
+      phase: 'installing',
+      stopConfirmed: false,
+      request,
+      unsubscribe: () => {},
+    };
+    this.replacementInstall = operation;
+    const unsubscribeEvents = this.deps.sidecarConnection.subscribe((event) => {
+      if (
+        operation.lifecycleGeneration !== this.lifecycleGeneration &&
+        event.type === 'model_install_update' &&
+        event.installId === request.installId &&
+        isTerminalInstallState(event.state)
+      ) {
+        this.releaseReplacementInstall(request.installId, 'terminal');
+      }
+    });
+    const unsubscribeStop = this.deps.sidecarConnection.subscribeProcessStop(() => {
+      operation.stopConfirmed = true;
+      if (operation.phase === 'stopping' || operation.phase === 'reconciling') return;
+      if (
+        operation.lifecycleGeneration === this.lifecycleGeneration &&
+        (this.currentInstallRequest?.installId === request.installId ||
+          this.failedInstall?.failureId === request.installId)
+      ) {
+        const error = new Error('The sidecar stopped before the model reinstall completed.');
+        this.currentInstallRequest = null;
+        this.clearActiveInstall(request.installId);
+        this.failedInstall = createFailedInstall(request, error);
+        this.rejectInstallWaiter(request.installId, error);
+        this.notify();
+      }
+      void this.refreshStoppedReplacement(operation);
+    });
+    operation.unsubscribe = () => {
+      unsubscribeEvents();
+      unsubscribeStop();
+    };
+    return operation;
+  }
+
+  private releaseReplacementInstall(installId: string, proof: 'terminal' | 'process-stop'): void {
+    const operation = this.replacementInstall;
+    if (
+      operation?.request.installId !== installId ||
+      (operation.phase !== 'installing' && proof === 'terminal')
+    ) {
+      return;
+    }
+    this.replacementInstall = null;
+    operation.unsubscribe();
+    operation.lease.release();
+  }
+
+  private async stopReplacementInstall(installId: string): Promise<void> {
+    const operation = this.replacementInstall;
+    if (operation?.request.installId !== installId) return;
+    operation.phase = 'stopping';
+    try {
+      await this.deps.sidecarConnection.shutdown();
+    } catch (error) {
+      if (operation.stopConfirmed) {
+        await this.refreshStoppedReplacement(operation);
+        return;
+      }
+      operation.phase = 'unconfirmed';
+      this.currentInstallRequest = null;
+      this.clearActiveInstall(installId);
+      const message =
+        'Could not confirm that model reinstallation stopped. Restart Obsidian before starting speech work.';
+      this.failedInstall = createFailedInstall(operation.request, message);
+      this.rejectInstallWaiter(installId, new Error(message));
+      this.notify();
+      throw error;
+    }
+    await this.refreshStoppedReplacement(operation);
+  }
+
+  private async refreshStoppedReplacement(operation: ReplacementInstall): Promise<void> {
+    if (operation.lifecycleGeneration !== this.lifecycleGeneration) {
+      this.releaseReplacementInstall(operation.request.installId, 'process-stop');
+      return;
+    }
+    operation.phase = 'reconciling';
+    await this.completeInstallRefresh(
+      operation.request.installId,
+      {
+        completed: null,
+        expectedInstallGeneration: this.installGeneration,
+        expectedLifecycleGeneration: operation.lifecycleGeneration,
+        expectedSelectionGenerations: { ...this.selectionGenerations },
+        reconcileFailure: null,
+      },
+      'process-stop',
+    );
+  }
+
   private async refreshSelectedCapabilities(
     selection: SelectedModel,
     task: CapabilityTask = 'stt',
@@ -1460,6 +1615,12 @@ export class ModelInstallManager {
     if (event.type !== 'model_install_update') {
       return;
     }
+    if (
+      this.replacementInstall?.request.installId === event.installId &&
+      this.replacementInstall.phase !== 'installing'
+    ) {
+      return;
+    }
 
     if (event.state === 'failed') {
       this.rejectInstallWaiter(
@@ -1489,13 +1650,13 @@ export class ModelInstallManager {
           selectedModelEquals(this.failedInstall.selection, completed)
             ? copyFailedInstall(this.failedInstall)
             : null;
-        void this.refreshAfterInstall({
+        void this.completeInstallRefresh(event.installId, {
           completed: reconcileFailure === null ? null : completed,
           expectedInstallGeneration: this.installGeneration,
           expectedLifecycleGeneration: this.lifecycleGeneration,
           expectedSelectionGenerations: { ...this.selectionGenerations },
           reconcileFailure,
-        }).then((refreshed) => this.resolveCompletedInstallWaiter(event.installId, refreshed));
+        });
       }
       return;
     }
@@ -1539,17 +1700,58 @@ export class ModelInstallManager {
       if (matchedFailedRequest !== null) {
         this.notify();
       }
-      void this.refreshAfterInstall({
+      void this.completeInstallRefresh(event.installId, {
         completed: selectionFromInstallUpdate(event),
         expectedInstallGeneration: this.installGeneration,
         expectedLifecycleGeneration: this.lifecycleGeneration,
         expectedSelectionGenerations: { ...this.selectionGenerations },
         reconcileFailure: null,
-      }).then((refreshed) => this.resolveCompletedInstallWaiter(event.installId, refreshed));
+      });
       return;
     }
 
+    if (isTerminalInstallState(event.state)) {
+      this.releaseReplacementInstall(event.installId, 'terminal');
+    }
     this.notify();
+  }
+
+  private async completeInstallRefresh(
+    installId: string,
+    refresh: InstallRefresh,
+    proof: 'terminal' | 'process-stop' = 'terminal',
+  ): Promise<void> {
+    const expectedInitGeneration = this.initGeneration;
+    try {
+      const replacing = this.replacementInstall?.request.installId === installId;
+      const refreshed = await this.refreshAfterInstall(
+        replacing ? { ...refresh, completed: null } : refresh,
+      );
+      const replacement = this.replacementInstall;
+      const selected = this.deps.getSettings().selectedModel;
+      if (
+        replacement?.request.installId === installId &&
+        replacement.lifecycleGeneration === refresh.expectedLifecycleGeneration &&
+        this.lifecycleGeneration === refresh.expectedLifecycleGeneration &&
+        this.initGeneration === expectedInitGeneration &&
+        this.selectionGenerations.stt === refresh.expectedSelectionGenerations.stt &&
+        selected !== null &&
+        selectedModelEquals(selected, replacement.request.selection)
+      ) {
+        await this.refreshSelectedCapabilities(
+          selected,
+          'stt',
+          expectedInitGeneration,
+          refresh.expectedSelectionGenerations.stt,
+          false,
+          true,
+        );
+      }
+      this.resolveCompletedInstallWaiter(installId, refreshed);
+    } finally {
+      this.releaseReplacementInstall(installId, proof);
+      if (this.lifecycleGeneration === refresh.expectedLifecycleGeneration) this.notify();
+    }
   }
 
   private async refreshAfterInstall(refresh: InstallRefresh): Promise<boolean> {

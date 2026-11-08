@@ -139,7 +139,7 @@ describe('deriveModelRowStates', () => {
     );
 
     expect(row).toMatchObject({ installed: true, isSelected: true });
-    expect(row.allowedActions).toEqual(['selected', 'details']);
+    expect(row.allowedActions).toEqual(['selected', 'reinstall', 'details']);
     expect(row.model).toMatchObject({
       familyId: 'moonshine',
       licenseLabel: 'MIT',
@@ -153,6 +153,19 @@ describe('deriveModelRowStates', () => {
   });
 
   describe('per-row allowed actions', () => {
+    it('offers recovery for a stuck reinstall of an installed speech model', () => {
+      const row = getRow(
+        deriveModelRowStates(
+          buildState({
+            activeInstall: sampleActiveInstall('cancelStuck'),
+            installedModels: [sampleInstalledModel()],
+          }),
+        ),
+        'whisper_large_v3_turbo_q8_0',
+      );
+      expect(row.allowedActions).toEqual(['recover', 'details']);
+    });
+
     it('idle, not installed → [install, details]', () => {
       const row = getRow(deriveModelRowStates(buildState()), 'whisper_large_v3_turbo_q8_0');
 
@@ -196,10 +209,10 @@ describe('deriveModelRowStates', () => {
       const row = getRow(rows, 'whisper_large_v3_turbo_q8_0');
 
       expect(row).toMatchObject({ installed: true, isSelected: false });
-      expect(row.allowedActions).toEqual(['use', 'remove', 'details']);
+      expect(row.allowedActions).toEqual(['use', 'reinstall', 'remove', 'details']);
     });
 
-    it('installed and selected → [selected, details] (selected is disabled)', () => {
+    it('offers reinstall for an installed selected model without exposing removal', () => {
       const rows = deriveModelRowStates(
         buildState({
           installedModels: [sampleInstalledModel()],
@@ -209,7 +222,19 @@ describe('deriveModelRowStates', () => {
       const row = getRow(rows, 'whisper_large_v3_turbo_q8_0');
 
       expect(row).toMatchObject({ installed: true, isSelected: true });
-      expect(row.allowedActions).toEqual(['selected', 'details']);
+      expect(row.allowedActions).toEqual(['selected', 'reinstall', 'details']);
+    });
+
+    it('does not offer another reinstall while a replacement is awaiting acknowledgement or refresh', () => {
+      const rows = deriveModelRowStates(
+        buildState({
+          installedModels: [sampleInstalledModel()],
+          installRequestPending: true,
+          selectedModel: selectionFor('whisper_large_v3_turbo_q8_0'),
+        }),
+      );
+
+      expect(getRow(rows, 'whisper_large_v3_turbo_q8_0').allowedActions).not.toContain('reinstall');
     });
   });
 

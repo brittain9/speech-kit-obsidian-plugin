@@ -541,7 +541,14 @@ impl AppState {
                                     catalog: Arc::clone(&self.catalog),
                                     before_model_replace: {
                                         let invalidator = self.synthesis_worker.cache_invalidator();
+                                        let transcription_release =
+                                            self.transcription_worker.model_release_barrier();
                                         Arc::new(move |runtime_id, family_id, install_dir| {
+                                            transcription_release.wait_until_released(
+                                                runtime_id,
+                                                family_id,
+                                                install_dir,
+                                            )?;
                                             invalidator.invalidate_and_wait(
                                                 runtime_id,
                                                 family_id,
