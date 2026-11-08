@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: 24.14.1
+  NODE_VERSION: 24.22.2
   RUST_TOOLCHAIN: 1.94.1
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
           upgrade-npm: "true"
 
       - name: Install JavaScript dependencies
-        run: npm ci
+        run: npm ci --engine-strict
 
       - name: Validate release metadata
         run: npm run check:release
