@@ -7,7 +7,7 @@
   "main": "main.js",
   "type": "module",
   "engines": {
-    "node": "^20.19.0 || ^22.13.0 || >=24"
+    "node": "^24.22.2"
   },
   "scripts": {
     "build:sidecar": "node scripts/build-sidecar.mjs",

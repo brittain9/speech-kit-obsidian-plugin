@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 env:
-  NODE_VERSION: 24.14.1
+  NODE_VERSION: 24.22.2
 
 jobs:
   snapshot:
@@ -42,7 +42,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install JavaScript dependencies
-        run: npm ci
+        run: npm ci --engine-strict
 
       # STATS_TRAFFIC_TOKEN is a fine-grained PAT (this repo only,
       # Administration: read) that must be added manually as a repo secret —
