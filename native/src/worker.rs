@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::panic::{self, AssertUnwindSafe};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
@@ -56,6 +56,12 @@ pub enum WorkerCommand {
     EndSession {
         session_id: String,
     },
+    ConfirmModelReleased {
+        runtime_id: RuntimeId,
+        family_id: ModelFamilyId,
+        install_dir: PathBuf,
+        acknowledged: Sender<Result<(), String>>,
+    },
     Shutdown,
     StreamAudio {
         samples: Vec<i16>,
@@ -105,6 +111,35 @@ pub struct TranscriptionWorker {
     handle: Option<thread::JoinHandle<()>>,
 }
 
+#[derive(Clone)]
+pub struct TranscriptionModelReleaseBarrier {
+    command_tx: Sender<WorkerCommand>,
+}
+
+impl TranscriptionModelReleaseBarrier {
+    /// Wait for prior session teardown commands to release model handles.
+    /// A session still using this install prevents replacement.
+    pub fn wait_until_released(
+        &self,
+        runtime_id: RuntimeId,
+        family_id: ModelFamilyId,
+        install_dir: &Path,
+    ) -> Result<(), String> {
+        let (acknowledged, acknowledgement) = mpsc::channel();
+        self.command_tx
+            .send(WorkerCommand::ConfirmModelReleased {
+                runtime_id,
+                family_id,
+                install_dir: install_dir.to_path_buf(),
+                acknowledged,
+            })
+            .map_err(|_| "The transcription worker is unavailable.".to_string())?;
+        acknowledgement.recv().map_err(|_| {
+            "The transcription worker stopped before releasing the model.".to_string()
+        })?
+    }
+}
+
 impl TranscriptionWorker {
     pub fn spawn(registry: Arc<EngineRegistry>) -> Self {
         let (command_tx, command_rx) = mpsc::channel();
@@ -121,6 +156,12 @@ impl TranscriptionWorker {
 
     pub fn poll_event(&self) -> Option<WorkerEvent> {
         self.event_rx.try_recv().ok()
+    }
+
+    pub fn model_release_barrier(&self) -> TranscriptionModelReleaseBarrier {
+        TranscriptionModelReleaseBarrier {
+            command_tx: self.command_tx.clone(),
+        }
     }
 
     // SendError wraps the rejected command, which contains an audio buffer
@@ -353,6 +394,24 @@ fn worker_main(
             }
             WorkerCommand::EndSession { session_id } => {
                 sessions.remove(&session_id);
+            }
+            WorkerCommand::ConfirmModelReleased {
+                runtime_id,
+                family_id,
+                install_dir,
+                acknowledged,
+            } => {
+                let in_use = sessions.values().any(|session| {
+                    session.metadata.runtime_id == runtime_id
+                        && session.metadata.family_id == family_id
+                        && session.metadata.model_file_path.starts_with(&install_dir)
+                });
+                let result = if in_use {
+                    Err("The transcription model is still in use.".to_string())
+                } else {
+                    Ok(())
+                };
+                let _ = acknowledged.send(result);
             }
             WorkerCommand::Shutdown => break,
             WorkerCommand::StreamAudio {
@@ -1040,6 +1099,7 @@ fn assemble_transcript(input: TranscriptAssembly<'_>) -> Transcript {
 mod tests {
     use std::path::Path;
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
     use super::*;
@@ -1110,6 +1170,189 @@ mod tests {
         dropped_rx
             .try_recv()
             .expect("worker resources must be destroyed before drop returns");
+    }
+
+    struct FileBackedModel {
+        _file: std::fs::File,
+        drops: Arc<AtomicUsize>,
+    }
+
+    impl Drop for FileBackedModel {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    impl LoadedModel for FileBackedModel {
+        fn transcribe(
+            &mut self,
+            _request: &TranscriptionRequest,
+        ) -> Result<EngineTranscriptOutput, TranscriptionError> {
+            Ok(fixture_output("file-backed transcription".to_string()))
+        }
+    }
+
+    impl StreamingModel for FileBackedModel {
+        fn accept_audio(&mut self, _samples: &[i16]) -> Result<(), TranscriptionError> {
+            Ok(())
+        }
+
+        fn partial(&mut self) -> Result<EngineTranscriptOutput, TranscriptionError> {
+            Ok(fixture_output("file-backed partial".to_string()))
+        }
+
+        fn finalize_utterance(&mut self) -> Result<EngineTranscriptOutput, TranscriptionError> {
+            Ok(fixture_output("file-backed final".to_string()))
+        }
+
+        fn reset_utterance(&mut self) {}
+    }
+
+    struct FileBackedAdapter {
+        capabilities: ModelFamilyCapabilities,
+        drops: Arc<AtomicUsize>,
+    }
+
+    impl ModelFamilyAdapter for FileBackedAdapter {
+        fn runtime_id(&self) -> RuntimeId {
+            RuntimeId::OnnxRuntime
+        }
+
+        fn family_id(&self) -> ModelFamilyId {
+            ModelFamilyId::Moonshine
+        }
+
+        fn capabilities(&self) -> &ModelFamilyCapabilities {
+            &self.capabilities
+        }
+
+        fn probe_model(&self, _path: &Path) -> Result<(), TranscriptionError> {
+            Ok(())
+        }
+
+        fn load(
+            &self,
+            path: &Path,
+            _gpu: GpuConfig,
+        ) -> Result<Box<dyn LoadedModel>, TranscriptionError> {
+            Ok(Box::new(FileBackedModel {
+                _file: std::fs::File::open(path).expect("synthetic model should open"),
+                drops: Arc::clone(&self.drops),
+            }))
+        }
+
+        fn load_streaming(
+            &self,
+            path: &Path,
+            _gpu: GpuConfig,
+        ) -> Result<Box<dyn StreamingModel>, TranscriptionError> {
+            Ok(Box::new(FileBackedModel {
+                _file: std::fs::File::open(path).expect("synthetic model should open"),
+                drops: Arc::clone(&self.drops),
+            }))
+        }
+    }
+
+    #[test]
+    fn model_release_waits_for_queued_session_end_for_batch_and_streaming() {
+        for streaming in [false, true] {
+            let directory = std::env::temp_dir().join(format!("stt-release-{}", Uuid::new_v4()));
+            std::fs::create_dir_all(&directory).unwrap();
+            let model_path = directory.join("model.bin");
+            std::fs::write(&model_path, b"synthetic weights").unwrap();
+            let drops = Arc::new(AtomicUsize::new(0));
+            let mut capabilities = streaming_caps();
+            capabilities.supports_streaming = streaming;
+            let mut registry = EngineRegistry::default();
+            registry.register_adapter(Box::new(FileBackedAdapter {
+                capabilities,
+                drops: Arc::clone(&drops),
+            }));
+            let worker = TranscriptionWorker::spawn(Arc::new(registry));
+            let mut metadata = streaming_session_metadata("release-session");
+            metadata.model_file_path = model_path;
+            worker.send(WorkerCommand::BeginSession(metadata)).unwrap();
+            worker
+                .send(WorkerCommand::EndSession {
+                    session_id: "release-session".to_string(),
+                })
+                .unwrap();
+
+            worker
+                .model_release_barrier()
+                .wait_until_released(RuntimeId::OnnxRuntime, ModelFamilyId::Moonshine, &directory)
+                .expect("queued session teardown must release model handles before replacement");
+
+            assert_eq!(drops.load(Ordering::SeqCst), 1);
+            let replacement = directory.with_extension("replaced");
+            std::fs::rename(&directory, &replacement).unwrap();
+            std::fs::remove_dir_all(replacement).unwrap();
+        }
+    }
+
+    #[test]
+    fn model_release_rejects_active_target_and_preserves_unrelated_sessions() {
+        for streaming in [false, true] {
+            let directory = std::env::temp_dir().join(format!("stt-active-{}", Uuid::new_v4()));
+            let target = directory.join("target");
+            let unrelated = directory.join("unrelated");
+            for path in [&target, &unrelated] {
+                std::fs::create_dir_all(path).unwrap();
+                std::fs::write(path.join("model.bin"), b"synthetic weights").unwrap();
+            }
+            let drops = Arc::new(AtomicUsize::new(0));
+            let mut capabilities = streaming_caps();
+            capabilities.supports_streaming = streaming;
+            let mut registry = EngineRegistry::default();
+            registry.register_adapter(Box::new(FileBackedAdapter {
+                capabilities,
+                drops: Arc::clone(&drops),
+            }));
+            let worker = TranscriptionWorker::spawn(Arc::new(registry));
+            for (session_id, path) in [("target", &target), ("unrelated", &unrelated)] {
+                let mut metadata = streaming_session_metadata(session_id);
+                metadata.model_file_path = path.join("model.bin");
+                worker.send(WorkerCommand::BeginSession(metadata)).unwrap();
+            }
+            let barrier = worker.model_release_barrier();
+
+            assert!(
+                barrier
+                    .wait_until_released(RuntimeId::OnnxRuntime, ModelFamilyId::Moonshine, &target)
+                    .is_err()
+            );
+            assert_eq!(drops.load(Ordering::SeqCst), 0);
+            worker
+                .send(WorkerCommand::EndSession {
+                    session_id: "target".to_string(),
+                })
+                .unwrap();
+            barrier
+                .wait_until_released(RuntimeId::OnnxRuntime, ModelFamilyId::Moonshine, &target)
+                .unwrap();
+            assert_eq!(drops.load(Ordering::SeqCst), 1);
+            assert!(
+                barrier
+                    .wait_until_released(
+                        RuntimeId::OnnxRuntime,
+                        ModelFamilyId::Moonshine,
+                        &unrelated
+                    )
+                    .is_err()
+            );
+            assert_eq!(drops.load(Ordering::SeqCst), 1);
+
+            worker
+                .send(WorkerCommand::EndSession {
+                    session_id: "unrelated".to_string(),
+                })
+                .unwrap();
+            barrier
+                .wait_until_released(RuntimeId::OnnxRuntime, ModelFamilyId::Moonshine, &unrelated)
+                .unwrap();
+            assert_eq!(drops.load(Ordering::SeqCst), 2);
+            std::fs::remove_dir_all(directory).unwrap();
+        }
     }
 
     #[test]
