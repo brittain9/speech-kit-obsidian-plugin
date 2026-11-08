@@ -1,6 +1,6 @@
 ---
-status: accepted
----
+
+## status: accepted
 
 # Decouple plugin and sidecar releases through an explicit compatibility pointer
 

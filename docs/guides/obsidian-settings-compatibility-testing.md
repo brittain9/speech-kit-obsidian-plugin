@@ -8,11 +8,11 @@ prove how a specific Obsidian binary renders the page.
 
 ## Versions
 
-| Obsidian | Why it may be useful | Settings window modes |
-| --- | --- | --- |
-| 1.11.5 | Exact `minAppVersion` | Main window, plus separate window if the toggle is available |
-| 1.12.7 | Final pre-1.13 baseline | Main window, plus separate window if the toggle is available |
-| 1.13.4 | Current 1.13 settings renderer that exposed the empty-page regression | Main window and separate window |
+| Obsidian | Why it may be useful                                                  | Settings window modes                                        |
+| -------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 1.11.5   | Exact `minAppVersion`                                                 | Main window, plus separate window if the toggle is available |
+| 1.12.7   | Final pre-1.13 baseline                                               | Main window, plus separate window if the toggle is available |
+| 1.13.4   | Current 1.13 settings renderer that exposed the empty-page regression | Main window and separate window                              |
 
 Choose versions relevant to the change or reported issue. These rows are
 examples, not a mandatory release checklist. Find available versions in Obsidian's
@@ -75,14 +75,14 @@ versions.
 When these checks are run, record the results in the relevant PR or issue.
 A blank or assumed result does not count as runtime evidence.
 
-| Obsidian | Window mode | Platform | Result | Notes/evidence |
-| --- | --- | --- | --- | --- |
-| 1.11.5 | Main |  | Not run |  |
-| 1.11.5 | Separate or N/A |  | Not run |  |
-| 1.12.7 | Main |  | Not run |  |
-| 1.12.7 | Separate or N/A |  | Not run |  |
-| 1.13.4 | Main |  | Not run |  |
-| 1.13.4 | Separate |  | Not run |  |
+| Obsidian | Window mode     | Platform | Result  | Notes/evidence |
+| -------- | --------------- | -------- | ------- | -------------- |
+| 1.11.5   | Main            |          | Not run |                |
+| 1.11.5   | Separate or N/A |          | Not run |                |
+| 1.12.7   | Main            |          | Not run |                |
+| 1.12.7   | Separate or N/A |          | Not run |                |
+| 1.13.4   | Main            |          | Not run |                |
+| 1.13.4   | Separate        |          | Not run |                |
 
 No row in this guide blocks tagging or publication. The supported-floor
 typecheck remains useful regression evidence; it does not establish that a

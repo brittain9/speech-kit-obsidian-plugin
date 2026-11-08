@@ -1,4 +1,5 @@
 ---
+
 title: Translation adapter API sketch
 status: exploratory
 ---

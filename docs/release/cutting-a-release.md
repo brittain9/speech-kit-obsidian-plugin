@@ -26,13 +26,13 @@ archive matrix under that same tag. There is never a second sidecar-only tag.
 `manifest.json` is the source of truth for the plugin release; its mirrors must
 agree on every release:
 
-| File | What to change |
-| --- | --- |
-| `manifest.json` | `version`. Bump `minAppVersion` **only** if the runtime floor actually changed. |
-| `package.json` | `version`. |
-| `package-lock.json` | top-level `version` and the root package version under `packages[""]`. |
-| `versions.json` | add `"<version>": "<minAppVersion>"` for Obsidian's minimum-app map. |
-| `docs/release/notes/<version>.md` | new, non-empty, curated release notes. |
+| File                              | What to change                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------------- |
+| `manifest.json`                   | `version`. Bump `minAppVersion` **only** if the runtime floor actually changed. |
+| `package.json`                    | `version`.                                                                      |
+| `package-lock.json`               | top-level `version` and the root package version under `packages[""]`.          |
+| `versions.json`                   | add `"<version>": "<minAppVersion>"` for Obsidian's minimum-app map.            |
+| `docs/release/notes/<version>.md` | new, non-empty, curated release notes.                                          |
 
 `sidecar-version.json` names the GitHub Release that contains the exact
 sidecar archives compatible with the plugin. Its value may be older than the

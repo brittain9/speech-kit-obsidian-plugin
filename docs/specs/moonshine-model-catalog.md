@@ -231,7 +231,7 @@ remediation lives in this spec and the PR description.
 - **CDN republish** — handled by D6; failure mode is explicit.
 - **Ordering fix regressions** — the mock at
   `test/model-install-manager.test.ts:97` pinned the old arbitrary order;
-  step 2's tests must assert the *new* contract, not incidentally encode
+  step 2's tests must assert the _new_ contract, not incidentally encode
   another arbitrary order.
 - **Install probe on low-RAM machines** — probe loads the model during
   install (before promotion). Medium (~303 MB quantized) is well within
@@ -243,38 +243,38 @@ Base URL pattern: `https://download.moonshine.ai/model/<variant>/quantized/<file
 
 ### moonshine_tiny_streaming_en (variant `tiny-streaming-en`, total 51,131,795 bytes)
 
-| filename | role | sha256 | sizeBytes |
-|---|---|---|---|
-| frontend.ort | transcription_model | bbdf5edb120cb3df1adf9ebc07c35136539b007a7047fd148c6f2960fc56fcf1 | 8324600 |
-| encoder.ort | supporting_file | 96dde726be90c4429f3bc458d04e3ea5bd1818a5fdcd0152edf4c07b8e405c07 | 7569200 |
-| adapter.ort | supporting_file | df13e655b29d279911fcb42d8b91b0e655b8fe32b7ba1f463ece663ce55ae6eb | 1319440 |
-| cross_kv.ort | supporting_file | 5acfca68f7bb068c68c1960b54e215995ba07ee46b61645b78bff010a14e5a92 | 1264384 |
-| decoder_kv.ort | supporting_file | 6e3828f1db4b634bc525cb8ba1f0b628ec56059168f0336ad060891c7c1c9154 | 32403688 |
-| streaming_config.json | supporting_file | 74fe5ddebd63b17caf59e8a3b18c17547ff7bce1642050edbb1c3962674f8950 | 509 |
-| tokenizer.bin | supporting_file | 6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d | 249974 |
+| filename              | role                | sha256                                                           | sizeBytes |
+| --------------------- | ------------------- | ---------------------------------------------------------------- | --------- |
+| frontend.ort          | transcription_model | bbdf5edb120cb3df1adf9ebc07c35136539b007a7047fd148c6f2960fc56fcf1 | 8324600   |
+| encoder.ort           | supporting_file     | 96dde726be90c4429f3bc458d04e3ea5bd1818a5fdcd0152edf4c07b8e405c07 | 7569200   |
+| adapter.ort           | supporting_file     | df13e655b29d279911fcb42d8b91b0e655b8fe32b7ba1f463ece663ce55ae6eb | 1319440   |
+| cross_kv.ort          | supporting_file     | 5acfca68f7bb068c68c1960b54e215995ba07ee46b61645b78bff010a14e5a92 | 1264384   |
+| decoder_kv.ort        | supporting_file     | 6e3828f1db4b634bc525cb8ba1f0b628ec56059168f0336ad060891c7c1c9154 | 32403688  |
+| streaming_config.json | supporting_file     | 74fe5ddebd63b17caf59e8a3b18c17547ff7bce1642050edbb1c3962674f8950 | 509       |
+| tokenizer.bin         | supporting_file     | 6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d | 249974    |
 
 ### moonshine_small_streaming_en (variant `small-streaming-en`, total 164,689,974 bytes)
 
-| filename | role | sha256 | sizeBytes |
-|---|---|---|---|
-| frontend.ort | transcription_model | e086451043c1c8652a9614e4a4a81d5807221b611584a3cf31f73779d5900003 | 30984200 |
-| encoder.ort | supporting_file | 3b21d02eff6aa5651524ada4271d37c1d7bba4eb3d256415074f2cfdbaeb526a | 43853224 |
-| adapter.ort | supporting_file | d8493e0ac76a198b309a8be6f74b3101e235f773ffe5d6b378278cd7e4177992 | 2867424 |
-| cross_kv.ort | supporting_file | 6e57d1361717e00d73336a0c3beafedae784b1e537905ad253dee33db4007466 | 5298736 |
-| decoder_kv.ort | supporting_file | d5adfcfaa6e582144791f1568bd0f683852c7bfbb8c79acad97499da05e4ffcf | 81435904 |
-| streaming_config.json | supporting_file | 26f02b6afb22d60871a5efd85c3d38e569cc0ddb6c5eb6e93d3260152ae8a47a | 512 |
-| tokenizer.bin | supporting_file | 6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d | 249974 |
+| filename              | role                | sha256                                                           | sizeBytes |
+| --------------------- | ------------------- | ---------------------------------------------------------------- | --------- |
+| frontend.ort          | transcription_model | e086451043c1c8652a9614e4a4a81d5807221b611584a3cf31f73779d5900003 | 30984200  |
+| encoder.ort           | supporting_file     | 3b21d02eff6aa5651524ada4271d37c1d7bba4eb3d256415074f2cfdbaeb526a | 43853224  |
+| adapter.ort           | supporting_file     | d8493e0ac76a198b309a8be6f74b3101e235f773ffe5d6b378278cd7e4177992 | 2867424   |
+| cross_kv.ort          | supporting_file     | 6e57d1361717e00d73336a0c3beafedae784b1e537905ad253dee33db4007466 | 5298736   |
+| decoder_kv.ort        | supporting_file     | d5adfcfaa6e582144791f1568bd0f683852c7bfbb8c79acad97499da05e4ffcf | 81435904  |
+| streaming_config.json | supporting_file     | 26f02b6afb22d60871a5efd85c3d38e569cc0ddb6c5eb6e93d3260152ae8a47a | 512       |
+| tokenizer.bin         | supporting_file     | 6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d | 249974    |
 
 ### moonshine_medium_streaming_en (variant `medium-streaming-en`, total 303,329,727 bytes)
 
-| filename | role | sha256 | sizeBytes |
-|---|---|---|---|
-| frontend.ort | transcription_model | 378fe8a5d7090a1b9ab88bbb1fc95bde010cdd64ec23419350d2d23c675636e9 | 47467256 |
-| encoder.ort | supporting_file | a5f11167a62eef61787fe8410453257d6ddb8eba90af461a9604e5f2e93d5322 | 94202872 |
-| adapter.ort | supporting_file | 16307442b7f4229f2f1511fc51b545cec9616e55872c588f3a297bbc6f4762ea | 3647712 |
-| cross_kv.ort | supporting_file | 354b9a955caeb768b528f447f0a36ce4b850ca7b4531900165df304d97904fba | 11544952 |
-| decoder_kv.ort | supporting_file | fa67aa87521247f5bf44d3e44d4e4978e58c1f114249c3c6909c882624056715 | 146216448 |
-| streaming_config.json | supporting_file | 28e83b7a28e91472692a035e0dae3116422ae43aeb2bef5ed822c44ce89b88af | 513 |
-| tokenizer.bin | supporting_file | 6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d | 249974 |
+| filename              | role                | sha256                                                           | sizeBytes |
+| --------------------- | ------------------- | ---------------------------------------------------------------- | --------- |
+| frontend.ort          | transcription_model | 378fe8a5d7090a1b9ab88bbb1fc95bde010cdd64ec23419350d2d23c675636e9 | 47467256  |
+| encoder.ort           | supporting_file     | a5f11167a62eef61787fe8410453257d6ddb8eba90af461a9604e5f2e93d5322 | 94202872  |
+| adapter.ort           | supporting_file     | 16307442b7f4229f2f1511fc51b545cec9616e55872c588f3a297bbc6f4762ea | 3647712   |
+| cross_kv.ort          | supporting_file     | 354b9a955caeb768b528f447f0a36ce4b850ca7b4531900165df304d97904fba | 11544952  |
+| decoder_kv.ort        | supporting_file     | fa67aa87521247f5bf44d3e44d4e4978e58c1f114249c3c6909c882624056715 | 146216448 |
+| streaming_config.json | supporting_file     | 28e83b7a28e91472692a035e0dae3116422ae43aeb2bef5ed822c44ce89b88af | 513       |
+| tokenizer.bin         | supporting_file     | 6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d | 249974    |
 
 (`tokenizer.bin` is byte-identical across all three variants.)

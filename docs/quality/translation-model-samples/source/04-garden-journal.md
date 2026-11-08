@@ -1,4 +1,5 @@
 ---
+
 title: Balcony garden journal
 season: summer
 ---
@@ -22,10 +23,10 @@ The tomatoes finally reached the top of the railing this week. Two plants are pr
 
 The weather report predicts two cooler nights. If the temperature falls below 15°C, the seedlings can stay outside, but growth may slow. The rough watering estimate is $V = 0.1d^2$ liters for a round pot with diameter $d$ measured in centimeters; this is only a reminder, not a horticultural rule.
 
-| Plant | Condition | Next action |
-| --- | --- | --- |
-| Tomato | flowering | feed on Saturday |
-| Basil | healthy | pinch the tips |
-| Mint | waterlogged | improve drainage |
+| Plant  | Condition   | Next action      |
+| ------ | ----------- | ---------------- |
+| Tomato | flowering   | feed on Saturday |
+| Basil  | healthy     | pinch the tips   |
+| Mint   | waterlogged | improve drainage |
 
 I want to compare this entry with [[Garden 2025]] before buying anything else. The balcony is already crowded, and the better experiment is careful observation rather than another gadget. #home/garden
