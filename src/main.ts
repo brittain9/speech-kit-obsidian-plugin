@@ -542,6 +542,7 @@ export default class LocalSttPlugin extends Plugin {
       saveSettings: (nextSettings) => this.updateSettings(nextSettings),
       setDetachedStatus: (state, reopen) => this.renderTranslationStatus(state, reopen),
       sidecarConnection: this.requireSidecarConnection(),
+      sidecarLifecycleGate: this.sidecarLifecycleGate,
     });
 
     this.addSettingTab(

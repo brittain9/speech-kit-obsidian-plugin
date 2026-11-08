@@ -12,6 +12,7 @@ import {
   type WarningEvent,
 } from '../src/sidecar/protocol';
 import { SidecarConnection, type SidecarError } from '../src/sidecar/sidecar-connection';
+import { SidecarLifecycleGate } from '../src/sidecar/sidecar-lifecycle-gate';
 import type { ResolveSidecarLaunchSpec } from '../src/sidecar/sidecar-process';
 import { translateWithHyMt } from '../src/translation/hy-mt-client';
 
@@ -197,8 +198,266 @@ afterEach(() => {
 });
 
 describe('SidecarConnection', () => {
+  it('retains translation ownership after disposal until the running process exits', async () => {
+    const { connection, process } = createHarness();
+    const gate = new SidecarLifecycleGate();
+    const abort = new AbortController();
+    const translation = translateWithHyMt({
+      accelerationPreference: 'auto',
+      modelSelection: {
+        kind: 'catalog_model',
+        runtimeId: 'llama_cpp',
+        familyId: 'tencent_hy_mt',
+        modelId: 'model',
+      },
+      onProgress: vi.fn(),
+      onReady: vi.fn(),
+      sidecarConnection: connection,
+      sidecarLifecycleGate: gate,
+      signal: abort.signal,
+      sourceLanguage: 'en',
+      targetLanguage: 'es',
+      texts: ['Hello'],
+      translationId: 'active',
+    });
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+    abort.abort();
+    await expect(translation).rejects.toMatchObject({ name: 'AbortError' });
+    connection.dispose();
+    expect(() => gate.acquireMutation()).toThrow();
+    process.exit();
+    gate.acquireMutation().release();
+  });
+
+  it('releases translation ownership when shutdown confirms the process has stopped', async () => {
+    const { connection, process } = createHarness();
+    const gate = new SidecarLifecycleGate();
+    const abort = new AbortController();
+    const translation = translateWithHyMt({
+      accelerationPreference: 'auto',
+      modelSelection: {
+        kind: 'catalog_model',
+        runtimeId: 'llama_cpp',
+        familyId: 'tencent_hy_mt',
+        modelId: 'model',
+      },
+      onProgress: vi.fn(),
+      onReady: vi.fn(),
+      sidecarConnection: connection,
+      sidecarLifecycleGate: gate,
+      signal: abort.signal,
+      sourceLanguage: 'en',
+      targetLanguage: 'es',
+      texts: ['Hello'],
+      translationId: 'active',
+    });
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+    abort.abort();
+    await expect(translation).rejects.toMatchObject({ name: 'AbortError' });
+    await connection.shutdown();
+    gate.acquireMutation().release();
+  });
+
+  it('fails an active translation when shutdown stops the sidecar', async () => {
+    const { connection, process } = createHarness();
+    const gate = new SidecarLifecycleGate();
+    const translation = translateWithHyMt({
+      accelerationPreference: 'auto',
+      modelSelection: {
+        kind: 'catalog_model',
+        runtimeId: 'llama_cpp',
+        familyId: 'tencent_hy_mt',
+        modelId: 'model',
+      },
+      onProgress: vi.fn(),
+      onReady: vi.fn(),
+      sidecarConnection: connection,
+      sidecarLifecycleGate: gate,
+      signal: new AbortController().signal,
+      sourceLanguage: 'en',
+      targetLanguage: 'es',
+      texts: ['Hello'],
+      translationId: 'active',
+    });
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+    await connection.shutdown();
+    await expect(translation).rejects.toThrow('sidecar');
+    gate.acquireMutation().release();
+  });
+
+  it('does not acquire sidecar ownership for an already cancelled translation', async () => {
+    const { connection, process } = createHarness();
+    const gate = new SidecarLifecycleGate();
+    const mutation = gate.acquireMutation();
+    const abort = new AbortController();
+    abort.abort();
+    const translation = translateWithHyMt({
+      accelerationPreference: 'auto',
+      modelSelection: {
+        kind: 'catalog_model',
+        runtimeId: 'llama_cpp',
+        familyId: 'tencent_hy_mt',
+        modelId: 'model',
+      },
+      onProgress: vi.fn(),
+      onReady: vi.fn(),
+      sidecarConnection: connection,
+      sidecarLifecycleGate: gate,
+      signal: abort.signal,
+      sourceLanguage: 'en',
+      targetLanguage: 'es',
+      texts: ['Hello'],
+      translationId: 'cancelled',
+    });
+    await expect(translation).rejects.toMatchObject({ name: 'AbortError' });
+    expect(process.writtenFrames).toHaveLength(0);
+    mutation.release();
+  });
+
+  it('settles cancellation and retains ownership if the cancel command cannot be written', async () => {
+    const { connection, process } = createHarness();
+    const gate = new SidecarLifecycleGate();
+    const abort = new AbortController();
+    const translation = translateWithHyMt({
+      accelerationPreference: 'auto',
+      modelSelection: {
+        kind: 'catalog_model',
+        runtimeId: 'llama_cpp',
+        familyId: 'tencent_hy_mt',
+        modelId: 'model',
+      },
+      onProgress: vi.fn(),
+      onReady: vi.fn(),
+      sidecarConnection: connection,
+      sidecarLifecycleGate: gate,
+      signal: abort.signal,
+      sourceLanguage: 'en',
+      targetLanguage: 'es',
+      texts: ['Hello'],
+      translationId: 'active',
+    });
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+    vi.spyOn(process, 'write').mockImplementationOnce(() => {
+      throw new Error('stdin closed');
+    });
+    abort.abort();
+    await expect(translation).rejects.toThrow('stdin closed');
+    expect(() => gate.acquireMutation()).toThrow();
+    process.exit();
+    gate.acquireMutation().release();
+  });
+
+  it('releases sidecar ownership if the process exits after cancellation', async () => {
+    const { connection, process } = createHarness();
+    const gate = new SidecarLifecycleGate();
+    const abort = new AbortController();
+    const translation = translateWithHyMt({
+      accelerationPreference: 'auto',
+      modelSelection: {
+        kind: 'catalog_model',
+        runtimeId: 'llama_cpp',
+        familyId: 'tencent_hy_mt',
+        modelId: 'model',
+      },
+      onProgress: vi.fn(),
+      onReady: vi.fn(),
+      sidecarConnection: connection,
+      sidecarLifecycleGate: gate,
+      signal: abort.signal,
+      sourceLanguage: 'en',
+      targetLanguage: 'es',
+      texts: ['Hello'],
+      translationId: 'active',
+    });
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+    abort.abort();
+    abort.abort();
+    await expect(translation).rejects.toMatchObject({ name: 'AbortError' });
+    expect(() => gate.acquireMutation()).toThrow();
+    process.exit();
+    gate.acquireMutation().release();
+  });
+
+  it('keeps sidecar mutation blocked until a sent translation cancellation is acknowledged', async () => {
+    const { connection, process } = createHarness();
+    const gate = new SidecarLifecycleGate();
+    const abort = new AbortController();
+    const onReady = vi.fn();
+    const onProgress = vi.fn();
+    const translation = translateWithHyMt({
+      accelerationPreference: 'auto',
+      modelSelection: {
+        kind: 'catalog_model',
+        runtimeId: 'llama_cpp',
+        familyId: 'tencent_hy_mt',
+        modelId: 'model',
+      },
+      onProgress,
+      onReady,
+      sidecarConnection: connection,
+      sidecarLifecycleGate: gate,
+      signal: abort.signal,
+      sourceLanguage: 'en',
+      targetLanguage: 'es',
+      texts: ['Hello'],
+      translationId: 'active',
+    });
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+    abort.abort();
+    await expect(translation).rejects.toMatchObject({ name: 'AbortError' });
+    expect(process.writtenFrames.map(readJsonPayload)).toContainEqual({
+      type: 'cancel_translation',
+      translationId: 'active',
+    });
+    expect(() => gate.acquireMutation()).toThrow();
+    process.deliver({ type: 'translation_started', translationId: 'active', total: 2 });
+    process.deliver({
+      type: 'translation_progress',
+      translationId: 'active',
+      completed: 1,
+      total: 2,
+    });
+    expect(onReady).not.toHaveBeenCalled();
+    expect(onProgress).not.toHaveBeenCalled();
+    process.deliver({ type: 'translation_cancelled', translationId: 'active' });
+    gate.acquireMutation().release();
+  });
+
+  it('prevents sidecar mutation while HY-MT translation is active', async () => {
+    const { connection, process } = createHarness();
+    const gate = new SidecarLifecycleGate();
+    const translation = translateWithHyMt({
+      accelerationPreference: 'auto',
+      modelSelection: {
+        kind: 'catalog_model',
+        runtimeId: 'llama_cpp',
+        familyId: 'tencent_hy_mt',
+        modelId: 'model',
+      },
+      onProgress: vi.fn(),
+      onReady: vi.fn(),
+      sidecarConnection: connection,
+      sidecarLifecycleGate: gate,
+      signal: new AbortController().signal,
+      sourceLanguage: 'en',
+      targetLanguage: 'es',
+      texts: ['Hello'],
+      translationId: 'active',
+    });
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+    expect(() => gate.acquireMutation()).toThrow();
+    process.deliver({
+      type: 'translation_complete',
+      translationId: 'active',
+      translations: ['Hola'],
+    });
+    await expect(translation).resolves.toEqual(['Hola']);
+    gate.acquireMutation().release();
+  });
+
   it('does not start a translation cancelled while the sidecar is starting', async () => {
     const { connection, process } = createHarness();
+    const gate = new SidecarLifecycleGate();
     await process.start();
     let finishStartup!: () => void;
     vi.spyOn(connection, 'ensureStarted').mockImplementation(
@@ -225,6 +484,7 @@ describe('SidecarConnection', () => {
       onProgress: vi.fn(),
       onReady: vi.fn(),
       sidecarConnection: connection,
+      sidecarLifecycleGate: gate,
       signal: abort.signal,
       sourceLanguage: 'en',
       targetLanguage: 'es',
@@ -234,8 +494,10 @@ describe('SidecarConnection', () => {
     const cancelled = expect(translation).rejects.toMatchObject({ name: 'AbortError' });
     abort.abort();
     await cancelled;
+    expect(() => gate.acquireMutation()).toThrow();
     finishStartup();
     await pendingStart.catch(() => {});
+    await vi.waitFor(() => gate.acquireMutation().release());
     expect(process.writtenFrames.map(readJsonPayload)).not.toContainEqual(
       expect.objectContaining({ type: 'start_translation', translationId: 'cancelled' }),
     );

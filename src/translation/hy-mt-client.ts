@@ -2,6 +2,7 @@ import type { SelectedModel } from '../models/model-management-types';
 import { asError } from '../shared/error-utils';
 import type { TranslationErrorEvent } from '../sidecar/protocol';
 import type { SidecarConnection } from '../sidecar/sidecar-connection';
+import type { SidecarLifecycleGate } from '../sidecar/sidecar-lifecycle-gate';
 import type { TranslationLanguage } from './languages';
 
 export class HyMtTranslationError extends Error {
@@ -23,8 +24,9 @@ interface HyMtTranslationOptions {
   onReady: () => void;
   sidecarConnection: Pick<
     SidecarConnection,
-    'cancelTranslation' | 'startTranslation' | 'subscribe'
+    'cancelTranslation' | 'startTranslation' | 'subscribe' | 'subscribeProcessStop'
   >;
+  sidecarLifecycleGate: SidecarLifecycleGate;
   signal: AbortSignal;
   sourceLanguage: TranslationLanguage;
   styleInstruction?: string;
@@ -34,18 +36,32 @@ interface HyMtTranslationOptions {
 }
 
 export async function translateWithHyMt(options: HyMtTranslationOptions): Promise<string[]> {
+  if (options.signal.aborted) throw new DOMException('Translation canceled.', 'AbortError');
+  const lease = options.sidecarLifecycleGate.acquireUse();
   return new Promise<string[]>((resolve, reject) => {
     let settled = false;
+    const cleanup = () => {
+      lease.release();
+      release();
+      releaseProcessStop();
+      options.signal.removeEventListener('abort', onAbort);
+    };
     const finish = (callback: () => void) => {
+      cleanup();
       if (settled) return;
       settled = true;
-      release();
-      options.signal.removeEventListener('abort', onAbort);
       callback();
     };
     const onAbort = () => {
-      options.sidecarConnection.cancelTranslation(options.translationId);
-      finish(() => reject(new DOMException('Translation canceled.', 'AbortError')));
+      if (settled) return;
+      settled = true;
+      options.signal.removeEventListener('abort', onAbort);
+      try {
+        options.sidecarConnection.cancelTranslation(options.translationId);
+        reject(new DOMException('Translation canceled.', 'AbortError'));
+      } catch (error) {
+        reject(asError(error, 'Translation cancellation could not be sent.'));
+      }
     };
     const release = options.sidecarConnection.subscribe((event) => {
       if (event.type === 'error' && event.code === 'sidecar_exited') {
@@ -55,10 +71,10 @@ export async function translateWithHyMt(options: HyMtTranslationOptions): Promis
       if (!('translationId' in event) || event.translationId !== options.translationId) return;
       switch (event.type) {
         case 'translation_started':
-          options.onReady();
+          if (!settled) options.onReady();
           break;
         case 'translation_progress':
-          options.onProgress(event.completed, event.total);
+          if (!settled) options.onProgress(event.completed, event.total);
           break;
         case 'translation_complete':
           finish(() => resolve(event.translations));
@@ -71,9 +87,21 @@ export async function translateWithHyMt(options: HyMtTranslationOptions): Promis
           break;
       }
     });
+    const releaseProcessStop = options.sidecarConnection.subscribeProcessStop((unexpected) => {
+      finish(() =>
+        reject(
+          new Error(
+            unexpected
+              ? 'The sidecar process exited unexpectedly.'
+              : 'The sidecar process stopped.',
+          ),
+        ),
+      );
+    });
     options.signal.addEventListener('abort', onAbort, { once: true });
     if (options.signal.aborted) {
       onAbort();
+      cleanup();
       return;
     }
     void options.sidecarConnection
