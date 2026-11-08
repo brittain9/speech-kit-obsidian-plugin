@@ -553,6 +553,53 @@ describe('NoteSurface', () => {
       surface.dispose();
     }
   });
+
+  it('preserves pasted text inside a partial and continues dictating after it', () => {
+    const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+    append(surface, 'u1', 'live words');
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.paste'),
+      changes: { from: 5, insert: 'pasted ' },
+    });
+
+    expect(surface.replaceAnchor('u1', 'final words', 'live words').kind).toBe('denied');
+    expect(append(surface, 'u2', 'more speech').kind).toBe('appended');
+    expect(doc(view)).toBe('live pasted words more speech');
+    surface.dispose();
+  });
+
+  it('preserves text typed at the end of a partial and continues after it', () => {
+    const { surface, view } = createSurface({ extensions: noteSurfaceUpdateListenerExtension() });
+    append(surface, 'u1', 'live words');
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.type'),
+      changes: { from: 10, insert: ' typed' },
+    });
+
+    expect(surface.replaceAnchor('u1', 'final words', 'live words').kind).toBe('denied');
+    expect(append(surface, 'u2', 'more speech').kind).toBe('appended');
+    expect(doc(view)).toBe('live words typed more speech');
+    surface.dispose();
+  });
+
+  it('keeps the typing cursor outside the dictated text when a partial changes', () => {
+    const { surface, view } = createSurface({
+      doc: 'other text',
+      extensions: noteSurfaceUpdateListenerExtension(),
+      selectionHead: 10,
+    });
+    append(surface, 'u1', 'live words');
+    view.dispatch({ selection: { anchor: 0 } });
+    view.dispatch({
+      annotations: Transaction.userEvent.of('input.type'),
+      changes: { from: 0, insert: 'typed ' },
+      selection: { anchor: 6 },
+    });
+    expect(surface.replaceAnchor('u1', 'final words', 'live words').kind).toBe('replaced');
+    expect(view.state.selection.main.head).toBe(6);
+    expect(doc(view)).toBe('typed other text final words');
+    surface.dispose();
+  });
   it('lets only the newest session drive the shared cursor and clears it on the last dispose', () => {
     const view = new FakeEditorView('', 0, dictationAnchorExtension());
     const earlier = new NoteSurface(view as unknown as EditorView, { anchor: 'at_cursor' });
