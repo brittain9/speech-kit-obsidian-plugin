@@ -1235,6 +1235,10 @@ export const en = {
     'Does not support {language}. Change Dictation language to install or use this model.',
   'models.manage.use': 'Use',
   'models.manage.selected': 'Selected',
+  'models.manage.reinstall': 'Reinstall',
+  'models.manage.reinstallDesc':
+    'Download this model again. Your installed copy stays in place until the replacement is ready.',
+  'models.manage.reinstallStartFailed': 'Could not start model reinstallation.',
   'models.manage.cancelling': 'Cancelling…',
   'models.manage.details': 'Details',
   'models.manage.retryInstall': 'Retry',
@@ -1244,7 +1248,7 @@ export const en = {
   'models.manage.selectedNotice': 'Model selected.',
   'models.manage.removeFailed': 'Could not remove the model. Close any process using its files.',
   'models.manage.stopSpeechFirst':
-    'Stop dictation or Read aloud first — the speech engine is using model files right now.',
+    'Stop dictation, transcription, translation, or Read aloud first. A model is in use.',
   'models.manage.removedNotice': 'Model removed.',
   'models.external.title': 'Use external file',
   'models.external.intro':

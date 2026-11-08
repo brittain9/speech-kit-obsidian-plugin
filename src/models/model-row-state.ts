@@ -28,6 +28,7 @@ type ModelRowAction =
   | 'selected'
   | 'cancel'
   | 'remove'
+  | 'reinstall'
   | 'retry'
   | 'dismiss'
   | 'details';
@@ -117,6 +118,7 @@ export function deriveModelRowStates(state: ModelManagerState): ModelRowState[] 
           : selectedModel,
       activeInstall,
       failedInstall,
+      state.installRequestPending,
     );
   });
 }
@@ -127,6 +129,7 @@ function deriveRowState(
   selectedModel: SelectedModel | null,
   activeInstall: ActiveInstallInfo | null,
   failedInstall: FailedInstallInfo | null,
+  installRequestPending: boolean,
 ): ModelRowState {
   const installed =
     installedModels.find((m) =>
@@ -162,6 +165,7 @@ function deriveRowState(
     isCanceling,
     hasFailed,
     hasOtherActiveInstall,
+    canReinstall: model.task === 'stt' && !installRequestPending && !hasOtherActiveInstall,
   });
 
   return {
@@ -182,9 +186,17 @@ function deriveAllowedActions(flags: {
   isCanceling: boolean;
   hasFailed: boolean;
   hasOtherActiveInstall: boolean;
+  canReinstall: boolean;
 }): ModelRowAction[] {
-  const { installed, isSelected, isInstalling, isCanceling, hasFailed, hasOtherActiveInstall } =
-    flags;
+  const {
+    installed,
+    isSelected,
+    isInstalling,
+    isCanceling,
+    hasFailed,
+    hasOtherActiveInstall,
+    canReinstall,
+  } = flags;
 
   // Currently canceling or cancelStuck — only details allowed.
   if (isCanceling) {
@@ -213,13 +225,11 @@ function deriveAllowedActions(flags: {
     return ['install', 'details'];
   }
 
-  // Installed and selected.
-  if (isSelected) {
-    return ['selected', 'details'];
-  }
-
-  // Installed and not selected.
-  return ['use', 'remove', 'details'];
+  const actions: ModelRowAction[] = isSelected ? ['selected'] : ['use'];
+  if (canReinstall) actions.push('reinstall');
+  if (!isSelected) actions.push('remove');
+  actions.push('details');
+  return actions;
 }
 
 // ---------------------------------------------------------------------------

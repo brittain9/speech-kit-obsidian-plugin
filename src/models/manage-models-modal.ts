@@ -1,5 +1,5 @@
 import type { App } from 'obsidian';
-import { Modal, SearchComponent, Setting, setIcon } from 'obsidian';
+import { Modal, SearchComponent, Setting, setIcon, setTooltip } from 'obsidian';
 
 import {
   catalogModelSupportsLanguage,
@@ -751,6 +751,13 @@ export class ManageModelsModal extends Modal {
       }
       setting.setDesc(tags);
     }
+    if (
+      row.installed &&
+      row.model.task === 'stt' &&
+      (row.isInstalling || row.isCanceling || row.failedInstall !== null)
+    ) {
+      setting.descEl.createDiv({ text: t('models.manage.reinstallDesc') });
+    }
 
     // Action buttons based on allowedActions.
     for (const action of row.allowedActions) {
@@ -798,6 +805,16 @@ export class ManageModelsModal extends Modal {
         case 'selected':
           setting.addButton((button) => {
             button.setButtonText(t('models.manage.selected')).setDisabled(true);
+          });
+          break;
+
+        case 'reinstall':
+          setting.addButton((button) => {
+            setTooltip(button.buttonEl, t('models.manage.reinstallDesc'));
+            button
+              .setButtonText(t('models.manage.reinstall'))
+              .setDisabled(this.actionInProgress || !supportsSelectedLanguage)
+              .onClick(() => this.requestModelInstall(row.model));
           });
           break;
 
@@ -986,17 +1003,32 @@ export class ManageModelsModal extends Modal {
 
   private requestModelInstall(model: CatalogModelRecord): void {
     const confirmation = resolveModelPresentationPolicy(model).installConfirmation;
+    const reinstalling =
+      model.task === 'stt' &&
+      this.deps.manager
+        .getState()
+        .installedModels.some((installed) =>
+          matchesModelTriple(installed, model.runtimeId, model.familyId, model.modelId),
+        );
     const install = async (): Promise<void> => {
       await this.runAction(
         async () => {
-          await this.deps.manager.install({
+          const selection = {
             familyId: model.familyId,
-            kind: 'catalog_model',
+            kind: 'catalog_model' as const,
             modelId: model.modelId,
             runtimeId: model.runtimeId,
-          });
+          };
+          if (reinstalling) await this.deps.manager.reinstall(selection);
+          else await this.deps.manager.install(selection);
         },
-        { failureMessage: t('models.manage.installStartFailed') },
+        {
+          failureMessage: t(
+            reinstalling
+              ? 'models.manage.reinstallStartFailed'
+              : 'models.manage.installStartFailed',
+          ),
+        },
       );
     };
     if (confirmation === null) {
