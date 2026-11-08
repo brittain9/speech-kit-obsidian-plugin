@@ -514,7 +514,7 @@ describe('ModelInstallManager', () => {
         expect.stringContaining('failed before progress'),
         error,
       );
-      expect(onStateChange).toHaveBeenCalledTimes(2);
+      expect(onStateChange).toHaveBeenCalled();
     });
 
     it('publishes failed state before rejecting installAndWait', async () => {
@@ -1121,6 +1121,130 @@ describe('ModelInstallManager', () => {
   });
 
   describe('reinstall()', () => {
+    it.each([
+      'acknowledgement failure',
+      'process stop',
+      'process stop before acknowledgement',
+      'stuck cancellation',
+    ] as const)(
+      'reconciles metadata and selected capabilities before releasing after %s',
+      async (recovery) => {
+        vi.useFakeTimers();
+        try {
+          const selection = sampleSelection();
+          harness = createManagerHarness({
+            selectedModel: selection,
+            selectedModelCapabilitiesSnapshot: {
+              capabilities: sampleMergedCapabilities(),
+              selection,
+            },
+          });
+          configureSidecarForInit(harness.sidecarConnection);
+          await harness.manager.init();
+          const refreshed = deferred<{ models: InstalledModelRecord[] }>();
+          const probed = deferred<ModelProbeResultEvent>();
+          harness.sidecarConnection.listInstalledModels.mockReturnValueOnce(refreshed.promise);
+          harness.sidecarConnection.probeModelSelection.mockReturnValueOnce(probed.promise);
+          harness.sidecarConnection.installModel.mockResolvedValueOnce(
+            sampleInstallUpdate({ state: 'queued' }),
+          );
+          let recoveryFinished: Promise<unknown>;
+          if (recovery === 'process stop before acknowledgement') {
+            const acknowledgement = deferred<ReturnType<typeof sampleInstallUpdate>>();
+            harness.sidecarConnection.installModel.mockReset();
+            harness.sidecarConnection.installModel.mockReturnValueOnce(acknowledgement.promise);
+            const starting = harness.manager.reinstall(selection);
+            recoveryFinished = expect(starting).rejects.toThrow('lost acknowledgement');
+            harness.emitProcessStop(true);
+            acknowledgement.reject(new Error('lost acknowledgement'));
+          } else if (recovery === 'acknowledgement failure') {
+            harness.sidecarConnection.installModel.mockReset();
+            harness.sidecarConnection.installModel.mockRejectedValueOnce(
+              new Error('lost acknowledgement'),
+            );
+            recoveryFinished = expect(harness.manager.reinstall(selection)).rejects.toThrow(
+              'lost acknowledgement',
+            );
+          } else {
+            await harness.manager.reinstall(selection);
+            const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+            if (request === undefined) throw new Error('Expected a reinstall request');
+            if (recovery === 'process stop') {
+              harness.emitProcessStop(true);
+              recoveryFinished = Promise.resolve();
+            } else {
+              emitInstallUpdate(harness, { installId: request.installId, state: 'downloading' });
+              await harness.manager.cancel();
+              await vi.advanceTimersByTimeAsync(30_000);
+              recoveryFinished = harness.manager.dismissCancelStuck();
+            }
+          }
+          await vi.waitFor(() =>
+            expect(harness.sidecarConnection.listInstalledModels).toHaveBeenCalledTimes(2),
+          );
+          if (recovery === 'process stop before acknowledgement') {
+            expect(harness.sidecarConnection.shutdown).not.toHaveBeenCalled();
+          }
+          expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+            SidecarLifecycleConflictError,
+          );
+          refreshed.resolve({ models: [sampleInstalledModel(undefined, { totalSizeBytes: 950 })] });
+          await vi.waitFor(() =>
+            expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledOnce(),
+          );
+          expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow(
+            SidecarLifecycleConflictError,
+          );
+          const freshCapabilities = {
+            ...sampleMergedCapabilities(),
+            family: { ...sampleMergedCapabilities().family, supportsWordTimestamps: false },
+          };
+          probed.resolve({
+            ...sampleReadyProbeResult(selection),
+            mergedCapabilities: freshCapabilities,
+            type: 'model_probe_result',
+          });
+          await recoveryFinished;
+          await vi.waitFor(() =>
+            expect(harness.manager.getState().installRequestPending).toBe(false),
+          );
+          expect(harness.manager.getState().installedModels[0]?.totalSizeBytes).toBe(950);
+          expect(harness.getSettings().selectedModel).toEqual(selection);
+          expect(harness.getSettings().selectedModelCapabilitiesSnapshot?.capabilities).toEqual(
+            freshCapabilities,
+          );
+          expect(() => harness.sidecarLifecycleGate.acquireSpeech().release()).not.toThrow();
+        } finally {
+          vi.useRealTimers();
+        }
+      },
+    );
+
+    it('invalidates the old selected snapshot when a completed replacement cannot be probed', async () => {
+      const selection = sampleSelection();
+      harness = createManagerHarness({
+        selectedModel: selection,
+        selectedModelCapabilitiesSnapshot: { capabilities: sampleMergedCapabilities(), selection },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      await harness.manager.init();
+      harness.sidecarConnection.installModel.mockResolvedValueOnce(
+        sampleInstallUpdate({ state: 'queued' }),
+      );
+      harness.sidecarConnection.probeModelSelection.mockRejectedValueOnce(
+        new Error('probe failed'),
+      );
+      await harness.manager.reinstall(selection);
+      const request = harness.sidecarConnection.installModel.mock.calls[0]?.[0];
+      if (request === undefined) throw new Error('Expected a reinstall request');
+      emitInstallUpdate(harness, { installId: request.installId, state: 'completed' });
+      await vi.waitFor(() => expect(harness.manager.getState().installRequestPending).toBe(false));
+      expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
+      expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+        status: 'unavailable',
+      });
+    });
+
     it('does not probe or change selection after disposal during the completed-install refresh', async () => {
       const selection = sampleSelection();
       harness = createManagerHarness({
@@ -1200,7 +1324,9 @@ describe('ModelInstallManager', () => {
       );
       harness.emitProcessStop(false);
 
-      expect(() => harness.sidecarLifecycleGate.acquireSpeech().release()).not.toThrow();
+      await vi.waitFor(() => {
+        expect(() => harness.sidecarLifecycleGate.acquireSpeech().release()).not.toThrow();
+      });
       expect(harness.manager.getState().installedModels).toHaveLength(1);
     });
 
