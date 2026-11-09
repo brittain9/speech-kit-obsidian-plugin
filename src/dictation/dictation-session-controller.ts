@@ -960,7 +960,12 @@ export class DictationSessionController {
     this.applySessionStateToAnchor(entry, event.state);
 
     const audioActive = this.dependencies.captureStream.isCapturing();
-    if (event.sessionId !== this.activeSessionId || entry.phase !== 'active' || !audioActive) {
+    if (
+      event.sessionId !== this.activeSessionId ||
+      entry.phase !== 'active' ||
+      !audioActive ||
+      (this.state === 'starting' && event.state !== 'error')
+    ) {
       return;
     }
 

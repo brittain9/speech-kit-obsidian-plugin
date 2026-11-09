@@ -406,9 +406,18 @@ describe('DictationSessionController', () => {
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     try {
       const captureStream = new AudioCaptureStream({});
-      const controller = createController({ captureStream });
+      const sidecarConnection = new FakeSidecarConnection();
+      const controller = createController({ captureStream, sidecarConnection });
       const oldStart = controller.startDictation();
       await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+      const oldSessionId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId;
+      if (!oldSessionId) throw new Error('session missing');
+      sidecarConnection.emit({
+        type: 'session_state_changed',
+        sessionId: oldSessionId,
+        state: 'listening',
+      });
+      expect(controller.getWorkflowStatus().capture).toBe('starting');
       await controller.stopDictation();
       await controller.startDictation();
       expect(controller.getState()).toBe('listening');
