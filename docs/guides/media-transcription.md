@@ -30,7 +30,7 @@ Both commands check that the intended note is still a safe insertion target befo
 ## Configure an AI provider
 
 1. Open **Settings → Speech Kit** and enable **LLM features**.
-2. Under **Provider and model**, choose a provider and configure its model. For Ollama, start Ollama and select an installed chat model. For a remote provider, select the required API key from Obsidian's secure storage. Use the refresh or connection-test controls when needed.
+2. Under **Provider and model**, choose a provider and configure its model. For Ollama, start Ollama and select an installed chat model. If the provider requires an API key, select it from Obsidian's secure storage. Use the refresh or connection-test controls when needed.
 3. Choose an AI preset in the file or YouTube dialog. Choose **Transcript only** to skip AI. **Transform new dictation** can stay off while you process media transcripts.
 
 To edit presets, use the settings button beside **Active preset**. The sidebar also offers the everyday transform controls and a shortcut to Settings.
