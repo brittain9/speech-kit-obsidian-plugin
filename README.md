@@ -25,13 +25,13 @@ Dictate live. Transcribe audio and video files. Bring YouTube captions into your
 
 Install the models you need in **Settings → Speech Kit → Manage models**. Available languages and performance depend on the model and your computer.
 
-| You want | Models to consider |
-| --- | --- |
-| English live dictation | Moonshine, English Nemotron, or Parakeet Unified |
-| Multilingual live dictation | Nemotron 3.5 ASR |
-| File transcription or batch dictation | Whisper or Cohere Transcribe |
-| Local voices | Pocket TTS or Supertonic 3 |
-| Local translation | Firefox Translations or Tencent HY-MT 2 |
+| You want                              | Models to consider                               |
+| ------------------------------------- | ------------------------------------------------ |
+| English live dictation                | Moonshine, English Nemotron, or Parakeet Unified |
+| Multilingual live dictation           | Nemotron 3.5 ASR                                 |
+| File transcription or batch dictation | Whisper or Cohere Transcribe                     |
+| Local voices                          | Pocket TTS or Supertonic 3                       |
+| Local translation                     | Firefox Translations or Tencent HY-MT 2          |
 
 The setup wizard helps you install the native engine and your first speech model. Review each model’s download size and license before installing it. NVIDIA streaming models run on CPU; performance and delay depend on your computer.
 
