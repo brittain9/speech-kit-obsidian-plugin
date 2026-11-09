@@ -15,6 +15,10 @@ const elementParents = new WeakMap<TestElement, TestElement>();
 export class TestDocument {
   activeElement: TestElement | null = null;
 
+  querySelectorAll(): TestElement[] {
+    return [];
+  }
+
   constructor(readonly defaultView: Window = window) {}
 }
 
@@ -50,6 +54,10 @@ export class TestElement {
     this.ownerDocument = ownerDocument;
     this.tagName = tagName.toUpperCase();
     this.win = ownerDocument.defaultView;
+  }
+
+  getBoundingClientRect(): { left: number; bottom: number } {
+    return { left: 0, bottom: 0 };
   }
 
   get parentElement(): TestElement | null {
@@ -890,3 +898,27 @@ export const setTooltip = vi.fn((target: unknown, tooltip: string): void => {
     );
   }
 });
+
+export class Menu {
+  static lastItems: Array<{ title: string; click: () => void }> = [];
+  constructor() {
+    Menu.lastItems = [];
+  }
+  addItem(
+    callback: (item: {
+      setTitle: (title: string) => { onClick: (click: () => void) => void };
+    }) => void,
+  ): this {
+    callback({
+      setTitle: (title) => ({
+        onClick: (click) => {
+          Menu.lastItems.push({ title, click });
+        },
+      }),
+    });
+    return this;
+  }
+  showAtPosition(): this {
+    return this;
+  }
+}

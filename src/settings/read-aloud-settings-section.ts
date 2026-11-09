@@ -12,7 +12,9 @@ import { matchesModelTriple } from '../models/model-management-types';
 import { formatVoiceLabel } from '../shared/format-utils';
 import { t } from '../shared/i18n';
 import { resolveReadAloudVoiceId } from '../tts/read-aloud-selection';
+import { renderModelSummaryRow } from './model-summary-row';
 import { MAX_TTS_SPEED, MIN_TTS_SPEED, type PluginSettings } from './plugin-settings';
+import { captureSettingsFocus, restoreSettingsFocus } from './settings-tab-lifecycle';
 
 interface ReadAloudSettingsSectionDependencies {
   getSettings: () => PluginSettings;
@@ -71,6 +73,7 @@ export function renderTextToSpeechSettings(
   let voiceSettingEl: HTMLElement | null = null;
 
   const render = (): void => {
+    const focus = captureSettingsFocus(modelContainer);
     modelContainer.empty();
     if (languageSettingEl !== null) readAloudContainer.removeChild(languageSettingEl);
     if (voiceSettingEl !== null) readAloudContainer.removeChild(voiceSettingEl);
@@ -95,34 +98,40 @@ export function renderTextToSpeechSettings(
               catalogModel.modelId,
             ),
           ) ?? null);
-    const modelSetting = new Setting(modelContainer)
-      .setName(t('settings.model.textToSpeech'))
-      .setDesc(catalogModel?.displayName ?? t('settings.model.noModelSelected'))
-      .addButton((button) => {
-        button
-          .setCta()
-          .setButtonText(t('settings.model.manageModels'))
-          .onClick(() => {
-            void dependencies.openModelPicker({ initialTask: 'tts' });
-          });
-      });
-    if (catalogModel !== null && installed === null && state.loadStatus === 'ready') {
-      modelSetting.descEl.createSpan({ text: ' · ' });
-      modelSetting.descEl.createSpan({
-        cls: 'local-stt-badge local-stt-badge--missing',
-        text: t('settings.model.notInstalled'),
-      });
-    }
-    if (catalogModel !== null) {
-      modelSetting.addExtraButton((button) => {
-        button
-          .setIcon('info')
-          .setTooltip(t('settings.model.details'))
-          .onClick(() => {
-            dependencies.openSelectedModelDetails();
-          });
-      });
-    }
+    const status =
+      selection === null
+        ? { modifier: 'neutral' as const, text: t('settings.model.noModelSelected') }
+        : installed !== null
+          ? { modifier: 'ready' as const, text: t('models.current.installed') }
+          : state.loadStatus === 'ready'
+            ? { modifier: 'missing' as const, text: t('settings.model.notInstalled') }
+            : state.loadStatus === 'error'
+              ? { modifier: 'neutral' as const, text: t('settings.model.unavailable') }
+              : { modifier: 'neutral' as const, text: t('settings.model.checking') };
+    renderModelSummaryRow(modelContainer, {
+      taskLabel: t('settings.model.task.tts'),
+      modelName:
+        catalogModel?.displayName ??
+        (selection?.kind === 'catalog_model'
+          ? selection.modelId
+          : t('settings.model.noModelSelected')),
+      icon: 'volume-2',
+      streaming: false,
+      status,
+      onOpen: () => {
+        void dependencies.openModelPicker({ initialTask: 'tts' });
+      },
+      actions:
+        catalogModel === null
+          ? []
+          : [
+              {
+                label: t('settings.model.details'),
+                onSelect: dependencies.openSelectedModelDetails,
+              },
+            ],
+    });
+    restoreSettingsFocus(modelContainer, focus);
     const installedVoices = installed?.installedVoiceIds ?? [];
     const languageSetting = new Setting(readAloudContainer)
       .setName(t('settings.readAloud.language'))

@@ -4,6 +4,27 @@ import { SettingsTabLifecycle } from '../src/settings/settings-tab-lifecycle';
 import { TestElement } from './__mocks__/obsidian';
 
 describe('SettingsTabLifecycle', () => {
+  it('does not restore dialog focus after settings hides or another control takes focus', () => {
+    const container = new TestElement();
+    Object.defineProperty(container, 'isConnected', { value: true });
+    const controls = addSettingRow(container, 'Models', 1);
+    const lifecycle = new SettingsTabLifecycle({
+      containerEl: container as unknown as HTMLElement,
+      display: () => {},
+    });
+    lifecycle.markVisible();
+    const returnFocus = lifecycle.focusAfterDialog({ settingName: 'Models', controlIndex: 0 });
+    const other = new TestElement(container.ownerDocument, 'button');
+    other.focus();
+    returnFocus();
+    expect(container.ownerDocument.activeElement).toBe(other);
+    lifecycle.markHidden();
+    lifecycle.markVisible();
+    container.ownerDocument.activeElement = null;
+    returnFocus();
+    expect(container.ownerDocument.activeElement).toBeNull();
+    expect(controls[0]).toBeDefined();
+  });
   it('uses display on legacy hosts and preserves focused control identity', () => {
     const container = new TestElement();
     const originalControls = addSettingRow(container, 'Listening mode', 2);

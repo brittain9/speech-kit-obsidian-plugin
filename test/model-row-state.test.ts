@@ -311,7 +311,7 @@ describe('deriveCurrentModelDisplay', () => {
     const display = deriveCurrentModelDisplay(buildState());
 
     expect(display).toMatchObject({
-      detail: 'Choose an installed model or validate an external file.',
+      detail: 'Choose or install a model.',
       displayName: 'No model selected',
       engineLabel: '',
       installLocation: null,

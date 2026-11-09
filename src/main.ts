@@ -880,6 +880,7 @@ export default class LocalSttPlugin extends Plugin {
               : { initialTask: pickerOptions.initialTask }),
             manager: this.requireModelInstallManager(),
             onChanged: pickerOptions.onChanged ?? (() => {}),
+            ...(pickerOptions.onClosed === undefined ? {} : { onClosed: pickerOptions.onClosed }),
             openModelStore: (path) => this.openModelStore(path),
             onRunSetup: () => {
               void this.openSetupWizard();

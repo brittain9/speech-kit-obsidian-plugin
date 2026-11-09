@@ -3,7 +3,6 @@ import { Setting } from 'obsidian';
 import type { ModelPickerOptions } from '../models/manage-models-modal';
 import type { ModelInstallManager, ModelManagerState } from '../models/model-install-manager';
 import { type CatalogModelRecord, matchesModelTriple } from '../models/model-management-types';
-import { formatBytes } from '../shared/format-utils';
 import { t } from '../shared/i18n';
 import {
   isSupportedTranslationPair,
@@ -15,6 +14,7 @@ import {
   translationSourcesFor,
   translationTargetsFor,
 } from '../translation/languages';
+import { renderModelSummaryRow } from './model-summary-row';
 import {
   isTranslationStyle,
   normalizeTranslationStyle,
@@ -24,11 +24,13 @@ import {
   type TranslationStyle,
 } from './plugin-settings';
 import { addTextAreaSetting } from './setting-helpers';
+import { captureSettingsFocus, restoreSettingsFocus } from './settings-tab-lifecycle';
 
 export interface TranslationSettingsDependencies {
   getSettings: () => PluginSettings;
   manager: ModelInstallManager;
   openModelPicker: (options?: ModelPickerOptions) => Promise<void>;
+  openSelectedModelDetails?: () => void;
   persistLanguages: (
     sourceLanguage: TranslationLanguage,
     targetLanguage: TranslationLanguage,
@@ -37,7 +39,10 @@ export interface TranslationSettingsDependencies {
 }
 
 export function translationSettingsFingerprint(
-  state: Pick<ModelManagerState, 'catalog' | 'installedModels' | 'selectedTranslationModel'>,
+  state: Pick<
+    ModelManagerState,
+    'catalog' | 'installedModels' | 'selectedTranslationModel' | 'loadStatus'
+  >,
 ): string {
   const models = translationModels(state);
   const installed = models.filter((model) =>
@@ -48,6 +53,7 @@ export function translationSettingsFingerprint(
   const selected = state.selectedTranslationModel;
   return [
     state.catalog.catalogVersion,
+    state.loadStatus,
     ...models.map((model) => model.modelId),
     '|',
     ...installed.map((model) => model.modelId),
@@ -180,6 +186,7 @@ export function renderTranslationModelSetting(
 
   const render = (): void => {
     if (disposed) return;
+    const focus = captureSettingsFocus(container);
     container.empty();
     const state = dependencies.manager.getState();
     const selectedModel = selectedTranslationCatalogModel(state);
@@ -195,17 +202,43 @@ export function renderTranslationModelSetting(
             ),
           ) ?? null);
 
-    new Setting(container)
-      .setName(t('settings.translation.model.name'))
-      .setDesc(modelDescription(selectedModel, installedRecord?.totalSizeBytes ?? null))
-      .addButton((button) => {
-        button
-          .setCta()
-          .setButtonText(t('settings.model.manageModels'))
-          .onClick(() => {
-            void dependencies.openModelPicker({ initialTask: 'translation' });
-          });
-      });
+    const selection = state.selectedTranslationModel;
+    const status =
+      selection === null
+        ? { modifier: 'neutral' as const, text: t('settings.model.noModelSelected') }
+        : installedRecord !== null
+          ? { modifier: 'ready' as const, text: t('models.current.installed') }
+          : state.loadStatus === 'ready'
+            ? { modifier: 'missing' as const, text: t('settings.model.notInstalled') }
+            : state.loadStatus === 'error'
+              ? { modifier: 'neutral' as const, text: t('settings.model.unavailable') }
+              : { modifier: 'neutral' as const, text: t('settings.model.checking') };
+    renderModelSummaryRow(container, {
+      taskLabel: t('settings.model.task.translation'),
+      modelName:
+        (selectedModel === null ? null : translationSummaryName(selectedModel)) ??
+        (selection?.kind === 'catalog_model'
+          ? selection.modelId
+          : selection === null
+            ? t('settings.model.noModelSelected')
+            : t('settings.translation.model.unavailable')),
+      icon: 'languages',
+      streaming: false,
+      status,
+      onOpen: () => {
+        void dependencies.openModelPicker({ initialTask: 'translation' });
+      },
+      actions:
+        selectedModel !== null && dependencies.openSelectedModelDetails !== undefined
+          ? [
+              {
+                label: t('settings.model.details'),
+                onSelect: dependencies.openSelectedModelDetails,
+              },
+            ]
+          : [],
+    });
+    restoreSettingsFocus(container, focus);
   };
 
   render();
@@ -225,6 +258,14 @@ function translationModels(state: Pick<ModelManagerState, 'catalog'>): CatalogMo
   return state.catalog.models.filter((model) => model.task === 'translation');
 }
 
+function translationSummaryName(model: CatalogModelRecord): string {
+  if (model.runtimeId === 'llama_cpp' && model.familyId === 'tencent_hy_mt') {
+    if (model.modelId === 'tencent_hy_mt_2_1_8b_q4_k_m') return 'HY-MT 2 · 1.8B';
+    if (model.modelId === 'tencent_hy_mt_2_7b_q4_k_m') return 'HY-MT 2 · 7B';
+  }
+  return model.displayName;
+}
+
 function selectedTranslationCatalogModel(
   state: Pick<ModelManagerState, 'catalog' | 'selectedTranslationModel'>,
 ): CatalogModelRecord | null {
@@ -236,23 +277,5 @@ function selectedTranslationCatalogModel(
         model.task === 'translation' &&
         matchesModelTriple(model, selected.runtimeId, selected.familyId, selected.modelId),
     ) ?? null
-  );
-}
-
-function modelDescription(model: CatalogModelRecord | null, installedSize: number | null): string {
-  if (model === null) return t('settings.translation.model.unavailable');
-  const size =
-    installedSize ??
-    model.artifacts
-      .filter((artifact) => artifact.required)
-      .reduce((total, artifact) => total + artifact.sizeBytes, 0);
-  return t(
-    installedSize === null
-      ? 'settings.translation.model.availableDesc'
-      : 'settings.translation.model.installedDesc',
-    {
-      model: model.displayName,
-      size: formatBytes(size),
-    },
   );
 }

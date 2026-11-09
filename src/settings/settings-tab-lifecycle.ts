@@ -19,15 +19,44 @@ export interface SettingsFocus {
 
 export class SettingsTabLifecycle {
   private visible = false;
+  private visibilityGeneration = 0;
+  private dialogGeneration = 0;
 
   constructor(private readonly host: SettingsTabRefreshHost) {}
 
   markVisible(): void {
+    if (!this.visible) this.visibilityGeneration += 1;
     this.visible = true;
   }
 
   markHidden(): void {
     this.visible = false;
+  }
+
+  focusAfterDialog(focus: SettingsFocus): () => void {
+    const visibility = this.visibilityGeneration;
+    const dialog = ++this.dialogGeneration;
+    return () => {
+      const container = this.host.containerEl;
+      const document = container.ownerDocument;
+      const active = document.activeElement;
+      if (
+        !this.visible ||
+        visibility !== this.visibilityGeneration ||
+        dialog !== this.dialogGeneration ||
+        !container.isConnected
+      )
+        return;
+      if (active !== null && active !== document.body && active !== document.documentElement)
+        return;
+      if (
+        Array.from(document.querySelectorAll('.modal-container')).some(
+          (modal) => !modal.contains(container),
+        )
+      )
+        return;
+      restoreSettingsFocus(container, focus);
+    };
   }
 
   refresh(): void {

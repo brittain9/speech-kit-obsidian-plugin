@@ -6,7 +6,7 @@ import {
   readAloudControlsFingerprint,
   renderTextToSpeechSettings,
 } from '../src/settings/read-aloud-settings-section';
-import { Setting, SliderComponent, TestElement } from './__mocks__/obsidian';
+import { Menu, Setting, SliderComponent, TestElement } from './__mocks__/obsidian';
 
 function state(
   voices: string[],
@@ -95,6 +95,35 @@ function state(
 }
 
 describe('Read Aloud settings incremental refresh', () => {
+  it('opens the text-to-speech picker from its summary row', async () => {
+    const currentState = state(['alba'], null, 'pocket_tts_english_2026_04_int8', true);
+    const modelControls = new TestElement();
+    const readAloudControls = new TestElement();
+    const picker = vi.fn(async () => {});
+    renderTextToSpeechSettings(
+      modelControls as unknown as HTMLDivElement,
+      readAloudControls as unknown as HTMLDivElement,
+      readAloudControls.createDiv() as unknown as HTMLElement,
+      {
+        getSettings: () => ({
+          ...DEFAULT_PLUGIN_SETTINGS,
+          selectedTtsModel: currentState.selectedTtsModel,
+        }),
+        manager: {
+          getState: () => currentState,
+          subscribe: () => () => {},
+        } as unknown as ModelInstallManager,
+        openSelectedModelDetails: vi.fn(),
+        openModelPicker: picker,
+        persistLanguage: vi.fn(async () => {}),
+        persistVoice: vi.fn(async () => {}),
+      },
+    );
+    const row = modelControls.findByClass('local-stt-model-summary-open');
+    expect(row).not.toBeNull();
+    await row?.click();
+    expect(picker).toHaveBeenCalledWith({ initialTask: 'tts' });
+  });
   it('shows missing status only after discovery and refreshes when an empty-voice model is installed or removed', () => {
     Setting.reset();
     let currentState: ModelManagerState = {
@@ -130,27 +159,21 @@ describe('Read Aloud settings incremental refresh', () => {
         persistVoice: vi.fn(async () => {}),
       },
     );
-    const description = () => {
-      const desc = Setting.instances
-        .filter((setting) => setting.name === 'Text-to-speech model')
-        .at(-1)?.descEl;
-      return [desc?.textContent, ...(desc?.children.map((child) => child.textContent) ?? [])].join(
-        '',
-      );
-    };
-    expect(description()).not.toContain('Not installed');
+    const status = () =>
+      modelControls.findByClass('local-stt-model-summary-dot')?.getAttribute('title');
+    expect(status()).toBe('Checking…');
     currentState = { ...currentState, loadStatus: 'error', loadError: 'unavailable' };
     notify();
-    expect(description()).not.toContain('Not installed');
+    expect(status()).toBe('Unavailable');
     currentState = { ...currentState, loadStatus: 'ready', loadError: null };
     notify();
-    expect(description()).toContain('Not installed');
+    expect(status()).toBe('Not installed');
     currentState = { ...currentState, installedModels: state([]).installedModels };
     notify();
-    expect(description()).not.toContain('Not installed');
+    expect(status()).toBe('Installed');
     currentState = { ...currentState, installedModels: [] };
     notify();
-    expect(description()).toContain('Not installed');
+    expect(status()).toBe('Not installed');
     expect(currentState.selectedTtsModel?.kind).toBe('catalog_model');
   });
   it('shows the speed value dynamically and persists changes', () => {
@@ -222,7 +245,7 @@ describe('Read Aloud settings incremental refresh', () => {
     const originalFirstControl = modelControls.children[0];
     expect(modelControls.children).toEqual([originalFirstControl]);
     expect(readAloudControls.children[2]).toBe(readAloudBefore);
-    expect(Setting.named('Text-to-speech model').descEl.textContent).toBe('No model selected');
+    expect(modelControls.findByClass('local-stt-model-summary-open')).toBeDefined();
     expect(Setting.named('Reading language')).toBeDefined();
     expect(Setting.named('Voice')).toBeDefined();
 
@@ -277,24 +300,16 @@ describe('Read Aloud settings incremental refresh', () => {
       },
     );
 
-    const firstModelSetting = Setting.named('Text-to-speech model');
-    expect(firstModelSetting.extraButtonComponents).toHaveLength(1);
-    expect(firstModelSetting.extraButtonComponents[0]?.icon).toBe('info');
-    expect(firstModelSetting.extraButtonComponents[0]?.tooltip).toBe('Model details');
-
+    expect(modelControls.findByClass('local-stt-model-summary-more')).toBeDefined();
     currentState = state(['alba'], null, 'pocket_tts_english_new', true);
     notify();
-    const currentModelSetting = Setting.instances
-      .filter((setting) => setting.name === 'Text-to-speech model')
-      .at(-1);
-    await currentModelSetting?.extraButtonComponents[0]?.click();
+    await modelControls.findByClass('local-stt-model-summary-more')?.click();
+    expect(Menu.lastItems.map((item) => item.title)).toEqual(['Model details']);
+    Menu.lastItems[0]?.click();
     expect(openedModelId).toBe('pocket_tts_english_new');
 
     currentState = { ...state([]), catalog: { ...state([]).catalog, models: [] } };
     notify();
-    const unresolvedModelSetting = Setting.instances
-      .filter((setting) => setting.name === 'Text-to-speech model')
-      .at(-1);
-    expect(unresolvedModelSetting?.extraButtonComponents).toHaveLength(0);
+    expect(modelControls.findByClass('local-stt-model-summary-more')).toBeUndefined();
   });
 });

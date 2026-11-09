@@ -29,6 +29,7 @@ interface ExternalModelFileModalDependencies {
   feedback: Pick<UserFeedback, 'show'>;
   manager: ModelInstallManager;
   onChanged: () => Promise<void>;
+  onClosed?: () => void;
 }
 
 export class ExternalModelFileModal extends Modal {
@@ -135,6 +136,10 @@ export class ExternalModelFileModal extends Modal {
           }
         });
     });
+  }
+
+  override onClose(): void {
+    if (this.dependencies.onClosed !== undefined) queueMicrotask(this.dependencies.onClosed);
   }
 
   private renderGuidance(): void {

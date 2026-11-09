@@ -45,6 +45,7 @@ const MODEL_PICKER_TASKS: readonly ModelPickerTask[] = ['stt', 'tts', 'translati
 export interface ModelPickerOptions {
   initialTask?: ModelPickerTask;
   onChanged?: () => void;
+  onClosed?: () => void;
 }
 
 export function resolveInitialModelPickerTask(options: ModelPickerOptions): ModelPickerTask {
@@ -171,6 +172,7 @@ interface ManageModelsModalDependencies {
   initialTask?: ModelPickerTask;
   manager: ModelInstallManager;
   onChanged: () => void;
+  onClosed?: () => void;
   openModelStore?: (path: string) => Promise<void>;
   onRunSetup?: () => void;
 }
@@ -237,6 +239,7 @@ function modelFamilyKey(key: ModelFamilyKey): string {
 // ---------------------------------------------------------------------------
 
 export class ManageModelsModal extends Modal {
+  private restoreOpener = true;
   private actionInProgress = false;
   private capabilityRetryPending = false;
   private readonly activeLanguages = new Map<ModelPickerTask, ModelLanguageFilter>();
@@ -261,6 +264,7 @@ export class ManageModelsModal extends Modal {
   }
 
   override onOpen(): void {
+    this.restoreOpener = true;
     this.modalEl.addClass('local-stt-manage-models');
     this.setTitle(t('models.manage.title'));
     this.renderContent();
@@ -359,6 +363,7 @@ export class ManageModelsModal extends Modal {
     actions
       .createEl('button', { cls: 'mod-cta', text: t('models.manage.runSetup') })
       .addEventListener('click', () => {
+        this.restoreOpener = false;
         this.close();
         this.deps.onRunSetup?.();
       });
@@ -380,6 +385,7 @@ export class ManageModelsModal extends Modal {
     this.progressElements.clear();
     this.renderedFailureId = null;
     this.contentEl.empty();
+    if (this.restoreOpener && this.deps.onClosed !== undefined) queueMicrotask(this.deps.onClosed);
   }
 
   // -------------------------------------------------------------------------

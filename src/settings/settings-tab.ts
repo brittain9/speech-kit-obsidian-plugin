@@ -157,7 +157,7 @@ export function renderReadAloudHighlightSetting(
 }
 
 export class LocalSttSettingTab extends PluginSettingTab {
-  override readonly icon = 'audio-lines';
+  override readonly icon = 'mic';
 
   private readonly access: SettingAccess;
   private disposeDiarizationDesc: (() => void) | null = null;
@@ -205,17 +205,36 @@ export class LocalSttSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     // --- Model ---
-    const modelSection = createSettingGroup(containerEl, t('settings.groups.model'));
-    const modelSummary = modelSection.createDiv();
+    const modelGroup = containerEl.createDiv({
+      cls: 'setting-group local-stt-model-summary-group',
+    });
+    new Setting(modelGroup)
+      .setName(t('settings.groups.model'))
+      .setHeading()
+      .addButton((button) => {
+        button.setButtonText(t('settings.model.manageModels')).onClick(() => {
+          void this.openModelPickerFromSettings(
+            { onChanged: () => this.refreshSettingsTab() },
+            t('settings.groups.model'),
+          );
+        });
+      });
+    const modelSection = modelGroup.createDiv({
+      cls: 'setting-items local-stt-model-summary-list',
+    });
+    const modelSummary = modelSection.createDiv({ cls: 'local-stt-model-summary-slot' });
     const manager = this.dependencies.modelInstallManager;
     this.disposeModelSection = renderModelSection(modelSummary, manager, {
       onManageModels: () => {
-        void this.dependencies.openModelPicker({
-          initialTask: 'stt',
-          onChanged: () => {
-            this.refreshSettingsTab();
+        void this.openModelPickerFromSettings(
+          {
+            initialTask: 'stt',
+            onChanged: () => {
+              this.refreshSettingsTab();
+            },
           },
-        });
+          t('settings.model.task.stt'),
+        );
       },
       onExternalFile: () => {
         const selectedModel = this.dependencies.getSettings().selectedModel;
@@ -228,17 +247,20 @@ export class LocalSttSettingTab extends PluginSettingTab {
             onChanged: async () => {
               this.refreshSettingsTab();
             },
+            onClosed: this.lifecycle.focusAfterDialog({
+              settingName: t('settings.model.task.stt'),
+              controlIndex: 1,
+            }),
           },
         ).open();
       },
-      onModelInfo:
-        settings.selectedModel?.kind === 'catalog_model'
-          ? this.buildModelInfoCallback(manager, 'stt')
-          : null,
+      onModelInfo: this.buildModelInfoCallback(manager, 'stt'),
     });
 
-    const ttsModelContainer = modelSection.createDiv();
-    const translationModelContainer = modelSection.createDiv();
+    const ttsModelContainer = modelSection.createDiv({ cls: 'local-stt-model-summary-slot' });
+    const translationModelContainer = modelSection.createDiv({
+      cls: 'local-stt-model-summary-slot',
+    });
 
     const modelState = manager.getState();
     const selectedCapabilities = modelState.selectedModelCapabilities;
@@ -456,7 +478,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
         getSettings: () => this.dependencies.getSettings(),
         manager,
         openSelectedModelDetails: this.buildModelInfoCallback(manager, 'tts'),
-        openModelPicker: (options) => this.dependencies.openModelPicker(options),
+        openModelPicker: (options) =>
+          this.openModelPickerFromSettings(options ?? {}, t('settings.model.task.tts')),
         persistLanguage: (language) => this.access.persistOne('readAloudLanguage', language),
         persistVoice: (voice) => this.access.persistOne('selectedTtsVoice', voice),
       },
@@ -465,7 +488,9 @@ export class LocalSttSettingTab extends PluginSettingTab {
     const translationSettingsDependencies = {
       getSettings: () => this.dependencies.getSettings(),
       manager,
-      openModelPicker: (options) => this.dependencies.openModelPicker(options),
+      openModelPicker: (options) =>
+        this.openModelPickerFromSettings(options ?? {}, t('settings.model.task.translation')),
+      openSelectedModelDetails: this.buildModelInfoCallback(manager, 'translation'),
       persistLanguages: async (sourceLanguage, targetLanguage) => {
         await this.dependencies.mutateLlmSettings((current) => ({
           ...current,
@@ -762,7 +787,20 @@ export class LocalSttSettingTab extends PluginSettingTab {
     });
   }
 
-  private buildModelInfoCallback(manager: ModelInstallManager, task: 'stt' | 'tts'): () => void {
+  private openModelPickerFromSettings(
+    options: ModelPickerOptions,
+    settingName: string,
+  ): Promise<void> {
+    return this.dependencies.openModelPicker({
+      ...options,
+      onClosed: this.lifecycle.focusAfterDialog({ settingName, controlIndex: 0 }),
+    });
+  }
+
+  private buildModelInfoCallback(
+    manager: ModelInstallManager,
+    task: 'stt' | 'tts' | 'translation',
+  ): () => void {
     return () => {
       openSelectedModelDetailsModal(this.app, manager, task);
     };
