@@ -810,7 +810,12 @@ describe('model browser', () => {
       loadError: null,
       loadStatus: 'ready',
       modelStore: { overridePath: null, path: '/models', usingDefaultPath: true },
-      selectedModel: null,
+      selectedModel: {
+        kind: 'catalog_model',
+        runtimeId: 'onnx_runtime',
+        familyId: 'nemotron_asr',
+        modelId: 'french',
+      },
       selectedModelCapabilities: { status: 'none' },
       selectedTtsModel: null,
       selectedTtsModelCapabilities: { status: 'none' },
@@ -830,6 +835,15 @@ describe('model browser', () => {
     globalThis.createFragment = () => new TestElement() as unknown as DocumentFragment;
     try {
       modal.open();
+      const familyTabs = () =>
+        (modal.contentEl as unknown as TestElement).querySelectorAll('.local-stt-tab');
+      const activeFamily = () =>
+        familyTabs().find((tab) => tab.getAttribute('aria-selected') === 'true')?.textContent;
+      expect(activeFamily()).toBe('Nemotron');
+      await familyTabs()
+        .find((tab) => tab.textContent === 'Moonshine')
+        ?.click();
+      expect(activeFamily()).toBe('Moonshine');
       await selectLanguage(modal, 'Français');
       expect(activeLanguage(modal)).toBe('Français');
 
@@ -843,6 +857,7 @@ describe('model browser', () => {
 
       await selectTask(modal, 'Speech to text');
       expect(activeLanguage(modal)).toBe('Français');
+      expect(activeFamily()).toBe('Moonshine');
       await selectTask(modal, 'Text to speech');
       expect(activeLanguage(modal)).toBe('Deutsch');
       await selectTask(modal, 'Translation');
