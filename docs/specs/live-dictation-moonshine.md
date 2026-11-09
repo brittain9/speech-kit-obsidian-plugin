@@ -1,8 +1,7 @@
 # Spec: Live Dictation with Moonshine v2 Streaming
 
-Status: approved for implementation (handoff to Codex)
+Status: historical design record. See [current architecture](../system-architecture.md).
 Issue: [#175](https://github.com/brittain9/local-dictation-obsidian-plugin/issues/175)
-Companion plan: `PLANS.md` (repo root, local only).
 
 ## Product goal
 

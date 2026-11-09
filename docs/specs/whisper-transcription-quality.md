@@ -1,8 +1,7 @@
 # Spec: Whisper Transcription Quality Fixes
 
-Status: approved for implementation (handoff to Codex)
+Status: historical design record. See [current architecture](../system-architecture.md).
 Issues: [#160](https://github.com/brittain9/local-dictation-obsidian-plugin/issues/160), [#138](https://github.com/brittain9/local-dictation-obsidian-plugin/issues/138), plus two field-reported defects (capitalization drift, spurious speaker labels) captured below.
-Companion plan: `PLANS.md` (repo root).
 
 ## Design principle
 

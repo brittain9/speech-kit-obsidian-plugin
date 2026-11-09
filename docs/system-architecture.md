@@ -1,10 +1,12 @@
 # System Architecture
 
-Speech Kit is an Obsidian plugin that handles voice and language workflows
-entirely on-device. Dictation audio crosses a binary protocol into a native
-Rust sidecar and returns as text. Read-aloud text takes the inverse path and
-returns as audio for playback in Obsidian. Firefox translation runs inside an
-isolated WebAssembly worker; Tencent HY-MT 2 uses a packaged native helper.
+Speech Kit runs dictation, file transcription, read aloud, and translation
+on-device. Dictation audio crosses a binary protocol into a native Rust sidecar
+and returns as text. Read-aloud text takes the inverse path and returns as
+audio in Obsidian. Firefox translation runs in an isolated WebAssembly worker;
+Tencent HY-MT 2 uses a packaged native helper. Model downloads and YouTube
+caption import need a network connection. Optional remote text providers
+receive transcript text and any enabled context; audio stays local.
 
 The split is deliberate:
 
@@ -248,7 +250,7 @@ The sidecar is spawned as a subprocess of Obsidian (`child_process.spawn`,
 | `session_state_changed`       | State-machine transition                                                                                   |
 | `audio_level`                 | Periodic input level for the meter                                                                         |
 | `transcript_ready`            | Transcript revision: `isFinal`, monotonic `revision`, segments, timing, `stageResults[]`, and `warnings[]` |
-| `transcription_queue_changed` | Back-pressure queue depth changed                                                                          |
+| `transcription_queue_changed` | Utterance back-pressure tier changed                                                                       |
 | `context_request`             | Sidecar asks the plugin for context for the next utterance                                                 |
 | `session_stopped`             | Session ended, with reason                                                                                 |
 | `warning`                     | Non-fatal warning                                                                                          |
@@ -400,17 +402,21 @@ than a silent failure.
 **Worker behavior:**
 - A dedicated thread holding `Arc<EngineRegistry>`, communicating over `mpsc`
   channels; all inference is synchronous and blocking on that thread.
-- Whisper runs greedy decoding in the exact model's selected language, with
-  translation disabled and `use_gpu`/`flash_attn` from the acceleration config. The model context persists across utterances and
-  reloads only on a path or GPU-config change.
+- Whisper runs greedy decoding in the selected language, with translation
+  disabled and `use_gpu`/`flash_attn` from the acceleration config. Its model
+  context persists across the session's utterances. `EndSession` releases the
+  session resources.
 - Moonshine keeps frontend, encoder, adapter, cross-attention, and decoder KV
   state for the open utterance. It attempts a changed-text partial every 500 ms;
   the single worker thread guarantees one decode in flight, and the wall-time
   gate drops catch-up partials while preserving all PCM for the next decode.
-- Nemotron keeps the pinned encoder's channel/time caches and RNNT predictor
-  states across 560 ms chunks. The session language selects the pinned graph's
-  verified prompt index, and the adapter resets all
-  graph state on finalization or inference failure.
+- Nemotron retains encoder caches and RNNT predictor state across chunks. Its
+  supported profiles are English 560 ms and multilingual 160/560 ms. Only the
+  multilingual graphs take a language prompt. Finalization or inference failure
+  resets the graph state.
+- Parakeet Unified uses the pinned 1,120 ms buffered profile: 560 ms chunks,
+  560 ms right context, and up to 5.6 seconds of left context. It recomputes
+  encoder windows and retains RNNT predictor state across chunks.
 - Partials carry only the engine stage outcome. Finals run the normal post-engine
   chain and receive a revision greater than every emitted partial.
 - Back-pressure: finalized utterances queue while inference is in flight; queue
@@ -419,24 +425,32 @@ than a silent failure.
 - Panic safety: `catch_unwind` wraps model load and inference; panics become
   `error` events instead of crashing the sidecar.
 
+Queue events report tier changes: normal at 0–2 queued utterances, catching up
+at 3–9, falling behind at 10–29, and saturated at 30. They do not measure audio
+buffered within an open streaming utterance or estimate time remaining.
+
 **Available models:**
 
-| Model                   | Runtime · Family                         | Quant     | Size                                   | Notes                                                         |
-| ----------------------- | ---------------------------------------- | --------- | -------------------------------------- | ------------------------------------------------------------- |
-| Whisper Tiny EN         | `whisper_cpp` · `whisper`                | Q8_0      | 42 MB                                  | Fastest, lowest quality                                       |
-| Whisper Base EN         | `whisper_cpp` · `whisper`                | Q8_0      | 78 MB                                  |                                                               |
-| Whisper Small EN        | `whisper_cpp` · `whisper`                | Q5_1      | 181 MB                                 | Balanced                                                      |
-| Whisper Medium EN       | `whisper_cpp` · `whisper`                | Q5_0      | 514 MB                                 |                                                               |
-| Whisper Large V3 Turbo  | `whisper_cpp` · `whisper`                | Q8_0      | 834 MB                                 | Best with GPU                                                 |
-| Cohere Transcribe FP16  | `onnx_runtime` · `cohere_transcribe`     | FP16      | 3.8 GB                                 | 2B params                                                     |
-| Cohere Transcribe INT8  | `onnx_runtime` · `cohere_transcribe`     | INT8      | 2.9 GB                                 |                                                               |
-| Cohere Transcribe Q4    | `onnx_runtime` · `cohere_transcribe`     | Q4        | 2.0 GB                                 |                                                               |
-| Moonshine Tiny          | `onnx_runtime` · `moonshine`             | Quantized | 49 MB                                  | Streaming (live), 34M params                                  |
-| Moonshine Small         | `onnx_runtime` · `moonshine`             | Quantized | 157 MB                                 | Streaming (live), balanced, 123M params                       |
-| Moonshine Medium        | `onnx_runtime` · `moonshine`             | Quantized | 289 MB                                 | Streaming (live), 245M params                                 |
-| Nemotron 3.5 ASR 560 ms | `onnx_runtime` · `nemotron_asr`          | INT8      | 651 MB                                 | Multilingual streaming                                        |
-| Supertonic 3            | `onnx_runtime` · `supertonic`            | ONNX      | 398 MB                                 | Read aloud in eight app languages, 10 voices                  |
-| Firefox Translations    | `bergamot_wasm` · `firefox_translations` | Bergamot  | ~5 MB runtime + 20–67 MB per direction | 96 released English-anchored directions, downloaded on demand |
+Sizes below are rounded required-file totals from [the catalog](../native/catalog.json).
+Optional voices and translation packs add storage. These are download sizes;
+runtime memory also includes graph state, tensors, and audio buffers.
+
+| Model                             | Runtime · Family                         | Format           | Required files                           | Scope                                        |
+| --------------------------------- | ---------------------------------------- | ---------------- | ---------------------------------------- | -------------------------------------------- |
+| Whisper Tiny EN                   | `whisper_cpp` · `whisper`                | Q8_0             | 42 MiB                                   | English batch                                |
+| Whisper Base EN                   | `whisper_cpp` · `whisper`                | Q8_0             | 78 MiB                                   | English batch                                |
+| Whisper Small EN                  | `whisper_cpp` · `whisper`                | Q5_1             | 181 MiB                                  | English batch                                |
+| Whisper Medium EN                 | `whisper_cpp` · `whisper`                | Q5_0             | 514 MiB                                  | English batch                                |
+| Whisper Large V3 Turbo            | `whisper_cpp` · `whisper`                | Q8_0             | 834 MiB                                  | Ten product languages; batch                 |
+| Cohere Transcribe                 | `onnx_runtime` · `cohere_transcribe`     | FP16 / INT8 / Q4 | 3,942 / 2,927 / 2,029 MiB                | English batch                                |
+| Moonshine Tiny / Small / Medium   | `onnx_runtime` · `moonshine`             | Quantized ORT    | 49 / 157 / 289 MiB                       | English streaming                            |
+| Nemotron Speech English 560 ms    | `onnx_runtime` · `nemotron_asr`          | INT8             | 631 MiB                                  | English streaming                            |
+| Nemotron 3.5 ASR 160 / 560 ms     | `onnx_runtime` · `nemotron_asr`          | INT8             | 651 MiB per profile                      | Nine product languages; streaming            |
+| Parakeet Unified English 1,120 ms | `onnx_runtime` · `parakeet_unified`      | INT8             | 632 MiB                                  | English buffered streaming                   |
+| Pocket TTS                        | `onnx_runtime` · `pocket_tts`            | INT8 / ONNX      | 126 MiB; French 361 MiB                  | Six language variants                        |
+| Supertonic 3                      | `onnx_runtime` · `supertonic`            | ONNX             | 380 MiB                                  | Nine product languages; ten voices available |
+| Firefox Translations              | `bergamot_wasm` · `firefox_translations` | Bergamot         | 5 MiB runtime; packs selected separately | 96 English-anchored directions               |
+| HY-MT 2 1.8B / 7B                 | `llama_cpp` · `tencent_hy_mt`            | Q4_K_M GGUF      | 1,081 / 4,410 MiB                        | 38 all-to-all languages                      |
 
 Moonshine models are streaming (live-dictation) entries in the managed catalog,
 installed through Manage Models like any other model. Each is a multi-file ORT
@@ -446,19 +460,19 @@ SHA-256 hashes. They are English-only and do not apply speaker labels. See
 [`docs/guides/moonshine-live-testing.md`](guides/moonshine-live-testing.md) for
 install and manual acceptance testing.
 
-Nemotron 3.5 ASR is a separate managed entry; Moonshine Small
-remains the recommended live-dictation default. Its encoder, decoder, joiner,
-and tokenizer are pinned by revision, size, and SHA-256. The adapter supports
-the 560 ms int8 export with verified manual and automatic language prompts. See
-[`docs/specs/nemotron-asr-stage-a.md`](specs/nemotron-asr-stage-a.md) for the
-artifact, graph-contract, golden-oracle, and license record.
+Moonshine Small remains the recommended English live-dictation default. The
+Nemotron and Parakeet exports use pinned encoder, decoder, joiner, and tokenizer
+files. Nemotron's English conversion does not record its exact NVIDIA source
+checkpoint. The multilingual 160 ms option uses the existing 3.5 model; it is not
+a new checkpoint. Only Parakeet's 1,120 ms profile is in the production catalog.
+See the [Nemotron integration](research/2026-11-nemotron-model-integration.md)
+and [NVIDIA export record](research/2026-11-nvidia-asr-options.md) for contracts,
+licenses, and functional checks.
 
-**Inference is the bottleneck.** Time depends on model size, hardware, and
-utterance length, and is reported as `processing_duration_ms` on each transcript.
-Typical for a ~3 s utterance: Whisper Tiny ~200-500 ms (CPU); Whisper Small
-~1-3 s (CPU) or ~200-500 ms (Metal/CUDA); Large V3 Turbo ~2-5 s (Metal/CUDA). On
-smaller models the user is usually still pausing when inference completes, so the
-silence window hides most of the latency.
+Inference time is reported as `processing_duration_ms`. End-to-end latency also
+includes capture, speech-boundary detection, queueing, and optional text
+processing. Chunk labels and model-file sizes do not predict latency or battery
+use on a particular machine.
 
 ---
 
@@ -765,16 +779,16 @@ A representative slice of user-facing settings (full list and defaults in
 
 ## Technology Reference
 
-| Technology                                       | Role in the system                                                                                 |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| **Obsidian Plugin API**                          | Host runtime: editor access, commands, settings, UI hooks                                          |
-| **Web Audio API / AudioWorklet**                 | Microphone capture and PCM frame production at 50 fps                                              |
-| **whisper-rs / whisper.cpp**                     | Primary engine; runs GGML-quantized Whisper on CPU, Metal, or CUDA                                 |
-| **ort (ONNX Runtime)**                           | Engine for Cohere Transcribe, Moonshine, and Nemotron; also runs Silero VAD and diarization models |
-| **Silero VAD**                                   | Speech probability per 32 ms window; drives boundary detection                                     |
-| **Node.js child_process**                        | Spawns and manages the Rust sidecar                                                                |
-| **reqwest + sha2**                               | Downloads model files and verifies their SHA-256                                                   |
-| **Ollama / OpenRouter / OpenAI-compatible APIs** | Optional provider-selected text transformation on the plugin side                                  |
+| Technology                                       | Role in the system                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| **Obsidian Plugin API**                          | Host runtime: editor access, commands, settings, UI hooks                                         |
+| **Web Audio API / AudioWorklet**                 | Microphone capture and PCM frame production at 50 fps                                             |
+| **whisper-rs / whisper.cpp**                     | Primary engine; runs GGML-quantized Whisper on CPU, Metal, or CUDA                                |
+| **ort (ONNX Runtime)**                           | CPU engine for ONNX speech recognition and synthesis; also runs Silero VAD and diarization models |
+| **Silero VAD**                                   | Speech probability per 32 ms window; drives boundary detection                                    |
+| **Node.js child_process**                        | Spawns and manages the Rust sidecar                                                               |
+| **reqwest + sha2**                               | Downloads model files and verifies their SHA-256                                                  |
+| **Ollama / OpenRouter / OpenAI-compatible APIs** | Optional provider-selected text transformation on the plugin side                                 |
 
 ## Where Things Live
 

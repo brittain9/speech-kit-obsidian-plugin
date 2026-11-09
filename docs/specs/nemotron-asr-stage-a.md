@@ -9,6 +9,10 @@ verified language prompts and automatic detection. The installed application
 runs the selected export through its existing native ONNX Runtime; it does not
 install or invoke Python, PyTorch, NeMo, or sherpa-onnx.
 
+The [current integration record](../research/2026-11-nemotron-model-integration.md)
+adds the separate English export and the multilingual 160 ms profile. The
+original 560 ms artifact pins below remain unchanged.
+
 ## Pinned model lineage
 
 The selected model is pinned at every published boundary:

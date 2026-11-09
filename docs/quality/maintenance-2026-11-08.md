@@ -1,6 +1,6 @@
 # Speech Kit maintenance and smoke tests
 
-The maintenance build improves provider setup, language discovery, live editing, and local audio recording. No release was created. The local test installation uses `~/Documents/test-vault`; the personal vault was not used.
+This is the initial November 8 maintenance snapshot, before the later model, lifecycle, and settings work. Its test counts and observations describe that pass. Current follow-up records include [model integration](../research/2026-11-nemotron-model-integration.md), [model-store switching](2026-11-model-store-switch.md), and [LLM settings](2026-11-llm-settings.md). No release was created. Testing used a separate test vault.
 
 ## What changed and why
 
@@ -43,8 +43,8 @@ Automated checks include TypeScript and Obsidian-floor compatibility, Biome, Obs
 
 Two native safety stops were observed early in QA. The exact trigger was not established. The nested-update defect was separately reproduced in a real editor and fixed in #501; later native smoke tests passed.
 
-Ollama was not running during QA, so provider discovery and its unavailable state were checked; a real LLM transformation still needs a running provider. Native Windows, Linux, mobile, and screen-reader testing are separate from this Mac QA. Short fixture checks establish that the workflows operate; they are not a broad model-accuracy benchmark.
+Ollama was not running during this initial pass, so it checked provider discovery and the unavailable state. Later controlled-provider checks are in the LLM settings record above. Native Windows, Linux, mobile, and screen-reader testing are separate from this Mac QA. Short fixture checks establish that the workflows operate; they are not a broad model-accuracy benchmark.
 
 The German model linked in the [#418 comment](https://github.com/brittain9/speech-kit-obsidian-plugin/issues/418#issuecomment-6607692242) contains Transformers/safetensors files. Speech Kit's external Whisper importer expects a whisper.cpp-compatible model. Conversion of that particular model remains unverified. The catalog already offers German transcription through multilingual Whisper Large V3 Turbo and Nemotron ASR.
 
-Issue #476 and correction-rules PR #459 were left untouched. PR #451 remains open because its integration conflicts need a separate review; the narrow documentation corrections were handled here.
+Issue #476 and correction-rules PR #459 were left untouched. This initial pass did not merge PR #451. Its later workflow-status port is tracked in [#524](https://github.com/brittain9/speech-kit-obsidian-plugin/pull/524).
