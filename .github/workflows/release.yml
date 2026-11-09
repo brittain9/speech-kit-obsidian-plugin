@@ -145,7 +145,8 @@ jobs:
             build_command: npm run build:sidecar:release
             cache_workspaces: native -> target
             cuda: false
-          - runner: ubuntu-latest
+          # Keep CPU and CUDA on the same glibc baseline and CUDA-supported image.
+          - runner: ubuntu-24.04
             asset_name: sidecar-linux-x86_64-cpu
             archive_name: sidecar-linux-x86_64-cpu.tar.gz
             binary_path: native/target/release/local-dictation-sidecar
@@ -161,7 +162,7 @@ jobs:
             build_command: npm run build:sidecar:release
             cache_workspaces: native -> target
             cuda: false
-          - runner: ubuntu-latest
+          - runner: ubuntu-24.04
             asset_name: sidecar-linux-x86_64-cuda
             archive_name: sidecar-linux-x86_64-cuda.tar.gz
             binary_path: native/target-cuda/release/local-dictation-sidecar
