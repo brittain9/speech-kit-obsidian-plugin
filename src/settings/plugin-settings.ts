@@ -171,6 +171,7 @@ export interface PluginSettings {
   diarizationEnabled: boolean;
   diarizationMaxSpeakers: number | null;
   dictationAnchor: DictationAnchor;
+  pinNoteDuringTranscription: boolean;
   dictationLanguage: DictationLanguage;
   autoCopyFinalizedUtterances: boolean;
   listeningMode: ListeningMode;
@@ -240,6 +241,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   diarizationEnabled: false,
   diarizationMaxSpeakers: null,
   dictationAnchor: 'at_cursor',
+  pinNoteDuringTranscription: true,
   dictationLanguage: DEFAULT_DICTATION_LANGUAGE,
   autoCopyFinalizedUtterances: false,
   listeningMode: 'always_on',
@@ -340,6 +342,10 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
     developerMode: readBoolean(raw.developerMode, DEFAULT_PLUGIN_SETTINGS.developerMode),
     diarizationEnabled: readDiarizationEnabled(raw),
     diarizationMaxSpeakers: readDiarizationMaxSpeakers(raw.diarizationMaxSpeakers),
+    pinNoteDuringTranscription: readBoolean(
+      raw.pinNoteDuringTranscription,
+      DEFAULT_PLUGIN_SETTINGS.pinNoteDuringTranscription,
+    ),
     dictationAnchor: isDictationAnchor(raw.dictationAnchor)
       ? raw.dictationAnchor
       : DEFAULT_PLUGIN_SETTINGS.dictationAnchor,
@@ -1007,6 +1013,9 @@ function readSelectedModelCapabilitiesSnapshot(
   return {
     capabilities: normalized.capabilities,
     selection: normalizeSelectedModel(normalized.selection),
+    ...(normalized.modelStorePathOverride === undefined
+      ? {}
+      : { modelStorePathOverride: normalized.modelStorePathOverride }),
   };
 }
 

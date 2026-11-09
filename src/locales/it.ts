@@ -865,6 +865,8 @@ export const it = {
     'Modello equilibrato per la dettatura in tempo reale, con 123 milioni di parametri.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Il modello di streaming Moonshine più accurato, con 245 milioni di parametri.',
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
+    'Trascrizione dal vivo in inglese con buffer tramite NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'RNNT multilingue di NVIDIA da 0,6 miliardi di parametri, esportato in ONNX int8 per la trascrizione in tempo reale ottimizzata per la cache in otto lingue verificate.',
   'catalog.family.whisper.summary':
@@ -873,6 +875,8 @@ export const it = {
     'Trascrizione in batch di alta qualità, con requisiti di download e memoria nell’ordine di diversi gigabyte.',
   'catalog.family.moonshine.summary':
     'Mostra le parole mentre parli. Tiny privilegia un minore utilizzo delle risorse, Small bilancia velocità e qualità, mentre Medium privilegia la qualità.',
+  'catalog.family.parakeet_unified.summary':
+    'Trascrizione dal vivo in inglese con buffer. Questo modello richiede molte risorse della CPU.',
   'catalog.family.nemotron_asr.summary':
     'Streaming multilingue ad alta accuratezza, con un download più grande e un maggiore utilizzo delle risorse. Moonshine Small resta il modello predefinito consigliato per la dettatura in tempo reale in inglese.',
   'setup.sidecar.modal.unsupportedPlatform':

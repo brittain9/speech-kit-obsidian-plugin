@@ -415,6 +415,10 @@ export const hr = {
   'settings.recoveryMemory.name': 'Čuvanje teksta za oporavak u memoriji',
   'settings.recoveryMemory.desc':
     'U memoriji čuva najnoviji tekst za oporavak i snimku bilješke. Ništa se ne zapisuje na disk.',
+  'settings.modelStoreOverride.apply': 'Primijeni',
+  'settings.modelStoreOverride.updated': 'Mapa za pohranu modela je ažurirana.',
+  'settings.modelStoreOverride.failed':
+    'Nije moguće promijeniti mapu za pohranu modela. Odaberite apsolutnu putanju do dostupne mape i pokušajte ponovno.',
   'settings.modelStoreOverride.name': 'Zamjenska mapa za pohranu modela',
   'settings.modelStoreOverride.desc': 'Prilagođena mapa u koju dodatak preuzima modele.',
   'settings.modelStoreOverride.placeholder': 'Koristi zajedničku zadanu pohranu modela',
@@ -1096,6 +1100,8 @@ export const hr = {
     'Uravnotežen model za diktiranje uživo sa 123 milijuna parametara.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Najtočniji Moonshine streaming model s 245 milijuna parametara.',
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
+    'Međuspremana transkripcija engleskog govora uživo s modelom NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'NVIDIA-in višejezični RNNT s 0,6 milijardi parametara, izvezen u int8 ONNX za transkripciju uživo s predmemorijom konteksta na devet provjerenih jezika.',
   'catalog.pocket_tts_english_2026_04_int8.summary':
@@ -1118,6 +1124,8 @@ export const hr = {
     'Visokokvalitetna skupna transkripcija uz preuzimanje i memorijske zahtjeve od više gigabajta.',
   'catalog.family.moonshine.summary':
     'Prikazuje riječi dok govorite. Tiny naginje manjoj potrošnji resursa, Small uravnotežuje brzinu i kvalitetu, a Medium naginje kvaliteti.',
+  'catalog.family.parakeet_unified.summary':
+    'Međuspremana transkripcija engleskog govora uživo. Ovaj model znatno opterećuje CPU.',
   'catalog.family.nemotron_asr.summary':
     'Streaming na engleskom i drugim jezicima uz veća preuzimanja i veću potrošnju resursa. Moonshine Small i dalje je preporučeni zadani izbor za diktiranje na engleskom uživo.',
   'catalog.family.supertonic.summary':

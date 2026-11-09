@@ -10,6 +10,7 @@ export const MODEL_FAMILY_IDS = [
   'cohere_transcribe',
   'moonshine',
   'nemotron_asr',
+  'parakeet_unified',
   'pocket_tts',
   'supertonic',
   'whisper',
@@ -213,6 +214,7 @@ export type SelectedModelCapabilities =
 export interface SelectedModelCapabilitiesSnapshot {
   capabilities: EngineCapabilitiesRecord;
   selection: SelectedModel;
+  modelStorePathOverride?: string;
 }
 
 export type ModelInstallState =
@@ -344,6 +346,8 @@ export function isSelectedModelCapabilitiesSnapshot(
   return (
     isRecord(value) &&
     isSelectedModel(value.selection) &&
+    (value.modelStorePathOverride === undefined ||
+      typeof value.modelStorePathOverride === 'string') &&
     isEngineCapabilitiesRecord(value.capabilities)
   );
 }

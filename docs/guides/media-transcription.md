@@ -40,3 +40,5 @@ A local provider keeps transcript text on your computer. A remote provider recei
 Speech Kit ships 16 starting presets. Every preset can be edited, duplicated, or deleted from **Manage presets**, including the shipped ones. Edits and deletions persist across reloads. **Restore transform defaults** resets edited starting presets and restores deleted ones while preserving custom presets and configured models. Deleting every preset turns AI transformation off.
 
 See [the complete preset settings and prompts](ai-preset-prompts.md) for placement defaults, timing, and prompt behavior.
+
+Speech Kit temporarily pins the target tab during file transcription. You can disable **Temporarily pin the target note** in **Settings → Speech Kit → Transcript output**. The preference applies to the next session. It does not change pins you set yourself. Keep the target tab open until transcription finishes.

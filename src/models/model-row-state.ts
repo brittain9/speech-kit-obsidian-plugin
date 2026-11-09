@@ -28,6 +28,8 @@ type ModelRowAction =
   | 'selected'
   | 'cancel'
   | 'remove'
+  | 'reinstall'
+  | 'recover'
   | 'retry'
   | 'dismiss'
   | 'details';
@@ -117,6 +119,7 @@ export function deriveModelRowStates(state: ModelManagerState): ModelRowState[] 
           : selectedModel,
       activeInstall,
       failedInstall,
+      state.installRequestPending,
     );
   });
 }
@@ -127,6 +130,7 @@ function deriveRowState(
   selectedModel: SelectedModel | null,
   activeInstall: ActiveInstallInfo | null,
   failedInstall: FailedInstallInfo | null,
+  installRequestPending: boolean,
 ): ModelRowState {
   const installed =
     installedModels.find((m) =>
@@ -162,6 +166,8 @@ function deriveRowState(
     isCanceling,
     hasFailed,
     hasOtherActiveInstall,
+    canReinstall: model.task === 'stt' && !installRequestPending && !hasOtherActiveInstall,
+    canRecover: installed && model.task === 'stt' && thisInstall?.phase === 'cancelStuck',
   });
 
   return {
@@ -182,13 +188,22 @@ function deriveAllowedActions(flags: {
   isCanceling: boolean;
   hasFailed: boolean;
   hasOtherActiveInstall: boolean;
+  canReinstall: boolean;
+  canRecover: boolean;
 }): ModelRowAction[] {
-  const { installed, isSelected, isInstalling, isCanceling, hasFailed, hasOtherActiveInstall } =
-    flags;
+  const {
+    installed,
+    isSelected,
+    isInstalling,
+    isCanceling,
+    hasFailed,
+    hasOtherActiveInstall,
+    canReinstall,
+    canRecover,
+  } = flags;
 
-  // Currently canceling or cancelStuck — only details allowed.
   if (isCanceling) {
-    return ['details'];
+    return canRecover ? ['recover', 'details'] : ['details'];
   }
 
   // Currently installing — cancel and details.
@@ -213,13 +228,11 @@ function deriveAllowedActions(flags: {
     return ['install', 'details'];
   }
 
-  // Installed and selected.
-  if (isSelected) {
-    return ['selected', 'details'];
-  }
-
-  // Installed and not selected.
-  return ['use', 'remove', 'details'];
+  const actions: ModelRowAction[] = isSelected ? ['selected'] : ['use'];
+  if (canReinstall) actions.push('reinstall');
+  if (!isSelected) actions.push('remove');
+  actions.push('details');
+  return actions;
 }
 
 // ---------------------------------------------------------------------------
@@ -350,6 +363,8 @@ function resolveFamilyDisplayName(
       return 'Moonshine';
     case 'nemotron_asr':
       return 'NVIDIA Nemotron ASR';
+    case 'parakeet_unified':
+      return 'NVIDIA Parakeet Unified';
     case 'pocket_tts':
       return 'Pocket TTS';
     case 'supertonic':

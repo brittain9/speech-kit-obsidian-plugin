@@ -538,6 +538,9 @@ export const en = {
   'settings.listeningMode.oneSentence': 'One sentence',
   'settings.listeningMode.name': 'Listening mode',
   'settings.listeningMode.desc': 'Continuous, or stop after one sentence.',
+  'settings.pinNoteDuringTranscription.name': 'Temporarily pin the target note',
+  'settings.pinNoteDuringTranscription.desc':
+    'Prevents links from replacing the target tab during the next dictation or file transcription. Speech Kit removes its temporary pin when processing ends. When off, opening another note in the same tab stops dictation; completed text stays in the original note.',
   'settings.autoCopyFinalizedUtterances.name': 'Automatically copy finalized utterances',
   'settings.autoCopyFinalizedUtterances.desc':
     'Each finalized phrase replaces the system clipboard.',
@@ -640,6 +643,10 @@ export const en = {
   'settings.recoveryMemory.name': 'Keep recovery text in memory',
   'settings.recoveryMemory.desc':
     'Keep the latest recoverable text and note snapshot in memory. Nothing is written to disk.',
+  'settings.modelStoreOverride.apply': 'Apply',
+  'settings.modelStoreOverride.updated': 'Model store folder updated.',
+  'settings.modelStoreOverride.failed':
+    'Could not change the model store folder. Choose an absolute path to an accessible folder and try again.',
   'settings.modelStoreOverride.name': 'Model store folder override',
   'settings.modelStoreOverride.desc': 'Custom folder for managed model downloads.',
   'settings.modelStoreOverride.placeholder': 'Use the shared default model store',
@@ -1238,6 +1245,15 @@ export const en = {
     'Does not support {language}. Change Dictation language to install or use this model.',
   'models.manage.use': 'Use',
   'models.manage.selected': 'Selected',
+  'models.manage.reinstall': 'Reinstall',
+  'models.manage.reinstallDesc':
+    'Download this model again. Your installed copy stays in place until the replacement is ready.',
+  'models.manage.reinstallStartFailed': 'Could not start model reinstallation.',
+  'models.manage.reinstallRecover': 'Stop engine and recover',
+  'models.manage.reinstallRecoveryDesc':
+    'Cancellation has not finished. Stop the engine to check the installed copy.',
+  'models.manage.reinstallRecoveryFailed':
+    'Could not confirm that model reinstallation stopped. Restart Obsidian before starting speech work.',
   'models.manage.cancelling': 'Cancelling…',
   'models.manage.details': 'Details',
   'models.manage.retryInstall': 'Retry',
@@ -1247,7 +1263,7 @@ export const en = {
   'models.manage.selectedNotice': 'Model selected.',
   'models.manage.removeFailed': 'Could not remove the model. Close any process using its files.',
   'models.manage.stopSpeechFirst':
-    'Stop dictation or Read aloud first — the speech engine is using model files right now.',
+    'Stop dictation, transcription, translation, or Read aloud first. A model is in use.',
   'models.manage.removedNotice': 'Model removed.',
   'models.external.title': 'Use external file',
   'models.external.intro':
@@ -1404,6 +1420,8 @@ export const en = {
     'Balanced live-dictation model at 123M parameters.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Most accurate Moonshine streaming model at 245M parameters.',
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
+    'English buffered live transcription with the NVIDIA Parakeet Unified model.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     "NVIDIA's 0.6B multilingual RNNT, exported to int8 ONNX for cache-aware live transcription in nine verified languages.",
   'catalog.nemotron_asr_0_6b_int8_streaming_160ms.summary':
@@ -1430,6 +1448,8 @@ export const en = {
     'High-quality batch transcription with multi-gigabyte download and memory requirements.',
   'catalog.family.moonshine.summary':
     'Shows words while you speak. Tiny favors lower resource use, Small balances speed and quality, and Medium favors quality.',
+  'catalog.family.parakeet_unified.summary':
+    'English buffered live transcription. This model requires substantial CPU resources.',
   'catalog.family.nemotron_asr.summary':
     'English and multilingual streaming with larger downloads and higher resource use. Moonshine Small remains the recommended English live-dictation default.',
   'catalog.family.supertonic.summary':

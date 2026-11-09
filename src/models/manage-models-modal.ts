@@ -1,5 +1,5 @@
 import type { App } from 'obsidian';
-import { Modal, SearchComponent, Setting, setIcon } from 'obsidian';
+import { Modal, SearchComponent, Setting, setIcon, setTooltip } from 'obsidian';
 
 import {
   catalogModelSupportsLanguage,
@@ -751,6 +751,13 @@ export class ManageModelsModal extends Modal {
       }
       setting.setDesc(tags);
     }
+    if (
+      row.installed &&
+      row.model.task === 'stt' &&
+      (row.isInstalling || row.isCanceling || row.failedInstall !== null)
+    ) {
+      setting.descEl.createDiv({ text: t('models.manage.reinstallDesc') });
+    }
 
     // Action buttons based on allowedActions.
     for (const action of row.allowedActions) {
@@ -801,6 +808,16 @@ export class ManageModelsModal extends Modal {
           });
           break;
 
+        case 'reinstall':
+          setting.addButton((button) => {
+            setTooltip(button.buttonEl, t('models.manage.reinstallDesc'));
+            button
+              .setButtonText(t('models.manage.reinstall'))
+              .setDisabled(this.actionInProgress || !supportsSelectedLanguage)
+              .onClick(() => this.requestModelInstall(row.model));
+          });
+          break;
+
         case 'cancel':
           setting.addButton((button) => {
             if (row.isCanceling) {
@@ -843,6 +860,20 @@ export class ManageModelsModal extends Modal {
           });
           break;
 
+        case 'recover':
+          setting.descEl.createDiv({ text: t('models.manage.reinstallRecoveryDesc') });
+          setting.addButton((button) => {
+            button
+              .setButtonText(t('models.manage.reinstallRecover'))
+              .setDisabled(this.actionInProgress)
+              .onClick(() => {
+                void this.runAction(async () => this.deps.manager.dismissCancelStuck(), {
+                  failureMessage: t('models.manage.reinstallRecoveryFailed'),
+                });
+              });
+          });
+          break;
+
         case 'retry':
           setting.addButton((button) => {
             const failureId = row.failedInstall?.failureId ?? null;
@@ -852,7 +883,8 @@ export class ManageModelsModal extends Modal {
               .setDisabled(
                 this.actionInProgress ||
                   failureId === null ||
-                  this.deps.manager.getState().activeInstall !== null,
+                  this.deps.manager.getState().activeInstall !== null ||
+                  this.deps.manager.getState().installRequestPending,
               )
               .onClick(() => {
                 if (failureId === null) return;
@@ -871,7 +903,11 @@ export class ManageModelsModal extends Modal {
             const failureId = row.failedInstall?.failureId ?? null;
             button
               .setButtonText(t('models.manage.dismissInstallFailure'))
-              .setDisabled(this.actionInProgress || failureId === null)
+              .setDisabled(
+                this.actionInProgress ||
+                  failureId === null ||
+                  this.deps.manager.getState().installRequestPending,
+              )
               .onClick(() => {
                 if (failureId === null) return;
                 this.deps.manager.dismissFailedInstall(failureId);
@@ -986,17 +1022,32 @@ export class ManageModelsModal extends Modal {
 
   private requestModelInstall(model: CatalogModelRecord): void {
     const confirmation = resolveModelPresentationPolicy(model).installConfirmation;
+    const reinstalling =
+      model.task === 'stt' &&
+      this.deps.manager
+        .getState()
+        .installedModels.some((installed) =>
+          matchesModelTriple(installed, model.runtimeId, model.familyId, model.modelId),
+        );
     const install = async (): Promise<void> => {
       await this.runAction(
         async () => {
-          await this.deps.manager.install({
+          const selection = {
             familyId: model.familyId,
-            kind: 'catalog_model',
+            kind: 'catalog_model' as const,
             modelId: model.modelId,
             runtimeId: model.runtimeId,
-          });
+          };
+          if (reinstalling) await this.deps.manager.reinstall(selection);
+          else await this.deps.manager.install(selection);
         },
-        { failureMessage: t('models.manage.installStartFailed') },
+        {
+          failureMessage: t(
+            reinstalling
+              ? 'models.manage.reinstallStartFailed'
+              : 'models.manage.installStartFailed',
+          ),
+        },
       );
     };
     if (confirmation === null) {
@@ -1058,7 +1109,11 @@ export class ManageModelsModal extends Modal {
       const key = installTripleKey(activeInstall.installUpdate);
       const existingProgressEl = this.progressElements.get(key);
 
-      if (existingProgressEl !== null && existingProgressEl !== undefined) {
+      if (
+        existingProgressEl !== null &&
+        existingProgressEl !== undefined &&
+        activeInstall.phase !== 'cancelStuck'
+      ) {
         updateInstallProgressElement(existingProgressEl, {
           ...activeInstall.installUpdate,
           isCancelling: isCancellingPhase(activeInstall.phase),

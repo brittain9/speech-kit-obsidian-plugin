@@ -46,6 +46,7 @@ engine-whisper = ["dep:whisper-rs"]
 engine-cohere-transcribe = ["half", "ort/half"]
 engine-moonshine = []
 engine-nemotron-asr = []
+engine-parakeet-unified = []
 engine-pocket-tts = ["dep:safetensors", "dep:sentencepiece-rs"]
 engine-supertonic = ["dep:regex", "dep:unicode-normalization"]
 engine-hy-mt = ["dep:llama-cpp-2", "dep:llama-cpp-sys-2"]
@@ -62,6 +63,10 @@ gpu-cuda = ["whisper-rs/cuda", "llama-cpp-2/cuda"]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 hound = "3.5"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+
+[[test]]
+name = "parakeet_unified_e2e"
+required-features = ["engine-parakeet-unified"]
 
 [[test]]
 name = "nemotron_asr_e2e"

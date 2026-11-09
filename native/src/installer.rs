@@ -943,7 +943,10 @@ mod tests {
         ModelFamilyDescriptor, ModelRuntimeDescriptor,
     };
     use crate::engine::capabilities::{ModelFamilyId, ModelTask, RuntimeId};
-    use crate::model_store::read_install_metadata;
+    use crate::model_store::{
+        create_install_metadata_for_artifacts, read_install_metadata, resolve_model_install_dir,
+        write_install_metadata,
+    };
     use crate::protocol::{Event, ModelInstallState};
     use crate::transcription::TranscriptionError;
     use sha2::{Digest, Sha256};
@@ -1586,6 +1589,93 @@ mod tests {
             )),
             "cancelled event should keep the aggregate byte counters"
         );
+    }
+
+    #[test]
+    fn cancellation_during_model_release_preserves_the_previous_install() {
+        let mut request = sample_request();
+        let target = resolve_model_install_dir(
+            &request.store_root,
+            request.runtime_id,
+            request.family_id,
+            &request.model_id,
+        )
+        .unwrap();
+        fs::create_dir_all(&target).unwrap();
+        fs::write(target.join("model.bin"), b"old").unwrap();
+        let mut metadata = create_install_metadata_for_artifacts(
+            &request.catalog,
+            request.runtime_id,
+            request.family_id,
+            &request.model_id,
+            &request.artifacts,
+        )
+        .unwrap();
+        metadata.artifacts[0].sha256 = sha256_hex(b"old");
+        metadata.artifacts[0].size_bytes = 3;
+        write_install_metadata(&target, &metadata).unwrap();
+        let previous_manifest = fs::read(target.join("install.json")).unwrap();
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = std::sync::Mutex::new(release_rx);
+        request.before_model_replace = Arc::new(move |_, _, _| {
+            entered_tx.send(()).unwrap();
+            release_rx.lock().unwrap().recv().unwrap();
+            Ok(())
+        });
+        let cancellation = Arc::new(InstallCancellation::new());
+        let worker_cancellation = Arc::clone(&cancellation);
+        let worker_request = request.clone();
+        let (event_tx, event_rx) = mpsc::channel();
+        let runner = thread::spawn(move || {
+            let reporter = sample_reporter(&worker_request, event_tx);
+            let downloader = MemoryDownloadSource::new([(
+                "https://example.com/model.bin".to_string(),
+                b"test".to_vec(),
+            )]);
+            run_install_test(
+                &worker_request,
+                worker_cancellation,
+                &reporter,
+                &downloader,
+                &test_probe,
+            )
+        });
+
+        entered_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        cancellation.cancel();
+        release_tx.send(()).unwrap();
+        assert!(matches!(
+            runner.join().unwrap(),
+            Err(InstallError::Cancelled)
+        ));
+        assert_eq!(fs::read(target.join("model.bin")).unwrap(), b"old");
+        assert_eq!(
+            fs::read(target.join("install.json")).unwrap(),
+            previous_manifest
+        );
+        assert!(
+            !target
+                .parent()
+                .unwrap()
+                .join(".staging-small-install-1")
+                .exists()
+        );
+        let events = collect_install_events(event_rx);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            Event::ModelInstallUpdate {
+                state: ModelInstallState::Cancelled,
+                ..
+            }
+        )));
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            Event::ModelInstallUpdate {
+                state: ModelInstallState::Completed,
+                ..
+            }
+        )));
     }
 
     #[test]

@@ -34,6 +34,7 @@ import { renderLlmProviderSettings } from './llm-provider-settings-section';
 import { renderMediaToolSetting } from './media-tool-setting';
 import { renderMicrophonePicker } from './microphone-picker';
 import { renderModelSection } from './model-settings-section';
+import { renderModelStoreSetting } from './model-store-setting';
 import { openFilteredHotkeySettings } from './open-hotkey-settings';
 import {
   PHRASE_FINALIZATION_TOOLTIP,
@@ -54,7 +55,6 @@ import {
 } from './read-aloud-settings-section';
 import {
   addEnumSetting,
-  addTextSetting,
   addToggleSetting,
   appendInfoTooltip,
   createSettingGroup,
@@ -127,6 +127,14 @@ export function renderAutomaticCopyFinalizedUtterancesSetting(
     name: t('settings.autoCopyFinalizedUtterances.name'),
     desc: t('settings.autoCopyFinalizedUtterances.desc'),
     key: 'autoCopyFinalizedUtterances',
+  });
+}
+
+export function renderNotePinningSetting(parent: HTMLElement, access: SettingAccess): Setting {
+  return addToggleSetting(parent, access, {
+    name: t('settings.pinNoteDuringTranscription.name'),
+    desc: t('settings.pinNoteDuringTranscription.desc'),
+    key: 'pinNoteDuringTranscription',
   });
 }
 
@@ -372,6 +380,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
       isValid: isDictationAnchor,
     });
 
+    renderNotePinningSetting(outputCard, this.access);
+
     renderAutomaticCopyFinalizedUtterancesSetting(outputCard, this.access);
 
     this.renderTranscriptFormattingSetting(outputCard);
@@ -594,11 +604,10 @@ export class LocalSttSettingTab extends PluginSettingTab {
       key: 'retainLastUtterance',
     });
 
-    addTextSetting(advancedSection, this.access, {
-      name: t('settings.modelStoreOverride.name'),
-      desc: t('settings.modelStoreOverride.desc'),
-      key: 'modelStorePathOverride',
-      placeholder: t('settings.modelStoreOverride.placeholder'),
+    renderModelStoreSetting(advancedSection, {
+      currentPath: this.dependencies.getSettings().modelStorePathOverride,
+      changeModelStore: (path) => this.dependencies.modelInstallManager.changeModelStore(path),
+      feedback: this.dependencies.feedback,
     });
 
     new Setting(advancedSection)

@@ -49,6 +49,7 @@ impl EngineRegistry {
             feature = "engine-cohere-transcribe",
             feature = "engine-moonshine",
             feature = "engine-nemotron-asr",
+            feature = "engine-parakeet-unified",
             feature = "engine-pocket-tts",
             feature = "engine-supertonic"
         ))]
@@ -66,6 +67,11 @@ impl EngineRegistry {
 
         #[cfg(feature = "engine-nemotron-asr")]
         registry.register_adapter(Box::new(crate::adapters::nemotron_asr::NemotronAsrAdapter));
+
+        #[cfg(feature = "engine-parakeet-unified")]
+        registry.register_adapter(Box::new(
+            crate::adapters::parakeet_unified::ParakeetUnifiedAdapter,
+        ));
 
         #[cfg(feature = "engine-pocket-tts")]
         registry.register_adapter(Box::new(crate::adapters::pocket_tts::PocketTtsAdapter));

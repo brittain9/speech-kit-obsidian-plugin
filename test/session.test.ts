@@ -771,6 +771,94 @@ describe('Session', () => {
     expect(targetLeaf.pinned).toBe(false);
   });
 
+  it('dictates without changing the tab pin when automatic pinning is disabled', () => {
+    const { session, surface, targetLeaf } = createSessionHarness({
+      pinNoteDuringTranscription: false,
+    });
+
+    session.acceptTranscript(transcript({ text: 'still dictated', utteranceId: 'u1' }));
+    session.dispose();
+
+    expect(surface.appendCalls).toHaveLength(1);
+    expect(targetLeaf.pinned).toBe(false);
+    expect(targetLeaf.setPinned).not.toHaveBeenCalled();
+  });
+
+  it('stops projection when navigation replaces an unpinned target editor', () => {
+    const { callbacks, session, surface, targetLeaf, workspace } = createSessionHarness({
+      pinNoteDuringTranscription: false,
+    });
+    targetLeaf.view = { editor: { cm: {} as EditorView }, file: fakeFile('other.md') };
+    workspace.trigger('layout-change');
+    session.acceptTranscript(
+      transcript({ text: 'must not reach the other note', utteranceId: 'u1' }),
+    );
+
+    expect(callbacks.onLockedNoteClosed).toHaveBeenCalledOnce();
+    expect(surface.appendCalls).toHaveLength(0);
+    expect(targetLeaf.setPinned).not.toHaveBeenCalled();
+  });
+
+  it('stops projection when the same unpinned editor starts displaying another file', () => {
+    const { callbacks, session, surface, targetLeaf, workspace } = createSessionHarness({
+      pinNoteDuringTranscription: false,
+    });
+    targetLeaf.view.file = fakeFile('other.md');
+    workspace.trigger('layout-change');
+    session.acceptTranscript(
+      transcript({ text: 'must not reach the other note', utteranceId: 'u1' }),
+    );
+
+    expect(callbacks.onLockedNoteClosed).toHaveBeenCalledOnce();
+    expect(surface.appendCalls).toHaveLength(0);
+    expect(targetLeaf.setPinned).not.toHaveBeenCalled();
+  });
+
+  it('rejects a late transcript before navigation events arrive', () => {
+    const { callbacks, session, surface, targetLeaf } = createSessionHarness({
+      pinNoteDuringTranscription: false,
+    });
+    targetLeaf.view.file = fakeFile('other.md');
+    session.acceptTranscript(transcript({ text: 'late speech', utteranceId: 'u1' }));
+
+    expect(surface.appendCalls).toHaveLength(0);
+    expect(callbacks.onLockedNoteClosed).toHaveBeenCalledOnce();
+  });
+
+  it.each(['replace', 'above', 'below', 'recording'] as const)(
+    'rejects a late %s write after the editor switches files',
+    (operation) => {
+      const { callbacks, session, surface, targetLeaf } = createSessionHarness({
+        pinNoteDuringTranscription: false,
+      });
+      session.acceptTranscript(transcript({ text: 'original speech', utteranceId: 'u1' }));
+      targetLeaf.view.file = fakeFile('other.md');
+
+      if (operation === 'replace') {
+        expect(session.replaceSessionRangeWithCleaned('cleaned')).toEqual({ kind: 'denied' });
+      } else if (operation === 'recording') {
+        expect(session.insertMicrophoneRecording('![[recording.webm]]')).toBe(false);
+      } else {
+        expect(session.insertAdjacentToSessionRange('summary', operation)).toBe(false);
+      }
+      expect(surface.rewriteCalls).toHaveLength(0);
+      expect(surface.insertAfterRange).not.toHaveBeenCalled();
+      expect(callbacks.onLockedNoteClosed).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('does not read context from an editor that has switched files', () => {
+    const { session, surface, targetLeaf } = createSessionHarness({
+      pinNoteDuringTranscription: false,
+    });
+    targetLeaf.view.file = fakeFile('other.md');
+
+    expect(session.readNoteText(100)).toBeNull();
+    expect(session.readNoteGlossary(100)).toBeNull();
+    expect(surface.readNoteText).not.toHaveBeenCalled();
+    expect(surface.readNoteGlossary).not.toHaveBeenCalled();
+  });
+
   it('holds the temporary pin until session disposal', () => {
     const { session, targetLeaf } = createSessionHarness();
 
@@ -783,7 +871,7 @@ describe('Session', () => {
     expect(targetLeaf.pinned).toBe(false);
   });
 
-  it('continues without navigation protection when the exact editor leaf is unresolved', () => {
+  it('does not write when the exact editor leaf is unresolved', () => {
     const logger = fakeLogger();
     const { session, surface, targetLeaf } = createSessionHarness({
       logger,
@@ -793,14 +881,14 @@ describe('Session', () => {
     session.acceptTranscript(transcript({ text: 'still dictated', utteranceId: 'u1' }));
 
     expect(targetLeaf.setPinned).not.toHaveBeenCalled();
-    expect(surface.appendCalls).toHaveLength(1);
+    expect(surface.appendCalls).toHaveLength(0);
     expect(logger.debug).toHaveBeenCalledWith(
       'session',
       'navigation protection unavailable: exact editor leaf could not be resolved',
     );
   });
 
-  it('continues without pinning either leaf when exact editor resolution is ambiguous', () => {
+  it('does not write or pin either leaf when exact editor resolution is ambiguous', () => {
     const { duplicateLeaf, session, surface, targetLeaf } = createSessionHarness({
       ambiguousTarget: true,
     });
@@ -809,7 +897,7 @@ describe('Session', () => {
 
     expect(targetLeaf.setPinned).not.toHaveBeenCalled();
     expect(duplicateLeaf?.setPinned).not.toHaveBeenCalled();
-    expect(surface.appendCalls).toHaveLength(1);
+    expect(surface.appendCalls).toHaveLength(0);
   });
 
   it('requests cancel on locked-note delete and never writes later transcripts', () => {
@@ -1276,6 +1364,7 @@ function createSessionHarness(
     ambiguousTarget?: boolean;
     duplicateLockedLeaf?: boolean;
     leafPinManager?: TemporaryLeafPinLeaseManager;
+    pinNoteDuringTranscription?: boolean;
     logger?: PluginLogger;
     rendererOptions?: TranscriptRenderOptions;
     unresolvedTarget?: boolean;
@@ -1323,6 +1412,7 @@ function createSessionHarness(
     app,
     callbacks,
     leafPinManager: options.leafPinManager ?? new TemporaryLeafPinLeaseManager(),
+    pinNoteDuringTranscription: options.pinNoteDuringTranscription ?? true,
     lockedFile,
     noteSurfaceFactory: (_view, _placement, onSurfaceDesynchronized) => {
       surface.onSurfaceDesynchronized = onSurfaceDesynchronized;
@@ -1382,6 +1472,7 @@ function createRecoveryIntegrationHarness(
       onSurfaceDesynchronized: vi.fn(),
     },
     leafPinManager: new TemporaryLeafPinLeaseManager(),
+    pinNoteDuringTranscription: true,
     lockedFile,
     noteSurfaceFactory: (editor, placement, onFailure) => {
       const surface = new NoteSurface(editor, placement, onFailure);

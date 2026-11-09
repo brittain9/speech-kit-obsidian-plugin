@@ -45,7 +45,7 @@ The upstream MIT license explicitly covers English models. [Pinned license](http
 
 Every paced case emitted 20–21 nonempty partials, increasing revisions, one final, and a clean stop. Each model's final text was stable across all repetitions and matched its fast-feed final. The candidate's fast-feed maximum RSS was 312.6 MiB versus 289.8 MiB for the incumbent; memory improvement is therefore not a general conclusion. No energy or battery measurement was taken.
 
-The acceptance rule was useful fixture quality gain without a material live-latency or resource regression. These results meet that narrow rule: no clip worsened, live first-partial/final timing stayed similar, and memory stayed far below the 1 GiB investigation threshold. Native Obsidian UI QA remains pending.
+The acceptance rule was useful fixture quality gain without a material live-latency or resource regression. These results meet that narrow rule: no clip worsened, live first-partial/final timing stayed similar, and memory stayed far below the 1 GiB investigation threshold. The native external-model smoke described below adds workflow evidence.
 
 ## Checks and installation behavior
 
@@ -57,13 +57,21 @@ Existing installed Tiny models remain usable. A probe with the updated catalog r
 
 To refresh an existing Tiny installation after the updated sidecar/catalog is available:
 
-1. Stop dictation, recording, and other speech work.
-2. In Manage Models, select another installed speech-to-text model. If Tiny is the only installed model, install and select another speech model first. The UI prevents removal of the selected model.
-3. Remove Moonshine Tiny, then install it again. Wait for installation to complete.
-4. Select Moonshine Tiny and dictate a short sentence. Stop, then start again and confirm both transcripts appear once.
+1. Stop dictation, file transcription, translation, and Read aloud.
+2. In Manage Models, select **Reinstall** on Moonshine Tiny. It can remain the only installed and selected speech model.
+3. Wait for installation and the selected-model check to complete. A failure or cancellation before activation preserves the incumbent copy and its selection.
+4. Dictate a short sentence. Stop, then start again and confirm both transcripts appear once. See the [refresh guide](../guides/moonshine-live-testing.md#refresh-an-installed-model).
 
 No automatic migration, fallback, new setting, or new language is introduced. [Removal guard and installed-manifest handling](../../src/models/model-install-manager.ts), [native model resolution](../../native/src/model_store.rs).
 
 A newly built sidecar completed a fresh managed install in an isolated temporary model store. It emitted download, verification, probe, and completed states. The installed catalog selection probed ready and ran the paced fixture with 21 partial revisions and one final (two word edits, matching the comparison). A second silence session in the same process stayed empty and stopped cleanly. The process then shut down cleanly. See the managed-install entry in the measurement JSON.
 
-Native Obsidian UI QA remains separate from these completed build, installer, and protocol checks. It must be recorded before merging.
+In native Obsidian, the candidate was selected through the external Moonshine file path. A slowed replay of the public JFK fixture fed system capture while a typed marker and pasted URL were added during changing live partials. The saved note retained both source boundaries, one marker, and one URL. It contained no U+200B characters. Capture, recording, and system audio were stopped afterward. This acoustic replay checks the editing workflow; it is not a controlled accuracy comparison.
+
+## Managed Reinstall UI check
+
+Native Obsidian testing used an isolated model store containing only the selected incumbent Tiny. The active-capture conflict check showed the stop-work notice. Cancelling a real Reinstall when progress showed 3.7 MiB returned the row to Installed / Selected / Reinstall. All eight incumbent files, including `install.json`, remained byte-for-byte unchanged. No staging or backup directory remained.
+
+The next Reinstall completed. All seven new artifacts matched their catalog SHA-256 and sizes, totaling 51,441,771 bytes. The selected model ID stayed unchanged, Reinstall returned, and no staging directory remained. Capture with the refreshed model reached Listening and was then cancelled. The default shared store's incumbent frontend hash remained unchanged. These checks establish the managed refresh and cancellation workflow, not an accuracy or battery result.
+
+This UI check acquired one additional complete 51,441,771-byte model plus the cancelled partial download, whose progress showed 3.7 MiB. The partial figure is an observed progress value, not an exact transfer count. These downloads are separate from the 102,883,542-byte benchmark and installer acquisition above.

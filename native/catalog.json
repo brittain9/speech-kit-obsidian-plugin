@@ -66,6 +66,13 @@
       "summary": "English and multilingual streaming with larger downloads and higher resource use. Moonshine Small remains the recommended English live-dictation default."
     },
     {
+      "familyId": "parakeet_unified",
+      "task": "stt",
+      "runtimeId": "onnx_runtime",
+      "displayName": "NVIDIA Parakeet Unified",
+      "summary": "English buffered streaming transcription with substantial CPU requirements."
+    },
+    {
       "familyId": "pocket_tts",
       "task": "tts",
       "runtimeId": "onnx_runtime",
@@ -110,6 +117,11 @@
       "collectionId": "nemotron_asr_streaming",
       "displayName": "NVIDIA Nemotron ASR",
       "summary": "English and multilingual streaming with pinned int8 exports and encoder-chunk options."
+    },
+    {
+      "collectionId": "parakeet_unified_streaming",
+      "displayName": "NVIDIA Parakeet Unified",
+      "summary": "English buffered streaming transcription."
     },
     {
       "collectionId": "supertonic_read_aloud",
@@ -917,6 +929,63 @@
           "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11/resolve/ab43d895f5985b1bbab8b6eac8607fcdc05343f3/tokens.txt",
           "sha256": "729cc103155bafa785f9cd45746cd41cabe97eab7182fc04d594129587958f8a",
           "sizeBytes": 131440
+        }
+      ]
+    },
+    {
+      "runtimeId": "onnx_runtime",
+      "familyId": "parakeet_unified",
+      "task": "stt",
+      "modelId": "parakeet_unified_en_0_6b_int8_streaming_1120ms",
+      "collectionId": "parakeet_unified_streaming",
+      "displayName": "Parakeet Unified English 1,120 ms",
+      "summary": "NVIDIA English RNNT exported to int8 ONNX for buffered live transcription.",
+      "languageTags": ["en"],
+      "uxTags": ["streaming", "cpu"],
+      "licenseLabel": "NVIDIA Open Model License",
+      "licenseUrl": "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/",
+      "sourceUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-streaming-1120ms/tree/615bf8c5ad39692dc96cf1105afde73ec3eb2a59",
+      "modelCardUrl": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b/tree/fe53cd885760c96b6a5f51a0bfd362cb4584a98b",
+      "notes": [
+        "The four required artifacts total about 632 MiB. The buffered model uses 1,120 ms of chunk and right context.",
+        "The derived model weights are licensed under the NVIDIA Open Model License, not this project's MIT license."
+      ],
+      "artifacts": [
+        {
+          "artifactId": "encoder",
+          "role": "transcription_model",
+          "required": true,
+          "filename": "encoder.int8.onnx",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-streaming-1120ms/resolve/615bf8c5ad39692dc96cf1105afde73ec3eb2a59/encoder.int8.onnx",
+          "sha256": "1c03f1192de41771384af22972ca10203613ba56197a024f275b86727cd35911",
+          "sizeBytes": 654046391
+        },
+        {
+          "artifactId": "decoder",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "decoder.int8.onnx",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-streaming-1120ms/resolve/615bf8c5ad39692dc96cf1105afde73ec3eb2a59/decoder.int8.onnx",
+          "sha256": "34fea72425d2506600772ba191a6d3f99c0710abdb68d9a3dc89fa8cb2aa473a",
+          "sizeBytes": 7257777
+        },
+        {
+          "artifactId": "joiner",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "joiner.int8.onnx",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-streaming-1120ms/resolve/615bf8c5ad39692dc96cf1105afde73ec3eb2a59/joiner.int8.onnx",
+          "sha256": "869f43f7d24595c55581ad3bf249a935fb8a71389fbdaa7504b9f46f93140f8a",
+          "sizeBytes": 1735860
+        },
+        {
+          "artifactId": "tokens",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "tokens.txt",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-streaming-1120ms/resolve/615bf8c5ad39692dc96cf1105afde73ec3eb2a59/tokens.txt",
+          "sha256": "dc0b4584ab2e4ddbf888425c076c61b736e7356a015250db7d307e6f1a8188ff",
+          "sizeBytes": 8952
         }
       ]
     },
