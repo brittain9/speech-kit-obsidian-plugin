@@ -10,7 +10,8 @@ import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import type { SidecarEvent } from '../src/sidecar/protocol';
 import { SidecarLifecycleGate } from '../src/sidecar/sidecar-lifecycle-gate';
 import { TranslationController } from '../src/translation/translation-controller';
-import { Modal, Setting, type TestElement } from './__mocks__/obsidian';
+import { TranslationStatusController } from '../src/translation/translation-status';
+import { Modal, Setting, TestElement } from './__mocks__/obsidian';
 
 const testView = { file: { path: 'Notes/source.md' } };
 
@@ -84,6 +85,58 @@ describe('TranslationController', () => {
     expect(worker).not.toHaveBeenCalled();
     expect(replaceRange).not.toHaveBeenCalled();
   });
+
+  it.each([true, false])(
+    'restores focus after status-triggered dismissal only if the source view still matches: %s',
+    async (sourceStillOpen) => {
+      Modal.instances.length = 0;
+      Setting.reset();
+      const statusElement = new TestElement();
+      const status = new TranslationStatusController(statusElement as unknown as HTMLElement);
+      const focus = vi.fn();
+      const sourceView = { file: { path: 'Notes/source.md' } };
+      const controller = new TranslationController({
+        sidecarLifecycleGate: new SidecarLifecycleGate(),
+        app: {} as never,
+        canReadAloud: () => false,
+        feedback: { show: vi.fn() },
+        getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+        logger: { error: vi.fn(), warn: vi.fn() } as never,
+        modelManager: {
+          subscribe: () => () => {},
+          getState: () => ({
+            activeInstall: null,
+            installRequestPending: false,
+            catalog: { models: [] },
+            installedModels: [],
+          }),
+        } as never,
+        onReadAloud: vi.fn(),
+        saveSettings: vi.fn(async () => {}),
+        setDetachedStatus: (state, reopen, options) => status.update(state, reopen, options),
+      });
+      controller.translateNote(
+        { getValue: () => 'Translate this note.', focus } as never,
+        sourceView as never,
+      );
+      await vi.waitFor(() => expect(Setting.buttonNamed('Dismiss')).toBeDefined());
+      Modal.instances.at(-1)?.close();
+      const button = statusElement.querySelector('button');
+      if (!button) throw new Error('Expected translation status button');
+      button.focus();
+      Setting.reset();
+      await button.click();
+      const reopened = Modal.instances.at(-1);
+      if (!reopened) throw new Error('Expected reopened translation');
+      const finishClose = reopened.onClose.bind(reopened);
+      reopened.onClose = () => {};
+      await Setting.buttonNamed('Dismiss').click();
+      expect(focus).not.toHaveBeenCalled();
+      if (!sourceStillOpen) sourceView.file = { path: 'Notes/other.md' };
+      finishClose();
+      expect(focus).toHaveBeenCalledTimes(sourceStillOpen ? 1 : 0);
+    },
+  );
 
   it('detaches a long translation job, reopens it without duplicate inference, and keeps progress current', async () => {
     Modal.instances.length = 0;

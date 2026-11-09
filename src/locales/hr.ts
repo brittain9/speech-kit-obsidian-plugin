@@ -1,6 +1,8 @@
 import type { TranslationCatalog } from '.';
 
 export const hr = {
+  'media.modal.partialAvailable':
+    'Dostupan je djelomičan transkript. Nije potpun. Kopirajte ga prije pokretanja novog zadatka.',
   'notice.dictationNotActive': 'Diktiranje trenutačno nije aktivno.',
   'commands.transcribeAudioFile': 'Transkribiraj lokalnu audio-datoteku',
   'commands.cancelAudioFile': 'Otkaži transkripciju lokalne audio-datoteke',
@@ -546,6 +548,15 @@ export const hr = {
   'common.on': 'Uključeno',
   'common.save': 'Spremi',
   'common.unavailable': 'Nedostupno',
+  'media.progress.needsAttention': 'Potrebna je pozornost · Djelomični prijepis je dostupan',
+  'dictation.status.starting': 'Pokretanje',
+  'dictation.status.listening': 'Slušanje',
+  'dictation.status.transcribing': 'Lokalno prepisivanje',
+  'dictation.status.catchingUp': 'Sustizanje',
+  'dictation.status.fallingBehind': 'Zaostajanje',
+  'dictation.status.finishing': 'Dovršavanje snimljenog govora',
+  'dictation.status.provider': 'Obrada kod pružatelja usluge',
+  'translation.modal.reopen': 'Ponovno otvori prijevod: {status}',
   'ribbon.idle': 'Speech Kit — pokreni diktiranje',
   'ribbon.starting': 'Speech Kit — pokretanje…',
   'ribbon.listening': 'Speech Kit — slušanje',
