@@ -640,6 +640,10 @@ export const en = {
   'settings.recoveryMemory.name': 'Keep recovery text in memory',
   'settings.recoveryMemory.desc':
     'Keep the latest recoverable text and note snapshot in memory. Nothing is written to disk.',
+  'settings.modelStoreOverride.apply': 'Apply',
+  'settings.modelStoreOverride.updated': 'Model store folder updated.',
+  'settings.modelStoreOverride.failed':
+    'Could not change the model store folder. Choose an absolute path to an accessible folder and try again.',
   'settings.modelStoreOverride.name': 'Model store folder override',
   'settings.modelStoreOverride.desc': 'Custom folder for managed model downloads.',
   'settings.modelStoreOverride.placeholder': 'Use the shared default model store',

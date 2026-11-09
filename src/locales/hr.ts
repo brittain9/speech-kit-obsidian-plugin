@@ -415,6 +415,10 @@ export const hr = {
   'settings.recoveryMemory.name': 'Čuvanje teksta za oporavak u memoriji',
   'settings.recoveryMemory.desc':
     'U memoriji čuva najnoviji tekst za oporavak i snimku bilješke. Ništa se ne zapisuje na disk.',
+  'settings.modelStoreOverride.apply': 'Primijeni',
+  'settings.modelStoreOverride.updated': 'Mapa za pohranu modela je ažurirana.',
+  'settings.modelStoreOverride.failed':
+    'Nije moguće promijeniti mapu za pohranu modela. Odaberite apsolutnu putanju do dostupne mape i pokušajte ponovno.',
   'settings.modelStoreOverride.name': 'Zamjenska mapa za pohranu modela',
   'settings.modelStoreOverride.desc': 'Prilagođena mapa u koju dodatak preuzima modele.',
   'settings.modelStoreOverride.placeholder': 'Koristi zajedničku zadanu pohranu modela',

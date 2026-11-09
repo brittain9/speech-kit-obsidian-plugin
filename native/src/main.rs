@@ -84,6 +84,7 @@ fn run_stdio(catalog: ModelCatalog, sidecar_version: String) -> Result<()> {
                 write_events(
                     &mut writer,
                     vec![Event::Error {
+                        request_id: None,
                         code: "invalid_frame".to_string(),
                         details: Some(details),
                         message: "Failed to parse an incoming protocol frame.".to_string(),

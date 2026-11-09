@@ -330,16 +330,22 @@ pub enum Command {
     GetModelStore {
         #[serde(default)]
         model_store_path_override: Option<String>,
+        #[serde(default)]
+        request_id: Option<String>,
     },
     ListModelCatalog,
     ListInstalledModels {
         #[serde(default)]
         model_store_path_override: Option<String>,
+        #[serde(default)]
+        request_id: Option<String>,
     },
     ProbeModelSelection {
         model_selection: SelectedModel,
         #[serde(default)]
         model_store_path_override: Option<String>,
+        #[serde(default)]
+        request_id: Option<String>,
     },
     RemoveModel {
         runtime_id: RuntimeId,
@@ -421,6 +427,8 @@ pub enum Event {
         status: HealthStatus,
     },
     ModelStore {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
         override_path: Option<String>,
         path: String,
         using_default_path: bool,
@@ -433,9 +441,13 @@ pub enum Event {
         models: Vec<CatalogModel>,
     },
     InstalledModels {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
         models: Vec<InstalledModelRecord>,
     },
     ModelProbeResult {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
         available: bool,
         details: Option<String>,
         display_name: Option<String>,
@@ -587,6 +599,8 @@ pub enum Event {
         session_id: String,
     },
     Error {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
         code: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         details: Option<String>,
@@ -837,13 +851,13 @@ fn read_exact_or_eof<R: Read>(reader: &mut R, buffer: &mut [u8]) -> Result<usize
 #[cfg(test)]
 mod tests {
     use super::{
-        AUDIO_FRAME_KIND, AccelerationPreference, AudioFrame, Command, Event, EventEnvelope,
-        FRAME_HEADER_LENGTH, IncomingFrame, JSON_FRAME_KIND, ListeningMode, MAX_FRAME_PAYLOAD,
-        MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS, ModelInstallState, ModelProbeStatus,
-        PCM_BYTES_PER_FRAME, QueueBackpressureTier, SYNTHESIS_AUDIO_FRAME_KIND, SelectedModel,
-        SessionStopReason, SourceRange, SpeakingStyle, TimestampGranularity, TimestampSource,
-        TranscriptSegment, TranscriptWord, encode_audio_frame_envelope, read_frame,
-        write_event_frame, write_frame, write_synthesis_audio_frame,
+        AUDIO_FRAME_KIND, AccelerationPreference, AudioFrame, Command, CommandEnvelope, Event,
+        EventEnvelope, FRAME_HEADER_LENGTH, IncomingFrame, JSON_FRAME_KIND, ListeningMode,
+        MAX_FRAME_PAYLOAD, MAX_TRANSLATION_STYLE_INSTRUCTION_CHARS, ModelInstallState,
+        ModelProbeStatus, PCM_BYTES_PER_FRAME, QueueBackpressureTier, SYNTHESIS_AUDIO_FRAME_KIND,
+        SelectedModel, SessionStopReason, SourceRange, SpeakingStyle, TimestampGranularity,
+        TimestampSource, TranscriptSegment, TranscriptWord, encode_audio_frame_envelope,
+        read_frame, write_event_frame, write_frame, write_synthesis_audio_frame,
     };
     use crate::engine::capabilities::{ModelFamilyId, RuntimeId};
     use uuid::Uuid;
@@ -1170,8 +1184,48 @@ mod tests {
     }
 
     #[test]
+    fn legacy_store_requests_and_responses_remain_valid_without_request_ids() {
+        let command = CommandEnvelope::parse_json(br#"{"type":"get_model_store"}"#)
+            .expect("legacy command should parse");
+        assert!(matches!(
+            command,
+            Command::GetModelStore {
+                request_id: None,
+                ..
+            }
+        ));
+        let command = CommandEnvelope::parse_json(br#"{"type":"list_installed_models"}"#)
+            .expect("legacy command should parse");
+        assert!(matches!(
+            command,
+            Command::ListInstalledModels {
+                request_id: None,
+                ..
+            }
+        ));
+        let command = CommandEnvelope::parse_json(
+            br#"{"type":"probe_model_selection","modelSelection":{"kind":"catalog_model","runtimeId":"whisper_cpp","familyId":"whisper","modelId":"small"}}"#,
+        )
+        .expect("legacy probe should parse");
+        assert!(matches!(
+            command,
+            Command::ProbeModelSelection {
+                request_id: None,
+                ..
+            }
+        ));
+        let event = Event::InstalledModels {
+            request_id: None,
+            models: vec![],
+        };
+        let json = serde_json::to_value(event).expect("event should serialize");
+        assert!(json.get("requestId").is_none());
+    }
+
+    #[test]
     fn event_frame_round_trip_preserves_model_store_shape() {
         let event = Event::ModelStore {
+            request_id: None,
             override_path: None,
             path: "/tmp/models".to_string(),
             using_default_path: true,
@@ -1389,6 +1443,7 @@ mod tests {
     #[test]
     fn model_probe_result_serializes_none_optionals_as_null() {
         let event = Event::ModelProbeResult {
+            request_id: None,
             available: false,
             details: None,
             display_name: None,
@@ -1427,6 +1482,7 @@ mod tests {
     #[test]
     fn model_store_serializes_none_override_as_null() {
         let event = Event::ModelStore {
+            request_id: None,
             override_path: None,
             path: "/tmp/models".to_string(),
             using_default_path: true,
