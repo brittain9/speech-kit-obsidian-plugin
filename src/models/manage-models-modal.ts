@@ -516,7 +516,32 @@ export class ManageModelsModal extends Modal {
           adapter.runtimeId === activeTab.runtimeId && adapter.familyId === activeTab.familyId,
       )
     ) {
-      const first = adapters[0];
+      const selection =
+        this.activeTask === 'stt'
+          ? state.selectedModel
+          : this.activeTask === 'tts'
+            ? state.selectedTtsModel
+            : state.selectedTranslationModel;
+      const selected =
+        activeTab === null &&
+        selection?.kind === 'catalog_model' &&
+        rows.some(
+          (row) =>
+            row.model.task === this.activeTask &&
+            matchesModelTriple(
+              row.model,
+              selection.runtimeId,
+              selection.familyId,
+              selection.modelId,
+            ),
+        )
+          ? adapters.find(
+              (adapter) =>
+                adapter.runtimeId === selection.runtimeId &&
+                adapter.familyId === selection.familyId,
+            )
+          : undefined;
+      const first = selected ?? adapters[0];
       if (first === undefined) {
         this.activeTabs.delete(this.activeTask);
       } else {

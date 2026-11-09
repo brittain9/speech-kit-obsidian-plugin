@@ -13,6 +13,7 @@ import type { MediaTranscriptionJobOptions } from '../media/media-transcription-
 import { CaptionAcquisitionError } from '../media/youtube-captions';
 import { parseYouTubeVideoUrl } from '../media/youtube-url';
 import type { PluginSettings } from '../settings/plugin-settings';
+import { captureSettingsFocus, restoreSettingsFocus } from '../settings/settings-tab-lifecycle';
 import { t } from '../shared/i18n';
 import { mediaProgressText } from './media-progress-presenter';
 
@@ -119,6 +120,8 @@ class YouTubeTranscriptModal extends Modal {
   }
 
   private render(): void {
+    const focus = captureSettingsFocus(this.contentEl);
+    const scrollTop = this.contentEl.scrollTop;
     this.contentEl.empty();
     this.primaryButton = null;
     this.contentEl.createEl('p', {
@@ -175,6 +178,8 @@ class YouTubeTranscriptModal extends Modal {
         });
     });
     this.updatePrimaryButton();
+    restoreSettingsFocus(this.contentEl, focus);
+    this.contentEl.scrollTop = scrollTop;
   }
 
   private renderAiPreset(parent: HTMLElement): void {

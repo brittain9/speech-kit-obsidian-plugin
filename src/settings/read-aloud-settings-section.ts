@@ -36,7 +36,7 @@ export function configureReadAloudSpeedSlider(
 }
 
 export function readAloudControlsFingerprint(
-  state: Pick<ModelManagerState, 'catalog' | 'installedModels' | 'selectedTtsModel'>,
+  state: Pick<ModelManagerState, 'catalog' | 'installedModels' | 'selectedTtsModel' | 'loadStatus'>,
 ): string {
   const selection = state.selectedTtsModel;
   if (selection?.kind !== 'catalog_model') {
@@ -54,6 +54,8 @@ export function readAloudControlsFingerprint(
     selection.familyId,
     selection.modelId,
     catalogModel === undefined ? 'unresolved' : 'resolved',
+    state.loadStatus,
+    installed === undefined ? 'missing' : 'installed',
     ...(installed?.installedVoiceIds ?? []),
   ].join(':');
 }
@@ -82,27 +84,6 @@ export function renderTextToSpeechSettings(
           ) ?? null)
         : null;
 
-    const modelSetting = new Setting(modelContainer)
-      .setName(t('settings.model.textToSpeech'))
-      .setDesc(catalogModel?.displayName ?? t('settings.model.noModelSelected'))
-      .addButton((button) => {
-        button
-          .setCta()
-          .setButtonText(t('settings.model.manageModels'))
-          .onClick(() => {
-            void dependencies.openModelPicker({ initialTask: 'tts' });
-          });
-      });
-    if (catalogModel !== null) {
-      modelSetting.addExtraButton((button) => {
-        button
-          .setIcon('info')
-          .setTooltip(t('settings.model.details'))
-          .onClick(() => {
-            dependencies.openSelectedModelDetails();
-          });
-      });
-    }
     const installed =
       catalogModel === null
         ? null
@@ -114,6 +95,34 @@ export function renderTextToSpeechSettings(
               catalogModel.modelId,
             ),
           ) ?? null);
+    const modelSetting = new Setting(modelContainer)
+      .setName(t('settings.model.textToSpeech'))
+      .setDesc(catalogModel?.displayName ?? t('settings.model.noModelSelected'))
+      .addButton((button) => {
+        button
+          .setCta()
+          .setButtonText(t('settings.model.manageModels'))
+          .onClick(() => {
+            void dependencies.openModelPicker({ initialTask: 'tts' });
+          });
+      });
+    if (catalogModel !== null && installed === null && state.loadStatus === 'ready') {
+      modelSetting.descEl.createSpan({ text: ' · ' });
+      modelSetting.descEl.createSpan({
+        cls: 'local-stt-badge local-stt-badge--missing',
+        text: t('settings.model.notInstalled'),
+      });
+    }
+    if (catalogModel !== null) {
+      modelSetting.addExtraButton((button) => {
+        button
+          .setIcon('info')
+          .setTooltip(t('settings.model.details'))
+          .onClick(() => {
+            dependencies.openSelectedModelDetails();
+          });
+      });
+    }
     const installedVoices = installed?.installedVoiceIds ?? [];
     const languageSetting = new Setting(readAloudContainer)
       .setName(t('settings.readAloud.language'))

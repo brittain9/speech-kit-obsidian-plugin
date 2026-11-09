@@ -93,9 +93,18 @@ afterEach(() => {
   state.providerSelected = false;
 });
 
-function setup() {
+function setup(withEarlierSameName = false) {
   const parent = document.createElement('div');
   document.body.append(parent);
+  if (withEarlierSameName) {
+    const unrelated = document.createElement('div');
+    unrelated.className = 'setting-item';
+    const name = document.createElement('div');
+    name.className = 'setting-item-name';
+    name.textContent = 'Provider';
+    unrelated.append(name, document.createElement('select'));
+    parent.append(unrelated);
+  }
   const dispose = renderLlmProviderSettings(parent, {
     app: {} as App,
     feedback: { show: vi.fn() },
@@ -126,6 +135,18 @@ it('activates a clicked control after the URL field loses focus', () => {
   button.click();
   expect(state.activate).toHaveBeenCalledOnce();
   expect(document.activeElement).toBe(button);
+  dispose();
+});
+
+it('restores focus inside the provider group when another group has the same label', async () => {
+  const { parent, dispose } = setup(true);
+  const provider = parent.querySelector<HTMLSelectElement>('select[aria-label="Provider"]');
+  if (!provider) throw new Error('Expected provider control');
+  provider.focus();
+  provider.value = 'custom';
+  provider.dispatchEvent(new Event('change', { bubbles: true }));
+  await vi.waitFor(() => expect(parent.textContent).toContain('Custom provider fields'));
+  expect(document.activeElement).toBe(parent.querySelector('select[aria-label="Provider"]'));
   dispose();
 });
 
