@@ -1,6 +1,8 @@
 import type { TranslationCatalog } from '.';
 
 export const hr = {
+  'media.modal.partialAvailable':
+    'Dostupan je djelomičan transkript. Nije potpun. Kopirajte ga prije pokretanja novog zadatka.',
   'notice.dictationNotActive': 'Diktiranje trenutačno nije aktivno.',
   'commands.transcribeAudioFile': 'Transkribiraj lokalnu audio-datoteku',
   'commands.cancelAudioFile': 'Otkaži transkripciju lokalne audio-datoteke',

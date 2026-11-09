@@ -30,6 +30,55 @@ afterEach(() => {
 });
 
 describe('local media transcription modal', () => {
+  it('restores retained partial recovery actions when the dialog is reopened', async () => {
+    const registry = new MediaTranscriptionModalRegistry();
+    let canInsert = false;
+    let partial: string | null = 'retained partial';
+    const insertPartialTranscript = vi.fn(() => {
+      if (!canInsert) return false;
+      partial = null;
+      return true;
+    });
+    const startFile = vi.fn(async () => {});
+    const dependencies = {
+      cancel: vi.fn(async () => {}),
+      getModels: () => [],
+      getLastError: () => null,
+      getLastMediaAiResult: () => null,
+      getPartialTranscript: () => partial,
+      insertPartialTranscript,
+      getProgress: () => null,
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      isTranscribing: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => true,
+      isDecoderInstalled: async () => true,
+      openDecoderInstaller: vi.fn(),
+      onManageModels: vi.fn(),
+      onManagePresets: vi.fn(),
+      startFile,
+      subscribeProgress: () => () => {},
+    };
+    registry.open({} as never, dependencies);
+    registry.closeAll();
+    registry.open({} as never, dependencies);
+    const content = (
+      Modal as unknown as { instances: Array<{ contentEl: TestElement }> }
+    ).instances.at(-1)?.contentEl;
+    expect(content?.findByText(t('media.modal.partialAvailable'))).toBeDefined();
+    expect(content?.findByText(t('media.modal.copyPartial'))).toBeDefined();
+    const insert = content?.findByText(t('media.modal.insertPartial'));
+    expect(insert).toBeDefined();
+    await insert?.click();
+    expect(content?.findByText(t('media.modal.partialTargetChanged'))).toBeDefined();
+    expect(partial).toBe('retained partial');
+    canInsert = true;
+    await insert?.click();
+    expect(partial).toBeNull();
+    expect(content?.findByText(t('media.modal.insertPartial'))).toBeUndefined();
+    expect(startFile).not.toHaveBeenCalled();
+    registry.closeAll();
+  });
   it('keeps the file workflow focused on audio and video files', async () => {
     const registry = new MediaTranscriptionModalRegistry();
     const onManagePresets = vi.fn();

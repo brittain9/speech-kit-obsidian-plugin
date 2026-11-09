@@ -314,7 +314,8 @@ export const en = {
   'media.modal.fileSelected': '{name} · {size}',
   'media.modal.optionsTitle': 'Transcript options',
   'media.modal.model': 'Batch model',
-  'media.modal.partialAvailable': 'A partial transcript is available. It is incomplete.',
+  'media.modal.partialAvailable':
+    'A partial transcript is available. It is incomplete. Copy it before starting another job.',
   'media.modal.copyPartial': 'Copy partial transcript',
   'media.modal.insertPartial': 'Insert partial transcript',
   'media.modal.partialTargetChanged':

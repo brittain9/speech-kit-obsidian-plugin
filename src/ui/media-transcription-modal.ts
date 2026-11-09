@@ -180,6 +180,7 @@ class MediaTranscriptionModal extends Modal {
       attr: { role: 'alert' },
     });
     this.partialEl = this.contentEl.createDiv({ cls: 'local-stt-media-partial-actions' });
+    this.renderPartialRecovery();
     this.renderProgress(this.dependencies.getProgress());
 
     const footer = this.contentEl.createDiv({ cls: 'local-stt-media-footer' });
