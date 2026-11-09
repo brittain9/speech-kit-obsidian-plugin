@@ -2063,3 +2063,8 @@
     justify-self: center;
   }
 }
+
+/* Keep dynamically refreshed rows in the native settings group layout. */
+.local-dictation-settings-rows {
+  display: contents;
+}

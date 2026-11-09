@@ -1,7 +1,7 @@
 import type { App } from 'obsidian';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
+import { LlmPresetStateStore } from '../src/settings/llm-preset-state';
+import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
 import { LlmContextSettingsModal } from '../src/ui/llm-context-settings-modal';
 import { LlmModelSettingsModal } from '../src/ui/llm-model-settings-modal';
 import { LlmTimingSettingsModal } from '../src/ui/llm-timing-settings-modal';
@@ -26,7 +26,7 @@ describe('LLM transform settings modals', () => {
     const saveSettings = vi.fn(async () => {});
     const modal = new LlmTimingSettingsModal({} as App, {
       getSettings: () => INHERITING_SETTINGS,
-      saveSettings,
+      savePatch: saveSettings,
     });
 
     modal.open();
@@ -47,14 +47,14 @@ describe('LLM transform settings modals', () => {
 
   it('persists a valid minimum-word value when it changes', async () => {
     let settings = INHERITING_SETTINGS;
-    const saveSettings = vi.fn(async (next) => {
-      settings = next;
+    const saveSettings = vi.fn(async (patch: Partial<PluginSettings>) => {
+      settings = { ...settings, ...patch } as typeof settings;
     });
     const onSave = vi.fn();
     const modal = new LlmTimingSettingsModal({} as App, {
       getSettings: () => settings,
       onSave,
-      saveSettings,
+      savePatch: saveSettings,
     });
 
     modal.open();
@@ -74,12 +74,12 @@ describe('LLM transform settings modals', () => {
       llmPostprocessMode: 'per_utterance' as const,
     };
     let persistedSettings = settings;
-    const saveSettings = vi.fn(async (next) => {
-      persistedSettings = next;
+    const saveSettings = vi.fn(async (patch: Partial<PluginSettings>) => {
+      persistedSettings = { ...persistedSettings, ...patch } as typeof persistedSettings;
     });
     const modal = new LlmContextSettingsModal({} as App, {
       getSettings: () => settings,
-      saveSettings,
+      savePatch: saveSettings,
     });
 
     modal.open();
@@ -105,7 +105,7 @@ describe('LLM transform settings modals', () => {
 
     new LlmTimingSettingsModal({} as App, {
       getSettings: () => settings,
-      saveSettings: vi.fn(async () => {}),
+      savePatch: vi.fn(async () => {}),
     }).open();
     const minimumWords = MockSetting.named('Minimum words').onlyText().inputEl;
     expect(minimumWords.value).toBe('12');
@@ -114,11 +114,55 @@ describe('LLM transform settings modals', () => {
     MockSetting.reset();
     new LlmModelSettingsModal({} as App, {
       getSettings: () => settings,
-      saveSettings: vi.fn(async () => {}),
+      savePatch: vi.fn(async () => {}),
     }).open();
     const temperature = MockSetting.named('Temperature').onlyText().inputEl;
     expect(temperature.value).toBe('1.2');
     expect(temperature.disabled).toBe(true);
+  });
+
+  it('keeps an intentional reset queued after an earlier model setting change', async () => {
+    let settings: PluginSettings = { ...INHERITING_SETTINGS };
+    let finish!: () => void;
+    let started!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const store = new LlmPresetStateStore({
+      getSettings: () => settings,
+      loadData: async () => settings,
+      onExternalChange: vi.fn(),
+      warn: vi.fn(),
+      commit: async (next) => {
+        if (next.llmPostprocessTemperature === 0.8) {
+          started();
+          await new Promise<void>((resolve) => {
+            finish = resolve;
+          });
+        }
+        settings = next;
+      },
+    });
+    const modal = new LlmModelSettingsModal({} as App, {
+      getSettings: () => settings,
+      savePatch: (patch) => store.mutateSettings((current) => ({ ...current, ...patch })),
+    });
+    modal.open();
+    const earlier = store.mutateSettings((current) => ({
+      ...current,
+      llmPostprocessTemperature: 0.8,
+    }));
+    await waiting;
+    const resetting = MockSetting.buttonNamed('Reset').click();
+    await Promise.resolve();
+    finish();
+    await earlier;
+    await resetting;
+    await vi.waitFor(() =>
+      expect(settings.llmPostprocessTemperature).toBe(
+        DEFAULT_PLUGIN_SETTINGS.llmPostprocessTemperature,
+      ),
+    );
   });
 
   it('persists each applicable advanced model setting when it changes', async () => {
@@ -131,12 +175,12 @@ describe('LLM transform settings modals', () => {
         thresholdChars: 6_000,
       },
     };
-    const saveSettings = vi.fn(async (next) => {
-      settings = next;
+    const saveSettings = vi.fn(async (patch: Partial<PluginSettings>) => {
+      settings = { ...settings, ...patch } as typeof settings;
     });
     const modal = new LlmModelSettingsModal({} as App, {
       getSettings: () => settings,
-      saveSettings,
+      savePatch: saveSettings,
     });
 
     modal.open();
@@ -160,7 +204,7 @@ describe('LLM transform settings modals', () => {
 
     new LlmModelSettingsModal({} as App, {
       getSettings: () => settings,
-      saveSettings: vi.fn(async () => {}),
+      savePatch: vi.fn(async () => {}),
     }).open();
 
     const names = MockSetting.instances.map((setting) => setting.name);

@@ -15,7 +15,7 @@ describe('transcript output settings modals', () => {
     const saveSettings = vi.fn(async () => {});
     new TimestampSettingsModal({} as App, {
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
-      saveSettings,
+      savePatch: saveSettings,
     }).open();
 
     const intervalSetting = MockSetting.named('Interval');
@@ -36,14 +36,14 @@ describe('transcript output settings modals', () => {
       ...DEFAULT_PLUGIN_SETTINGS,
       timestampSparseIntervalMs: 45_000,
     };
-    const saveSettings = vi.fn(async (next: PluginSettings) => {
-      settings = next;
+    const saveSettings = vi.fn(async (patch: Partial<PluginSettings>) => {
+      settings = { ...settings, ...patch };
     });
     const onSave = vi.fn();
     new TimestampSettingsModal({} as App, {
       getSettings: () => settings,
       onSave,
-      saveSettings,
+      savePatch: saveSettings,
     }).open();
 
     const frequency = MockSetting.named('Frequency').onlyDropdown();
@@ -75,7 +75,7 @@ describe('transcript output settings modals', () => {
   it('disables speaker-limit editing while speaker labels are off', () => {
     new DiarizationSettingsModal({} as App, {
       getSettings: () => DEFAULT_PLUGIN_SETTINGS,
-      saveSettings: vi.fn(async () => {}),
+      savePatch: vi.fn(async () => {}),
     }).open();
 
     const maximumSpeakers = MockSetting.named('Maximum speakers');
@@ -85,14 +85,14 @@ describe('transcript output settings modals', () => {
 
   it('persists an enabled speaker limit when it changes', async () => {
     let settings = { ...DEFAULT_PLUGIN_SETTINGS, diarizationEnabled: true };
-    const saveSettings = vi.fn(async (next: PluginSettings) => {
-      settings = next;
+    const saveSettings = vi.fn(async (patch: Partial<PluginSettings>) => {
+      settings = { ...settings, ...patch };
     });
     const onSave = vi.fn();
     new DiarizationSettingsModal({} as App, {
       getSettings: () => settings,
       onSave,
-      saveSettings,
+      savePatch: saveSettings,
     }).open();
 
     const maximumSpeakers = MockSetting.named('Maximum speakers').onlyDropdown();

@@ -584,13 +584,15 @@ export const hr = {
   'llm.failure.permissionDenied':
     'Pružatelj usluge {provider} odbio je pristup. Provjerite vjerodajnice, dopuštenja računa ili pristup modelu.',
   'llm.failure.rateLimited':
-    'Dosegnuto je ograničenje broja zahtjeva pružatelja usluge {provider}. Vraćanje na izvorni tekst.',
-  'llm.failure.network': 'Mrežna pogreška pri povezivanju s pružateljem usluge {provider}.',
+    'Dosegnuto je ograničenje broja zahtjeva pružatelja usluge {provider}. Pričekajte i pokušajte ponovno.',
+  'llm.failure.network':
+    'Nije moguće pristupiti pružatelju usluge {provider}. Provjerite adresu i vezu pa pokušajte ponovno.',
   'llm.failure.modelNotConfigured':
-    'Model za pružatelja usluge {provider} nije konfiguriran. Odaberite ga u odjeljku Model.',
+    'Model za pružatelja usluge {provider} nije konfiguriran. Odaberite ga u postavkama dodatka Speech Kit.',
   'llm.failure.unknownModel':
-    'Model pružatelja usluge {provider} nije pronađen. Odaberite drugi u odjeljku Model.',
-  'llm.failure.unknown': 'LLM transformacija nije uspjela. Pogledajte konzolu.',
+    'Model pružatelja usluge {provider} nije pronađen. Odaberite drugi u postavkama dodatka Speech Kit.',
+  'llm.failure.unknown':
+    'Transformacija nije uspjela. Provjerite postavke pružatelja usluge i pokušajte ponovno.',
   'llm.status.selectOllamaModel': 'Odaberite Ollama model u nastavku.',
   'llm.status.selectOpenRouterModel': 'Odaberite OpenRouter model u nastavku.',
   'llm.status.selectCustomModel': 'Unesite ID modela u nastavku.',
@@ -664,6 +666,9 @@ export const hr = {
     'Uklonite vjerodajnice iz URL-a i upotrijebite Secret Storage.',
   'llm.validation.baseUrl.queryOrFragment':
     'Osnovni URL ne smije sadržavati upitni niz ni fragment.',
+  'llm.routing.settingsSaveFailed':
+    'Nije moguće spremiti postavke pružatelja usluge. Pokušajte ponovno.',
+  'llm.sidebar.openSettings': 'Otvori postavke',
   'llm.sidebar.eyebrow': 'Tijek rada s transkriptom',
   'llm.sidebar.title': 'Transformacija diktiranja',
   'llm.sidebar.description':
@@ -671,7 +676,7 @@ export const hr = {
   'llm.sidebar.group.preset': 'Predložak',
   'llm.sidebar.group.model': 'Model',
   'llm.sidebar.group.context': 'Kontekst',
-  'llm.sidebar.enabled.name': 'Uključeno',
+  'llm.sidebar.enabled.name': 'Transformiraj novi diktat',
   'llm.sidebar.enabled.description': 'Primjenjuje aktivni predložak na novi diktirani tekst.',
   'llm.sidebar.showOriginal.name': 'Prikaz izvornog transkripta',
   'llm.sidebar.showOriginal.description':
