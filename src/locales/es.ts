@@ -854,6 +854,8 @@ export const es = {
     'Modelo equilibrado de dictado en vivo con parámetros de 123M.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Modelo de transmisión Moonshine más preciso con parámetros de 245M.',
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
+    'Transcripción en directo en inglés con búfer usando NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'RNNT multilingüe 0.6B de NVIDIA, exportado a int8 ONNX para transcripción en vivo con reconocimiento de caché en ocho idiomas verificados.',
   'catalog.family.whisper.summary':
@@ -862,6 +864,8 @@ export const es = {
     'Transcripción por lotes de alta calidad con descarga de varios gigabytes y requisitos de memoria.',
   'catalog.family.moonshine.summary':
     'Muestra las palabras mientras habla. Tiny favorece un menor uso de recursos, Small equilibra la velocidad y la calidad, y Medium favorece la calidad.',
+  'catalog.family.parakeet_unified.summary':
+    'Transcripción en directo en inglés con búfer. Este modelo requiere muchos recursos de CPU.',
   'catalog.family.nemotron_asr.summary':
     'Transmisión multilingüe de alta precisión con una mayor descarga y mayor uso de recursos. Moonshine Small sigue siendo el valor predeterminado recomendado para el dictado en vivo en inglés.',
   'setup.sidecar.modal.unsupportedPlatform':

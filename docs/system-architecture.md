@@ -386,13 +386,13 @@ families remain on CPU without an unverified acceleration claim.
 
 **Compiled runtimes and adapters:**
 
-| Runtime        | Crate                    | Model format | Adapter                                                                      |
-| -------------- | ------------------------ | ------------ | ---------------------------------------------------------------------------- |
-| `whisper_cpp`  | whisper-rs (whisper.cpp) | GGML `.bin`  | `whisper`                                                                    |
-| `onnx_runtime` | ort (ONNX Runtime)       | ONNX / ORT   | `cohere_transcribe`, `moonshine`, `nemotron_asr`, `pocket_tts`, `supertonic` |
+| Runtime        | Crate                    | Model format | Adapter                                                                                          |
+| -------------- | ------------------------ | ------------ | ------------------------------------------------------------------------------------------------ |
+| `whisper_cpp`  | whisper-rs (whisper.cpp) | GGML `.bin`  | `whisper`                                                                                        |
+| `onnx_runtime` | ort (ONNX Runtime)       | ONNX / ORT   | `cohere_transcribe`, `moonshine`, `nemotron_asr`, `parakeet_unified`, `pocket_tts`, `supertonic` |
 
 Cargo features: `engine-whisper`, `engine-cohere-transcribe`,
-`engine-moonshine`, `engine-nemotron-asr`, `engine-pocket-tts`,
+`engine-moonshine`, `engine-nemotron-asr`, `engine-parakeet-unified`, `engine-pocket-tts`,
 `engine-supertonic`, `gpu-metal`, `gpu-cuda`. A missing
 `(runtimeId, familyId)` pair surfaces as an `unsupported_engine` error rather
 than a silent failure.

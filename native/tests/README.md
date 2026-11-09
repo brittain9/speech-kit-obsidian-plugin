@@ -10,6 +10,7 @@ Two tiers of tests live here, on top of the per-module unit tests in `src/`:
 | `sidecar_protocol_e2e.rs` | End-to-end contract (real binary, wire protocol) | yes            | only with `--ignored` |
 | `nemotron_asr_e2e.rs`     | Nemotron VAD/worker/revision quality             | yes (651 MiB)  | only with `--ignored` |
 | `nemotron_asr_tails.rs`   | Nemotron arbitrary-finalize regression           | yes (651 MiB)  | only with `--ignored` |
+| `parakeet_unified_e2e.rs` | Parakeet streaming, worker, and final tails      | yes (632 MiB)  | only with `--ignored` |
 
 The end-to-end tier is the quality suite: it feeds known audio fixtures through
 the **full sidecar** and asserts the transcript. The benchmark in
@@ -55,6 +56,16 @@ artifacts on first run):
 
 ```sh
 npm run test:sidecar:nemotron:e2e
+```
+
+Pinned Parakeet Unified real-model acceptance. The test verifies each catalog
+artifact before use and downloads it on demand if no local directory is set:
+
+```sh
+STT_TEST_PARAKEET_UNIFIED_DIR=/path/to/model cargo test --release \
+  --manifest-path native/Cargo.toml --no-default-features \
+  --features engine-parakeet-unified --test parakeet_unified_e2e \
+  -- --ignored --nocapture --test-threads=1
 ```
 
 Pinned Supertonic real-model smoke (downloads and SHA-verifies the required

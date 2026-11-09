@@ -10,6 +10,8 @@ const MODEL_SUMMARY_KEYS = {
   moonshine_medium_streaming_en: 'catalog.moonshine_medium_streaming_en.summary',
   moonshine_small_streaming_en: 'catalog.moonshine_small_streaming_en.summary',
   moonshine_tiny_streaming_en: 'catalog.moonshine_tiny_streaming_en.summary',
+  parakeet_unified_en_0_6b_int8_streaming_1120ms:
+    'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary',
   nemotron_asr_0_6b_int8_streaming_560ms: 'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary',
   pocket_tts_english_2026_04_int8: 'catalog.pocket_tts_english_2026_04_int8.summary',
   pocket_tts_french_24l_int8: 'catalog.pocket_tts_french_24l_int8.summary',
@@ -31,6 +33,7 @@ const FAMILY_SUMMARY_KEYS = {
   tencent_hy_mt: 'catalog.family.tencent_hy_mt.summary',
   moonshine: 'catalog.family.moonshine.summary',
   nemotron_asr: 'catalog.family.nemotron_asr.summary',
+  parakeet_unified: 'catalog.family.parakeet_unified.summary',
   pocket_tts: 'catalog.family.pocket_tts.summary',
   supertonic: 'catalog.family.supertonic.summary',
   whisper: 'catalog.family.whisper.summary',

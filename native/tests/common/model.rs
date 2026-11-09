@@ -18,6 +18,7 @@ use sha2::{Digest, Sha256};
 /// keeps the suite cheap while still exercising the real inference path.
 pub const TEST_MODEL_ID: &str = "whisper_tiny_en_q8_0";
 pub const MULTILINGUAL_WHISPER_MODEL_ID: &str = "whisper_large_v3_turbo_q8_0";
+pub const PARAKEET_UNIFIED_MODEL_ID: &str = "parakeet_unified_en_0_6b_int8_streaming_1120ms";
 pub const NEMOTRON_MODEL_ID: &str = "nemotron_asr_0_6b_int8_streaming_560ms";
 pub const POCKET_TTS_MODEL_ID: &str = "pocket_tts_english_2026_04_int8";
 pub const SUPERTONIC_MODEL_ID: &str = "supertonic_3_multilingual_2026_05";
@@ -152,6 +153,22 @@ pub fn require_nemotron_model() -> PathBuf {
              ensure network access for the catalog download."
         )
     })
+}
+
+/// Resolve and verify all artifacts of the pinned Parakeet Unified export.
+pub fn require_parakeet_unified_model() -> PathBuf {
+    static RESOLVED: OnceLock<Result<PathBuf, String>> = OnceLock::new();
+    RESOLVED
+        .get_or_init(|| {
+            resolve_catalog_model(
+                "STT_TEST_PARAKEET_UNIFIED_DIR",
+                RuntimeId::OnnxRuntime,
+                ModelFamilyId::ParakeetUnified,
+                PARAKEET_UNIFIED_MODEL_ID,
+            )
+        })
+        .clone()
+        .unwrap_or_else(|error| panic!("could not obtain pinned Parakeet Unified assets: {error}"))
 }
 
 pub fn require_pocket_tts_model() -> PathBuf {

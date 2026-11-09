@@ -853,6 +853,8 @@ export const pt = {
     'Modelo equilibrado de ditado em direto, com 123 milhões de parâmetros.',
   'catalog.moonshine_medium_streaming_en.summary':
     'O modelo Moonshine com transcrição em direto mais preciso, com 245 milhões de parâmetros.',
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
+    'Transcrição ao vivo em inglês com buffer usando NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'RNNT multilingue de 0,6 mil milhões de parâmetros da NVIDIA, exportado para ONNX int8 para transcrição em direto com gestão de cache em oito idiomas verificados.',
   'catalog.family.whisper.summary':
@@ -861,6 +863,8 @@ export const pt = {
     'Transcrição em lote de alta qualidade, com transferências de vários gigabytes e elevados requisitos de memória.',
   'catalog.family.moonshine.summary':
     'Mostra as palavras enquanto fala. Tiny privilegia um menor consumo de recursos, Small equilibra a velocidade e a qualidade, e Medium privilegia a qualidade.',
+  'catalog.family.parakeet_unified.summary':
+    'Transcrição ao vivo em inglês com buffer. Este modelo exige muitos recursos da CPU.',
   'catalog.family.nemotron_asr.summary':
     'Transcrição em direto multilingue de elevada precisão, com uma transferência maior e maior consumo de recursos. O Moonshine Small continua a ser a opção predefinida recomendada para ditado em direto em inglês.',
   'setup.sidecar.modal.unsupportedPlatform':

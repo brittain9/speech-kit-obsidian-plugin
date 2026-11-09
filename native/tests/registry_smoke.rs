@@ -8,7 +8,11 @@
 
 use std::path::Path;
 
-#[cfg(any(feature = "engine-nemotron-asr", feature = "engine-supertonic"))]
+#[cfg(any(
+    feature = "engine-nemotron-asr",
+    feature = "engine-supertonic",
+    feature = "engine-parakeet-unified"
+))]
 use local_dictation_sidecar::engine::LanguageSupport;
 use local_dictation_sidecar::engine::{
     AcceleratorId, EngineRegistry, ModelFamilyId, RuntimeId, missing_adapter_error,
@@ -202,4 +206,18 @@ fn merged_capabilities_falls_back_to_unknown_when_family_adapter_missing() {
     assert!(!merged.family.supports_initial_prompt);
     assert!(!merged.family.supports_language_selection);
     assert!(merged.family.max_audio_duration_secs.is_none());
+}
+
+#[cfg(feature = "engine-parakeet-unified")]
+#[test]
+fn parakeet_unified_pair_is_registered_when_compiled() {
+    let registry = EngineRegistry::build();
+    let adapter = registry
+        .adapter(RuntimeId::OnnxRuntime, ModelFamilyId::ParakeetUnified)
+        .expect("Parakeet Unified adapter must be registered");
+    assert!(adapter.capabilities().supports_streaming);
+    assert_eq!(
+        adapter.capabilities().supported_languages,
+        LanguageSupport::EnglishOnly
+    );
 }

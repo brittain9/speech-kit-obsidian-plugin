@@ -1099,6 +1099,8 @@ export const hr = {
     'Uravnotežen model za diktiranje uživo sa 123 milijuna parametara.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Najtočniji Moonshine streaming model s 245 milijuna parametara.',
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
+    'Međuspremana transkripcija engleskog govora uživo s modelom NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'NVIDIA-in višejezični RNNT s 0,6 milijardi parametara, izvezen u int8 ONNX za transkripciju uživo s predmemorijom konteksta na osam provjerenih jezika.',
   'catalog.pocket_tts_english_2026_04_int8.summary':
@@ -1121,6 +1123,8 @@ export const hr = {
     'Visokokvalitetna skupna transkripcija uz preuzimanje i memorijske zahtjeve od više gigabajta.',
   'catalog.family.moonshine.summary':
     'Prikazuje riječi dok govorite. Tiny naginje manjoj potrošnji resursa, Small uravnotežuje brzinu i kvalitetu, a Medium naginje kvaliteti.',
+  'catalog.family.parakeet_unified.summary':
+    'Međuspremana transkripcija engleskog govora uživo. Ovaj model znatno opterećuje CPU.',
   'catalog.family.nemotron_asr.summary':
     'Višejezični streaming visoke točnosti uz veće preuzimanje i veću potrošnju resursa. Moonshine Small i dalje je preporučeni zadani izbor za diktiranje na engleskom uživo.',
   'catalog.family.supertonic.summary':
