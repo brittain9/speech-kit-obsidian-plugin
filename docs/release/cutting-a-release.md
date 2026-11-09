@@ -234,6 +234,12 @@ forward-compatible Turing PTX variant, and its `GGML_NATIVE` setting prevents
 sidecars from inheriting runner-only CPU SIMD. The bundled CUDA runtime
 libraries ship after CUDA EULA review.
 
+Linux native release jobs use Ubuntu 24.04 images. Keep the x86-64 CPU and CUDA
+jobs on that same baseline to preserve the existing runtime compatibility and
+the [CUDA 13.2 package repository](https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/).
+Do not move native archives to a newer image through `ubuntu-latest` without
+reviewing both the toolkit packages and the resulting glibc requirements.
+
 Obsidian's updater only replaces `main.js`/`manifest.json`/`styles.css`, so the
 plugin installs the sidecar itself: it downloads the archive and
 `checksums.txt` from the release named in `sidecar-version.json`, verifies the
