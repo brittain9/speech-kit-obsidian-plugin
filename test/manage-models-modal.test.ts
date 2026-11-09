@@ -4,7 +4,7 @@ import {
   ALL_MODEL_LANGUAGES,
   buildModelNavigationSignature,
   deriveModelLanguageOptions,
-  derivePickerFamilyTabs,
+  derivePickerFamilies,
   deriveTaskModelAvailability,
   filterModelRowsForPicker,
   ManageModelsModal,
@@ -490,12 +490,7 @@ describe('model browser', () => {
     });
     modal.open();
     const content = modal.contentEl as unknown as TestElement;
-    const filipino = content
-      .querySelectorAll('.local-stt-language-rail__button')
-      .find((button) => button.findByText('Filipino') !== undefined);
-
-    expect(filipino).toBeDefined();
-    await filipino?.click();
+    await selectLanguage(modal, 'Filipino');
 
     expect(texts(content)).toEqual(
       expect.arrayContaining([
@@ -641,7 +636,7 @@ describe('model browser', () => {
     ).toEqual([english, multilingual]);
   });
 
-  it('filters family tabs before filtering models within the selected family', () => {
+  it('filters available families by task and language', () => {
     const rows = [
       row(sttModel('Whisper English', 'whisper', ['en'])),
       row(sttModel('Whisper Multilingual', 'whisper', ['en', 'es'])),
@@ -665,19 +660,19 @@ describe('model browser', () => {
     ];
 
     expect(
-      derivePickerFamilyTabs(adapters, rows, {
+      derivePickerFamilies(adapters, rows, {
         language: { kind: 'language', tag: 'es' },
         task: 'stt',
       }).map((family) => family.familyId),
     ).toEqual(['whisper', 'nemotron_asr']);
     expect(
-      derivePickerFamilyTabs(adapters, rows, {
+      derivePickerFamilies(adapters, rows, {
         language: { kind: 'language', tag: 'en' },
         task: 'stt',
       }).map((family) => family.familyId),
     ).toEqual(['whisper', 'cohere_transcribe', 'moonshine', 'nemotron_asr']);
     expect(
-      derivePickerFamilyTabs(adapters, rows, {
+      derivePickerFamilies(adapters, rows, {
         language: { kind: 'language', tag: 'es' },
         task: 'tts',
       }).map((family) => family.familyId),
@@ -835,18 +830,19 @@ describe('model browser', () => {
     globalThis.createFragment = () => new TestElement() as unknown as DocumentFragment;
     try {
       modal.open();
-      const familyTabs = () =>
-        (modal.contentEl as unknown as TestElement).querySelectorAll('.local-stt-tab');
-      const activeFamily = () =>
-        familyTabs().find((tab) => tab.getAttribute('aria-selected') === 'true')?.textContent;
-      expect(activeFamily()).toBe('Nemotron');
+      const familyGroups = () =>
+        (modal.contentEl as unknown as TestElement).querySelectorAll('.local-stt-model-family');
+      const familyNames = () =>
+        familyGroups().map((group) => group.querySelector('summary')?.textContent);
+      const openFamily = () =>
+        familyGroups()
+          .find((group) => (group as unknown as HTMLDetailsElement).open)
+          ?.querySelector('summary')?.textContent;
+      expect(openFamily()).toBe('Nemotron');
       await selectLanguage(modal, 'English');
-      expect(activeFamily()).toBe('Moonshine');
+      expect(familyNames()).toEqual(['Moonshine']);
       await selectLanguage(modal, 'All languages');
-      await familyTabs()
-        .find((tab) => tab.textContent === 'Nemotron')
-        ?.click();
-      expect(activeFamily()).toBe('Nemotron');
+      expect(openFamily()).toBe('Nemotron');
       await selectLanguage(modal, 'Français');
       expect(activeLanguage(modal)).toBe('Français');
 
@@ -860,7 +856,7 @@ describe('model browser', () => {
 
       await selectTask(modal, 'Speech to text');
       expect(activeLanguage(modal)).toBe('Français');
-      expect(activeFamily()).toBe('Nemotron');
+      expect(openFamily()).toBe('Nemotron');
       await selectTask(modal, 'Text to speech');
       expect(activeLanguage(modal)).toBe('Deutsch');
       await selectTask(modal, 'Translation');
@@ -1180,6 +1176,8 @@ describe('model browser', () => {
     try {
       modal.open();
       const content = modal.contentEl as unknown as TestElement;
+      const failedFamily = content.findByClass('local-stt-model-family');
+      expect((failedFamily as unknown as HTMLDetailsElement).open).toBe(true);
 
       // No separate banner anywhere in the modal.
       expect(content.findByClass('local-stt-install-failure')).toBeUndefined();
@@ -1212,19 +1210,27 @@ function texts(element: TestElement): string[] {
 
 function activeLanguage(modal: ManageModelsModal): string | null {
   const content = modal.contentEl as unknown as TestElement;
-  const active = content
-    .querySelectorAll('.local-stt-language-rail__button')
-    .find((button) => button.classList.contains('is-active'));
-  return active === undefined ? null : (texts(active).find((text) => text.length > 0) ?? null);
+  const setting = Setting.instances.find(
+    (candidate) => candidate.name === 'Languages' && content.contains(candidate.settingEl),
+  );
+  const dropdown = setting?.onlyDropdown();
+  return (
+    dropdown?.selectEl.options.find((option) => option.value === dropdown.selectEl.value)?.label ??
+    null
+  );
 }
 
 async function selectLanguage(modal: ManageModelsModal, label: string): Promise<void> {
   const content = modal.contentEl as unknown as TestElement;
-  const button = content
-    .querySelectorAll('.local-stt-language-rail__button')
-    .find((candidate) => texts(candidate).find((text) => text.length > 0) === label);
-  if (button === undefined) throw new Error(`Language filter not found: ${label}`);
-  await button.click();
+  const setting = Setting.instances.find(
+    (candidate) => candidate.name === 'Languages' && content.contains(candidate.settingEl),
+  );
+  const dropdown = setting?.onlyDropdown();
+  const option = dropdown?.selectEl.options.find((candidate) => candidate.label === label);
+  if (dropdown === undefined || option === undefined)
+    throw new Error(`Language filter not found: ${label}`);
+  dropdown.change(option.value);
+  await Promise.resolve();
 }
 
 async function selectTask(modal: ManageModelsModal, label: string): Promise<void> {
