@@ -2033,3 +2033,65 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
+
+/* Compact model summary rows use native buttons and the standard settings group. */
+.local-stt-model-summary-row {
+  position: relative;
+  padding: 0;
+}
+.local-stt-model-summary-info {
+  flex: 1;
+  min-width: 0;
+}
+.local-stt-model-summary-control {
+  position: absolute;
+  inset-inline-end: 36px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.local-stt-model-summary-open {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+  font: inherit;
+  text-align: start;
+  white-space: normal;
+}
+.local-stt-model-summary-open:hover {
+  background: var(--background-modifier-hover);
+}
+.local-stt-model-summary-icon,
+.local-stt-model-summary-chevron {
+  color: var(--text-muted);
+}
+.local-stt-model-summary-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding-inline-end: 32px;
+  overflow-wrap: anywhere;
+}
+.local-stt-model-summary-label {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+.local-stt-model-summary-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.local-stt-model-summary-detail {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}

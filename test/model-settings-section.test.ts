@@ -15,6 +15,45 @@ vi.mock('../src/shared/i18n', () => ({
 }));
 
 describe('model settings section ownership', () => {
+  it('opens the speech picker from a compact summary row', async () => {
+    const container = new TestElement();
+    const onManageModels = vi.fn();
+    const manager = {
+      getState: () => ({
+        activeInstall: null,
+        catalog: { catalogVersion: 1, collections: [], families: [], models: [] },
+        compiledAdapters: [],
+        compiledRuntimes: [],
+        failedInstall: null,
+        installedModels: [],
+        installRequestPending: false,
+        loadError: null,
+        loadStatus: 'ready',
+        modelStore: { overridePath: null, path: '/models', usingDefaultPath: true },
+        selectedModel: null,
+        selectedModelCapabilities: { status: 'none' },
+        selectedTtsModel: null,
+        selectedTtsModelCapabilities: { status: 'none' },
+      }),
+      subscribe: () => () => {},
+    } as unknown as ModelInstallManager;
+    const original = globalThis.createFragment;
+    globalThis.createFragment = () => new TestElement() as unknown as DocumentFragment;
+    try {
+      const dispose = renderModelSection(container as unknown as HTMLDivElement, manager, {
+        onManageModels,
+        onExternalFile: vi.fn(),
+        onModelInfo: null,
+      });
+      const open = container.findByClass('local-stt-model-summary-open');
+      expect(open).toBeDefined();
+      await open?.click();
+      expect(onManageModels).toHaveBeenCalledOnce();
+      dispose();
+    } finally {
+      globalThis.createFragment = original;
+    }
+  });
   it('does not erase sibling language controls when manager state changes', () => {
     const section = new TestElement();
     const modelSummary = section.createDiv();

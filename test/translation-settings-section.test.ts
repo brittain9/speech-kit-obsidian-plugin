@@ -118,6 +118,23 @@ function hyMtState(installed: boolean): ModelManagerState {
 }
 
 describe('Translation settings', () => {
+  it('opens the translation picker from its summary row', async () => {
+    const container = new TestElement();
+    const picker = vi.fn(async () => {});
+    renderTranslationModelSetting(container as unknown as HTMLDivElement, {
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      manager: {
+        getState: () => state(true),
+        subscribe: () => () => {},
+      } as unknown as ModelInstallManager,
+      openModelPicker: picker,
+      persistLanguages: vi.fn(async () => {}),
+    });
+    const row = container.findByClass('local-stt-model-summary-open');
+    expect(row).not.toBeNull();
+    await row?.click();
+    expect(picker).toHaveBeenCalledWith({ initialTask: 'translation' });
+  });
   it('shows the installed model and deep-links model management to Translation', async () => {
     Setting.reset();
     const openModelPicker = vi.fn(async () => {});
@@ -134,11 +151,8 @@ describe('Translation settings', () => {
       persistLanguages: vi.fn(async () => {}),
     });
 
-    const modelSetting = Setting.named('Translation model');
-    expect(modelSetting.descEl.textContent).toContain('Firefox Translations');
-    expect(modelSetting.descEl.textContent).toContain('Installed');
-    expect(modelSetting.buttonComponents[0]?.text).toBe('Manage models');
-    await modelSetting.buttonComponents[0]?.click();
+    expect(container.findByClass('local-stt-model-summary-open')).toBeDefined();
+    await container.findByClass('local-stt-model-summary-open')?.click();
     expect(openModelPicker).toHaveBeenCalledExactlyOnceWith({
       initialTask: 'translation',
     });
@@ -199,10 +213,8 @@ describe('Translation settings', () => {
       persistLanguages: vi.fn(async () => {}),
     });
 
-    expect(Setting.named('Translation model').descEl.textContent).toContain(
-      'No translation model is available.',
-    );
-    await Setting.named('Translation model').buttonComponents[0]?.click();
+    expect(container.findByClass('local-stt-model-summary-open')).toBeDefined();
+    await container.findByClass('local-stt-model-summary-open')?.click();
     expect(openModelPicker).toHaveBeenCalledWith({ initialTask: 'translation' });
   });
 

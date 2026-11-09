@@ -205,7 +205,16 @@ export class LocalSttSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     // --- Model ---
-    const modelSection = createSettingGroup(containerEl, t('settings.groups.model'));
+    const modelGroup = containerEl.createDiv({ cls: 'setting-group' });
+    new Setting(modelGroup)
+      .setName(t('settings.groups.model'))
+      .setHeading()
+      .addButton((button) => {
+        button.setButtonText(t('settings.model.manageModels')).onClick(() => {
+          void this.dependencies.openModelPicker({ onChanged: () => this.refreshSettingsTab() });
+        });
+      });
+    const modelSection = modelGroup.createDiv({ cls: 'setting-items' });
     const modelSummary = modelSection.createDiv();
     const manager = this.dependencies.modelInstallManager;
     this.disposeModelSection = renderModelSection(modelSummary, manager, {
@@ -231,10 +240,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
           },
         ).open();
       },
-      onModelInfo:
-        settings.selectedModel?.kind === 'catalog_model'
-          ? this.buildModelInfoCallback(manager, 'stt')
-          : null,
+      onModelInfo: this.buildModelInfoCallback(manager, 'stt'),
     });
 
     const ttsModelContainer = modelSection.createDiv();
@@ -466,6 +472,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
       getSettings: () => this.dependencies.getSettings(),
       manager,
       openModelPicker: (options) => this.dependencies.openModelPicker(options),
+      openSelectedModelDetails: this.buildModelInfoCallback(manager, 'translation'),
       persistLanguages: async (sourceLanguage, targetLanguage) => {
         await this.dependencies.mutateLlmSettings((current) => ({
           ...current,
@@ -762,7 +769,10 @@ export class LocalSttSettingTab extends PluginSettingTab {
     });
   }
 
-  private buildModelInfoCallback(manager: ModelInstallManager, task: 'stt' | 'tts'): () => void {
+  private buildModelInfoCallback(
+    manager: ModelInstallManager,
+    task: 'stt' | 'tts' | 'translation',
+  ): () => void {
     return () => {
       openSelectedModelDetailsModal(this.app, manager, task);
     };

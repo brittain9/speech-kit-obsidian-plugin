@@ -52,6 +52,10 @@ export class TestElement {
     this.win = ownerDocument.defaultView;
   }
 
+  getBoundingClientRect(): { left: number; bottom: number } {
+    return { left: 0, bottom: 0 };
+  }
+
   get parentElement(): TestElement | null {
     return elementParents.get(this) ?? null;
   }
@@ -890,3 +894,27 @@ export const setTooltip = vi.fn((target: unknown, tooltip: string): void => {
     );
   }
 });
+
+export class Menu {
+  static lastItems: Array<{ title: string; click: () => void }> = [];
+  constructor() {
+    Menu.lastItems = [];
+  }
+  addItem(
+    callback: (item: {
+      setTitle: (title: string) => { onClick: (click: () => void) => void };
+    }) => void,
+  ): this {
+    callback({
+      setTitle: (title) => ({
+        onClick: (click) => {
+          Menu.lastItems.push({ title, click });
+        },
+      }),
+    });
+    return this;
+  }
+  showAtPosition(): this {
+    return this;
+  }
+}

@@ -1,10 +1,10 @@
-import { Setting } from 'obsidian';
-
 import { isCancellingPhase, type ModelInstallManager } from '../models/model-install-manager';
 import { updateInstallProgressElement } from '../models/model-install-progress';
 import { type CurrentModelStatus, deriveCurrentModelDisplay } from '../models/model-row-state';
 import { t } from '../shared/i18n';
 import { renderActiveInstallCard } from './install-progress-row';
+import { renderModelSummaryRow } from './model-summary-row';
+import { captureSettingsFocus, restoreSettingsFocus } from './settings-tab-lifecycle';
 
 // ---------------------------------------------------------------------------
 // Badge helper (maps stable model status -> CSS modifier + localized display text)
@@ -56,83 +56,31 @@ export function renderModelSection(
   let installProgressEl: HTMLDivElement | null = null;
 
   function render(): void {
+    const focus = captureSettingsFocus(container);
     container.empty();
     installProgressEl = null;
 
     const state = manager.getState();
     const currentModel = deriveCurrentModelDisplay(state);
 
-    // --- Current model row ---
-    const descFragment = createFragment();
-    descFragment.createSpan({ text: currentModel.displayName });
-    let hasMetadata = currentModel.displayName.length > 0;
-    const appendSeparator = (): void => {
-      if (hasMetadata) {
-        descFragment.createSpan({ text: ' \u00b7 ' });
-      }
-      hasMetadata = true;
-    };
-
-    if (currentModel.engineLabel.length > 0) {
-      appendSeparator();
-      descFragment.createSpan({ text: currentModel.engineLabel });
-    }
     const caps = state.selectedModelCapabilities;
-    if (caps.status === 'ready' && caps.capabilities.family.supportsStreaming) {
-      appendSeparator();
-      descFragment.createSpan({
-        cls: 'local-stt-badge local-stt-badge--streaming',
-        text: t('settings.model.streaming'),
-      });
-    }
-    const badge = getModelStatusBadge(currentModel.status);
-    if (badge !== null) {
-      appendSeparator();
-      descFragment.createSpan({
-        cls: `local-stt-badge local-stt-badge--${badge.modifier}`,
-        text: badge.text,
-      });
-    }
-    if (currentModel.detail.length > 0) {
-      if (hasMetadata) {
-        descFragment.createEl('br');
-      }
-      descFragment.createSpan({ text: currentModel.detail });
-    }
-
-    const cardSetting = new Setting(container)
-      .setName(t('settings.model.speechToText'))
-      .setDesc(descFragment);
-
-    cardSetting.addButton((button) => {
-      button
-        .setCta()
-        .setButtonText(t('settings.model.manageModels'))
-        .onClick(() => {
-          callbacks.onManageModels();
-        });
+    const actions = [
+      ...(callbacks.onModelInfo !== null && state.selectedModel?.kind === 'catalog_model'
+        ? [{ label: t('settings.model.details'), onSelect: callbacks.onModelInfo }]
+        : []),
+      { label: t('settings.model.useExternalFile'), onSelect: callbacks.onExternalFile },
+    ];
+    renderModelSummaryRow(container, {
+      taskLabel: t('settings.model.task.stt'),
+      modelName: currentModel.displayName,
+      icon: 'mic',
+      streaming: caps.status === 'ready' && caps.capabilities.family.supportsStreaming,
+      status:
+        currentModel.status === 'not_selected' ? null : getModelStatusBadge(currentModel.status),
+      detail: currentModel.detail,
+      onOpen: callbacks.onManageModels,
+      actions,
     });
-
-    cardSetting.addExtraButton((button) => {
-      button
-        .setIcon('file-input')
-        .setTooltip(t('settings.model.useExternalFile'))
-        .onClick(() => {
-          callbacks.onExternalFile();
-        });
-    });
-
-    if (callbacks.onModelInfo !== null) {
-      const onModelInfo = callbacks.onModelInfo;
-      cardSetting.addExtraButton((button) => {
-        button
-          .setIcon('info')
-          .setTooltip(t('settings.model.details'))
-          .onClick(() => {
-            onModelInfo();
-          });
-      });
-    }
 
     // --- Install progress panel ---
     const { activeInstall } = state;
@@ -165,6 +113,7 @@ export function renderModelSection(
     // sibling language control. Keep Obsidian's `.setting-item:last-child`
     // rule from stripping its bottom padding and pulling the divider upward.
     container.createSpan({ attr: { 'aria-hidden': 'true' } }).hide();
+    restoreSettingsFocus(container, focus);
   }
 
   function handleStateChange(): void {
