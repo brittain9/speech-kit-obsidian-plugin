@@ -1,6 +1,6 @@
 # Spec: Moonshine in the Model Catalog
 
-Status: approved for implementation (handoff to Codex)
+Status: historical design record. See [current architecture](../system-architecture.md).
 Issue: [#177](https://github.com/brittain9/local-dictation-obsidian-plugin/issues/177)
 Predecessor: `docs/specs/live-dictation-moonshine.md` (PR #176)
 

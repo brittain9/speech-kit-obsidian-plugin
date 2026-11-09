@@ -7,7 +7,7 @@
 
 Date: 2026-07-27
 
-Branch benchmarked: `agent/spec-local-translation` at `513dc0b`
+Benchmark revision: `513dc0b`
 
 Hardware: 16 GB MacBook Pro (Mac14,9), M2 Pro, 12 CPU cores, 19 GPU cores
 

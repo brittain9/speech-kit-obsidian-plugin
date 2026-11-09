@@ -1,8 +1,6 @@
 # Adding a product language
 
-This is the repeatable process for answering "can you add language X?". It is
-written to be executable: an agent handed a language request should be able to
-follow it end to end and open a reviewable PR.
+Follow this process to add a product language and prepare a reviewable PR.
 
 Architecture and invariants live in
 [multilingual-support.md](multilingual-support.md). This document is the
