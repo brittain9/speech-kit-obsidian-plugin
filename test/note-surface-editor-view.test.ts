@@ -21,6 +21,152 @@ function projection(text: string) {
   };
 }
 
+it('places a later session after the previous speech and recording when the caret was not moved', () => {
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: 'note: ',
+      selection: { anchor: 6 },
+      extensions: [noteSurfaceUpdateListenerExtension()],
+    }),
+    parent: document.body,
+  });
+  const first = new NoteSurface(view, { anchor: 'at_cursor' });
+  expect(first.appendProjection('u1', projection('first')).kind).toBe('appended');
+  expect(first.insertAfterRange({ from: 6, to: 11 }, '![[first.webm]]')).toBe(true);
+  first.dispose();
+  const second = new NoteSurface(view, { anchor: 'at_cursor' });
+  expect(second.appendProjection('u2', projection(' second')).kind).toBe('appended');
+  expect(view.state.doc.toString()).toBe('note: first\n\n![[first.webm]] second');
+  second.dispose();
+  view.destroy();
+});
+
+it('keeps consecutive speech in order without a recording', () => {
+  const view = new EditorView({
+    state: EditorState.create({ doc: '', extensions: [noteSurfaceUpdateListenerExtension()] }),
+    parent: document.body,
+  });
+  const first = new NoteSurface(view, { anchor: 'at_cursor' });
+  first.appendProjection('u1', projection('first'));
+  first.dispose();
+  const second = new NoteSurface(view, { anchor: 'at_cursor' });
+  second.appendProjection('u2', projection(' second'));
+  expect(view.state.doc.toString()).toBe('first second');
+  second.dispose();
+  view.destroy();
+});
+
+it('places the next session after a recording when no speech was produced', () => {
+  const view = new EditorView({
+    state: EditorState.create({ extensions: [noteSurfaceUpdateListenerExtension()] }),
+    parent: document.body,
+  });
+  const first = new NoteSurface(view, { anchor: 'at_cursor' });
+  expect(first.insertAfterRange(null, '![[first.webm]]')).toBe(true);
+  first.dispose();
+  const second = new NoteSurface(view, { anchor: 'at_cursor' });
+  second.appendProjection('u2', projection(' next'));
+  expect(view.state.doc.toString()).toBe('![[first.webm]] next');
+  second.dispose();
+  view.destroy();
+});
+
+it('respects a caret deliberately moved away and back while speech is arriving', () => {
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: 'note: ',
+      selection: { anchor: 6 },
+      extensions: [noteSurfaceUpdateListenerExtension()],
+    }),
+    parent: document.body,
+  });
+  const first = new NoteSurface(view, { anchor: 'at_cursor' });
+  first.appendProjection('u1', projection('first'));
+  view.dispatch({ selection: { anchor: 0 } });
+  view.dispatch({ selection: { anchor: 11 } });
+  first.insertAfterRange({ from: 6, to: 11 }, '![[first.webm]]');
+  expect(view.state.selection.main.head).toBe(11);
+  first.dispose();
+  const second = new NoteSurface(view, { anchor: 'at_cursor' });
+  second.appendProjection('u2', projection(' second'));
+  expect(view.state.doc.toString()).toBe('note: first second\n\n![[first.webm]]');
+  second.dispose();
+  view.destroy();
+});
+
+it('keeps the caret at a later revision and leaves focus on the hold control', () => {
+  const button = document.createElement('button');
+  document.body.append(button);
+  const view = new EditorView({
+    state: EditorState.create({ extensions: [noteSurfaceUpdateListenerExtension()] }),
+    parent: document.body,
+  });
+  button.focus();
+  const first = new NoteSurface(view, { anchor: 'at_cursor' });
+  first.appendProjection('u1', projection('partial'));
+  expect(first.replaceAnchor('u1', 'final speech', 'partial').kind).toBe('replaced');
+  expect(view.state.selection.main.head).toBe('final speech'.length);
+  expect(document.activeElement).toBe(button);
+  first.dispose();
+  const second = new NoteSurface(view, { anchor: 'at_cursor' });
+  second.appendProjection('u2', projection(' next'));
+  expect(view.state.doc.toString()).toBe('final speech next');
+  expect(document.activeElement).toBe(button);
+  second.dispose();
+  view.destroy();
+  button.remove();
+});
+
+it('does not move a manual caret when batch text replaces a session', () => {
+  const view = new EditorView({
+    state: EditorState.create({ extensions: [noteSurfaceUpdateListenerExtension()] }),
+    parent: document.body,
+  });
+  const surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  surface.appendProjection('u1', projection('speech'));
+  view.dispatch({ selection: { anchor: 0 } });
+  expect(surface.rewriteRegion({ from: 0, to: 6 }, 'clean speech', []).kind).toBe('rewritten');
+  expect(view.state.selection.main.head).toBe(0);
+  surface.dispose();
+  view.destroy();
+});
+
+it('does not move a selection made before a late first transcript and recording', () => {
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: 'before after',
+      selection: { anchor: 12 },
+      extensions: [noteSurfaceUpdateListenerExtension()],
+    }),
+    parent: document.body,
+  });
+  const surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  view.dispatch({ selection: { anchor: 0, head: 6 } });
+  surface.appendProjection('u1', projection(' speech'));
+  expect(surface.insertAfterRange({ from: 12, to: 19 }, '![[audio.webm]]')).toBe(true);
+  expect(view.state.selection.main.from).toBe(0);
+  expect(view.state.selection.main.to).toBe(6);
+  surface.dispose();
+  view.destroy();
+});
+
+it('keeps the newer session caret when an older recording finishes later', () => {
+  const view = new EditorView({
+    state: EditorState.create({ extensions: [noteSurfaceUpdateListenerExtension()] }),
+    parent: document.body,
+  });
+  const first = new NoteSurface(view, { anchor: 'at_cursor' });
+  const second = new NoteSurface(view, { anchor: 'at_cursor' });
+  first.appendProjection('u1', projection('first'));
+  second.appendProjection('u2', projection('second'));
+  expect(first.insertAfterRange({ from: 0, to: 5 }, '![[first.webm]]')).toBe(true);
+  expect(view.state.doc.toString()).toBe('first\n\n![[first.webm]]\n\nsecond');
+  expect(view.state.selection.main.head).toBe(view.state.doc.length);
+  first.dispose();
+  second.dispose();
+  view.destroy();
+});
+
 it('tracks a new speech span across a nested edit during its insertion', () => {
   let nested = false;
   const early = EditorView.updateListener.of((update) => {
