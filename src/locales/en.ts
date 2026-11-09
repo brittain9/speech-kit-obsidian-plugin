@@ -695,6 +695,7 @@ export const en = {
   'settings.microphone.fallbackCleared':
     'Saved microphone unavailable. Using the default microphone; the saved selection was cleared for future sessions.',
   'settings.model.notInstalled': 'Not installed',
+  'settings.model.externalMissing': 'Model file missing',
   'settings.model.validatedExternal': 'Validated · external',
   'settings.model.external': 'External',
   'settings.model.checking': 'Checking…',
@@ -1366,7 +1367,7 @@ export const en = {
   'models.progress.verifyingFile': 'Verifying {filename}',
   'models.progress.fileCount': 'File {current} of {total}',
   'models.current.noneSelected': 'No model selected',
-  'models.current.noneSelectedDesc': 'Choose an installed model or validate an external file.',
+  'models.current.noneSelectedDesc': 'Choose or install a model.',
   'models.current.notSelected': 'Not selected',
   'models.current.externalFile': 'External file',
   'models.current.managedNotInstalled': 'The selected managed model is not installed.',

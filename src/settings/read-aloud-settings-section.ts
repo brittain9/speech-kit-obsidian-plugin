@@ -99,13 +99,15 @@ export function renderTextToSpeechSettings(
             ),
           ) ?? null);
     const status =
-      selection === null || installed !== null
-        ? null
-        : state.loadStatus === 'ready'
-          ? { modifier: 'missing', text: t('settings.model.notInstalled') }
-          : state.loadStatus === 'error'
-            ? { modifier: 'unavailable', text: t('settings.model.unavailable') }
-            : { modifier: 'checking', text: t('settings.model.checking') };
+      selection === null
+        ? { modifier: 'neutral' as const, text: t('settings.model.noModelSelected') }
+        : installed !== null
+          ? { modifier: 'ready' as const, text: t('models.current.installed') }
+          : state.loadStatus === 'ready'
+            ? { modifier: 'missing' as const, text: t('settings.model.notInstalled') }
+            : state.loadStatus === 'error'
+              ? { modifier: 'neutral' as const, text: t('settings.model.unavailable') }
+              : { modifier: 'neutral' as const, text: t('settings.model.checking') };
     renderModelSummaryRow(modelContainer, {
       taskLabel: t('settings.model.task.tts'),
       modelName:

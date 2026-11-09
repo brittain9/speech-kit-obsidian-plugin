@@ -159,21 +159,21 @@ describe('Read Aloud settings incremental refresh', () => {
         persistVoice: vi.fn(async () => {}),
       },
     );
-    const description = () =>
-      modelControls.findByClass('local-stt-badge--missing')?.textContent ?? '';
-    expect(description()).not.toContain('Not installed');
+    const status = () =>
+      modelControls.findByClass('local-stt-model-summary-dot')?.getAttribute('title');
+    expect(status()).toBe('Checking…');
     currentState = { ...currentState, loadStatus: 'error', loadError: 'unavailable' };
     notify();
-    expect(description()).not.toContain('Not installed');
+    expect(status()).toBe('Unavailable');
     currentState = { ...currentState, loadStatus: 'ready', loadError: null };
     notify();
-    expect(description()).toContain('Not installed');
+    expect(status()).toBe('Not installed');
     currentState = { ...currentState, installedModels: state([]).installedModels };
     notify();
-    expect(description()).not.toContain('Not installed');
+    expect(status()).toBe('Installed');
     currentState = { ...currentState, installedModels: [] };
     notify();
-    expect(description()).toContain('Not installed');
+    expect(status()).toBe('Not installed');
     expect(currentState.selectedTtsModel?.kind).toBe('catalog_model');
   });
   it('shows the speed value dynamically and persists changes', () => {

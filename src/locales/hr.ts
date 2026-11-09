@@ -471,6 +471,7 @@ export const hr = {
   'settings.microphone.fallbackCleared':
     'Spremljeni mikrofon nije dostupan. Koristi se zadani mikrofon; spremljeni odabir obrisan je za buduće sesije.',
   'settings.model.notInstalled': 'Nije instalirano',
+  'settings.model.externalMissing': 'Datoteka modela nedostaje',
   'settings.model.validatedExternal': 'Provjeren · vanjski',
   'settings.model.external': 'Vanjski',
   'settings.model.checking': 'Provjera…',
@@ -1050,7 +1051,7 @@ export const hr = {
   'models.progress.verifyingFile': 'Provjera datoteke {filename}',
   'models.progress.fileCount': 'Datoteka {current} od {total}',
   'models.current.noneSelected': 'Nijedan model nije odabran',
-  'models.current.noneSelectedDesc': 'Odaberite instalirani model ili provjerite vanjsku datoteku.',
+  'models.current.noneSelectedDesc': 'Odaberite ili instalirajte model.',
   'models.current.notSelected': 'Nije odabrano',
   'models.current.externalFile': 'Vanjska datoteka',
   'models.current.managedNotInstalled': 'Odabrani upravljani model nije instaliran.',

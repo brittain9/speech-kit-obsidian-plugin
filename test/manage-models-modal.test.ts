@@ -22,6 +22,7 @@ import type {
 } from '../src/models/model-management-types';
 import { resolveModelPresentationPolicy } from '../src/models/model-presentation-policy';
 import type { ModelRowState } from '../src/models/model-row-state';
+import { SettingsTabLifecycle } from '../src/settings/settings-tab-lifecycle';
 import { Setting, TestElement } from './__mocks__/obsidian';
 
 function ttsModel(
@@ -150,6 +151,7 @@ describe('external model file modal', () => {
     Setting.reset();
     const validateAndSelectExternalFile = vi.fn(async () => {});
     const onChanged = vi.fn(async () => {});
+    const onClosed = vi.fn();
     const modal = new ExternalModelFileModal({} as never, '/models/old.gguf', {
       feedback: { show: vi.fn() },
       manager: {
@@ -157,6 +159,7 @@ describe('external model file modal', () => {
         validateAndSelectExternalFile,
       } as unknown as ModelInstallManager,
       onChanged,
+      onClosed,
     });
 
     modal.onOpen();
@@ -177,10 +180,148 @@ describe('external model file modal', () => {
       runtimeId: 'onnx_runtime',
     });
     expect(onChanged).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(onClosed).toHaveBeenCalledOnce());
   });
 });
 
 describe('model browser', () => {
+  it('does not return focus to Settings when the picker opens setup', async () => {
+    const onClosed = vi.fn();
+    const onRunSetup = vi.fn();
+    const modal = new ManageModelsModal({} as never, {
+      feedback: { show: vi.fn() },
+      manager: {
+        getState: () => ({ failedInstall: null, loadStatus: 'error' }),
+        subscribe: () => () => {},
+      } as unknown as ModelInstallManager,
+      onChanged: vi.fn(),
+      onClosed,
+      onRunSetup,
+    });
+    modal.open();
+    const button = (modal.contentEl as unknown as TestElement).querySelectorAll('button')[0];
+    await button?.click();
+    await Promise.resolve();
+    expect(onRunSetup).toHaveBeenCalledOnce();
+    expect(onClosed).not.toHaveBeenCalled();
+  });
+  it('returns focus to the rebuilt settings row after selecting a model', async () => {
+    vi.stubGlobal('createFragment', () => new TestElement());
+    const tiny = sttModel('Tiny', 'moonshine', ['en']);
+    const small = sttModel('Small', 'moonshine', ['en']);
+    const installed = [tiny, small].map((model) => ({
+      catalogVersion: 1,
+      familyId: model.familyId,
+      modelId: model.modelId,
+      runtimeId: model.runtimeId,
+      installPath: '/models/test',
+      installedArtifactIds: [],
+      installedAtUnixMs: 1,
+      installedVoiceIds: [],
+      runtimePath: null,
+      totalSizeBytes: 1,
+    }));
+    const state = {
+      activeInstall: null,
+      failedInstall: null,
+      installRequestPending: false,
+      catalog: {
+        catalogVersion: 1,
+        collections: [],
+        families: [
+          {
+            displayName: 'Moonshine',
+            familyId: 'moonshine',
+            runtimeId: 'onnx_runtime',
+            summary: '',
+            task: 'stt',
+          },
+        ],
+        models: [tiny, small],
+      },
+      compiledAdapters: [
+        {
+          displayName: 'Moonshine',
+          familyId: 'moonshine',
+          runtimeId: 'onnx_runtime',
+          familyCapabilities: { supportedLanguages: { kind: 'all' }, task: 'stt' },
+        },
+      ],
+      compiledRuntimes: [],
+      installedModels: installed,
+      loadStatus: 'ready',
+      loadError: null,
+      modelStore: { overridePath: null, path: '/models', usingDefaultPath: true },
+      selectedModel: {
+        kind: 'catalog_model',
+        familyId: 'moonshine',
+        runtimeId: 'onnx_runtime',
+        modelId: 'Tiny',
+      },
+      selectedModelCapabilities: { status: 'none' },
+      selectedTtsModel: null,
+      selectedTtsModelCapabilities: { status: 'none' },
+    } as unknown as ModelManagerState;
+    const settings = new TestElement();
+    Object.defineProperty(settings, 'isConnected', { value: true });
+    const renderSettings = () => {
+      settings.empty();
+      const row = settings.createDiv({ cls: 'setting-item' });
+      row.createDiv({ cls: 'setting-item-name', text: 'Speech to text' });
+      row.createEl('button');
+    };
+    const lifecycle = new SettingsTabLifecycle({
+      containerEl: settings as unknown as HTMLElement,
+      display: renderSettings,
+    });
+    lifecycle.markVisible();
+    renderSettings();
+    settings.querySelector('button')?.focus();
+    const onClosed = lifecycle.focusAfterDialog({ settingName: 'Speech to text', controlIndex: 0 });
+    settings.ownerDocument.activeElement = null;
+    const manager = {
+      getState: () => state,
+      getDictationLanguage: () => 'en',
+      subscribe: () => () => {},
+      select: vi.fn(async () => {
+        renderSettings();
+        return { committed: true };
+      }),
+    } as unknown as ModelInstallManager;
+    const onChanged = vi.fn(() => lifecycle.refresh());
+    const modal = new ManageModelsModal({} as never, {
+      feedback: { show: vi.fn() },
+      manager,
+      onChanged,
+      onClosed,
+    });
+    modal.open();
+    const use = Setting.named('Small').buttonComponents.find((button) => button.text === 'Use');
+    expect(use).toBeDefined();
+    await use?.click();
+    await vi.waitFor(() => expect(onChanged).toHaveBeenCalledOnce());
+    await vi.waitFor(() =>
+      expect(settings.ownerDocument.activeElement).toBe(settings.querySelector('button')),
+    );
+    const afterEscape = lifecycle.focusAfterDialog({
+      settingName: 'Speech to text',
+      controlIndex: 0,
+    });
+    settings.ownerDocument.activeElement = null;
+    const reopened = new ManageModelsModal({} as never, {
+      feedback: { show: vi.fn() },
+      manager,
+      onChanged: vi.fn(),
+      onClosed: afterEscape,
+    });
+    reopened.open();
+    renderSettings();
+    reopened.close();
+    await vi.waitFor(() =>
+      expect(settings.ownerDocument.activeElement).toBe(settings.querySelector('button')),
+    );
+    vi.unstubAllGlobals();
+  });
   it('deep-links to the requested task and defaults setup entry points to dictation', () => {
     expect(resolveInitialModelPickerTask({ initialTask: 'tts' })).toBe('tts');
     expect(resolveInitialModelPickerTask({ initialTask: 'translation' })).toBe('translation');

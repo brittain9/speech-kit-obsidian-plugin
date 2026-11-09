@@ -52,6 +52,7 @@ vi.mock('obsidian', () => ({
 import type { ModelInstallManager } from '../src/models/model-install-manager';
 import { renderModelSection } from '../src/settings/model-settings-section';
 import { renderModelSummaryRow } from '../src/settings/model-summary-row';
+import { SettingsTabLifecycle } from '../src/settings/settings-tab-lifecycle';
 
 Object.assign(HTMLElement.prototype, {
   empty(this: HTMLElement) {
@@ -81,6 +82,53 @@ Object.assign(HTMLElement.prototype, {
   },
 });
 
+it.each([
+  ['ready', 'Installed'],
+  ['missing', 'Not installed'],
+  ['neutral', 'Checking…'],
+  ['neutral', 'No model selected'],
+] as const)('shows a small %s indicator with an accessible %s label', (modifier, label) => {
+  const host = document.createElement('div');
+  renderModelSummaryRow(host, {
+    taskLabel: 'Speech to text',
+    modelName: 'Model',
+    icon: 'mic',
+    streaming: false,
+    status: { modifier, text: label },
+    onOpen: vi.fn(),
+    actions: [],
+  });
+  const dot = host.querySelector(`.local-stt-model-summary-dot--${modifier}`);
+  expect(dot?.getAttribute('title')).toBe(label);
+  expect(dot?.getAttribute('aria-hidden')).toBe('true');
+  expect(host.querySelector('button')?.textContent).toContain(label);
+  expect(host.querySelector('.local-stt-badge--missing')).toBeNull();
+});
+
+it('does not reclaim focus when a newer dialog has opened without a focused control', () => {
+  const settings = document.createElement('div');
+  document.body.append(settings);
+  const lifecycle = new SettingsTabLifecycle({ containerEl: settings, display: () => {} });
+  lifecycle.markVisible();
+  renderModelSummaryRow(settings, {
+    taskLabel: 'Speech to text',
+    modelName: 'Small',
+    icon: 'mic',
+    streaming: false,
+    status: { modifier: 'neutral', text: 'No model selected' },
+    onOpen: vi.fn(),
+    actions: [],
+  });
+  const onClosed = lifecycle.focusAfterDialog({ settingName: 'Speech to text', controlIndex: 0 });
+  const newerDialog = document.createElement('div');
+  newerDialog.className = 'modal-container';
+  document.body.append(newerDialog);
+  onClosed();
+  expect(document.activeElement).toBe(document.body);
+  newerDialog.remove();
+  settings.remove();
+});
+
 it('keeps the focused speech summary button after a model update', () => {
   const host = document.createElement('div');
   document.body.append(host);
@@ -102,6 +150,9 @@ it('keeps the focused speech summary button after a model update', () => {
     onExternalFile: vi.fn(),
     onModelInfo: null,
   });
+  expect(host.querySelector('.local-stt-model-summary-detail')?.textContent).toBe(
+    'Choose or install a model.',
+  );
   host.querySelector<HTMLButtonElement>('.local-stt-model-summary-open')?.focus();
   notify();
   expect(document.activeElement).toBe(host.querySelector('.local-stt-model-summary-open'));
@@ -121,7 +172,7 @@ it('opens the task picker or distinct menu actions without nested or duplicate b
     modelName: 'NVIDIA Nemotron English 560 ms',
     icon: 'mic',
     streaming: true,
-    status: null,
+    status: { modifier: 'ready', text: 'Installed' },
     onOpen: openPicker,
     actions: [
       { label: 'Model details', onSelect: openDetails },

@@ -7,27 +7,28 @@ import { renderModelSummaryRow } from './model-summary-row';
 import { captureSettingsFocus, restoreSettingsFocus } from './settings-tab-lifecycle';
 
 // ---------------------------------------------------------------------------
-// Badge helper (maps stable model status -> CSS modifier + localized display text)
+// Map model status to a localized availability indicator.
 // ---------------------------------------------------------------------------
 
-export function getModelStatusBadge(
-  status: CurrentModelStatus,
-): { modifier: string; text: string } | null {
+function getModelStatusIndicator(status: CurrentModelStatus): {
+  modifier: 'ready' | 'missing' | 'neutral';
+  text: string;
+} {
   switch (status) {
     case 'installed':
-      return null;
+      return { modifier: 'ready', text: t('models.current.installed') };
     case 'not_installed':
       return { modifier: 'missing', text: t('settings.model.notInstalled') };
     case 'external_validated':
       return { modifier: 'ready', text: t('settings.model.validatedExternal') };
     case 'external_file':
-      return { modifier: 'external', text: t('settings.model.external') };
+      return { modifier: 'neutral', text: t('settings.model.external') };
     case 'checking':
-      return { modifier: 'external', text: t('settings.model.checking') };
+      return { modifier: 'neutral', text: t('settings.model.checking') };
     case 'unavailable':
-      return { modifier: 'missing', text: t('settings.model.unavailable') };
+      return { modifier: 'neutral', text: t('settings.model.unavailable') };
     case 'not_selected':
-      return { modifier: 'none', text: t('settings.model.noModel') };
+      return { modifier: 'neutral', text: t('settings.model.noModelSelected') };
   }
 }
 
@@ -76,8 +77,18 @@ export function renderModelSection(
       icon: 'mic',
       streaming: caps.status === 'ready' && caps.capabilities.family.supportsStreaming,
       status:
-        currentModel.status === 'not_selected' ? null : getModelStatusBadge(currentModel.status),
-      detail: currentModel.detail,
+        state.selectedModel?.kind === 'external_file' &&
+        caps.status === 'unavailable' &&
+        caps.reason === 'missing'
+          ? { modifier: 'missing', text: t('settings.model.externalMissing') }
+          : getModelStatusIndicator(
+              currentModel.status === 'not_installed' && state.loadStatus !== 'ready'
+                ? state.loadStatus === 'error'
+                  ? 'unavailable'
+                  : 'checking'
+                : currentModel.status,
+            ),
+      detail: currentModel.status === 'not_installed' ? '' : currentModel.detail,
       onOpen: callbacks.onManageModels,
       actions,
     });

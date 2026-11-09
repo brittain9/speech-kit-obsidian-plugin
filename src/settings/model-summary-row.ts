@@ -13,7 +13,7 @@ export function renderModelSummaryRow(
     modelName: string;
     icon: string;
     streaming: boolean;
-    status: { modifier: string; text: string } | null;
+    status: { modifier: 'ready' | 'missing' | 'neutral'; text: string };
     detail?: string;
     onOpen: () => void;
     actions: readonly ModelSummaryAction[];
@@ -25,7 +25,7 @@ export function renderModelSummaryRow(
   setting.controlEl.classList.add('local-stt-model-summary-control');
   const primary = setting.infoEl.createEl('button', {
     cls: 'local-stt-model-summary-open',
-    attr: { type: 'button' },
+    attr: { type: 'button', title: options.status.text },
   });
   const icon = primary.createSpan({
     cls: 'local-stt-model-summary-icon',
@@ -39,15 +39,15 @@ export function renderModelSummaryRow(
   });
   const value = text.createSpan({ cls: 'local-stt-model-summary-value' });
   value.createSpan({ text: options.modelName });
+  value.createSpan({
+    cls: `local-stt-model-summary-dot local-stt-model-summary-dot--${options.status.modifier}`,
+    attr: { title: options.status.text, 'aria-hidden': 'true' },
+  });
+  value.createSpan({ cls: 'local-stt-model-summary-status-label', text: options.status.text });
   if (options.streaming)
     value.createSpan({
       cls: 'local-stt-badge local-stt-badge--streaming',
       text: t('settings.model.streaming'),
-    });
-  if (options.status !== null)
-    value.createSpan({
-      cls: `local-stt-badge local-stt-badge--${options.status.modifier}`,
-      text: options.status.text,
     });
   if (options.detail)
     text.createSpan({ cls: 'local-stt-model-summary-detail', text: options.detail });

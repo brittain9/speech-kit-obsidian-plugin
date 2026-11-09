@@ -15,6 +15,10 @@ const elementParents = new WeakMap<TestElement, TestElement>();
 export class TestDocument {
   activeElement: TestElement | null = null;
 
+  querySelectorAll(): TestElement[] {
+    return [];
+  }
+
   constructor(readonly defaultView: Window = window) {}
 }
 

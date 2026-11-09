@@ -118,6 +118,35 @@ function hyMtState(installed: boolean): ModelManagerState {
 }
 
 describe('Translation settings', () => {
+  it('reports installed, missing, unavailable and unselected translation models', () => {
+    let current = state(true);
+    let notify = () => {};
+    const container = new TestElement();
+    renderTranslationModelSetting(container as unknown as HTMLDivElement, {
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      manager: {
+        getState: () => current,
+        subscribe: (listener: () => void) => {
+          notify = listener;
+          return () => {};
+        },
+      } as unknown as ModelInstallManager,
+      openModelPicker: vi.fn(async () => {}),
+      persistLanguages: vi.fn(async () => {}),
+    });
+    const status = () =>
+      container.findByClass('local-stt-model-summary-dot')?.getAttribute('title');
+    expect(status()).toBe('Installed');
+    current = { ...current, installedModels: [] };
+    notify();
+    expect(status()).toBe('Not installed');
+    current = { ...current, loadStatus: 'error' };
+    notify();
+    expect(status()).toBe('Unavailable');
+    current = { ...current, selectedTranslationModel: null };
+    notify();
+    expect(status()).toBe('No model selected');
+  });
   it.each([
     ['tencent_hy_mt_2_1_8b_q4_k_m', 'Tencent HY-MT 2 1.8B (Q4_K_M)', 'HY-MT 2 · 1.8B'],
     ['tencent_hy_mt_2_7b_q4_k_m', 'Tencent HY-MT 2 7B (Q4_K_M)', 'HY-MT 2 · 7B'],
@@ -249,6 +278,9 @@ describe('Translation settings', () => {
       persistLanguages: vi.fn(async () => {}),
     });
 
+    expect(container.findByClass('local-stt-model-summary-value')?.children[0]?.textContent).toBe(
+      'No model selected',
+    );
     expect(container.findByClass('local-stt-model-summary-open')).toBeDefined();
     await container.findByClass('local-stt-model-summary-open')?.click();
     expect(openModelPicker).toHaveBeenCalledWith({ initialTask: 'translation' });

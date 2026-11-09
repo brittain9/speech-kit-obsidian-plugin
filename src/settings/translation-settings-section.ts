@@ -204,20 +204,24 @@ export function renderTranslationModelSetting(
 
     const selection = state.selectedTranslationModel;
     const status =
-      selection === null || installedRecord !== null
-        ? null
-        : state.loadStatus === 'ready'
-          ? { modifier: 'missing', text: t('settings.model.notInstalled') }
-          : state.loadStatus === 'error'
-            ? { modifier: 'unavailable', text: t('settings.model.unavailable') }
-            : { modifier: 'checking', text: t('settings.model.checking') };
+      selection === null
+        ? { modifier: 'neutral' as const, text: t('settings.model.noModelSelected') }
+        : installedRecord !== null
+          ? { modifier: 'ready' as const, text: t('models.current.installed') }
+          : state.loadStatus === 'ready'
+            ? { modifier: 'missing' as const, text: t('settings.model.notInstalled') }
+            : state.loadStatus === 'error'
+              ? { modifier: 'neutral' as const, text: t('settings.model.unavailable') }
+              : { modifier: 'neutral' as const, text: t('settings.model.checking') };
     renderModelSummaryRow(container, {
       taskLabel: t('settings.model.task.translation'),
       modelName:
         (selectedModel === null ? null : translationSummaryName(selectedModel)) ??
         (selection?.kind === 'catalog_model'
           ? selection.modelId
-          : t('settings.translation.model.unavailable')),
+          : selection === null
+            ? t('settings.model.noModelSelected')
+            : t('settings.translation.model.unavailable')),
       icon: 'languages',
       streaming: false,
       status,
