@@ -781,6 +781,10 @@ export const en = {
   'dictation.status.provider': 'Provider processing',
   'translation.modal.reopen': 'Reopen translation: {status}',
   'ribbon.idle': 'Speech Kit — start dictation',
+  'ribbon.pushToTalk': 'Hold to talk. Wait for Listening before speaking.',
+  'settings.showPushToTalk.name': 'Show push-to-talk button',
+  'settings.showPushToTalk.desc':
+    'Hold the ribbon button to dictate. Wait for Listening before speaking.',
   'ribbon.starting': 'Speech Kit — starting…',
   'ribbon.listening': 'Speech Kit — listening',
   'ribbon.speechDetected': 'Speech Kit — hearing speech',

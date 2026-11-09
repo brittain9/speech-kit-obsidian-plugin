@@ -251,6 +251,7 @@ const FEEDBACK_FAILURES = {
 
 export class DictationSessionController {
   private activeSessionId: string | null = null;
+  private pushToTalkOwner: object | null = null;
   private readonly cancellationPromises = new Map<string, Promise<void>>();
   private pendingSpeechLease: SidecarLifecycleLease | null = null;
   private readonly releaseSidecarSubscription: () => void;
@@ -387,6 +388,35 @@ export class DictationSessionController {
   }
 
   async startDictation(): Promise<void> {
+    if (!this.isCaptureActive()) this.pushToTalkOwner = null;
+    await this.startDictationInternal();
+  }
+
+  startPushToTalk(): { release: () => Promise<void> } | null {
+    if (this.isCaptureActive() || this.sessions.size >= MAX_CONTROLLER_SESSIONS) return null;
+    const owner = {};
+    this.pushToTalkOwner = owner;
+    void this.startDictationInternal()
+      .catch((error: unknown) => {
+        if (this.pushToTalkOwner === owner) {
+          this.pushToTalkOwner = null;
+          this.handleError(FEEDBACK_FAILURES.startDictation, error);
+        }
+      })
+      .finally(() => {
+        if (this.pushToTalkOwner === owner && !this.isCaptureActive()) this.pushToTalkOwner = null;
+      });
+    if (!this.isCaptureActive()) return null;
+    return {
+      release: async () => {
+        if (this.pushToTalkOwner !== owner) return;
+        this.pushToTalkOwner = null;
+        await this.stopDictation();
+      },
+    };
+  }
+
+  private async startDictationInternal(): Promise<void> {
     if (this.isCaptureActive() || this.sessions.size >= MAX_CONTROLLER_SESSIONS) {
       return;
     }
@@ -642,6 +672,7 @@ export class DictationSessionController {
   }
 
   async stopDictation(): Promise<void> {
+    this.pushToTalkOwner = null;
     const pendingStartCancelled = this.cancelPendingStart();
     const sessionId = this.activeSessionId;
 
@@ -675,6 +706,7 @@ export class DictationSessionController {
   }
 
   private cancelPendingStart(): boolean {
+    this.pushToTalkOwner = null;
     this.startRevision += 1;
     if (this.activeSessionId !== null || this.state !== 'starting') return false;
     this.pendingSpeechLease?.release();
@@ -800,6 +832,7 @@ export class DictationSessionController {
     if (this.activeSessionId !== sessionId) {
       return;
     }
+    this.pushToTalkOwner = null;
     this.activeSessionId = null;
     this.dependencies.audioLevelMeter.clearSession(sessionId);
     this.applyUiState('idle');

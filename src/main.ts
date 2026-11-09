@@ -113,6 +113,7 @@ import { renderMediaProgressStatus } from './ui/media-progress-presenter';
 import { MediaToolInstallModal } from './ui/media-tool-install-modal';
 import { MediaTranscriptionModalRegistry } from './ui/media-transcription-modal';
 import { PresetManagerModal } from './ui/preset-manager-modal';
+import { PushToTalkControl } from './ui/push-to-talk-control';
 import { YouTubeTranscriptModalRegistry } from './ui/youtube-transcript-modal';
 
 export default class LocalSttPlugin extends Plugin {
@@ -153,6 +154,7 @@ export default class LocalSttPlugin extends Plugin {
     workspace: this.app.workspace,
   });
   private ribbonController: DictationRibbonController | null = null;
+  private pushToTalkControl: PushToTalkControl | null = null;
   private dictationStatus: HTMLElement | null = null;
   private readAloudController: ReadAloudController | null = null;
   private readAloudFollowAlong: ReadAloudFollowAlong | null = null;
@@ -348,6 +350,14 @@ export default class LocalSttPlugin extends Plugin {
         this.readAloudController?.stop();
       },
     });
+    const pushToTalkElement = this.addRibbonIcon('mic', t('ribbon.pushToTalk'), () => {});
+    pushToTalkElement.setAttribute('aria-label', t('ribbon.pushToTalk'));
+    pushToTalkElement.setAttribute('role', 'button');
+    pushToTalkElement.setAttribute('tabindex', '0');
+    this.pushToTalkControl = new PushToTalkControl(pushToTalkElement, () =>
+      this.requireDictationController().startPushToTalk(),
+    );
+    this.pushToTalkControl.setEnabled(this.settings.showPushToTalk);
     this.readAloudStatus = this.addStatusBarItem();
     this.translationStatus = new TranslationStatusController(this.addStatusBarItem());
     this.mediaTranscriptionStatus = this.addStatusBarItem();
@@ -916,6 +926,8 @@ export default class LocalSttPlugin extends Plugin {
   }
 
   private async disposeAll(): Promise<void> {
+    this.pushToTalkControl?.dispose();
+    this.pushToTalkControl = null;
     this.mediaTranscriptionModals.closeAll();
     this.youtubeTranscriptModals.closeAll();
     this.finalizedUtteranceAutoCopy.dispose();
@@ -1070,6 +1082,7 @@ export default class LocalSttPlugin extends Plugin {
   ): Promise<void> {
     const previousSettings = this.settings;
     this.settings = resolvePluginSettings(nextSettings);
+    this.pushToTalkControl?.setEnabled(this.settings.showPushToTalk);
     const llmWasDisabled = previousSettings.llmFeaturesEnabled && !this.settings.llmFeaturesEnabled;
     if (llmWasDisabled) {
       this.dictationController?.disableLlmForActiveSessions();

@@ -280,6 +280,12 @@ export class LocalSttSettingTab extends PluginSettingTab {
       key: 'saveMicrophoneRecording',
     });
 
+    addToggleSetting(captureCard, this.access, {
+      name: t('settings.showPushToTalk.name'),
+      desc: t('settings.showPushToTalk.desc'),
+      key: 'showPushToTalk',
+    });
+
     const selectedLanguage = settings.dictationLanguage;
     const coverage = languageFeatureCoverage(modelState.catalog.models, selectedLanguage);
     const languageLabel = dictationLanguageLabel(selectedLanguage);

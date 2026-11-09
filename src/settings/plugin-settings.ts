@@ -166,6 +166,7 @@ export interface PluginSettings {
   audioInputDevice: AudioInputDevice | null;
   includeSystemAudio: boolean;
   saveMicrophoneRecording: boolean;
+  showPushToTalk: boolean;
   cudaLibraryPath: string;
   developerMode: boolean;
   diarizationEnabled: boolean;
@@ -236,6 +237,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   audioInputDevice: null,
   includeSystemAudio: false,
   saveMicrophoneRecording: false,
+  showPushToTalk: false,
   cudaLibraryPath: '',
   developerMode: false,
   diarizationEnabled: false,
@@ -338,6 +340,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.saveMicrophoneRecording,
       DEFAULT_PLUGIN_SETTINGS.saveMicrophoneRecording,
     ),
+    showPushToTalk: readBoolean(raw.showPushToTalk, DEFAULT_PLUGIN_SETTINGS.showPushToTalk),
     cudaLibraryPath: readString(raw.cudaLibraryPath, DEFAULT_PLUGIN_SETTINGS.cudaLibraryPath),
     developerMode: readBoolean(raw.developerMode, DEFAULT_PLUGIN_SETTINGS.developerMode),
     diarizationEnabled: readDiarizationEnabled(raw),

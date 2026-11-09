@@ -32,6 +32,11 @@ function makeUserPreset(overrides: Partial<LlmPreset> & { id: string }): LlmPres
 }
 
 describe('resolvePluginSettings', () => {
+  it('keeps push-to-talk hidden by default and restores an explicit choice', () => {
+    expect(resolvePluginSettings({}).showPushToTalk).toBe(false);
+    expect(resolvePluginSettings({ showPushToTalk: true }).showPushToTalk).toBe(true);
+    expect(resolvePluginSettings({ showPushToTalk: 'yes' }).showPushToTalk).toBe(false);
+  });
   it('returns defaults when persisted data is missing', () => {
     expect(resolvePluginSettings(undefined)).toEqual(DEFAULT_PLUGIN_SETTINGS);
   });

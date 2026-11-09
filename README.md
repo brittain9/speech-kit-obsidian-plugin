@@ -79,6 +79,8 @@ Choose your platform. Choose your models. Keep one workflow inside Obsidian.
 2. Follow the setup wizard to install the native engine and a speech model.
 3. Select **Try dictation now**, or start from the ribbon, command palette, or a hotkey.
 
+To use push-to-talk, enable **Show push-to-talk button** under Capture. Hold the new ribbon button and wait for **Listening** before speaking. Release it to stop and finish captured speech. You can also focus the button and hold Space or Enter. The existing toggle and its shortcut remain available.
+
 Dictation, local file transcription, translation, and read aloud require no account, API key, usage credits, or cloud service. Once their models are installed, they continue working offline. YouTube caption import requires a connection to YouTube.
 
 Optional LLM text tools are separate. You can connect a local or remote provider when you choose to use them.

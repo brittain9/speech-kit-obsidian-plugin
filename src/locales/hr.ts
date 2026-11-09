@@ -554,6 +554,10 @@ export const hr = {
   'dictation.status.provider': 'Obrada kod pružatelja usluge',
   'translation.modal.reopen': 'Ponovno otvori prijevod: {status}',
   'ribbon.idle': 'Speech Kit — pokreni diktiranje',
+  'ribbon.pushToTalk': 'Držite za govor. Pričekajte slušanje prije govora.',
+  'settings.showPushToTalk.name': 'Prikaži gumb za govor držanjem',
+  'settings.showPushToTalk.desc':
+    'Držite gumb na vrpci za diktiranje. Pričekajte slušanje prije govora.',
   'ribbon.starting': 'Speech Kit — pokretanje…',
   'ribbon.listening': 'Speech Kit — slušanje',
   'ribbon.speechDetected': 'Speech Kit — čuje govor',
