@@ -941,6 +941,8 @@ export const hr = {
   'models.manage.loadingCatalog': 'Učitavanje kataloga modela…',
   'models.manage.loadCatalogFailed': 'Učitavanje kataloga modela nije uspjelo.',
   'models.manage.noneAvailable': 'Za ovaj govorni modul nema dostupnih modela.',
+  'models.manage.noSearchResults':
+    'Nema modela koji odgovaraju pretrazi. Očistite ili promijenite pretragu.',
   'models.manage.unsupportedLanguage':
     'Ne podržava {language}. Promijenite Jezik diktiranja kako biste instalirali ili upotrijebili ovaj model.',
   'models.manage.use': 'Upotrijebi',

@@ -178,7 +178,7 @@ interface ManageModelsModalDependencies {
 export function filterModelRowsForPicker(
   rows: readonly ModelRowState[],
   options: {
-    activeFamily: AdapterTabKey | null;
+    activeFamily: ModelFamilyKey | null;
     language: ModelLanguageFilter;
     query: string;
     task: ModelPickerTask;
@@ -205,12 +205,12 @@ export function filterModelRowsForPicker(
   });
 }
 
-interface AdapterTabKey {
+interface ModelFamilyKey {
   runtimeId: RuntimeId;
   familyId: ModelFamilyId;
 }
 
-export function derivePickerFamilyTabs(
+export function derivePickerFamilies(
   adapters: readonly ReturnType<typeof deriveModelFamilyTabs>[number][],
   rows: readonly ModelRowState[],
   options: { language: ModelLanguageFilter; task: ModelPickerTask },
@@ -228,7 +228,7 @@ export function derivePickerFamilyTabs(
   );
 }
 
-function adapterTabId(key: AdapterTabKey): string {
+function modelFamilyKey(key: ModelFamilyKey): string {
   return `${key.runtimeId}:${key.familyId}`;
 }
 
@@ -240,16 +240,13 @@ export class ManageModelsModal extends Modal {
   private actionInProgress = false;
   private capabilityRetryPending = false;
   private readonly activeLanguages = new Map<ModelPickerTask, ModelLanguageFilter>();
-  private readonly activeTabs = new Map<ModelPickerTask, AdapterTabKey>();
+  private readonly openFamilies = new Map<ModelPickerTask, Set<string>>();
   private activeTask: ModelPickerTask;
-  private browserEl: HTMLDivElement | null = null;
   private navigationEl: HTMLDivElement | null = null;
   private navigationSignature = '';
   private listContainer: HTMLDivElement | null = null;
   private readonly progressElements = new Map<string, HTMLDivElement>();
   private releaseSubscription: (() => void) | null = null;
-  private tabButtons = new Map<string, HTMLButtonElement>();
-  private tabBarEl: HTMLDivElement | null = null;
   private search: SearchComponent | null = null;
   private searchQuery = '';
   private taskButtons = new Map<ModelPickerTask, HTMLButtonElement>();
@@ -276,13 +273,10 @@ export class ManageModelsModal extends Modal {
   private renderContent(): void {
     this.contentEl.empty();
     this.progressElements.clear();
-    this.browserEl = null;
     this.navigationEl = null;
     this.navigationSignature = '';
-    this.tabBarEl = null;
     this.listContainer = null;
     this.search = null;
-    this.tabButtons.clear();
     this.taskButtons.clear();
 
     const state = this.deps.manager.getState();
@@ -336,7 +330,8 @@ export class ManageModelsModal extends Modal {
     const searchLabel = t('models.manage.searchPlaceholder', {
       task: taskLabel(this.activeTask),
     });
-    const searchHost = toolbar.createDiv({ cls: 'local-stt-model-search' });
+    const controls = this.contentEl.createDiv({ cls: 'local-stt-model-controls' });
+    const searchHost = controls.createDiv({ cls: 'local-stt-model-search' });
     this.search = new SearchComponent(searchHost)
       .setPlaceholder(searchLabel)
       .setValue(this.searchQuery)
@@ -346,16 +341,8 @@ export class ManageModelsModal extends Modal {
       });
     this.search.inputEl.setAttribute('aria-label', searchLabel);
 
-    this.browserEl = this.contentEl.createDiv({ cls: 'local-stt-model-browser' });
-    this.navigationEl = this.browserEl.createDiv({
-      cls: 'local-stt-model-browser__navigation local-stt-language-rail',
-    });
-    const results = this.browserEl.createDiv({ cls: 'local-stt-model-browser__results' });
-    this.tabBarEl = results.createDiv({
-      attr: { 'aria-label': t('models.manage.familiesLabel'), role: 'tablist' },
-      cls: 'local-stt-tab-bar',
-    });
-    this.listContainer = results.createDiv({ cls: 'local-stt-model-list' });
+    this.navigationEl = controls.createDiv({ cls: 'local-stt-model-language' });
+    this.listContainer = this.contentEl.createDiv({ cls: 'local-stt-model-list' });
     this.renderNavigation();
     this.renderModelList();
   }
@@ -385,13 +372,10 @@ export class ManageModelsModal extends Modal {
     this.releaseSubscription = null;
     this.actionInProgress = false;
     this.capabilityRetryPending = false;
-    this.browserEl = null;
     this.navigationEl = null;
     this.navigationSignature = '';
     this.listContainer = null;
-    this.tabBarEl = null;
     this.search = null;
-    this.tabButtons.clear();
     this.taskButtons.clear();
     this.progressElements.clear();
     this.renderedFailureId = null;
@@ -433,177 +417,72 @@ export class ManageModelsModal extends Modal {
 
   private renderNavigation(): void {
     if (this.navigationEl === null) return;
-    this.renderLanguageRail();
-    this.renderTabs();
-    this.navigationSignature = this.buildNavigationSignature();
-  }
-
-  private renderLanguageRail(): void {
-    if (this.navigationEl === null) return;
+    const focused = this.navigationEl.ownerDocument.activeElement;
+    const restoreFocus = focused !== null && this.navigationEl.contains(focused);
     this.navigationEl.empty();
-    this.navigationEl.addClass('local-stt-language-rail');
-    this.navigationEl.setAttribute('role', 'tablist');
-    this.navigationEl.setAttribute('aria-label', t('models.manage.languagesLabel'));
     const options = deriveModelLanguageOptions(
       this.getRunnableRows().map((row) => row.model),
       this.activeTask,
     );
-    const activeLanguage = this.getActiveLanguage();
-    for (const [index, language] of options.entries()) {
-      const selected = languageFiltersEqual(language.filter, activeLanguage);
-      const button = this.navigationEl.createEl('button', {
-        attr: {
-          'aria-selected': String(selected),
-          role: 'tab',
-          tabindex: selected ? '0' : '-1',
-          type: 'button',
-        },
-        cls: 'local-stt-language-rail__button',
-      });
-      button.createSpan({ cls: 'local-stt-language-rail__name', text: language.label });
-      if (language.code !== null) {
-        button.createSpan({ cls: 'local-stt-language-rail__code', text: language.code });
+    const language = this.getActiveLanguage();
+    const label = t('models.manage.languagesLabel');
+    new Setting(this.navigationEl).setName(label).addDropdown((dropdown) => {
+      dropdown.selectEl.setAttribute('aria-label', label);
+      for (const option of options) {
+        dropdown.addOption(option.filter.kind === 'all' ? '' : option.filter.tag, option.label);
       }
-      button.toggleClass('is-active', selected);
-      button.addEventListener('click', () => this.selectLanguage(language.filter));
-      button.addEventListener('keydown', (event) => {
-        const nextIndex = resolveTabNavigationIndex(index, event.key, options.length);
-        if (nextIndex === null) return;
-        event.preventDefault();
-        const next = options[nextIndex];
-        if (next === undefined) return;
-        this.selectLanguage(next.filter);
-        this.navigationEl
-          ?.querySelectorAll<HTMLButtonElement>('.local-stt-language-rail__button')
-          .item(nextIndex)
-          .focus();
+      if (
+        language.kind === 'language' &&
+        !options.some((option) => languageFiltersEqual(option.filter, language))
+      ) {
+        dropdown.addOption(language.tag, modelLanguageLabel(language.tag));
+      }
+      dropdown.setValue(language.kind === 'all' ? '' : language.tag);
+      dropdown.onChange((value) => {
+        this.activeLanguages.set(
+          this.activeTask,
+          value === '' ? ALL_MODEL_LANGUAGES : { kind: 'language', tag: value },
+        );
+        this.renderModelList();
       });
-    }
-  }
-
-  private selectLanguage(language: ModelLanguageFilter): void {
-    if (languageFiltersEqual(language, this.getActiveLanguage())) return;
-    this.activeLanguages.set(this.activeTask, language);
-    this.renderNavigation();
-    this.renderModelList();
-  }
-
-  private renderTabs(): void {
-    if (this.tabBarEl === null) {
-      return;
-    }
-
-    this.tabBarEl.empty();
-    this.tabButtons.clear();
-
-    const state = this.deps.manager.getState();
-    const rows = this.getRunnableRows();
-
-    // Only show adapter tabs for (runtime, family) pairs present in both the
-    // compiled sidecar AND the catalog — compiled alone doesn't guarantee any
-    // downloadable models, and catalog alone doesn't guarantee the sidecar can
-    // run them.
-    const adapters = derivePickerFamilyTabs(deriveModelFamilyTabs(state), rows, {
-      language: this.getActiveLanguage(),
-      task: this.activeTask,
     });
-    const activeTab = this.getActiveTab();
-
-    if (
-      activeTab === null ||
-      !adapters.some(
-        (adapter) =>
-          adapter.runtimeId === activeTab.runtimeId && adapter.familyId === activeTab.familyId,
-      )
-    ) {
-      const selection =
-        this.activeTask === 'stt'
-          ? state.selectedModel
-          : this.activeTask === 'tts'
-            ? state.selectedTtsModel
-            : state.selectedTranslationModel;
-      const selected =
-        activeTab === null &&
-        selection?.kind === 'catalog_model' &&
-        rows.some(
-          (row) =>
-            row.model.task === this.activeTask &&
-            matchesModelTriple(
-              row.model,
-              selection.runtimeId,
-              selection.familyId,
-              selection.modelId,
-            ),
-        )
-          ? adapters.find(
-              (adapter) =>
-                adapter.runtimeId === selection.runtimeId &&
-                adapter.familyId === selection.familyId,
-            )
-          : undefined;
-      const first = selected ?? adapters[0];
-      if (first === undefined) {
-        this.activeTabs.delete(this.activeTask);
-      } else {
-        this.activeTabs.set(this.activeTask, {
-          runtimeId: first.runtimeId,
-          familyId: first.familyId,
-        });
-      }
-    }
-
-    for (const [index, adapter] of adapters.entries()) {
-      const tabKey: AdapterTabKey = {
-        runtimeId: adapter.runtimeId,
-        familyId: adapter.familyId,
-      };
-      const btn = this.tabBarEl.createEl('button', {
-        cls: 'local-stt-tab',
-        text: adapter.displayName,
-      });
-
-      const selected = matchesAdapterTab(tabKey, this.getActiveTab());
-      if (selected) {
-        btn.addClass('local-stt-tab--active');
-      }
-      btn.setAttribute('aria-selected', String(selected));
-      btn.setAttribute('role', 'tab');
-      btn.setAttribute('tabindex', selected ? '0' : '-1');
-
-      btn.addEventListener('click', () => {
-        this.selectFamily(tabKey);
-      });
-      btn.addEventListener('keydown', (event) => {
-        const nextIndex = resolveTabNavigationIndex(index, event.key, adapters.length);
-        if (nextIndex === null) return;
-        event.preventDefault();
-        const next = adapters[nextIndex];
-        if (next === undefined) return;
-        const nextTab = { familyId: next.familyId, runtimeId: next.runtimeId };
-        this.selectFamily(nextTab);
-        this.tabButtons.get(adapterTabId(nextTab))?.focus();
-      });
-
-      this.tabButtons.set(adapterTabId(tabKey), btn);
-    }
+    this.navigationSignature = this.buildNavigationSignature();
+    if (restoreFocus) this.navigationEl.querySelector('select')?.focus();
   }
 
-  private updateTabActiveStates(): void {
-    const activeTab = this.getActiveTab();
-    const activeId = activeTab === null ? null : adapterTabId(activeTab);
-    for (const [tabId, btn] of this.tabButtons) {
-      const selected = tabId === activeId;
-      btn.toggleClass('local-stt-tab--active', selected);
-      btn.setAttribute('aria-selected', String(selected));
-      btn.setAttribute('tabindex', selected ? '0' : '-1');
-    }
-  }
-
-  private selectFamily(tab: AdapterTabKey): void {
-    if (matchesAdapterTab(tab, this.getActiveTab())) return;
-    this.activeTabs.set(this.activeTask, tab);
-    this.updateTabActiveStates();
-    this.renderModelList();
+  private getOpenFamilies(
+    adapters: ReturnType<typeof deriveModelFamilyTabs>,
+    state: Readonly<ModelManagerState>,
+  ): Set<string> {
+    let open = this.openFamilies.get(this.activeTask);
+    if (open !== undefined) return open;
+    open = new Set();
+    const selected =
+      this.activeTask === 'stt'
+        ? state.selectedModel
+        : this.activeTask === 'tts'
+          ? state.selectedTtsModel
+          : state.selectedTranslationModel;
+    const selectedIsEligible =
+      selected?.kind === 'catalog_model' &&
+      this.getRunnableRows().some(
+        (row) =>
+          row.model.task === this.activeTask &&
+          matchesModelTriple(row.model, selected.runtimeId, selected.familyId, selected.modelId) &&
+          modelMatchesLanguageFilter(row.model, this.getActiveLanguage()),
+      );
+    const initial =
+      selected?.kind === 'catalog_model' && selectedIsEligible
+        ? adapters.find(
+            (adapter) =>
+              adapter.runtimeId === selected.runtimeId && adapter.familyId === selected.familyId,
+          )
+        : undefined;
+    const first = initial ?? adapters[0];
+    if (first === undefined) return open;
+    open.add(modelFamilyKey(first));
+    this.openFamilies.set(this.activeTask, open);
+    return open;
   }
 
   // -------------------------------------------------------------------------
@@ -634,6 +513,47 @@ export class ManageModelsModal extends Modal {
       return;
     }
 
+    const active = this.listContainer.ownerDocument.activeElement;
+    const focused = active !== null && this.listContainer.contains(active) ? active : null;
+    const family = focused?.closest('.local-stt-model-family');
+    const row = focused?.closest('[data-model-key]');
+    const familyKey = family?.getAttribute('data-family-key');
+    const modelKey = row?.getAttribute('data-model-key');
+    const action = focused?.getAttribute('data-model-action');
+    this.renderModelListContent();
+    if (familyKey === null || familyKey === undefined) return;
+    const families = [
+      ...this.listContainer.querySelectorAll<HTMLElement>('.local-stt-model-family'),
+    ];
+    const failure = this.deps.manager.getState().failedInstall;
+    const nextFamily =
+      families.find((candidate) => candidate.getAttribute('data-family-key') === familyKey) ??
+      (failure === null
+        ? undefined
+        : families.find(
+            (candidate) =>
+              candidate.getAttribute('data-family-key') === modelFamilyKey(failure.selection),
+          ));
+    if (nextFamily === undefined) return;
+    const nextRow =
+      modelKey == null
+        ? undefined
+        : [...nextFamily.querySelectorAll<HTMLElement>('[data-model-key]')].find(
+            (candidate) => candidate.getAttribute('data-model-key') === modelKey,
+          );
+    const button =
+      action == null
+        ? undefined
+        : [...(nextRow?.querySelectorAll<HTMLElement>('[data-model-action]') ?? [])].find(
+            (candidate) => candidate.getAttribute('data-model-action') === action,
+          );
+    if (button !== undefined && !button.hasAttribute('disabled')) button.focus();
+    else nextFamily.querySelector<HTMLElement>('summary')?.focus();
+  }
+
+  private renderModelListContent(): void {
+    if (this.listContainer === null) return;
+
     this.listContainer.empty();
     this.progressElements.clear();
 
@@ -657,49 +577,64 @@ export class ManageModelsModal extends Modal {
     }
 
     this.renderLanguageAvailability();
-    const activeTab = this.getActiveTab();
-    if (activeTab === null) {
-      this.listContainer.createEl('p', {
-        cls: 'local-stt-empty-state',
-        text:
-          this.getActiveLanguage().kind === 'all'
-            ? t('models.manage.noneAvailable')
-            : t('models.manage.noneForLanguage'),
-      });
-      return;
-    }
-
-    const activeFamily = state.catalog.families.find(
-      (family) =>
-        family.task === this.activeTask &&
-        family.runtimeId === activeTab.runtimeId &&
-        family.familyId === activeTab.familyId,
-    );
-    if (activeFamily !== undefined && activeFamily.summary.length > 0) {
-      this.listContainer.createEl('p', {
-        cls: 'local-stt-family-summary',
-        text: localizeFamilySummary(activeFamily.familyId, activeFamily.summary),
-      });
-    }
-
     const rows = this.getRunnableRows();
-    const tabRows = filterModelRowsForPicker(rows, {
-      activeFamily: activeTab,
+    const adapters = derivePickerFamilies(deriveModelFamilyTabs(state), rows, {
       language: this.getActiveLanguage(),
-      query: this.searchQuery,
       task: this.activeTask,
     });
-
-    if (tabRows.length === 0) {
+    const open = this.getOpenFamilies(adapters, state);
+    const searching = this.searchQuery.trim().length > 0;
+    const query = this.searchQuery.trim().toLocaleLowerCase();
+    let shown = 0;
+    for (const adapter of adapters) {
+      const familyMatches = searching && adapter.displayName.toLocaleLowerCase().includes(query);
+      const familyRows = filterModelRowsForPicker(rows, {
+        activeFamily: adapter,
+        language: this.getActiveLanguage(),
+        query: familyMatches ? '' : this.searchQuery,
+        task: this.activeTask,
+      });
+      if (familyRows.length === 0) continue;
+      shown += 1;
+      const key = modelFamilyKey(adapter);
+      const details = this.listContainer.createEl('details', { cls: 'local-stt-model-family' });
+      details.setAttribute('data-family-key', key);
+      details.open = searching || open.has(key);
+      const summary = details.createEl('summary', { text: adapter.displayName });
+      summary.addEventListener('click', () => {
+        if (this.searchQuery.trim().length > 0) return;
+        if (details.open) open.delete(key);
+        else open.add(key);
+      });
+      const family = state.catalog.families.find(
+        (candidate) =>
+          candidate.task === this.activeTask &&
+          candidate.runtimeId === adapter.runtimeId &&
+          candidate.familyId === adapter.familyId,
+      );
+      if (family !== undefined && family.summary.length > 0) {
+        details.createEl('p', {
+          cls: 'local-stt-family-summary',
+          text: localizeFamilySummary(family.familyId, family.summary),
+        });
+      }
+      for (const row of familyRows) {
+        const container = details.createDiv({ cls: 'local-stt-model-row-container' });
+        container.setAttribute('data-model-key', getRowKey(row));
+        this.renderRow(row, container);
+      }
+    }
+    if (shown === 0) {
       this.listContainer.createEl('p', {
         cls: 'local-stt-empty-state',
-        text: t('models.manage.noneAvailable'),
+        text: t(
+          searching
+            ? 'models.manage.noSearchResults'
+            : this.getActiveLanguage().kind === 'all'
+              ? 'models.manage.noneAvailable'
+              : 'models.manage.noneForLanguage',
+        ),
       });
-      return;
-    }
-
-    for (const row of tabRows) {
-      this.renderRow(row, this.listContainer.createDiv());
     }
   }
 
@@ -789,6 +724,7 @@ export class ManageModelsModal extends Modal {
       switch (action) {
         case 'install':
           setting.addButton((button) => {
+            button.buttonEl.setAttribute('data-model-action', action);
             button
               .setCta()
               .setButtonText(t('common.install'))
@@ -801,6 +737,7 @@ export class ManageModelsModal extends Modal {
 
         case 'use':
           setting.addButton((button) => {
+            button.buttonEl.setAttribute('data-model-action', action);
             button
               .setCta()
               .setButtonText(t('models.manage.use'))
@@ -829,12 +766,14 @@ export class ManageModelsModal extends Modal {
 
         case 'selected':
           setting.addButton((button) => {
+            button.buttonEl.setAttribute('data-model-action', action);
             button.setButtonText(t('models.manage.selected')).setDisabled(true);
           });
           break;
 
         case 'reinstall':
           setting.addButton((button) => {
+            button.buttonEl.setAttribute('data-model-action', action);
             setTooltip(button.buttonEl, t('models.manage.reinstallDesc'));
             button
               .setButtonText(t('models.manage.reinstall'))
@@ -845,6 +784,7 @@ export class ManageModelsModal extends Modal {
 
         case 'cancel':
           setting.addButton((button) => {
+            button.buttonEl.setAttribute('data-model-action', action);
             if (row.isCanceling) {
               button.setButtonText(t('models.manage.cancelling')).setDisabled(true);
             } else {
@@ -863,6 +803,7 @@ export class ManageModelsModal extends Modal {
 
         case 'remove':
           setting.addButton((button) => {
+            button.buttonEl.setAttribute('data-model-action', action);
             styleDestructiveButton(button)
               .setButtonText(t('common.remove'))
               .setDisabled(this.actionInProgress)
@@ -888,6 +829,7 @@ export class ManageModelsModal extends Modal {
         case 'recover':
           setting.descEl.createDiv({ text: t('models.manage.reinstallRecoveryDesc') });
           setting.addButton((button) => {
+            button.buttonEl.setAttribute('data-model-action', action);
             button
               .setButtonText(t('models.manage.reinstallRecover'))
               .setDisabled(this.actionInProgress)
@@ -901,6 +843,7 @@ export class ManageModelsModal extends Modal {
 
         case 'retry':
           setting.addButton((button) => {
+            button.buttonEl.setAttribute('data-model-action', action);
             const failureId = row.failedInstall?.failureId ?? null;
             button
               .setCta()
@@ -925,6 +868,7 @@ export class ManageModelsModal extends Modal {
 
         case 'dismiss':
           setting.addButton((button) => {
+            button.buttonEl.setAttribute('data-model-action', action);
             const failureId = row.failedInstall?.failureId ?? null;
             button
               .setButtonText(t('models.manage.dismissInstallFailure'))
@@ -942,6 +886,7 @@ export class ManageModelsModal extends Modal {
 
         case 'details':
           setting.addExtraButton((button) => {
+            button.extraSettingsEl.setAttribute('data-model-action', action);
             button
               .setIcon('info')
               .setTooltip(t('models.manage.details'))
@@ -1146,23 +1091,11 @@ export class ManageModelsModal extends Modal {
         return;
       }
 
-      // Progress ticks for a model outside the active task/language do not
-      // affect visible rows. Avoid rebuilding the DOM under the user's cursor.
-      const installingModel = state.catalog.models.find((model) =>
-        matchesModelTriple(
-          model,
-          activeInstall.installUpdate.runtimeId,
-          activeInstall.installUpdate.familyId,
-          activeInstall.installUpdate.modelId,
-        ),
-      );
-      const activeTab = this.getActiveTab();
-      const visible =
-        installingModel?.task === this.activeTask &&
-        modelMatchesLanguageFilter(installingModel, this.getActiveLanguage()) &&
-        activeTab !== null &&
-        activeInstall.installUpdate.runtimeId === activeTab.runtimeId &&
-        activeInstall.installUpdate.familyId === activeTab.familyId;
+      // Hidden models do not affect the displayed rows, including when a
+      // search excludes them. Keep open controls and focus intact.
+      const visible = [
+        ...this.listContainer.querySelectorAll('.local-stt-model-row-container'),
+      ].some((row) => row.getAttribute('data-model-key') === key);
       if (!visible) {
         return;
       }
@@ -1253,7 +1186,9 @@ export class ManageModelsModal extends Modal {
     if (model === undefined) return;
 
     this.setActiveTask(model.task);
-    this.activeTabs.set(model.task, { familyId: model.familyId, runtimeId: model.runtimeId });
+    const open = this.openFamilies.get(model.task) ?? new Set<string>();
+    open.add(modelFamilyKey(model));
+    this.openFamilies.set(model.task, open);
     if (!modelMatchesLanguageFilter(model, this.getActiveLanguage())) {
       this.activeLanguages.set(this.activeTask, ALL_MODEL_LANGUAGES);
     }
@@ -1265,10 +1200,6 @@ export class ManageModelsModal extends Modal {
 
   private getActiveLanguage(): ModelLanguageFilter {
     return this.activeLanguages.get(this.activeTask) ?? ALL_MODEL_LANGUAGES;
-  }
-
-  private getActiveTab(): AdapterTabKey | null {
-    return this.activeTabs.get(this.activeTask) ?? null;
   }
 
   private buildNavigationSignature(): string {
@@ -1432,10 +1363,6 @@ function languageFiltersEqual(left: ModelLanguageFilter, right: ModelLanguageFil
   if (left.kind !== right.kind) return false;
   if (left.kind === 'all') return true;
   return right.kind === 'language' && left.tag === right.tag;
-}
-
-function matchesAdapterTab(left: AdapterTabKey, right: AdapterTabKey | null): boolean {
-  return right !== null && left.runtimeId === right.runtimeId && left.familyId === right.familyId;
 }
 
 function modelLanguageLabel(tag: string): string {
