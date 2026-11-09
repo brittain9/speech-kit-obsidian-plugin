@@ -22,6 +22,7 @@ import type {
   TranscriptFormattingMode,
 } from '../settings/plugin-settings';
 import { validateTimestampIntervalSeconds } from '../settings/plugin-settings';
+import { captureSettingsFocus, restoreSettingsFocus } from '../settings/settings-tab-lifecycle';
 import { t } from '../shared/i18n';
 import { mediaProgressText } from './media-progress-presenter';
 
@@ -142,6 +143,8 @@ class MediaTranscriptionModal extends Modal {
   }
 
   private render(): void {
+    const focus = captureSettingsFocus(this.contentEl);
+    const scrollTop = this.contentEl.scrollTop;
     this.contentEl.empty();
     this.primaryButton = null;
     this.contentEl.createEl('p', {
@@ -198,6 +201,8 @@ class MediaTranscriptionModal extends Modal {
         });
     });
     this.updatePrimaryButton();
+    restoreSettingsFocus(this.contentEl, focus);
+    this.contentEl.scrollTop = scrollTop;
   }
 
   private renderFileSource(parent: HTMLElement): void {

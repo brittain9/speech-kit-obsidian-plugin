@@ -28,7 +28,8 @@ export function renderLlmProviderSettings(
   let disposed = false;
   const render = (): void => {
     if (disposed) return;
-    const focus = captureSettingsFocus(parent);
+    const dailyFocus = captureSettingsFocus(dailyHost);
+    const routingFocus = captureSettingsFocus(routingHost);
     dailyHost.empty();
     new Setting(dailyHost)
       .setName(t('settings.llm.enableFeatures.name'))
@@ -59,7 +60,8 @@ export function renderLlmProviderSettings(
       });
     routingHost.empty();
     controls.render(routingHost, dependencies.getSettings());
-    restoreSettingsFocus(parent, focus);
+    restoreSettingsFocus(dailyHost, dailyFocus);
+    restoreSettingsFocus(routingHost, routingFocus);
   };
   const controls = new LlmRoutingControls({
     ...dependencies,

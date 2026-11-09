@@ -494,9 +494,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
       translationSettingsDependencies,
     );
 
-    const llmSection = containerEl.createDiv();
     const llmSectionGeneration = this.llmSectionGeneration;
-    this.disposeLlmSection = renderLlmProviderSettings(llmSection, {
+    this.disposeLlmSection = renderLlmProviderSettings(containerEl, {
       app: this.app,
       feedback: this.dependencies.feedback,
       getSecret: this.dependencies.getSecret,
