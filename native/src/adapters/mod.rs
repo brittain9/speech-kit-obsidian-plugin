@@ -20,3 +20,6 @@ pub mod whisper;
 
 #[cfg(feature = "engine-supertonic")]
 pub mod supertonic;
+
+#[cfg(feature = "engine-nemotron-asr")]
+pub(crate) mod nemo_rnnt;

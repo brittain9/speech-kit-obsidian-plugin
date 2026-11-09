@@ -957,12 +957,12 @@ export const hr = {
     'Putanja do datoteke modela mora upućivati na datoteku: {path}',
   'models.external.validation.selectEntryFile': 'Odaberite {filename}.',
   'models.external.validation.nemotronEntryFile':
-    'Nemotron 3.5 ASR zahtijeva artefakt encoder.int8.onnx. Odaberite encoder.int8.onnx iz direktorija modela s prozorom od 560 ms.',
+    'Nemotron ASR zahtijeva artefakt encoder.int8.onnx. Odaberite encoder.int8.onnx iz podržanog direktorija Nemotron int8 modela.',
   'models.external.validation.moonshineEntryFile':
     'Moonshine zahtijeva svoj glavni artefakt frontend.ort. Odaberite frontend.ort iz direktorija streaming modela.',
   'models.external.validation.generic': 'Govorni modul nije mogao provjeriti ovaj model.',
   'models.external.requirements.nemotron.entry':
-    'Odaberite encoder.int8.onnx iz Nemotron 3.5 ASR int8 izvoza s prozorom od 560 ms.',
+    'Odaberite encoder.int8.onnx iz podržanog Nemotron int8 izvoza.',
   'models.external.requirements.nemotron.siblings':
     'Isti direktorij mora sadržavati decoder.int8.onnx, joiner.int8.onnx i tokens.txt.',
   'models.external.requirements.nemotron.compatibility':
@@ -1096,7 +1096,7 @@ export const hr = {
   'catalog.moonshine_medium_streaming_en.summary':
     'Najtočniji Moonshine streaming model s 245 milijuna parametara.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
-    'NVIDIA-in višejezični RNNT s 0,6 milijardi parametara, izvezen u int8 ONNX za transkripciju uživo s predmemorijom konteksta na osam provjerenih jezika.',
+    'NVIDIA-in višejezični RNNT s 0,6 milijardi parametara, izvezen u int8 ONNX za transkripciju uživo s predmemorijom konteksta na devet provjerenih jezika.',
   'catalog.pocket_tts_english_2026_04_int8.summary':
     'Prirodna lokalna sinteza čitanja naglas na engleskom uz izbor pomno odabranih glasova.',
   'catalog.pocket_tts_french_24l_int8.summary':
@@ -1118,7 +1118,7 @@ export const hr = {
   'catalog.family.moonshine.summary':
     'Prikazuje riječi dok govorite. Tiny naginje manjoj potrošnji resursa, Small uravnotežuje brzinu i kvalitetu, a Medium naginje kvaliteti.',
   'catalog.family.nemotron_asr.summary':
-    'Višejezični streaming visoke točnosti uz veće preuzimanje i veću potrošnju resursa. Moonshine Small i dalje je preporučeni zadani izbor za diktiranje na engleskom uživo.',
+    'Streaming na engleskom i drugim jezicima uz veća preuzimanja i veću potrošnju resursa. Moonshine Small i dalje je preporučeni zadani izbor za diktiranje na engleskom uživo.',
   'catalog.family.supertonic.summary':
     'Munjevito brz višejezični TTS na uređaju putem ONNX Runtimea.',
   'catalog.family.pocket_tts.summary':

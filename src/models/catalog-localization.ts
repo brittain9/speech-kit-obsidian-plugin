@@ -11,6 +11,9 @@ const MODEL_SUMMARY_KEYS = {
   moonshine_small_streaming_en: 'catalog.moonshine_small_streaming_en.summary',
   moonshine_tiny_streaming_en: 'catalog.moonshine_tiny_streaming_en.summary',
   nemotron_asr_0_6b_int8_streaming_560ms: 'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary',
+  nemotron_asr_0_6b_int8_streaming_160ms: 'catalog.nemotron_asr_0_6b_int8_streaming_160ms.summary',
+  nemotron_speech_streaming_en_v2603_int8_560ms:
+    'catalog.nemotron_speech_streaming_en_v2603_int8_560ms.summary',
   pocket_tts_english_2026_04_int8: 'catalog.pocket_tts_english_2026_04_int8.summary',
   pocket_tts_french_24l_int8: 'catalog.pocket_tts_french_24l_int8.summary',
   pocket_tts_german_int8: 'catalog.pocket_tts_german_int8.summary',

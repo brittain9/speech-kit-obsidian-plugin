@@ -90,12 +90,32 @@ https://raw.githubusercontent.com/Tencent-Hunyuan/Hy-MT2/71928c82b61fc04e0289ad7
 
 No endorsement by Tencent, llama.cpp, or llama-cpp-2 contributors is implied.
 
+## NVIDIA Nemotron Speech English streaming model
+
+- Work: `nvidia/nemotron-speech-streaming-en-0.6b`, March 2026 checkpoint
+- NVIDIA checkpoint revision: `ac0580bb7d3d6e39c4361db6afe28db9211793e4`
+- Derived 560 ms int8 ONNX export revision:
+  `52056fdc070914a48dcd68b31b44d6a6f5b85902`
+- Export implementation: sherpa-onnx
+  (`4fa889824497c22a874fb3cbf5fbd58425da89bb`)
+- License: NVIDIA Open Model License Agreement
+- Canonical agreement:
+  https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/
+- Attribution: Licensed by NVIDIA Corporation under the NVIDIA Open Model License
+
+The catalog downloads this derived ONNX model directly from the pinned export
+repository. Model weights are not bundled with the plugin or sidecar. They use
+the NVIDIA agreement, including its use and redistribution conditions. The
+installer links to those terms before the download.
+
 ## NVIDIA Nemotron 3.5 ASR streaming model
 
 - Work: `nvidia/nemotron-3.5-asr-streaming-0.6b`
 - NVIDIA checkpoint revision: `f3d333391852ba876df169dcc9ba902d25b6ab0b`
 - Derived 560 ms int8 ONNX export revision:
   `ab43d895f5985b1bbab8b6eac8607fcdc05343f3`
+- Derived 160 ms int8 ONNX export revision:
+  `b3a4dbde84fba1a13cb4270e6730b525ac6a2db6`
 - Export implementation: sherpa-onnx
   (`f71d85ff2f07422014f55fa89cb083fa52cce71f`, merged as
   `6a204636c4b8d97b45e8c4ab4a22e0067162b637`)

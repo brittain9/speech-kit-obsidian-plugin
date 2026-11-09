@@ -66,7 +66,7 @@ impl ModelFamilyId {
             Self::TencentHyMt => "Tencent HY-MT 2",
             Self::CohereTranscribe => "Cohere Transcribe",
             Self::Moonshine => "Moonshine",
-            Self::NemotronAsr => "NVIDIA Nemotron 3.5 ASR",
+            Self::NemotronAsr => "NVIDIA Nemotron ASR",
             Self::PocketTts => "Pocket TTS",
             Self::Supertonic => "Supertonic 3",
             Self::Whisper => "Whisper",

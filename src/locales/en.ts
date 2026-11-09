@@ -1268,12 +1268,12 @@ export const en = {
   'models.external.validation.notFile': 'Model file path must point to a file: {path}',
   'models.external.validation.selectEntryFile': 'Select {filename}.',
   'models.external.validation.nemotronEntryFile':
-    'Nemotron 3.5 ASR requires its encoder.int8.onnx artifact. Select encoder.int8.onnx from the pinned 560 ms model directory.',
+    'Nemotron ASR requires its encoder.int8.onnx artifact. Select encoder.int8.onnx from a supported Nemotron int8 model folder.',
   'models.external.validation.moonshineEntryFile':
     'Moonshine requires its primary frontend.ort artifact. Select frontend.ort from the streaming model directory.',
   'models.external.validation.generic': 'The speech engine could not validate this model.',
   'models.external.requirements.nemotron.entry':
-    'Select encoder.int8.onnx from the pinned Nemotron 3.5 ASR 560 ms int8 export.',
+    'Select encoder.int8.onnx from a supported Nemotron int8 export.',
   'models.external.requirements.nemotron.siblings':
     'The same directory must contain decoder.int8.onnx, joiner.int8.onnx, and tokens.txt.',
   'models.external.requirements.nemotron.compatibility':
@@ -1404,7 +1404,11 @@ export const en = {
   'catalog.moonshine_medium_streaming_en.summary':
     'Most accurate Moonshine streaming model at 245M parameters.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
-    "NVIDIA's 0.6B multilingual RNNT, exported to int8 ONNX for cache-aware live transcription in eight verified languages.",
+    "NVIDIA's 0.6B multilingual RNNT, exported to int8 ONNX for cache-aware live transcription in nine verified languages.",
+  'catalog.nemotron_asr_0_6b_int8_streaming_160ms.summary':
+    'A shorter encoder-chunk option for the existing multilingual 0.6B checkpoint. Supports the same verified languages as the 560 ms profile.',
+  'catalog.nemotron_speech_streaming_en_v2603_int8_560ms.summary':
+    'NVIDIA\u2019s English-only 0.6B streaming RNNT with punctuation and capitalization. Uses 560 ms encoder chunks.',
   'catalog.pocket_tts_english_2026_04_int8.summary':
     'Natural local English read-aloud synthesis with selectable curated voices.',
   'catalog.pocket_tts_french_24l_int8.summary':
@@ -1426,7 +1430,7 @@ export const en = {
   'catalog.family.moonshine.summary':
     'Shows words while you speak. Tiny favors lower resource use, Small balances speed and quality, and Medium favors quality.',
   'catalog.family.nemotron_asr.summary':
-    'High-accuracy multilingual streaming with a larger download and higher resource use. Moonshine Small remains the recommended English live-dictation default.',
+    'English and multilingual streaming with larger downloads and higher resource use. Moonshine Small remains the recommended English live-dictation default.',
   'catalog.family.supertonic.summary':
     'Lightning-fast on-device multilingual TTS via ONNX Runtime.',
   'catalog.family.pocket_tts.summary':
