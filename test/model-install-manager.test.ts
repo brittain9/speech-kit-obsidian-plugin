@@ -15,8 +15,17 @@ import type {
   InstalledModelRecord,
   ModelInstallUpdateRecord,
 } from '../src/models/model-management-types';
-import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
-import type { ModelProbeResultEvent, SidecarEvent, SystemInfoEvent } from '../src/sidecar/protocol';
+import {
+  DEFAULT_PLUGIN_SETTINGS,
+  type PluginSettings,
+  resolvePluginSettings,
+} from '../src/settings/plugin-settings';
+import type {
+  ModelInstallUpdateEvent,
+  ModelProbeResultEvent,
+  SidecarEvent,
+  SystemInfoEvent,
+} from '../src/sidecar/protocol';
 import {
   SidecarLifecycleConflictError,
   SidecarLifecycleGate,
@@ -89,7 +98,336 @@ describe('ModelInstallManager', () => {
     vi.restoreAllMocks();
   });
 
+  it('switches the model store only after the new store has been read', async () => {
+    configureSidecarForInit(harness.sidecarConnection);
+    await harness.manager.init();
+    const newModels = deferred<{ models: InstalledModelRecord[] }>();
+    harness.sidecarConnection.listInstalledModels.mockReturnValueOnce(newModels.promise);
+    harness.sidecarConnection.getModelStore.mockResolvedValueOnce({
+      overridePath: '/new-models',
+      path: '/new-models',
+      usingDefaultPath: false,
+    });
+
+    const switching = harness.manager.changeModelStore('/new-models');
+    expect(harness.getSettings().modelStorePathOverride).toBe('');
+    expect(() => harness.sidecarLifecycleGate.acquireSpeech()).toThrow();
+    newModels.resolve({ models: [] });
+    await switching;
+
+    expect(harness.getSettings().modelStorePathOverride).toBe('/new-models');
+    expect(harness.manager.getState().modelStore.path).toBe('/new-models');
+    expect(harness.manager.getState().installedModels).toEqual([]);
+    harness.sidecarLifecycleGate.acquireSpeech().release();
+  });
+
+  it('leaves the model store unchanged when speech is active or the new store cannot be read', async () => {
+    configureSidecarForInit(harness.sidecarConnection);
+    await harness.manager.init();
+    const oldModels = harness.manager.getState().installedModels;
+    const speech = harness.sidecarLifecycleGate.acquireSpeech();
+    await expect(harness.manager.changeModelStore('/new-models')).rejects.toBeInstanceOf(
+      SidecarLifecycleConflictError,
+    );
+    speech.release();
+    expect(harness.getSettings().modelStorePathOverride).toBe('');
+    expect(harness.sidecarConnection.listInstalledModels).toHaveBeenCalledTimes(1);
+
+    harness.sidecarConnection.listInstalledModels.mockRejectedValueOnce(new Error('invalid store'));
+    await expect(harness.manager.changeModelStore('/new-models')).rejects.toThrow('invalid store');
+    expect(harness.getSettings().modelStorePathOverride).toBe('');
+    expect(harness.manager.getState().installedModels).toEqual(oldModels);
+    expect(harness.manager.getState().modelStore.path).toBe('/models');
+  });
+
+  it('keeps the configured store when native folder validation fails', async () => {
+    configureSidecarForInit(harness.sidecarConnection);
+    await harness.manager.init();
+    const oldModels = harness.manager.getState().installedModels;
+    harness.sidecarConnection.getModelStore.mockRejectedValueOnce(
+      new Error('Model store folder is not usable'),
+    );
+
+    await expect(harness.manager.changeModelStore('/file/child')).rejects.toThrow(
+      'Model store folder is not usable',
+    );
+    expect(harness.getSettings().modelStorePathOverride).toBe('');
+    expect(harness.manager.getState().installedModels).toEqual(oldModels);
+    expect(harness.manager.getState().modelStore.path).toBe('/models');
+  });
+
+  it('does not change stores while a model install is active', async () => {
+    configureSidecarForInit(harness.sidecarConnection);
+    await harness.manager.init();
+    const pendingInstall = deferred<ModelInstallUpdateEvent>();
+    harness.sidecarConnection.installModel.mockReturnValueOnce(pendingInstall.promise);
+    const installing = harness.manager.install(sampleMoonshineSelection());
+    await expect(harness.manager.changeModelStore('/new-models')).rejects.toBeInstanceOf(
+      SidecarLifecycleConflictError,
+    );
+    expect(harness.getSettings().modelStorePathOverride).toBe('');
+    pendingInstall.resolve({ ...sampleMoonshineInstallUpdate(), type: 'model_install_update' });
+    await installing;
+  });
+
+  it('restores the old store state if saving the switch fails before the settings change', async () => {
+    const selection = sampleSelection();
+    harness = createManagerHarness({
+      selectedModel: selection,
+      selectedModelCapabilitiesSnapshot: {
+        selection,
+        capabilities: sampleMergedCapabilities(),
+        modelStorePathOverride: '',
+      },
+    });
+    configureSidecarForInit(harness.sidecarConnection);
+    await harness.manager.init();
+    const original = harness.manager.getState();
+    harness.sidecarConnection.listInstalledModels.mockResolvedValueOnce({ models: [] });
+    harness.sidecarConnection.getModelStore.mockResolvedValueOnce({
+      overridePath: '/new-models',
+      path: '/new-models',
+      usingDefaultPath: false,
+    });
+    harness.rejectNextConditionalCommit();
+
+    await expect(harness.manager.changeModelStore('/new-models')).rejects.toThrow('save failed');
+
+    expect(harness.getSettings().modelStorePathOverride).toBe('');
+    expect(harness.manager.getState()).toMatchObject({
+      installedModels: original.installedModels,
+      modelStore: original.modelStore,
+      loadStatus: 'ready',
+      selectedModelCapabilities: original.selectedModelCapabilities,
+    });
+  });
+
+  it('ignores an old store initialization that finishes after a store switch', async () => {
+    configureSidecarForInit(harness.sidecarConnection);
+    const oldModels = deferred<{ models: InstalledModelRecord[] }>();
+    harness.sidecarConnection.listInstalledModels
+      .mockReturnValueOnce(oldModels.promise)
+      .mockResolvedValueOnce({ models: [] });
+    harness.sidecarConnection.getModelStore
+      .mockResolvedValueOnce(sampleModelStore())
+      .mockResolvedValueOnce({
+        overridePath: '/new-models',
+        path: '/new-models',
+        usingDefaultPath: false,
+      });
+    const oldInit = harness.manager.init();
+    await harness.manager.changeModelStore('/new-models');
+    oldModels.resolve({ models: [sampleInstalledModel()] });
+    await oldInit;
+
+    expect(harness.manager.getState().installedModels).toEqual([]);
+    expect(harness.manager.getState().modelStore.path).toBe('/new-models');
+  });
+
+  it('does not commit a store switch after the model manager is disposed', async () => {
+    configureSidecarForInit(harness.sidecarConnection);
+    await harness.manager.init();
+    const pending = deferred<{ models: InstalledModelRecord[] }>();
+    harness.sidecarConnection.listInstalledModels.mockReturnValueOnce(pending.promise);
+    harness.sidecarConnection.getModelStore.mockResolvedValueOnce({
+      overridePath: '/new-models',
+      path: '/new-models',
+      usingDefaultPath: false,
+    });
+    const switching = harness.manager.changeModelStore('/new-models');
+    harness.manager.dispose();
+    pending.resolve({ models: [] });
+    await expect(switching).rejects.toThrow('closed');
+    expect(harness.getSettings().modelStorePathOverride).toBe('');
+  });
+
+  it('ignores a late successful probe from the old store after switching', async () => {
+    const selection = sampleSelection();
+    harness = createManagerHarness({ selectedModel: selection });
+    configureSidecarForInit(harness.sidecarConnection);
+    const oldProbe = deferred<ModelProbeResultEvent>();
+    harness.sidecarConnection.probeModelSelection
+      .mockReturnValueOnce(oldProbe.promise)
+      .mockResolvedValueOnce({
+        ...sampleReadyProbeResult(selection),
+        type: 'model_probe_result',
+        available: false,
+        mergedCapabilities: null,
+        status: 'missing',
+      });
+    await harness.manager.init();
+    harness.sidecarConnection.listInstalledModels.mockResolvedValueOnce({ models: [] });
+    harness.sidecarConnection.getModelStore.mockResolvedValueOnce({
+      overridePath: '/new-models',
+      path: '/new-models',
+      usingDefaultPath: false,
+    });
+
+    await harness.manager.changeModelStore('/new-models');
+    oldProbe.resolve({ ...sampleReadyProbeResult(selection), type: 'model_probe_result' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(harness.manager.getState().selectedModelCapabilities.status).toBe('unavailable');
+    expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
+    expect(harness.manager.getState().installedModels).toEqual([]);
+  });
+
+  it('preserves selected models while refreshing their capabilities for the new store in order', async () => {
+    const stt = sampleSelection();
+    const tts = sampleTtsVoiceSelection();
+    const translation = {
+      kind: 'catalog_model' as const,
+      runtimeId: 'bergamot_wasm' as const,
+      familyId: 'firefox_translations' as const,
+      modelId: 'firefox_translations_release',
+    };
+    harness = createManagerHarness({
+      selectedModel: stt,
+      selectedTtsModel: tts,
+      selectedTranslationModel: translation,
+      selectedModelCapabilitiesSnapshot: {
+        selection: stt,
+        capabilities: sampleMergedCapabilities(),
+        modelStorePathOverride: '',
+      },
+      selectedTtsModelCapabilitiesSnapshot: {
+        selection: tts,
+        capabilities: sampleMergedCapabilities(),
+        modelStorePathOverride: '',
+      },
+    });
+    configureSidecarForInit(harness.sidecarConnection);
+    await harness.manager.init();
+    harness.sidecarConnection.listInstalledModels.mockResolvedValueOnce({ models: [] });
+    harness.sidecarConnection.getModelStore.mockResolvedValueOnce({
+      overridePath: '/new-models',
+      path: '/new-models',
+      usingDefaultPath: false,
+    });
+    const sttProbe = deferred<ModelProbeResultEvent>();
+    harness.sidecarConnection.probeModelSelection
+      .mockReturnValueOnce(sttProbe.promise)
+      .mockResolvedValueOnce({
+        ...sampleReadyProbeResult(tts),
+        available: false,
+        mergedCapabilities: null,
+        status: 'missing',
+      });
+    const switching = harness.manager.changeModelStore('/new-models');
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(1),
+    );
+    expect(harness.getSettings()).toMatchObject({
+      selectedModel: stt,
+      selectedTtsModel: tts,
+      selectedTranslationModel: translation,
+      selectedModelCapabilitiesSnapshot: null,
+      selectedTtsModelCapabilitiesSnapshot: null,
+    });
+    expect(harness.manager.getState().installedModels).toEqual([]);
+    expect(harness.manager.getState().selectedModelCapabilities.status).toBe('pending');
+    expect(harness.manager.getState().selectedTtsModelCapabilities.status).toBe('pending');
+    sttProbe.resolve({
+      type: 'model_probe_result',
+      ...sampleReadyProbeResult(stt),
+      available: false,
+      mergedCapabilities: null,
+      status: 'missing',
+    });
+    await switching;
+    expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(2);
+    expect(harness.manager.getState().selectedModelCapabilities.status).toBe('unavailable');
+    expect(harness.manager.getState().selectedTtsModelCapabilities.status).toBe('unavailable');
+  });
+
+  it('preserves a probed external-file selection when the managed store changes', async () => {
+    const external = {
+      kind: 'external_file' as const,
+      runtimeId: 'whisper_cpp' as const,
+      familyId: 'whisper' as const,
+      filePath: '/models/external.bin',
+    };
+    const snapshot = { selection: external, capabilities: sampleMergedCapabilities() };
+    harness = createManagerHarness({
+      selectedModel: external,
+      selectedModelCapabilitiesSnapshot: snapshot,
+    });
+    configureSidecarForInit(harness.sidecarConnection);
+    await harness.manager.init();
+    harness.sidecarConnection.listInstalledModels.mockResolvedValueOnce({ models: [] });
+    harness.sidecarConnection.getModelStore.mockResolvedValueOnce({
+      overridePath: '/new-models',
+      path: '/new-models',
+      usingDefaultPath: false,
+    });
+
+    await harness.manager.changeModelStore('/new-models');
+
+    expect(harness.getSettings().selectedModel).toEqual(external);
+    expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual(snapshot);
+    expect(harness.manager.getState().selectedModelCapabilities.status).toBe('ready');
+    expect(harness.sidecarConnection.probeModelSelection).not.toHaveBeenCalled();
+  });
+
+  it('does not start a later model probe after disposal interrupts a store switch', async () => {
+    const stt = sampleSelection();
+    const tts = sampleTtsVoiceSelection();
+    harness = createManagerHarness({
+      selectedModel: stt,
+      selectedTtsModel: tts,
+      selectedModelCapabilitiesSnapshot: {
+        selection: stt,
+        capabilities: sampleMergedCapabilities(),
+        modelStorePathOverride: '',
+      },
+      selectedTtsModelCapabilitiesSnapshot: {
+        selection: tts,
+        capabilities: sampleMergedCapabilities(),
+        modelStorePathOverride: '',
+      },
+    });
+    configureSidecarForInit(harness.sidecarConnection);
+    await harness.manager.init();
+    harness.sidecarConnection.listInstalledModels.mockResolvedValueOnce({ models: [] });
+    harness.sidecarConnection.getModelStore.mockResolvedValueOnce({
+      overridePath: '/new-models',
+      path: '/new-models',
+      usingDefaultPath: false,
+    });
+    const sttProbe = deferred<ModelProbeResultEvent>();
+    harness.sidecarConnection.probeModelSelection.mockReturnValueOnce(sttProbe.promise);
+    const switching = harness.manager.changeModelStore('/new-models');
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(1),
+    );
+    harness.manager.dispose();
+    sttProbe.resolve({ ...sampleReadyProbeResult(stt), type: 'model_probe_result' });
+    await expect(switching).rejects.toThrow('closed');
+    expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledTimes(1);
+    expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toBeNull();
+    expect(harness.getSettings().selectedTtsModelCapabilitiesSnapshot).toBeNull();
+  });
+
   describe('init()', () => {
+    it('does not claim a selected model is ready when store discovery fails', async () => {
+      const selection = sampleSelection();
+      harness = createManagerHarness({
+        selectedModel: selection,
+        selectedModelCapabilitiesSnapshot: {
+          selection,
+          capabilities: sampleMergedCapabilities(),
+          modelStorePathOverride: '',
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      harness.sidecarConnection.listInstalledModels.mockRejectedValueOnce(
+        new Error('speech engine needs updating'),
+      );
+      await harness.manager.init();
+      expect(harness.manager.getState().loadStatus).toBe('error');
+      expect(harness.manager.getState().selectedModelCapabilities.status).not.toBe('ready');
+    });
+
     it('hydrates state from the sidecar and transitions to ready', async () => {
       configureSidecarForInit(harness.sidecarConnection);
       expect(harness.manager.getState().loadStatus).toBe('loading');
@@ -1136,6 +1474,7 @@ describe('ModelInstallManager', () => {
           harness = createManagerHarness({
             selectedModel: selection,
             selectedModelCapabilitiesSnapshot: {
+              modelStorePathOverride: '',
               capabilities: sampleMergedCapabilities(),
               selection,
             },
@@ -1241,7 +1580,11 @@ describe('ModelInstallManager', () => {
       const selection = sampleSelection();
       harness = createManagerHarness({
         selectedModel: selection,
-        selectedModelCapabilitiesSnapshot: { capabilities: sampleMergedCapabilities(), selection },
+        selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
+          capabilities: sampleMergedCapabilities(),
+          selection,
+        },
       });
       configureSidecarForInit(harness.sidecarConnection);
       await harness.manager.init();
@@ -1267,6 +1610,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: selection,
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: sampleMergedCapabilities(),
           selection,
         },
@@ -1452,6 +1796,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: selection,
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: sampleMergedCapabilities(),
           selection,
         },
@@ -2020,6 +2365,7 @@ describe('ModelInstallManager', () => {
           status: 'ready',
         });
         expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+          modelStorePathOverride: '',
           capabilities: sampleMergedCapabilities(),
           selection: sampleSelection(),
         });
@@ -2177,6 +2523,7 @@ describe('ModelInstallManager', () => {
           });
         });
         expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+          modelStorePathOverride: '',
           capabilities: readyProbe.mergedCapabilities,
           selection,
         });
@@ -2229,6 +2576,7 @@ describe('ModelInstallManager', () => {
       });
       const catalog = sampleCatalog();
       catalog.models.push(sampleTtsVoiceCatalogModel());
+      configureSidecarForInit(harness.sidecarConnection);
       harness.sidecarConnection.listModelCatalog.mockResolvedValue(catalog);
       const ttsProbe = deferred<ReturnType<typeof sampleReadyProbeResult>>();
       harness.sidecarConnection.probeModelSelection
@@ -2305,6 +2653,7 @@ describe('ModelInstallManager', () => {
       });
       expect(harness.getSettings().selectedModel).toEqual(selection);
       expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        modelStorePathOverride: '',
         capabilities: freshProbeResult.mergedCapabilities,
         selection,
       });
@@ -2362,6 +2711,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: currentSelection,
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: initialCapabilities,
           selection: currentSelection,
         },
@@ -2396,6 +2746,7 @@ describe('ModelInstallManager', () => {
       });
       expect(harness.getSettings().selectedModel).toEqual(currentSelection);
       expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        modelStorePathOverride: '',
         capabilities: recoveryCapabilities,
         selection: currentSelection,
       });
@@ -2413,6 +2764,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: currentSelection,
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: initialCapabilities,
           selection: currentSelection,
         },
@@ -2453,6 +2805,7 @@ describe('ModelInstallManager', () => {
 
       expect(harness.getSettings().selectedModel).toEqual(newerSelection);
       expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        modelStorePathOverride: '',
         capabilities: sampleReadyProbeResult(newerSelection).mergedCapabilities,
         selection: newerSelection,
       });
@@ -2483,6 +2836,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: selection,
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: initialCapabilities,
           selection,
         },
@@ -2531,6 +2885,7 @@ describe('ModelInstallManager', () => {
       });
       expect(harness.getSettings().selectedModel).toEqual(selection);
       expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        modelStorePathOverride: '',
         capabilities: freshCapabilities,
         selection,
       });
@@ -2543,6 +2898,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: selection,
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: initialCapabilities,
           selection,
         },
@@ -2596,6 +2952,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: selection,
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: initialCapabilities,
           selection,
         },
@@ -2643,6 +3000,7 @@ describe('ModelInstallManager', () => {
         });
       });
       expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        modelStorePathOverride: '',
         capabilities: refreshedCapabilities,
         selection,
       });
@@ -2699,6 +3057,7 @@ describe('ModelInstallManager', () => {
 
         expect(harness.getSettings().selectedModel).toEqual(selection);
         expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+          modelStorePathOverride: '',
           capabilities: changedCapabilities,
           selection,
         });
@@ -2718,6 +3077,7 @@ describe('ModelInstallManager', () => {
         harness = createManagerHarness({
           selectedModel: selection,
           selectedModelCapabilitiesSnapshot: {
+            modelStorePathOverride: '',
             capabilities: initialCapabilities,
             selection,
           },
@@ -2779,6 +3139,7 @@ describe('ModelInstallManager', () => {
         expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual(
           resultKind === 'ready'
             ? {
+                modelStorePathOverride: '',
                 capabilities: initialCapabilities,
                 selection,
               }
@@ -2846,6 +3207,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: selection,
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: initialCapabilities,
           selection,
         },
@@ -2889,6 +3251,7 @@ describe('ModelInstallManager', () => {
       });
       expect(harness.getSettings().selectedModel).toEqual(selection);
       expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        modelStorePathOverride: '',
         capabilities: freshCapabilities,
         selection,
       });
@@ -2918,6 +3281,7 @@ describe('ModelInstallManager', () => {
       await harness.manager.select(sampleSelection());
 
       expect(harness.getSettings().selectedModelCapabilitiesSnapshot).toEqual({
+        modelStorePathOverride: '',
         capabilities: sampleMergedCapabilities(),
         selection: sampleSelection(),
       });
@@ -2925,10 +3289,45 @@ describe('ModelInstallManager', () => {
   });
 
   describe('startup probe skip (issue #195)', () => {
+    it('retains the store identity of a persisted capabilities snapshot', () => {
+      const snapshot = {
+        capabilities: sampleMergedCapabilities(),
+        selection: sampleSelection(),
+        modelStorePathOverride: '/models',
+      };
+      expect(
+        resolvePluginSettings({ schemaVersion: 11, selectedModelCapabilitiesSnapshot: snapshot })
+          .selectedModelCapabilitiesSnapshot,
+      ).toEqual(snapshot);
+    });
+    it('does not trust an unbound model snapshot after the store path was changed', async () => {
+      harness = createManagerHarness({
+        modelStorePathOverride: '/new-models',
+        selectedModel: sampleSelection(),
+        selectedModelCapabilitiesSnapshot: {
+          capabilities: sampleMergedCapabilities(),
+          selection: sampleSelection(),
+        },
+      });
+      configureSidecarForInit(harness.sidecarConnection);
+      harness.sidecarConnection.listInstalledModels.mockResolvedValue({ models: [] });
+      const probe = deferred<ModelProbeResultEvent>();
+      harness.sidecarConnection.probeModelSelection.mockReturnValue(probe.promise);
+
+      await harness.manager.init();
+
+      expect(harness.manager.getState().installedModels).toEqual([]);
+      expect(harness.manager.getState().selectedModelCapabilities.status).toBe('pending');
+      expect(harness.sidecarConnection.probeModelSelection).toHaveBeenCalledWith(
+        expect.objectContaining({ modelStorePathOverride: '/new-models' }),
+      );
+    });
+
     it('trusts a matching persisted capabilities snapshot on init and never probes the sidecar', async () => {
       harness = createManagerHarness({
         selectedModel: sampleSelection(),
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: sampleMergedCapabilities(),
           selection: sampleSelection(),
         },
@@ -2949,6 +3348,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: sampleSelection(),
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: sampleMergedCapabilities(),
           selection: sampleSelection(),
         },
@@ -2980,6 +3380,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: sampleSelection(),
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: sampleMergedCapabilities(),
           selection: sampleSelection('whisper_small_en_q5_1'),
         },
@@ -3015,6 +3416,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: sampleSelection(),
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: sampleMergedCapabilities(),
           selection: sampleSelection(),
         },
@@ -3057,6 +3459,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: selection,
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: initialCapabilities,
           selection,
         },
@@ -3083,6 +3486,7 @@ describe('ModelInstallManager', () => {
       harness = createManagerHarness({
         selectedModel: sampleSelection(),
         selectedModelCapabilitiesSnapshot: {
+          modelStorePathOverride: '',
           capabilities: sampleMergedCapabilities(),
           selection: sampleSelection(),
         },
@@ -3102,6 +3506,7 @@ describe('ModelInstallManager', () => {
 // ---------------------------------------------------------------------------
 
 interface ManagerHarness {
+  rejectNextConditionalCommit(): void;
   blockNextConditionalCommit(): {
     release(): void;
     started: Promise<void>;
@@ -3131,6 +3536,7 @@ function createManagerHarness(settingsOverride?: Partial<PluginSettings>): Manag
     warn: vi.fn(),
   };
   let settingsOperationTail: Promise<void> = Promise.resolve();
+  let failNextConditionalCommit = false;
   let nextConditionalCommitBlock: {
     release: Deferred<void>;
     started: Deferred<void>;
@@ -3147,6 +3553,10 @@ function createManagerHarness(settingsOverride?: Partial<PluginSettings>): Manag
   const manager = new ModelInstallManager({
     commitSettingsIf: (condition, createNextSettings) =>
       enqueueSettingsOperation(async () => {
+        if (failNextConditionalCommit) {
+          failNextConditionalCommit = false;
+          throw new Error('save failed');
+        }
         if (!condition(settings)) return false;
         settings = createNextSettings(settings);
         const block = nextConditionalCommitBlock;
@@ -3165,6 +3575,9 @@ function createManagerHarness(settingsOverride?: Partial<PluginSettings>): Manag
   });
 
   return {
+    rejectNextConditionalCommit: () => {
+      failNextConditionalCommit = true;
+    },
     blockNextConditionalCommit: () => {
       const release = deferred<void>();
       const started = deferred<void>();
@@ -3468,6 +3881,8 @@ function sampleMergedCapabilities(): EngineCapabilitiesRecord {
 function sampleReadyProbeResult(selection: CatalogModelSelection = sampleSelection()) {
   const isMoonshine = selection.familyId === 'moonshine';
   const mergedCapabilities = sampleMergedCapabilities();
+  const supportedModelFormats: EngineCapabilitiesRecord['runtime']['supportedModelFormats'] =
+    isMoonshine ? ['onnx'] : ['ggml'];
 
   return {
     available: true,
@@ -3485,7 +3900,7 @@ function sampleReadyProbeResult(selection: CatalogModelSelection = sampleSelecti
       familyId: selection.familyId,
       runtime: {
         ...mergedCapabilities.runtime,
-        supportedModelFormats: isMoonshine ? (['onnx'] as const) : ['ggml'],
+        supportedModelFormats,
       },
       runtimeId: selection.runtimeId,
     },

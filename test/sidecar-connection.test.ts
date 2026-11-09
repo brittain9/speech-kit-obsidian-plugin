@@ -167,6 +167,14 @@ function readJsonPayload(frame: Uint8Array): unknown {
   );
 }
 
+function requestIdOf(process: FakeSidecarProcess, index: number): string {
+  const frame = process.writtenFrames[index];
+  if (frame === undefined) throw new Error('Expected a request frame.');
+  const payload = readJsonPayload(frame) as { requestId?: unknown };
+  if (typeof payload.requestId !== 'string') throw new Error('Expected a request ID.');
+  return payload.requestId;
+}
+
 function transcriptReadyEvent(overrides: Partial<TranscriptReadyEvent> = {}): TranscriptReadyEvent {
   return {
     isFinal: true,
@@ -198,6 +206,179 @@ afterEach(() => {
 });
 
 describe('SidecarConnection', () => {
+  it('keeps a correlated store error out of unrelated event listeners', async () => {
+    const { connection, process } = createHarness();
+    const listener = vi.fn();
+    connection.subscribe(listener);
+    const failed = connection.getModelStore('/invalid');
+    const other = connection.listInstalledModels('/valid');
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(2));
+    const oldId = requestIdOf(process, 0);
+    const otherId = requestIdOf(process, 1);
+    const rejection = expect(failed).rejects.toMatchObject({ code: 'invalid_model_store' });
+    process.deliver({
+      type: 'error',
+      requestId: oldId,
+      code: 'invalid_model_store',
+      message: 'invalid path',
+    });
+    await rejection;
+    expect(listener).not.toHaveBeenCalled();
+    process.deliver({ type: 'installed_models', requestId: otherId, models: [] });
+    await expect(other).resolves.toMatchObject({ models: [] });
+  });
+  it('rejects an uncorrelated reply from an older speech engine', async () => {
+    const { connection, process } = createHarness();
+    const request = connection.getModelStore('/models');
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+    process.deliver({
+      type: 'model_store',
+      overridePath: '/models',
+      path: '/models',
+      usingDefaultPath: false,
+    });
+    await expect(request).rejects.toThrow('does not support correlated model requests');
+  });
+
+  it.each(['model_store', 'installed_models', 'model_probe_result'] as const)(
+    'ignores a late %s reply after an earlier request timed out',
+    async (kind) => {
+      const { connection, process } = createHarness();
+      const modelSelection = {
+        kind: 'catalog_model' as const,
+        runtimeId: 'whisper_cpp' as const,
+        familyId: 'whisper' as const,
+        modelId: 'model',
+      };
+      const request = (path: string, timeout: number) => {
+        if (kind === 'model_store') return connection.getModelStore(path, timeout);
+        if (kind === 'installed_models') return connection.listInstalledModels(path, timeout);
+        return connection.probeModelSelection(
+          { modelSelection, modelStorePathOverride: path },
+          timeout,
+        );
+      };
+      const event = (requestId: string, path: string): SidecarEvent => {
+        if (kind === 'model_store')
+          return { type: kind, requestId, overridePath: path, path, usingDefaultPath: false };
+        if (kind === 'installed_models') return { type: kind, requestId, models: [] };
+        return {
+          type: kind,
+          requestId,
+          selection: modelSelection,
+          status: path === '/old' ? 'ready' : 'missing',
+        } as SidecarEvent;
+      };
+      const oldRequest = request('/old', 20);
+      await expect(oldRequest).rejects.toThrow('Timed out');
+      const oldId = requestIdOf(process, 0);
+      const newRequest = request('/new', 1_000);
+      await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(2));
+      const newId = requestIdOf(process, 1);
+      let settled = false;
+      void newRequest.then(() => {
+        settled = true;
+      });
+      process.deliver(event(oldId, '/old'));
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      process.deliver(event(newId, '/new'));
+      await expect(newRequest).resolves.toMatchObject({ type: kind, requestId: newId });
+    },
+  );
+  it('keeps same-model probe responses paired with their requested stores', async () => {
+    const { connection, process } = createHarness();
+    const modelSelection = {
+      kind: 'catalog_model' as const,
+      runtimeId: 'whisper_cpp' as const,
+      familyId: 'whisper' as const,
+      modelId: 'model',
+    };
+    const oldProbe = connection.probeModelSelection({
+      modelSelection,
+      modelStorePathOverride: '/old',
+    });
+    const newProbe = connection.probeModelSelection({
+      modelSelection,
+      modelStorePathOverride: '/new',
+    });
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(2));
+    const oldId = requestIdOf(process, 0);
+    const newId = requestIdOf(process, 1);
+    expect(oldId).not.toBe(newId);
+    process.deliver({
+      type: 'model_probe_result',
+      requestId: oldId,
+      selection: modelSelection,
+      status: 'ready',
+    } as SidecarEvent);
+    await oldProbe;
+    let newSettled = false;
+    void newProbe.then(() => {
+      newSettled = true;
+    });
+    await Promise.resolve();
+    expect(newSettled).toBe(false);
+    process.deliver({
+      type: 'model_probe_result',
+      requestId: newId,
+      selection: modelSelection,
+      status: 'missing',
+    } as SidecarEvent);
+    expect((await newProbe).status).toBe('missing');
+  });
+  it('keeps installed model responses paired with their store requests', async () => {
+    const { connection, process } = createHarness();
+    const oldList = connection.listInstalledModels('/old');
+    const newList = connection.listInstalledModels('/new');
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(2));
+    const oldId = requestIdOf(process, 0);
+    const newId = requestIdOf(process, 1);
+    expect(oldId).not.toBe(newId);
+    process.deliver({ type: 'installed_models', requestId: oldId, models: [] });
+    await oldList;
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(2));
+    let newSettled = false;
+    void newList.then(() => {
+      newSettled = true;
+    });
+    await Promise.resolve();
+    expect(newSettled).toBe(false);
+    process.deliver({ type: 'installed_models', requestId: newId, models: [] });
+    await expect(newList).resolves.toMatchObject({ type: 'installed_models' });
+  });
+  it('does not use a previous store response for a new store request', async () => {
+    const { connection, process } = createHarness();
+    const oldStore = connection.getModelStore('/old');
+    const newStore = connection.getModelStore('/new');
+    await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(2));
+    const oldId = requestIdOf(process, 0);
+    const newId = requestIdOf(process, 1);
+    expect(oldId).not.toBe(newId);
+    process.deliver({
+      type: 'model_store',
+      requestId: oldId,
+      overridePath: '/old',
+      path: '/old',
+      usingDefaultPath: false,
+    });
+    const old = await oldStore;
+    let newSettled = false;
+    void newStore.then(() => {
+      newSettled = true;
+    });
+    await Promise.resolve();
+    expect(old.path).toBe('/old');
+    expect(newSettled).toBe(false);
+    process.deliver({
+      type: 'model_store',
+      requestId: newId,
+      overridePath: '/new',
+      path: '/new',
+      usingDefaultPath: false,
+    });
+    expect((await newStore).path).toBe('/new');
+  });
   it('retains translation ownership after disposal until the running process exits', async () => {
     const { connection, process } = createHarness();
     const gate = new SidecarLifecycleGate();

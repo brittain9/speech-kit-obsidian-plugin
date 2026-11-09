@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { selectedModelEquals } from '../models/model-management-types';
 import { asError } from '../shared/error-utils';
 import type { PluginLogger } from '../shared/plugin-logger';
@@ -78,6 +79,8 @@ interface PendingEventWaiter {
   reject: (error: Error) => void;
   resolve: (event: SidecarEvent) => void;
   timeoutHandle: number;
+  uncorrelatedEventType?: 'model_store' | 'installed_models' | 'model_probe_result';
+  requestId?: string;
 }
 
 interface SidecarProcessLike {
@@ -102,6 +105,8 @@ interface CommandControl {
   readonly abortSignal?: AbortSignal;
   readonly beforeCommandWrite?: () => void;
   readonly onCommandIssued?: () => void;
+  readonly uncorrelatedEventType?: 'model_store' | 'installed_models' | 'model_probe_result';
+  readonly requestId?: string;
 }
 
 interface SidecarConnectionOptions {
@@ -204,11 +209,15 @@ export class SidecarConnection {
     modelStorePathOverride?: string,
     timeoutMs = this.options.getRequestTimeoutMs(),
   ): Promise<ModelStoreEvent> {
+    const requestId = randomUUID();
     return this.sendCommandAndWait(
-      createGetModelStoreCommand(modelStorePathOverride),
-      (event): event is ModelStoreEvent => event.type === 'model_store',
+      { ...createGetModelStoreCommand(modelStorePathOverride), requestId },
+      (event): event is ModelStoreEvent =>
+        event.type === 'model_store' && event.requestId === requestId,
       'model_store',
       timeoutMs,
+      (event) => event.requestId === requestId,
+      { uncorrelatedEventType: 'model_store', requestId },
     );
   }
 
@@ -227,11 +236,15 @@ export class SidecarConnection {
     modelStorePathOverride?: string,
     timeoutMs = this.options.getRequestTimeoutMs(),
   ): Promise<InstalledModelsEvent> {
+    const requestId = randomUUID();
     return this.sendCommandAndWait(
-      createListInstalledModelsCommand(modelStorePathOverride),
-      (event): event is InstalledModelsEvent => event.type === 'installed_models',
+      { ...createListInstalledModelsCommand(modelStorePathOverride), requestId },
+      (event): event is InstalledModelsEvent =>
+        event.type === 'installed_models' && event.requestId === requestId,
       'installed_models',
       timeoutMs,
+      (event) => event.requestId === requestId,
+      { uncorrelatedEventType: 'installed_models', requestId },
     );
   }
 
@@ -239,13 +252,17 @@ export class SidecarConnection {
     payload: Parameters<typeof createProbeModelSelectionCommand>[0],
     timeoutMs = this.options.getRequestTimeoutMs(),
   ): Promise<ModelProbeResultEvent> {
+    const requestId = randomUUID();
     return this.sendCommandAndWait(
-      createProbeModelSelectionCommand(payload),
+      createProbeModelSelectionCommand({ ...payload, requestId }),
       (event): event is ModelProbeResultEvent =>
         event.type === 'model_probe_result' &&
+        event.requestId === requestId &&
         selectedModelEquals(event.selection, payload.modelSelection),
       'model_probe_result',
       timeoutMs,
+      (event) => event.requestId === requestId,
+      { uncorrelatedEventType: 'model_probe_result', requestId },
     );
   }
 
@@ -506,6 +523,10 @@ export class SidecarConnection {
         },
         rejectOnError,
       );
+      if (control?.uncorrelatedEventType !== undefined) {
+        waiter.uncorrelatedEventType = control.uncorrelatedEventType;
+      }
+      if (control?.requestId !== undefined) waiter.requestId = control.requestId;
       control?.abortSignal?.addEventListener('abort', onAbort, { once: true });
 
       try {
@@ -534,7 +555,7 @@ export class SidecarConnection {
       description,
       matches,
       reject,
-      rejectOnError: rejectOnError ?? (() => true),
+      rejectOnError: rejectOnError ?? ((event) => event.requestId === undefined),
       resolve,
       timeoutHandle: window.setTimeout(() => {
         this.pendingWaiters.delete(waiter);
@@ -587,11 +608,48 @@ export class SidecarConnection {
       );
     }
 
-    for (const listener of this.eventListeners) {
-      listener(event);
+    if (event.type !== 'error' || event.requestId === undefined) {
+      for (const listener of this.eventListeners) {
+        listener(event);
+      }
     }
 
     for (const waiter of [...this.pendingWaiters]) {
+      if (
+        event.type === 'error' &&
+        event.requestId !== undefined &&
+        event.requestId !== waiter.requestId
+      )
+        continue;
+      if (
+        event.type === 'error' &&
+        event.requestId === undefined &&
+        event.code === 'invalid_model_store' &&
+        (waiter.uncorrelatedEventType === 'model_store' ||
+          waiter.uncorrelatedEventType === 'installed_models')
+      ) {
+        window.clearTimeout(waiter.timeoutHandle);
+        this.pendingWaiters.delete(waiter);
+        waiter.reject(
+          new Error(
+            'The speech engine does not support correlated model requests. Update the speech engine and try again.',
+          ),
+        );
+        continue;
+      }
+      if (
+        event.type === waiter.uncorrelatedEventType &&
+        (!('requestId' in event) || typeof event.requestId !== 'string')
+      ) {
+        window.clearTimeout(waiter.timeoutHandle);
+        this.pendingWaiters.delete(waiter);
+        waiter.reject(
+          new Error(
+            'The speech engine does not support correlated model requests. Update the speech engine and try again.',
+          ),
+        );
+        continue;
+      }
       if (waiter.matches(event)) {
         window.clearTimeout(waiter.timeoutHandle);
         this.pendingWaiters.delete(waiter);

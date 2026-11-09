@@ -36,10 +36,11 @@ function createMediaSession() {
   });
   const workspaceEvents = new EventSink();
   const vaultEvents = new EventSink();
+  const leaves = [{ view: { editor: { cm: view }, file } }];
   const workspace = {
     activeEditor: { editor: { cm: view }, file },
     getActiveFile: () => file,
-    getLeavesOfType: () => [{ view: { editor: { cm: view }, file } }],
+    getLeavesOfType: () => leaves,
     offref: (ref: EventRef) => workspaceEvents.offref(ref),
     on: (name: string, handler: (...args: never[]) => void) => workspaceEvents.on(name, handler),
   };
@@ -55,6 +56,7 @@ function createMediaSession() {
       onSurfaceDesynchronized: vi.fn(),
     },
     leafPinManager: new TemporaryLeafPinLeaseManager(),
+    pinNoteDuringTranscription: true,
     lockedFile: file,
     noteSurfaceFactory: (editor, placement, onFailure) => {
       const surface = new NoteSurface(editor, placement, onFailure);
@@ -79,10 +81,11 @@ describe('media LLM with the real Session', () => {
     });
     const workspaceEvents = new EventSink();
     const vaultEvents = new EventSink();
+    const leaves = [{ view: { editor: { cm: view }, file } }];
     const workspace = {
       activeEditor: { editor: { cm: view }, file },
       getActiveFile: () => file,
-      getLeavesOfType: () => [{ view: { editor: { cm: view }, file } }],
+      getLeavesOfType: () => leaves,
       offref: (ref: EventRef) => workspaceEvents.offref(ref),
       on: (name: string, handler: (...args: never[]) => void) => workspaceEvents.on(name, handler),
     };
@@ -98,6 +101,7 @@ describe('media LLM with the real Session', () => {
         onSurfaceDesynchronized: vi.fn(),
       },
       leafPinManager: new TemporaryLeafPinLeaseManager(),
+      pinNoteDuringTranscription: true,
       lockedFile: file,
       placement: { anchor: 'end_of_note' },
       rendererOptions: renderOptions(),

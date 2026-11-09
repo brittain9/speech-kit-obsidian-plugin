@@ -8,6 +8,7 @@ import { createSettingAccess } from '../src/settings/setting-helpers';
 import {
   LocalSttSettingTab,
   renderAutomaticCopyFinalizedUtterancesSetting,
+  renderNotePinningSetting,
   renderReadAloudHighlightSetting,
 } from '../src/settings/settings-tab';
 import { type Setting as MockSetting, TestElement } from './__mocks__/obsidian';
@@ -149,6 +150,23 @@ describe('LocalSttSettingTab Obsidian 1.13 compatibility', () => {
 
     await vi.waitFor(() => {
       expect(persistOne).toHaveBeenCalledWith('autoCopyFinalizedUtterances', true);
+    });
+  });
+
+  it('explains temporary note pinning and lets the user disable it', async () => {
+    const persistOne = vi.fn(async () => {});
+    const setting = renderNotePinningSetting(new TestElement() as unknown as HTMLElement, {
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      persistOne,
+    }) as unknown as MockSetting;
+
+    expect(setting.name).toBe('Temporarily pin the target note');
+    expect(setting.descEl.textContent).toContain('next dictation or file transcription');
+    expect(setting.descEl.textContent).toContain('stops dictation');
+    expect(setting.onlyToggle().value).toBe(true);
+    setting.onlyToggle().change(false);
+    await vi.waitFor(() => {
+      expect(persistOne).toHaveBeenCalledWith('pinNoteDuringTranscription', false);
     });
   });
 

@@ -57,10 +57,11 @@ describe('AudioFileTranscriptAdapter with the real Session', () => {
     });
     const workspaceEvents = new EventSink();
     const vaultEvents = new EventSink();
+    const leaves = [{ view: { editor: { cm: view }, file } }];
     const workspace = {
       activeEditor: { editor: { cm: view }, file },
       getActiveFile: () => file,
-      getLeavesOfType: () => [{ view: { editor: { cm: view }, file } }],
+      getLeavesOfType: () => leaves,
       offref: (ref: EventRef) => workspaceEvents.offref(ref),
       on: (name: string, handler: (...args: never[]) => void) => workspaceEvents.on(name, handler),
     };
@@ -77,6 +78,7 @@ describe('AudioFileTranscriptAdapter with the real Session', () => {
         onSurfaceDesynchronized: vi.fn(),
       },
       leafPinManager: new TemporaryLeafPinLeaseManager(),
+      pinNoteDuringTranscription: true,
       lockedFile: file,
       placement: { anchor: 'at_cursor' },
       rendererOptions: renderOptions(),
@@ -109,6 +111,7 @@ describe('AudioFileTranscriptAdapter with the real Session', () => {
     });
     const workspaceEvents = new EventSink();
     const vaultEvents = new EventSink();
+    const leaves = [{ view: { editor: { cm: view }, file } }];
     const app = {
       vault: {
         offref: (ref: EventRef) => vaultEvents.offref(ref),
@@ -117,7 +120,7 @@ describe('AudioFileTranscriptAdapter with the real Session', () => {
       workspace: {
         activeEditor: { editor: { cm: view }, file },
         getActiveFile: () => file,
-        getLeavesOfType: () => [{ view: { editor: { cm: view }, file } }],
+        getLeavesOfType: () => leaves,
         offref: (ref: EventRef) => workspaceEvents.offref(ref),
         on: (name: string, handler: (...args: never[]) => void) =>
           workspaceEvents.on(name, handler),
@@ -131,6 +134,7 @@ describe('AudioFileTranscriptAdapter with the real Session', () => {
         onSurfaceDesynchronized: vi.fn(),
       },
       leafPinManager: new TemporaryLeafPinLeaseManager(),
+      pinNoteDuringTranscription: true,
       lockedFile: file,
       placement: { anchor: 'at_cursor' },
       rendererOptions: { ...renderOptions(), transcriptFormatting: 'space' },

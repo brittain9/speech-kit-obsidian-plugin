@@ -538,6 +538,9 @@ export const en = {
   'settings.listeningMode.oneSentence': 'One sentence',
   'settings.listeningMode.name': 'Listening mode',
   'settings.listeningMode.desc': 'Continuous, or stop after one sentence.',
+  'settings.pinNoteDuringTranscription.name': 'Temporarily pin the target note',
+  'settings.pinNoteDuringTranscription.desc':
+    'Prevents links from replacing the target tab during the next dictation or file transcription. Speech Kit removes its temporary pin when processing ends. When off, opening another note in the same tab stops dictation; completed text stays in the original note.',
   'settings.autoCopyFinalizedUtterances.name': 'Automatically copy finalized utterances',
   'settings.autoCopyFinalizedUtterances.desc':
     'Each finalized phrase replaces the system clipboard.',
@@ -640,6 +643,10 @@ export const en = {
   'settings.recoveryMemory.name': 'Keep recovery text in memory',
   'settings.recoveryMemory.desc':
     'Keep the latest recoverable text and note snapshot in memory. Nothing is written to disk.',
+  'settings.modelStoreOverride.apply': 'Apply',
+  'settings.modelStoreOverride.updated': 'Model store folder updated.',
+  'settings.modelStoreOverride.failed':
+    'Could not change the model store folder. Choose an absolute path to an accessible folder and try again.',
   'settings.modelStoreOverride.name': 'Model store folder override',
   'settings.modelStoreOverride.desc': 'Custom folder for managed model downloads.',
   'settings.modelStoreOverride.placeholder': 'Use the shared default model store',

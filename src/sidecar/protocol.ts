@@ -146,17 +146,20 @@ export interface ContextResponseCommand extends EnvelopeBase<'context_response'>
 
 export interface GetModelStoreCommand extends EnvelopeBase<'get_model_store'> {
   modelStorePathOverride?: string;
+  requestId?: string;
 }
 
 export type ListModelCatalogCommand = EnvelopeBase<'list_model_catalog'>;
 
 export interface ListInstalledModelsCommand extends EnvelopeBase<'list_installed_models'> {
   modelStorePathOverride?: string;
+  requestId?: string;
 }
 
 export interface ProbeModelSelectionCommand extends EnvelopeBase<'probe_model_selection'> {
   modelSelection: SelectedModel;
   modelStorePathOverride?: string;
+  requestId?: string;
 }
 
 export interface RemoveModelCommand extends EnvelopeBase<'remove_model'> {
@@ -294,17 +297,22 @@ export interface SystemAudioProbeResultEvent extends EnvelopeBase<'system_audio_
   ok: boolean;
 }
 
-export interface ModelStoreEvent extends EnvelopeBase<'model_store'>, ModelStoreRecord {}
+export interface ModelStoreEvent extends EnvelopeBase<'model_store'>, ModelStoreRecord {
+  requestId?: string;
+}
 
 export interface ModelCatalogEvent extends EnvelopeBase<'model_catalog'>, ModelCatalogRecord {}
 
 export interface InstalledModelsEvent extends EnvelopeBase<'installed_models'> {
   models: InstalledModelRecord[];
+  requestId?: string;
 }
 
 export interface ModelProbeResultEvent
   extends EnvelopeBase<'model_probe_result'>,
-    ModelProbeResultRecord {}
+    ModelProbeResultRecord {
+  requestId?: string;
+}
 
 export interface ModelRemovedEvent extends EnvelopeBase<'model_removed'>, ModelRemovedRecord {}
 
@@ -431,6 +439,7 @@ export interface ErrorEvent extends EnvelopeBase<'error'> {
   details?: string;
   message: string;
   sessionId?: string;
+  requestId?: string;
 }
 
 export type SidecarEvent =

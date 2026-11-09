@@ -58,6 +58,17 @@ describe('resolvePluginSettings', () => {
     expect(resolvePluginSettings({}).schemaVersion).toBe(11);
   });
 
+  it('keeps temporary note pinning enabled unless the user disables it', () => {
+    expect(DEFAULT_PLUGIN_SETTINGS.pinNoteDuringTranscription).toBe(true);
+    expect(resolvePluginSettings({}).pinNoteDuringTranscription).toBe(true);
+    expect(
+      resolvePluginSettings({ pinNoteDuringTranscription: false }).pinNoteDuringTranscription,
+    ).toBe(false);
+    expect(
+      resolvePluginSettings({ pinNoteDuringTranscription: 'no' }).pinNoteDuringTranscription,
+    ).toBe(true);
+  });
+
   it('keeps microphone recording opt-in', () => {
     expect(resolvePluginSettings({}).saveMicrophoneRecording).toBe(false);
     expect(resolvePluginSettings({ saveMicrophoneRecording: true }).saveMicrophoneRecording).toBe(
