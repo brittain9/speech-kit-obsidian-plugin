@@ -508,6 +508,19 @@
 }
 
 @media (max-width: 560px) {
+  .local-stt-manage-models .local-stt-task-switcher {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .local-stt-manage-models .local-stt-task-switcher__button {
+    height: auto;
+    padding-inline: 6px;
+    text-align: center;
+  }
+
   .local-stt-model-controls {
     grid-template-columns: minmax(0, 1fr);
   }
