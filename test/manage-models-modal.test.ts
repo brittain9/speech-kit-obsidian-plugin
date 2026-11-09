@@ -751,7 +751,7 @@ describe('model browser', () => {
 
   it('restores each task’s own language filter after task switches', async () => {
     const english = sttModel('english', 'moonshine', ['en', 'fr']);
-    const french = sttModel('french', 'nemotron_asr', ['en', 'fr']);
+    const french = sttModel('french', 'nemotron_asr', ['fr']);
     const german = ttsModel('german', 'de');
     const translation = translationModelWithSupport({
       familyId: 'tencent_hy_mt',
@@ -840,10 +840,13 @@ describe('model browser', () => {
       const activeFamily = () =>
         familyTabs().find((tab) => tab.getAttribute('aria-selected') === 'true')?.textContent;
       expect(activeFamily()).toBe('Nemotron');
-      await familyTabs()
-        .find((tab) => tab.textContent === 'Moonshine')
-        ?.click();
+      await selectLanguage(modal, 'English');
       expect(activeFamily()).toBe('Moonshine');
+      await selectLanguage(modal, 'All languages');
+      await familyTabs()
+        .find((tab) => tab.textContent === 'Nemotron')
+        ?.click();
+      expect(activeFamily()).toBe('Nemotron');
       await selectLanguage(modal, 'Français');
       expect(activeLanguage(modal)).toBe('Français');
 
@@ -857,7 +860,7 @@ describe('model browser', () => {
 
       await selectTask(modal, 'Speech to text');
       expect(activeLanguage(modal)).toBe('Français');
-      expect(activeFamily()).toBe('Moonshine');
+      expect(activeFamily()).toBe('Nemotron');
       await selectTask(modal, 'Text to speech');
       expect(activeLanguage(modal)).toBe('Deutsch');
       await selectTask(modal, 'Translation');
