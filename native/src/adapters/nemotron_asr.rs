@@ -1,4 +1,4 @@
-//! No-Python Nemotron 3.5 ASR buffered RNNT adapter.
+//! Cache-aware Nemotron English and multilingual RNNT adapter.
 //!
 //! The graph contract and inference behavior follow the pinned Apache-2.0
 //! sherpa-onnx exporter/runtime and NVIDIA NeMo frontend recorded in the Stage
@@ -7,15 +7,17 @@
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use ort::session::Session;
-use ort::value::{DynValue, PrimitiveTensorElementType, TensorElementType, TensorRef, ValueType};
-use realfft::num_complex::Complex;
-use realfft::{RealFftPlanner, RealToComplex};
+use ort::value::{TensorElementType, ValueType};
+
+use super::nemo_rnnt::{
+    NemoTokenizer, OnlineNemoFeatures, dimension, graph_shape_error, output_at, tensor_f32,
+    tensor_f32_exact, tensor_i64_exact, tensor_ref,
+};
 
 use crate::engine::capabilities::{
     LanguageSupport, ModelFamilyCapabilities, ModelFamilyId, ModelTask, RuntimeId,
@@ -31,34 +33,30 @@ use crate::transcription::{
 };
 
 const SAMPLE_RATE: usize = 16_000;
-const FRAME_SHIFT_SAMPLES: usize = 160;
-const FRAME_LENGTH_SAMPLES: usize = 400;
-const FFT_SIZE: usize = 512;
-const FFT_BINS: usize = FFT_SIZE / 2 + 1;
-const STFT_WINDOW_OFFSET: usize = (FFT_SIZE - FRAME_LENGTH_SAMPLES) / 2;
 const FEATURE_DIM: usize = 128;
-const PREEMPHASIS_COEFFICIENT: f32 = 0.97;
-const LOG_ZERO_GUARD: f32 = 1.0 / 16_777_216.0;
 const MAX_SYMBOLS_PER_FRAME: usize = 10;
 const EN_US_PROMPT_INDEX: i64 = 0;
 const AUTO_PROMPT_INDEX: usize = 101;
-const EXPECTED_CHUNK_SIZE_MS: usize = 560;
 const EXPECTED_WINDOW_SIZE: usize = 65;
-const EXPECTED_CHUNK_SHIFT: usize = 56;
 const EXPECTED_SUBSAMPLING_FACTOR: usize = 8;
 const EXPECTED_ENCODER_DIM: usize = 1_024;
 const EXPECTED_CACHE_CHANNEL_LAYERS: usize = 24;
-const EXPECTED_CACHE_CHANNEL_TIME: usize = 56;
 const EXPECTED_CACHE_TIME_WIDTH: usize = 8;
 const EXPECTED_PREDICTOR_LAYERS: usize = 2;
 const EXPECTED_PREDICTOR_HIDDEN: usize = 640;
-const EXPECTED_VOCAB_SIZE: usize = 13_088;
 
 const ENCODER_FILENAME: &str = "encoder.int8.onnx";
 const DECODER_FILENAME: &str = "decoder.int8.onnx";
 const JOINER_FILENAME: &str = "joiner.int8.onnx";
 const TOKENS_FILENAME: &str = "tokens.txt";
 const MODEL_TYPE: &str = "EncDecRNNTBPEModelWithPrompt";
+const ENGLISH_MODEL_TYPE: &str = "EncDecHybridRNNTCTCBPEModel";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NemotronVariant {
+    English,
+    Multilingual,
+}
 
 #[derive(Clone, Copy)]
 struct LanguagePrompt {
@@ -202,13 +200,26 @@ impl ModelFamilyAdapter for NemotronAsrAdapter {
         Ok(())
     }
 
+    fn probe_model_and_language_support(
+        &self,
+        path: &Path,
+    ) -> Result<LanguageSupport, TranscriptionError> {
+        let graphs = ValidatedNemotronGraphs::load(path, GpuConfig { use_gpu: false })?;
+        Ok(match graphs.config.variant {
+            NemotronVariant::English => LanguageSupport::EnglishOnly,
+            NemotronVariant::Multilingual => LanguageSupport::List {
+                tags: supported_language_tags(),
+            },
+        })
+    }
+
     fn load(
         &self,
         _path: &Path,
         _gpu: GpuConfig,
     ) -> Result<Box<dyn LoadedModel>, TranscriptionError> {
         Err(TranscriptionError::unsupported_engine(
-            "Nemotron 3.5 ASR requires the streaming session path".to_string(),
+            "Nemotron ASR requires the streaming session path".to_string(),
         ))
     }
 
@@ -226,7 +237,7 @@ struct ValidatedNemotronGraphs {
     decoder: Session,
     encoder: Session,
     joiner: Session,
-    tokenizer: NemotronTokenizer,
+    tokenizer: NemoTokenizer,
 }
 
 impl ValidatedNemotronGraphs {
@@ -240,7 +251,7 @@ impl ValidatedNemotronGraphs {
         let joiner = build_session(&paths.joiner, GpuConfig { use_gpu: false })
             .map_err(invalid_session("joiner"))?;
         verify_graph_topology(&encoder, &decoder, &joiner, &config)?;
-        let tokenizer = NemotronTokenizer::load(&paths.tokens)?;
+        let tokenizer = NemoTokenizer::load(&paths.tokens)?;
         tokenizer.validate(config.vocab_size)?;
         Ok(Self {
             config,
@@ -272,14 +283,14 @@ fn resolve_model_paths(path: &Path) -> Result<ModelPaths, TranscriptionError> {
     validate_model_path(path)?;
     if path.file_name() != Some(OsStr::new(ENCODER_FILENAME)) {
         return Err(TranscriptionError::invalid_model_with_details(format!(
-            "Nemotron 3.5 ASR external models must be selected via {ENCODER_FILENAME}; received {}",
+            "Nemotron ASR external models must be selected via {ENCODER_FILENAME}; received {}",
             path.display()
         )));
     }
 
     let directory = path.parent().ok_or_else(|| {
         TranscriptionError::invalid_model_with_details(
-            "cannot determine the Nemotron 3.5 ASR model directory".to_string(),
+            "cannot determine the Nemotron ASR model directory".to_string(),
         )
     })?;
     let paths = ModelPaths {
@@ -292,7 +303,7 @@ fn resolve_model_paths(path: &Path) -> Result<ModelPaths, TranscriptionError> {
     for required in [&paths.decoder, &paths.joiner, &paths.tokens] {
         validate_model_path(required).map_err(|_| {
             TranscriptionError::invalid_model_with_details(format!(
-                "required Nemotron 3.5 ASR asset missing: {}",
+                "required Nemotron ASR asset missing: {}",
                 required.display()
             ))
         })?;
@@ -302,6 +313,8 @@ fn resolve_model_paths(path: &Path) -> Result<ModelPaths, TranscriptionError> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NemotronConfig {
+    variant: NemotronVariant,
+    chunk_size_ms: usize,
     vocab_size: usize,
     feature_dim: usize,
     window_size: usize,
@@ -319,7 +332,7 @@ impl NemotronConfig {
     fn from_encoder(encoder: &Session) -> Result<Self, TranscriptionError> {
         let metadata = encoder.metadata().map_err(|error| {
             TranscriptionError::invalid_model_with_details(format!(
-                "failed to read Nemotron 3.5 ASR encoder metadata: {error}"
+                "failed to read Nemotron ASR encoder metadata: {error}"
             ))
         })?;
         let model_type = metadata.custom("model_type").ok_or_else(|| {
@@ -327,41 +340,49 @@ impl NemotronConfig {
                 "encoder metadata is missing model_type".to_string(),
             )
         })?;
-        if model_type != MODEL_TYPE {
-            return Err(TranscriptionError::invalid_model_with_details(format!(
-                "expected model_type={MODEL_TYPE}, found {model_type}"
-            )));
-        }
+        let variant = match model_type.as_str() {
+            MODEL_TYPE => NemotronVariant::Multilingual,
+            ENGLISH_MODEL_TYPE => NemotronVariant::English,
+            _ => {
+                return Err(TranscriptionError::invalid_model_with_details(format!(
+                    "unsupported Nemotron model_type={model_type}"
+                )));
+            }
+        };
         let normalization = metadata.custom("normalize_type").unwrap_or_default();
         if !normalization.is_empty() {
             return Err(TranscriptionError::invalid_model_with_details(format!(
-                "unsupported Nemotron 3.5 ASR normalization {normalization:?}; expected no normalization"
+                "unsupported Nemotron ASR normalization {normalization:?}; expected no normalization"
             )));
         }
 
-        let prompt_dictionary = metadata.custom("prompt_dictionary").ok_or_else(|| {
-            TranscriptionError::invalid_model_with_details(
-                "encoder metadata is missing prompt_dictionary".to_string(),
-            )
-        })?;
-        let prompt_dictionary: HashMap<String, usize> = serde_json::from_str(&prompt_dictionary)
-            .map_err(|error| {
-                TranscriptionError::invalid_model_with_details(format!(
-                    "invalid encoder prompt_dictionary: {error}"
-                ))
+        if variant == NemotronVariant::Multilingual {
+            let prompt_dictionary = metadata.custom("prompt_dictionary").ok_or_else(|| {
+                TranscriptionError::invalid_model_with_details(
+                    "encoder metadata is missing prompt_dictionary".to_string(),
+                )
             })?;
-        validate_language_prompts(&prompt_dictionary)?;
-        if metadata_usize(&metadata, "auto_prompt_id")? != AUTO_PROMPT_INDEX {
-            return Err(TranscriptionError::invalid_model_with_details(
-                "encoder auto_prompt_id must be 101".to_string(),
-            ));
+            let prompt_dictionary: HashMap<String, usize> =
+                serde_json::from_str(&prompt_dictionary).map_err(|error| {
+                    TranscriptionError::invalid_model_with_details(format!(
+                        "invalid encoder prompt_dictionary: {error}"
+                    ))
+                })?;
+            validate_language_prompts(&prompt_dictionary)?;
+            if metadata_usize(&metadata, "auto_prompt_id")? != AUTO_PROMPT_INDEX {
+                return Err(TranscriptionError::invalid_model_with_details(
+                    "encoder auto_prompt_id must be 101".to_string(),
+                ));
+            }
         }
 
         let decoder_vocab_size = metadata_usize(&metadata, "vocab_size")?;
         let config = Self {
+            variant,
+            chunk_size_ms: metadata_usize(&metadata, "chunk_size_ms")?,
             vocab_size: decoder_vocab_size.checked_add(1).ok_or_else(|| {
                 TranscriptionError::invalid_model_with_details(
-                    "Nemotron 3.5 ASR vocabulary size overflow".to_string(),
+                    "Nemotron ASR vocabulary size overflow".to_string(),
                 )
             })?,
             feature_dim: metadata_usize(&metadata, "feat_dim")?,
@@ -375,12 +396,9 @@ impl NemotronConfig {
             predictor_layers: metadata_usize(&metadata, "pred_rnn_layers")?,
             predictor_hidden: metadata_usize(&metadata, "pred_hidden")?,
         };
-        let chunk_size_ms = metadata_usize(&metadata, "chunk_size_ms")?;
         let cache_time_layers = metadata_usize(&metadata, "cache_last_time_dim1")?;
         let cache_time_dim = metadata_usize(&metadata, "cache_last_time_dim2")?;
-        if chunk_size_ms != EXPECTED_CHUNK_SIZE_MS
-            || cache_time_layers != config.cache_channel_layers
-            || cache_time_dim != config.encoder_dim
+        if cache_time_layers != config.cache_channel_layers || cache_time_dim != config.encoder_dim
         {
             return Err(TranscriptionError::invalid_model_with_details(
                 "encoder metadata contains an unsupported chunk or cache layout".to_string(),
@@ -391,6 +409,20 @@ impl NemotronConfig {
     }
 
     fn validate(&self) -> Result<(), TranscriptionError> {
+        let (window_size, chunk_shift) = match (self.variant, self.chunk_size_ms) {
+            (_, 560) => (EXPECTED_WINDOW_SIZE, 56),
+            (NemotronVariant::Multilingual, 160) => (25, 16),
+            _ => {
+                return Err(TranscriptionError::invalid_model_with_details(format!(
+                    "unsupported Nemotron {:?} chunk size {} ms",
+                    self.variant, self.chunk_size_ms
+                )));
+            }
+        };
+        let (vocab_size, cache_channel_time) = match self.variant {
+            NemotronVariant::English => (1_025, 70),
+            NemotronVariant::Multilingual => (13_088, 56),
+        };
         let actual = (
             self.vocab_size,
             self.feature_dim,
@@ -405,21 +437,21 @@ impl NemotronConfig {
             self.predictor_hidden,
         );
         let expected = (
-            EXPECTED_VOCAB_SIZE,
+            vocab_size,
             FEATURE_DIM,
-            EXPECTED_WINDOW_SIZE,
-            EXPECTED_CHUNK_SHIFT,
+            window_size,
+            chunk_shift,
             EXPECTED_SUBSAMPLING_FACTOR,
             EXPECTED_ENCODER_DIM,
             EXPECTED_CACHE_CHANNEL_LAYERS,
-            EXPECTED_CACHE_CHANNEL_TIME,
+            cache_channel_time,
             EXPECTED_CACHE_TIME_WIDTH,
             EXPECTED_PREDICTOR_LAYERS,
             EXPECTED_PREDICTOR_HIDDEN,
         );
         if actual != expected {
             return Err(TranscriptionError::invalid_model_with_details(format!(
-                "unsupported Nemotron 3.5 ASR metadata dimensions: {actual:?}"
+                "unsupported Nemotron ASR metadata dimensions: {actual:?}"
             )));
         }
         Ok(())
@@ -446,17 +478,22 @@ fn verify_graph_topology(
     joiner: &Session,
     config: &NemotronConfig,
 ) -> Result<(), TranscriptionError> {
+    let encoder_inputs = [
+        "audio_signal",
+        "length",
+        "cache_last_channel",
+        "cache_last_time",
+        "cache_last_channel_len",
+        "prompt_index",
+    ];
+    let encoder_input_count = match config.variant {
+        NemotronVariant::English => 5,
+        NemotronVariant::Multilingual => 6,
+    };
     verify_session_io(
         encoder,
         "encoder",
-        &[
-            "audio_signal",
-            "length",
-            "cache_last_channel",
-            "cache_last_time",
-            "cache_last_channel_len",
-            "prompt_index",
-        ],
+        &encoder_inputs[..encoder_input_count],
         &[
             "outputs",
             "encoded_lengths",
@@ -508,12 +545,14 @@ fn verify_graph_topology(
         TensorElementType::Int64,
         1,
     )?;
-    verify_tensor(
-        encoder.inputs()[5].dtype(),
-        "encoder prompt_index input",
-        TensorElementType::Int64,
-        1,
-    )?;
+    if config.variant == NemotronVariant::Multilingual {
+        verify_tensor(
+            encoder.inputs()[5].dtype(),
+            "encoder prompt_index input",
+            TensorElementType::Int64,
+            1,
+        )?;
+    }
     verify_tensor(
         encoder.outputs()[0].dtype(),
         "encoder output",
@@ -746,92 +785,6 @@ fn validate_model_dimension(
     Ok(())
 }
 
-struct NemotronTokenizer {
-    pieces: Vec<String>,
-}
-
-impl NemotronTokenizer {
-    fn load(path: &Path) -> Result<Self, TranscriptionError> {
-        let text = fs::read_to_string(path).map_err(|error| {
-            TranscriptionError::invalid_model_with_details(format!(
-                "failed to read {}: {error}",
-                path.display()
-            ))
-        })?;
-        let mut pieces = Vec::new();
-        for (line_number, line) in text.lines().enumerate() {
-            let (piece, id) = line.rsplit_once(' ').ok_or_else(|| {
-                TranscriptionError::invalid_model_with_details(format!(
-                    "invalid tokens.txt line {}",
-                    line_number + 1
-                ))
-            })?;
-            let id = id.parse::<usize>().map_err(|error| {
-                TranscriptionError::invalid_model_with_details(format!(
-                    "invalid tokens.txt id on line {}: {error}",
-                    line_number + 1
-                ))
-            })?;
-            if id != pieces.len() || piece.is_empty() {
-                return Err(TranscriptionError::invalid_model_with_details(format!(
-                    "tokens.txt must contain contiguous non-empty pieces; line {} declares id {id}",
-                    line_number + 1
-                )));
-            }
-            pieces.push(piece.to_string());
-        }
-        Ok(Self { pieces })
-    }
-
-    fn validate(&self, vocab_size: usize) -> Result<(), TranscriptionError> {
-        if self.pieces.len() != vocab_size
-            || self.pieces.last().map(String::as_str) != Some("<blk>")
-        {
-            return Err(TranscriptionError::invalid_model_with_details(format!(
-                "tokenizer mismatch: expected {vocab_size} pieces ending in <blk>, found {}",
-                self.pieces.len()
-            )));
-        }
-        Ok(())
-    }
-
-    fn decode(&self, token_ids: &[i32]) -> Result<String, TranscriptionError> {
-        let mut text = String::new();
-        for &id in token_ids {
-            let piece = usize::try_from(id)
-                .ok()
-                .and_then(|id| self.pieces.get(id))
-                .ok_or_else(|| {
-                    TranscriptionError::transcription_failure(
-                        "Nemotron tokenizer",
-                        format!("token id {id} is outside the vocabulary"),
-                    )
-                })?;
-            if is_language_tag(piece) {
-                continue;
-            }
-            text.push_str(piece);
-        }
-        Ok(text.replace('▁', " ").trim().to_string())
-    }
-}
-
-fn is_language_tag(piece: &str) -> bool {
-    let bytes = piece.as_bytes();
-    if bytes.len() < 4 || bytes[0] != b'<' || bytes[bytes.len() - 1] != b'>' {
-        return false;
-    }
-    let body = &bytes[1..bytes.len() - 1];
-    if (2..=3).contains(&body.len()) && body.iter().all(u8::is_ascii_lowercase) {
-        return true;
-    }
-    body.len() == 5
-        && body[..2].iter().all(u8::is_ascii_lowercase)
-        && body[2] == b'-'
-        && body[3..].iter().all(u8::is_ascii_uppercase)
-}
-
-#[derive(Clone)]
 struct PredictorState {
     hidden: Vec<f32>,
     cell: Vec<f32>,
@@ -882,14 +835,14 @@ struct LoadedNemotronModel {
     encoder: Session,
     encoder_input: Vec<f32>,
     encoder_state: EncoderState,
-    features: OnlineNemotronFeatures,
+    features: OnlineNemoFeatures,
     joiner: Session,
     last_token: Option<i32>,
     predictor_state_before_last: PredictorState,
     prompt_index: i64,
     processed_feature_frames: usize,
     sample_count: usize,
-    tokenizer: NemotronTokenizer,
+    tokenizer: NemoTokenizer,
     tokens: Vec<i32>,
 }
 
@@ -911,7 +864,7 @@ impl LoadedNemotronModel {
             encoder,
             encoder_input,
             encoder_state,
-            features: OnlineNemotronFeatures::new(),
+            features: OnlineNemoFeatures::new(),
             joiner,
             last_token: None,
             predictor_state_before_last,
@@ -1006,19 +959,24 @@ impl LoadedNemotronModel {
         )?;
         let prompt_index_data = [self.prompt_index];
         let prompt_index = tensor_ref([1], &prompt_index_data, "Nemotron encoder prompt index")?;
-        let outputs = self
-            .encoder
-            .run(ort::inputs![
+        let outputs = match self.config.variant {
+            NemotronVariant::English => self.encoder.run(ort::inputs![
+                features,
+                length,
+                channel_cache,
+                time_cache,
+                channel_cache_len
+            ]),
+            NemotronVariant::Multilingual => self.encoder.run(ort::inputs![
                 features,
                 length,
                 channel_cache,
                 time_cache,
                 channel_cache_len,
                 prompt_index
-            ])
-            .map_err(|error| {
-                TranscriptionError::transcription_failure("Nemotron encoder", &error)
-            })?;
+            ]),
+        }
+        .map_err(|error| TranscriptionError::transcription_failure("Nemotron encoder", &error))?;
         let (shape, encoded) = tensor_f32(output_at(&outputs, 0, "encoder output")?, "encoder")?;
         if shape.len() != 3
             || shape[0] != 1
@@ -1259,6 +1217,16 @@ impl StreamingModel for LoadedNemotronModel {
                 "cannot change language during an open utterance",
             ));
         }
+        if self.config.variant == NemotronVariant::English {
+            return if language == "en" {
+                Ok(())
+            } else {
+                Err(TranscriptionError::unsupported_language(
+                    language,
+                    "This Nemotron model supports English only.",
+                ))
+            };
+        }
         self.prompt_index = prompt_index_for_language(language).ok_or_else(|| {
             TranscriptionError::unsupported_language(
                 language,
@@ -1295,323 +1263,9 @@ impl StreamingModel for LoadedNemotronModel {
     }
 }
 
-struct OnlineNemotronFeatures {
-    audio: Vec<f32>,
-    features: Vec<[f32; FEATURE_DIM]>,
-    filterbank: Vec<[f32; FFT_BINS]>,
-    fft: Arc<dyn RealToComplex<f32>>,
-    fft_input: Vec<f32>,
-    fft_output: Vec<Complex<f32>>,
-    fft_scratch: Vec<Complex<f32>>,
-    finished: bool,
-    window: [f32; FRAME_LENGTH_SAMPLES],
-}
-
-impl OnlineNemotronFeatures {
-    fn new() -> Self {
-        let fft = RealFftPlanner::<f32>::new().plan_fft_forward(FFT_SIZE);
-        let fft_input = fft.make_input_vec();
-        let fft_output = fft.make_output_vec();
-        let fft_scratch = fft.make_scratch_vec();
-        Self {
-            audio: Vec::new(),
-            features: Vec::new(),
-            filterbank: build_librosa_filterbank(),
-            fft,
-            fft_input,
-            fft_output,
-            fft_scratch,
-            finished: false,
-            window: build_symmetric_hann_window(),
-        }
-    }
-
-    fn accept(&mut self, samples: &[i16]) {
-        debug_assert!(!self.finished);
-        self.audio
-            .extend(samples.iter().map(|&sample| sample as f32 / 32768.0));
-        self.compute_available(false);
-    }
-
-    fn finish(&mut self) {
-        if !self.finished {
-            self.finished = true;
-            self.compute_available(true);
-        }
-    }
-
-    fn reset(&mut self) {
-        self.audio.clear();
-        self.features.clear();
-        self.finished = false;
-    }
-
-    fn len(&self) -> usize {
-        self.features.len()
-    }
-
-    fn compute_available(&mut self, flush: bool) {
-        if self.audio.is_empty() {
-            return;
-        }
-        let target = frame_count(self.audio.len(), flush);
-        while self.features.len() < target {
-            let frame = self.compute_frame(self.features.len());
-            self.features.push(frame);
-        }
-    }
-
-    fn compute_frame(&mut self, frame_index: usize) -> [f32; FEATURE_DIM] {
-        let start = frame_index as isize * FRAME_SHIFT_SAMPLES as isize
-            - (FRAME_LENGTH_SAMPLES / 2) as isize;
-        self.fft_input.fill(0.0);
-        for (offset, sample) in self.fft_input
-            [STFT_WINDOW_OFFSET..STFT_WINDOW_OFFSET + FRAME_LENGTH_SAMPLES]
-            .iter_mut()
-            .enumerate()
-        {
-            *sample =
-                preemphasized_sample(&self.audio, start + offset as isize) * self.window[offset];
-        }
-
-        self.fft
-            .process_with_scratch(
-                &mut self.fft_input,
-                &mut self.fft_output,
-                &mut self.fft_scratch,
-            )
-            .expect("Nemotron FFT buffers match the planned size");
-        let mut power = [0.0_f32; FFT_BINS];
-        for (index, value) in self.fft_output.iter().enumerate() {
-            power[index] = value.re * value.re + value.im * value.im;
-        }
-
-        let mut result = [0.0_f32; FEATURE_DIM];
-        for (mel_index, weights) in self.filterbank.iter().enumerate() {
-            let energy = weights
-                .iter()
-                .zip(power)
-                .map(|(weight, value)| weight * value)
-                .sum::<f32>();
-            result[mel_index] = (energy + LOG_ZERO_GUARD).ln();
-        }
-        result
-    }
-
-    fn window(&self, start: usize, frame_count: usize) -> Vec<f32> {
-        let mut window = vec![0.0_f32; frame_count * FEATURE_DIM];
-        for target_frame in 0..frame_count {
-            if let Some(source) = self.features.get(start + target_frame) {
-                window[target_frame * FEATURE_DIM..(target_frame + 1) * FEATURE_DIM]
-                    .copy_from_slice(source);
-            }
-        }
-        window
-    }
-}
-
-fn frame_count(sample_count: usize, flush: bool) -> usize {
-    if flush {
-        return sample_count / FRAME_SHIFT_SAMPLES;
-    }
-    sample_count
-        .saturating_sub(FRAME_LENGTH_SAMPLES / 2)
-        .div_ceil(FRAME_SHIFT_SAMPLES)
-}
-
-fn preemphasized_sample(audio: &[f32], index: isize) -> f32 {
-    let Ok(index) = usize::try_from(index) else {
-        return 0.0;
-    };
-    let Some(&sample) = audio.get(index) else {
-        return 0.0;
-    };
-    if index == 0 {
-        sample
-    } else {
-        sample - PREEMPHASIS_COEFFICIENT * audio[index - 1]
-    }
-}
-
-fn build_symmetric_hann_window() -> [f32; FRAME_LENGTH_SAMPLES] {
-    std::array::from_fn(|index| {
-        let phase = 2.0 * std::f32::consts::PI * index as f32 / (FRAME_LENGTH_SAMPLES - 1) as f32;
-        0.5 - 0.5 * phase.cos()
-    })
-}
-
-fn build_librosa_filterbank() -> Vec<[f32; FFT_BINS]> {
-    let mel_min = hz_to_slaney_mel(0.0);
-    let mel_max = hz_to_slaney_mel(SAMPLE_RATE as f32 / 2.0);
-    let mel_step = (mel_max - mel_min) / (FEATURE_DIM + 1) as f32;
-    (0..FEATURE_DIM)
-        .map(|bin| {
-            let left = slaney_mel_to_hz(mel_min + bin as f32 * mel_step);
-            let center = slaney_mel_to_hz(mel_min + (bin + 1) as f32 * mel_step);
-            let right = slaney_mel_to_hz(mel_min + (bin + 2) as f32 * mel_step);
-            let normalization = 2.0 / (right - left);
-            std::array::from_fn(|fft_bin| {
-                let hz = SAMPLE_RATE as f32 / FFT_SIZE as f32 * fft_bin as f32;
-                if hz > left && hz <= center {
-                    (hz - left) / (center - left) * normalization
-                } else if hz > center && hz < right {
-                    (right - hz) / (right - center) * normalization
-                } else {
-                    0.0
-                }
-            })
-        })
-        .collect()
-}
-
-fn hz_to_slaney_mel(hz: f32) -> f32 {
-    if hz <= 1_000.0 {
-        hz * 3.0 / 200.0
-    } else {
-        15.0 + 14.545_078 * (hz / 1_000.0).ln()
-    }
-}
-
-fn slaney_mel_to_hz(mel: f32) -> f32 {
-    if mel <= 15.0 {
-        200.0 / 3.0 * mel
-    } else {
-        1_000.0 * ((mel - 15.0) * 0.068_751_775).exp()
-    }
-}
-
-fn tensor_ref<'a, T, const RANK: usize>(
-    shape: [usize; RANK],
-    data: &'a [T],
-    context: &str,
-) -> Result<TensorRef<'a, T>, TranscriptionError>
-where
-    T: PrimitiveTensorElementType + Clone + std::fmt::Debug + 'static,
-{
-    TensorRef::from_array_view((shape, data))
-        .map_err(|error| TranscriptionError::transcription_failure(context, &error))
-}
-
-fn output_at<'a>(
-    outputs: &'a ort::session::SessionOutputs<'_>,
-    index: usize,
-    name: &str,
-) -> Result<&'a DynValue, TranscriptionError> {
-    if index >= outputs.len() {
-        return Err(TranscriptionError::transcription_failure(
-            "Nemotron graph output",
-            format!("missing {name} at index {index}"),
-        ));
-    }
-    Ok(&outputs[index])
-}
-
-fn tensor_f32<'a>(
-    value: &'a DynValue,
-    name: &str,
-) -> Result<(&'a [i64], &'a [f32]), TranscriptionError> {
-    let (shape, data) = value
-        .try_extract_tensor::<f32>()
-        .map_err(|error| TranscriptionError::transcription_failure(name, &error))?;
-    Ok((shape, data))
-}
-
-fn tensor_f32_exact<'a>(
-    value: &'a DynValue,
-    expected_shape: &[usize],
-    name: &str,
-) -> Result<&'a [f32], TranscriptionError> {
-    let (shape, data) = tensor_f32(value, name)?;
-    if !shape_matches(shape, expected_shape) {
-        return Err(graph_shape_error(name, shape));
-    }
-    Ok(data)
-}
-
-fn tensor_i64_exact<'a>(
-    value: &'a DynValue,
-    expected_shape: &[usize],
-    name: &str,
-) -> Result<&'a [i64], TranscriptionError> {
-    let (shape, data) = value
-        .try_extract_tensor::<i64>()
-        .map_err(|error| TranscriptionError::transcription_failure(name, &error))?;
-    if !shape_matches(shape, expected_shape) {
-        return Err(graph_shape_error(name, shape));
-    }
-    Ok(data)
-}
-
-fn shape_matches(actual: &[i64], expected: &[usize]) -> bool {
-    actual.len() == expected.len()
-        && actual
-            .iter()
-            .zip(expected)
-            .all(|(&actual, &expected)| actual == expected as i64)
-}
-
-fn dimension(shape: &[i64], index: usize, name: &str) -> Result<usize, TranscriptionError> {
-    shape
-        .get(index)
-        .and_then(|value| usize::try_from(*value).ok())
-        .ok_or_else(|| graph_shape_error(name, shape))
-}
-
-fn graph_shape_error(name: &str, shape: &[i64]) -> TranscriptionError {
-    TranscriptionError::transcription_failure(
-        "Nemotron graph shape",
-        format!("unexpected {name} shape {shape:?}"),
-    )
-}
-
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
-    use sha2::{Digest, Sha256};
-
     use super::*;
-
-    #[test]
-    fn non_snipping_frame_count_waits_for_complete_frames_until_flush() {
-        assert_eq!(frame_count(0, false), 0);
-        assert_eq!(frame_count(320, false), 1);
-        assert_eq!(frame_count(320, true), 2);
-        assert_eq!(frame_count(16_000, false), 99);
-        assert_eq!(frame_count(16_000, true), 100);
-    }
-
-    #[test]
-    fn preemphasis_preserves_first_sample_and_zero_pads_stft_edges() {
-        let audio = [0.5, 0.25];
-        assert_eq!(preemphasized_sample(&audio, -1), 0.0);
-        assert_eq!(preemphasized_sample(&audio, 0), 0.5);
-        assert_eq!(preemphasized_sample(&audio, 1), 0.25 - 0.97 * 0.5);
-        assert_eq!(preemphasized_sample(&audio, 2), 0.0);
-    }
-
-    #[test]
-    fn symmetric_hann_has_zero_endpoints() {
-        let window = build_symmetric_hann_window();
-        assert_eq!(window[0], 0.0);
-        assert!(window[FRAME_LENGTH_SAMPLES / 2] > 0.999);
-        assert!(window[FRAME_LENGTH_SAMPLES - 1].abs() < 1e-6);
-    }
-
-    #[test]
-    fn tokenizer_requires_contiguous_ids_and_blank_last() {
-        let tokenizer = NemotronTokenizer {
-            pieces: vec![
-                "▁hello".to_string(),
-                "<en-US>".to_string(),
-                "▁world".to_string(),
-                "<blk>".to_string(),
-            ],
-        };
-        tokenizer.validate(4).unwrap();
-        assert_eq!(tokenizer.decode(&[0, 1, 2]).unwrap(), "hello world");
-        assert!(tokenizer.validate(3).is_err());
-    }
 
     #[test]
     fn model_dimensions_accept_symbolic_axes_but_reject_static_mismatches() {
@@ -1628,79 +1282,6 @@ mod tests {
                 .is_some_and(|details| details.contains("expected 56, found 55")),
             "unexpected error details: {:?}",
             error.details
-        );
-    }
-
-    #[test]
-    fn feature_windows_zero_pad_missing_tail_without_normalization() {
-        let mut extractor = OnlineNemotronFeatures::new();
-        extractor.accept(&vec![0_i16; 8_000]);
-        let window = extractor.window(40, EXPECTED_WINDOW_SIZE);
-        assert_eq!(window.len(), EXPECTED_WINDOW_SIZE * FEATURE_DIM);
-        assert!(window.iter().all(|value| value.is_finite()));
-        assert!(window[10 * FEATURE_DIM..].iter().all(|&value| value == 0.0));
-    }
-
-    #[test]
-    fn frontend_matches_pinned_nemo_oracle() {
-        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-        let golden: serde_json::Value =
-            serde_json::from_slice(&fs::read(fixtures.join("nemotron/golden-560ms.json")).unwrap())
-                .unwrap();
-        let mut reader =
-            hound::WavReader::open(fixtures.join("audio/7021-79740-0000.wav")).unwrap();
-        let samples: Vec<i16> = reader.samples::<i16>().map(Result::unwrap).collect();
-        let mut extractor = OnlineNemotronFeatures::new();
-        extractor.accept(&samples);
-        extractor.finish();
-
-        let frontend = &golden["frontend"];
-        assert_eq!(
-            extractor.len(),
-            frontend["shape"][1].as_u64().unwrap() as usize
-        );
-        assert_eq!(frontend["shape"][0].as_u64().unwrap() as usize, FEATURE_DIM);
-        assert_eq!(
-            frontend["oraclePath"].as_str().unwrap(),
-            "frontend-560ms.f32le"
-        );
-        let oracle = include_bytes!("../../tests/fixtures/nemotron/frontend-560ms.f32le");
-        assert_eq!(
-            oracle.len(),
-            FEATURE_DIM * extractor.len() * std::mem::size_of::<f32>()
-        );
-        let oracle_sha256 = Sha256::digest(oracle)
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
-        assert_eq!(
-            oracle_sha256,
-            frontend["oracleSha256"].as_str().unwrap(),
-            "the committed NeMo frontend oracle bytes changed"
-        );
-
-        let tolerance = frontend["maxAbsError"].as_f64().unwrap() as f32;
-        let mut worst = (0.0_f32, 0_usize, 0_usize, 0.0_f32, 0.0_f32);
-        for feature in 0..FEATURE_DIM {
-            for frame in 0..extractor.len() {
-                let offset = (feature * extractor.len() + frame) * std::mem::size_of::<f32>();
-                let expected = f32::from_le_bytes(oracle[offset..offset + 4].try_into().unwrap());
-                let actual = extractor.features[frame][feature];
-                let error = (actual - expected).abs();
-                if error > worst.0 {
-                    worst = (error, frame, feature, expected, actual);
-                }
-            }
-        }
-        assert!(
-            worst.0 <= tolerance,
-            "full NeMo frontend parity failed at frame {}, bin {}: expected {}, found {}, absolute error {} exceeds {}",
-            worst.1,
-            worst.2,
-            worst.3,
-            worst.4,
-            worst.0,
-            tolerance
         );
     }
 }

@@ -729,16 +729,16 @@ export const fr = {
     'Le chemin du fichier modèle doit pointer vers un fichier : {path}',
   'models.external.validation.selectEntryFile': 'Sélectionnez {filename}.',
   'models.external.validation.nemotronEntryFile':
-    'Nemotron 3.5 ASR nécessite son artefact encoder.int8.onnx. Sélectionnez encoder.int8.onnx dans le répertoire de modèles 560 ms épinglés.',
+    'Nemotron ASR: Sélectionnez encoder.int8.onnx dans un export Nemotron int8 pris en charge.',
   'models.external.validation.moonshineEntryFile':
     'Moonshine nécessite son artefact frontend.ort principal. Sélectionnez frontend.ort dans le répertoire du modèle de streaming.',
   'models.external.validation.generic': "Le moteur vocal n'a pas pu valider ce modèle.",
   'models.external.requirements.nemotron.entry':
-    "Sélectionnez encoder.int8.onnx à partir de l'exportation Nemotron 3.5 ASR 560 ms int8 épinglée.",
+    'Sélectionnez encoder.int8.onnx dans un export Nemotron int8 pris en charge.',
   'models.external.requirements.nemotron.siblings':
     'Le même répertoire doit contenir decoder.int8.onnx, joiner.int8.onnx et tokens.txt.',
   'models.external.requirements.nemotron.compatibility':
-    'Les autres tailles de fragments et les exportations ORT GenAI ne sont pas compatibles avec cet adaptateur.',
+    'Exports pris en charge : anglais 560 ms et multilingues 160 ms ou 560 ms. Les exports ORT GenAI ne sont pas pris en charge.',
   'models.external.requirements.moonshine.entry':
     'Sélectionnez frontend.ort dans un répertoire de modèles ORT de streaming Moonshine v2.',
   'models.external.requirements.moonshine.siblings':
@@ -771,6 +771,7 @@ export const fr = {
   'models.capability.languageSelection': 'Sélection de la langue',
   'models.tag.fullPrecision': 'Pleine précision',
   'models.tag.reducedSize': 'Taille réduite',
+  'models.tag.licenseTerms': 'Conditions de licence',
   'models.progress.preparing': 'Préparer l’installation',
   'models.progress.downloading': 'Téléchargement',
   'models.progress.verifying': 'Vérification du téléchargement',

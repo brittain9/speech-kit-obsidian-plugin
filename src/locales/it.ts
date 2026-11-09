@@ -731,17 +731,17 @@ export const it = {
     'Il percorso del file del modello deve indicare un file: {path}',
   'models.external.validation.selectEntryFile': 'Seleziona {filename}.',
   'models.external.validation.nemotronEntryFile':
-    'Nemotron 3.5 ASR richiede il file encoder.int8.onnx. Seleziona encoder.int8.onnx dalla directory del modello con blocchi fissi da 560 ms.',
+    "Nemotron ASR: Seleziona encoder.int8.onnx da un'esportazione Nemotron int8 supportata.",
   'models.external.validation.moonshineEntryFile':
     'Moonshine richiede il file principale frontend.ort. Seleziona frontend.ort dalla directory del modello streaming.',
   'models.external.validation.generic':
     'Il motore di riconoscimento vocale non ha potuto convalidare questo modello.',
   'models.external.requirements.nemotron.entry':
-    'Seleziona encoder.int8.onnx dall’esportazione int8 di Nemotron 3.5 ASR fissata a 560 ms.',
+    "Seleziona encoder.int8.onnx da un'esportazione Nemotron int8 supportata.",
   'models.external.requirements.nemotron.siblings':
     'La stessa directory deve contenere decoder.int8.onnx, joiner.int8.onnx e tokens.txt.',
   'models.external.requirements.nemotron.compatibility':
-    'Altre dimensioni dei chunk e le esportazioni ORT GenAI non sono compatibili con questo adattatore.',
+    'Esportazioni supportate: inglese 560 ms e multilingue 160 ms o 560 ms. Le esportazioni ORT GenAI non sono supportate.',
   'models.external.requirements.moonshine.entry':
     'Seleziona frontend.ort da una directory di modello ORT streaming Moonshine v2.',
   'models.external.requirements.moonshine.siblings':
@@ -774,6 +774,7 @@ export const it = {
   'models.capability.languageSelection': 'Selezione della lingua',
   'models.tag.fullPrecision': 'Precisione completa',
   'models.tag.reducedSize': 'Dimensioni ridotte',
+  'models.tag.licenseTerms': 'Condizioni di licenza',
   'models.progress.preparing': 'Preparazione dell’installazione',
   'models.progress.downloading': 'Download in corso',
   'models.progress.verifying': 'Verifica del download',
