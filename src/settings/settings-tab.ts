@@ -205,7 +205,9 @@ export class LocalSttSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     // --- Model ---
-    const modelGroup = containerEl.createDiv({ cls: 'setting-group' });
+    const modelGroup = containerEl.createDiv({
+      cls: 'setting-group local-stt-model-summary-group',
+    });
     new Setting(modelGroup)
       .setName(t('settings.groups.model'))
       .setHeading()
@@ -214,8 +216,10 @@ export class LocalSttSettingTab extends PluginSettingTab {
           void this.dependencies.openModelPicker({ onChanged: () => this.refreshSettingsTab() });
         });
       });
-    const modelSection = modelGroup.createDiv({ cls: 'setting-items' });
-    const modelSummary = modelSection.createDiv();
+    const modelSection = modelGroup.createDiv({
+      cls: 'setting-items local-stt-model-summary-list',
+    });
+    const modelSummary = modelSection.createDiv({ cls: 'local-stt-model-summary-slot' });
     const manager = this.dependencies.modelInstallManager;
     this.disposeModelSection = renderModelSection(modelSummary, manager, {
       onManageModels: () => {
@@ -243,8 +247,10 @@ export class LocalSttSettingTab extends PluginSettingTab {
       onModelInfo: this.buildModelInfoCallback(manager, 'stt'),
     });
 
-    const ttsModelContainer = modelSection.createDiv();
-    const translationModelContainer = modelSection.createDiv();
+    const ttsModelContainer = modelSection.createDiv({ cls: 'local-stt-model-summary-slot' });
+    const translationModelContainer = modelSection.createDiv({
+      cls: 'local-stt-model-summary-slot',
+    });
 
     const modelState = manager.getState();
     const selectedCapabilities = modelState.selectedModelCapabilities;

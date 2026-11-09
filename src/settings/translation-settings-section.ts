@@ -214,7 +214,7 @@ export function renderTranslationModelSetting(
     renderModelSummaryRow(container, {
       taskLabel: t('settings.model.task.translation'),
       modelName:
-        selectedModel?.displayName ??
+        (selectedModel === null ? null : translationSummaryName(selectedModel)) ??
         (selection?.kind === 'catalog_model'
           ? selection.modelId
           : t('settings.translation.model.unavailable')),
@@ -252,6 +252,14 @@ export function renderTranslationModelSetting(
 
 function translationModels(state: Pick<ModelManagerState, 'catalog'>): CatalogModelRecord[] {
   return state.catalog.models.filter((model) => model.task === 'translation');
+}
+
+function translationSummaryName(model: CatalogModelRecord): string {
+  if (model.runtimeId === 'llama_cpp' && model.familyId === 'tencent_hy_mt') {
+    if (model.modelId === 'tencent_hy_mt_2_1_8b_q4_k_m') return 'HY-MT 2 · 1.8B';
+    if (model.modelId === 'tencent_hy_mt_2_7b_q4_k_m') return 'HY-MT 2 · 7B';
+  }
+  return model.displayName;
 }
 
 function selectedTranslationCatalogModel(

@@ -118,6 +118,42 @@ function hyMtState(installed: boolean): ModelManagerState {
 }
 
 describe('Translation settings', () => {
+  it.each([
+    ['tencent_hy_mt_2_1_8b_q4_k_m', 'Tencent HY-MT 2 1.8B (Q4_K_M)', 'HY-MT 2 · 1.8B'],
+    ['tencent_hy_mt_2_7b_q4_k_m', 'Tencent HY-MT 2 7B (Q4_K_M)', 'HY-MT 2 · 7B'],
+    ['other_variant', 'A different translation model', 'A different translation model'],
+  ])('shows the appropriate summary for %s', (modelId, displayName, expected) => {
+    const base = hyMtState(true);
+    const baseModel = base.catalog.models[0];
+    if (baseModel === undefined) throw new Error('Expected a translation model.');
+    const model = {
+      ...baseModel,
+      modelId,
+      displayName,
+    };
+    const current = {
+      ...base,
+      catalog: { ...base.catalog, models: [model] },
+      selectedTranslationModel: {
+        kind: 'catalog_model' as const,
+        familyId: model.familyId,
+        runtimeId: model.runtimeId,
+        modelId: model.modelId,
+      },
+    };
+    const container = new TestElement();
+    renderTranslationModelSetting(container as unknown as HTMLDivElement, {
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      manager: {
+        getState: () => current,
+        subscribe: () => () => {},
+      } as unknown as ModelInstallManager,
+      openModelPicker: vi.fn(async () => {}),
+      persistLanguages: vi.fn(async () => {}),
+    });
+    const value = container.findByClass('local-stt-model-summary-value');
+    expect(value?.children[0]?.textContent).toBe(expected);
+  });
   it('opens the translation picker from its summary row', async () => {
     const container = new TestElement();
     const picker = vi.fn(async () => {});
