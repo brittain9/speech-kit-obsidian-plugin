@@ -74,6 +74,7 @@ export interface SessionDependencies {
   app: Pick<App, 'vault' | 'workspace'>;
   callbacks: SessionLifecycleCallbacks;
   leafPinManager: Pick<TemporaryLeafPinLeaseManager, 'acquire'>;
+  pinNoteDuringTranscription: boolean;
   logger?: PluginLogger;
   lockedFile: TFile;
   noteSurfaceFactory?: (
@@ -130,6 +131,7 @@ export interface SessionTarget {
 export interface SessionCreateOptions {
   callbacks: SessionLifecycleCallbacks;
   leafPinManager: Pick<TemporaryLeafPinLeaseManager, 'acquire'>;
+  pinNoteDuringTranscription: boolean;
   logger?: PluginLogger;
   placement: NotePlacementOptions;
   rendererOptions: TranscriptRenderOptions;
@@ -189,6 +191,7 @@ export class Session {
       app,
       callbacks: options.callbacks,
       leafPinManager: options.leafPinManager,
+      pinNoteDuringTranscription: options.pinNoteDuringTranscription,
       lockedFile: target.file,
       placement,
       rendererOptions: options.rendererOptions,
@@ -210,7 +213,9 @@ export class Session {
     );
     this.targetLeaf = findOpenMarkdownLeafForEditor(dependencies.app, dependencies.view);
     this.registerLifecycleSubscriptions();
-    this.acquireLeafPinLease();
+    if (dependencies.pinNoteDuringTranscription) {
+      this.acquireLeafPinLease();
+    }
   }
 
   acceptTranscript(revision: TranscriptRevision): SessionAcceptResult {
@@ -236,10 +241,12 @@ export class Session {
   }
 
   readNoteGlossary(maxChars: number): { text: string; truncated: boolean } | null {
+    this.validateTargetSurface();
     return this.surface?.readNoteGlossary(maxChars) ?? null;
   }
 
   readNoteText(maxChars: number): { text: string; truncated: boolean } | null {
+    this.validateTargetSurface();
     return this.surface?.readNoteText(maxChars) ?? null;
   }
 
@@ -266,6 +273,7 @@ export class Session {
   }
 
   readCurrentSessionText(): string {
+    this.validateTargetSurface();
     if (this.surface === null || this.rawSessionEntries.length === 0) {
       return '';
     }
@@ -283,6 +291,7 @@ export class Session {
   }
 
   insertMicrophoneRecording(link: string): boolean {
+    this.validateTargetSurface();
     if (this.surface === null) return false;
     const range = this.resolveSessionRange();
     if (range === null && this.rawSessionEntries.length > 0) return false;
@@ -297,6 +306,7 @@ export class Session {
       showRawBelow?: boolean;
     } = {},
   ): SessionRangeReplacementResult {
+    this.validateTargetSurface();
     if (this.surface === null || this.rawSessionEntries.length === 0) {
       return { kind: 'denied' };
     }
@@ -362,6 +372,7 @@ export class Session {
     placement: 'above' | 'below',
     options: { rejectUserEdits?: boolean } = {},
   ): boolean {
+    this.validateTargetSurface();
     if (this.surface === null || this.rawSessionEntries.length === 0) {
       return false;
     }
@@ -399,6 +410,7 @@ export class Session {
   }
 
   setAnchorMode(mode: DictationAnchorMode): void {
+    this.validateTargetSurface();
     const result = this.surface?.setAnchorMode(mode);
     if (result !== undefined && result !== null) {
       this.handleSurfaceDesynchronization(result);
@@ -406,6 +418,7 @@ export class Session {
   }
 
   markSessionRangeAsProcessing(): boolean {
+    this.validateTargetSurface();
     if (this.surface === null) {
       return false;
     }
@@ -422,6 +435,7 @@ export class Session {
   }
 
   clearSessionProcessingMark(): void {
+    this.validateTargetSurface();
     const result = this.surface?.setProcessingRange(null);
     if (result !== undefined && result !== null) {
       this.handleSurfaceDesynchronization(result);
@@ -437,6 +451,7 @@ export class Session {
   }
 
   private projectRevision(revision: TranscriptRevision): void {
+    this.validateTargetSurface();
     if (this.noteDeleted) {
       this.projectionByUtterance.set(revision.utteranceId, { kind: 'denied' });
       return;
@@ -649,7 +664,13 @@ export class Session {
     this.refs.push({
       offref: (ref) => workspace.offref(ref),
       ref: workspace.on('layout-change', () => {
-        this.handleLayoutChange();
+        this.validateTargetSurface();
+      }),
+    });
+    this.refs.push({
+      offref: (ref) => workspace.offref(ref),
+      ref: workspace.on('file-open', () => {
+        this.validateTargetSurface();
       }),
     });
     this.refs.push({
@@ -681,12 +702,12 @@ export class Session {
     }
   }
 
-  private handleLayoutChange(): void {
-    if (this.noteDeleted || !this.noteOpen) {
+  private validateTargetSurface(): void {
+    if (this.noteDeleted || !this.noteOpen || this.surface === null) {
       return;
     }
 
-    if (this.hasLiveTargetSurface()) {
+    if (this.isExactTargetLeafLive()) {
       return;
     }
 
@@ -784,24 +805,15 @@ export class Session {
     }
   }
 
-  private hasLiveTargetSurface(): boolean {
-    if (this.targetLeaf !== null) {
-      return this.isExactTargetLeafLive();
-    }
-
-    return (
-      findOpenMarkdownViewForFile(this.dependencies.app, this.dependencies.lockedFile) !== null
-    );
-  }
-
   private isExactTargetLeafLive(): boolean {
     if (this.targetLeaf === null) {
       return false;
     }
 
     return (
+      this.targetLeaf.view?.file === this.dependencies.lockedFile &&
       findOpenMarkdownLeafForEditor(this.dependencies.app, this.dependencies.view) ===
-      this.targetLeaf
+        this.targetLeaf
     );
   }
 
