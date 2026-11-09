@@ -435,22 +435,22 @@ Sizes below are rounded required-file totals from [the catalog](../native/catalo
 Optional voices and translation packs add storage. These are download sizes;
 runtime memory also includes graph state, tensors, and audio buffers.
 
-| Model | Runtime · Family | Format | Required files | Scope |
-| --- | --- | --- | --- | --- |
-| Whisper Tiny EN | `whisper_cpp` · `whisper` | Q8_0 | 42 MiB | English batch |
-| Whisper Base EN | `whisper_cpp` · `whisper` | Q8_0 | 78 MiB | English batch |
-| Whisper Small EN | `whisper_cpp` · `whisper` | Q5_1 | 181 MiB | English batch |
-| Whisper Medium EN | `whisper_cpp` · `whisper` | Q5_0 | 514 MiB | English batch |
-| Whisper Large V3 Turbo | `whisper_cpp` · `whisper` | Q8_0 | 834 MiB | Ten product languages; batch |
-| Cohere Transcribe | `onnx_runtime` · `cohere_transcribe` | FP16 / INT8 / Q4 | 3,942 / 2,927 / 2,029 MiB | English batch |
-| Moonshine Tiny / Small / Medium | `onnx_runtime` · `moonshine` | Quantized ORT | 49 / 157 / 289 MiB | English streaming |
-| Nemotron Speech English 560 ms | `onnx_runtime` · `nemotron_asr` | INT8 | 631 MiB | English streaming |
-| Nemotron 3.5 ASR 160 / 560 ms | `onnx_runtime` · `nemotron_asr` | INT8 | 651 MiB per profile | Nine product languages; streaming |
-| Parakeet Unified English 1,120 ms | `onnx_runtime` · `parakeet_unified` | INT8 | 632 MiB | English buffered streaming |
-| Pocket TTS | `onnx_runtime` · `pocket_tts` | INT8 / ONNX | 126 MiB; French 361 MiB | Six language variants |
-| Supertonic 3 | `onnx_runtime` · `supertonic` | ONNX | 380 MiB | Nine product languages; ten voices available |
-| Firefox Translations | `bergamot_wasm` · `firefox_translations` | Bergamot | 5 MiB runtime; packs selected separately | 96 English-anchored directions |
-| HY-MT 2 1.8B / 7B | `llama_cpp` · `tencent_hy_mt` | Q4_K_M GGUF | 1,081 / 4,410 MiB | 38 all-to-all languages |
+| Model                             | Runtime · Family                         | Format           | Required files                           | Scope                                        |
+| --------------------------------- | ---------------------------------------- | ---------------- | ---------------------------------------- | -------------------------------------------- |
+| Whisper Tiny EN                   | `whisper_cpp` · `whisper`                | Q8_0             | 42 MiB                                   | English batch                                |
+| Whisper Base EN                   | `whisper_cpp` · `whisper`                | Q8_0             | 78 MiB                                   | English batch                                |
+| Whisper Small EN                  | `whisper_cpp` · `whisper`                | Q5_1             | 181 MiB                                  | English batch                                |
+| Whisper Medium EN                 | `whisper_cpp` · `whisper`                | Q5_0             | 514 MiB                                  | English batch                                |
+| Whisper Large V3 Turbo            | `whisper_cpp` · `whisper`                | Q8_0             | 834 MiB                                  | Ten product languages; batch                 |
+| Cohere Transcribe                 | `onnx_runtime` · `cohere_transcribe`     | FP16 / INT8 / Q4 | 3,942 / 2,927 / 2,029 MiB                | English batch                                |
+| Moonshine Tiny / Small / Medium   | `onnx_runtime` · `moonshine`             | Quantized ORT    | 49 / 157 / 289 MiB                       | English streaming                            |
+| Nemotron Speech English 560 ms    | `onnx_runtime` · `nemotron_asr`          | INT8             | 631 MiB                                  | English streaming                            |
+| Nemotron 3.5 ASR 160 / 560 ms     | `onnx_runtime` · `nemotron_asr`          | INT8             | 651 MiB per profile                      | Nine product languages; streaming            |
+| Parakeet Unified English 1,120 ms | `onnx_runtime` · `parakeet_unified`      | INT8             | 632 MiB                                  | English buffered streaming                   |
+| Pocket TTS                        | `onnx_runtime` · `pocket_tts`            | INT8 / ONNX      | 126 MiB; French 361 MiB                  | Six language variants                        |
+| Supertonic 3                      | `onnx_runtime` · `supertonic`            | ONNX             | 380 MiB                                  | Nine product languages; ten voices available |
+| Firefox Translations              | `bergamot_wasm` · `firefox_translations` | Bergamot         | 5 MiB runtime; packs selected separately | 96 English-anchored directions               |
+| HY-MT 2 1.8B / 7B                 | `llama_cpp` · `tencent_hy_mt`            | Q4_K_M GGUF      | 1,081 / 4,410 MiB                        | 38 all-to-all languages                      |
 
 Moonshine models are streaming (live-dictation) entries in the managed catalog,
 installed through Manage Models like any other model. Each is a multi-file ORT
@@ -779,16 +779,16 @@ A representative slice of user-facing settings (full list and defaults in
 
 ## Technology Reference
 
-| Technology                                       | Role in the system                                                                                 |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| **Obsidian Plugin API**                          | Host runtime: editor access, commands, settings, UI hooks                                          |
-| **Web Audio API / AudioWorklet**                 | Microphone capture and PCM frame production at 50 fps                                              |
-| **whisper-rs / whisper.cpp**                     | Primary engine; runs GGML-quantized Whisper on CPU, Metal, or CUDA                                 |
+| Technology                                       | Role in the system                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| **Obsidian Plugin API**                          | Host runtime: editor access, commands, settings, UI hooks                                         |
+| **Web Audio API / AudioWorklet**                 | Microphone capture and PCM frame production at 50 fps                                             |
+| **whisper-rs / whisper.cpp**                     | Primary engine; runs GGML-quantized Whisper on CPU, Metal, or CUDA                                |
 | **ort (ONNX Runtime)**                           | CPU engine for ONNX speech recognition and synthesis; also runs Silero VAD and diarization models |
-| **Silero VAD**                                   | Speech probability per 32 ms window; drives boundary detection                                     |
-| **Node.js child_process**                        | Spawns and manages the Rust sidecar                                                                |
-| **reqwest + sha2**                               | Downloads model files and verifies their SHA-256                                                   |
-| **Ollama / OpenRouter / OpenAI-compatible APIs** | Optional provider-selected text transformation on the plugin side                                  |
+| **Silero VAD**                                   | Speech probability per 32 ms window; drives boundary detection                                    |
+| **Node.js child_process**                        | Spawns and manages the Rust sidecar                                                               |
+| **reqwest + sha2**                               | Downloads model files and verifies their SHA-256                                                  |
+| **Ollama / OpenRouter / OpenAI-compatible APIs** | Optional provider-selected text transformation on the plugin side                                 |
 
 ## Where Things Live
 
