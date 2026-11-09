@@ -7,9 +7,9 @@ Moonshine AI. Model binaries must not be added to this repository.
 
 In Obsidian, open **Speech Kit settings → Manage models → Moonshine**.
 Choose Moonshine Tiny, Small, or Medium and select **Install**. Small is the
-recommended starting point; Tiny favors low-end CPUs and Medium favors
-accuracy. A first install is selected automatically. Otherwise, select **Use**
-after installation.
+recommended starting point; Tiny uses fewer resources, while Medium requires
+more CPU time and memory. A first install is selected automatically. Otherwise,
+select **Use** after installation.
 
 Manage Models downloads all seven required files, verifies their pinned sizes
 and SHA-256 checksums, validates the model, and only then promotes the complete
@@ -39,8 +39,8 @@ message directs.
 Moonshine writes provisional text while you speak, revises that text in place,
 and locks the final text when voice activity detection closes the utterance.
 Tiny is suitable for lower-end CPUs, Small is the recommended starting point,
-and Medium requires more CPU time and memory in exchange for accuracy; actual
-latency depends on the host processor.
+and Medium requires more CPU time and memory. Actual latency and results depend
+on the host processor and audio.
 
 Live dictation is English-only. Speaker labels are not applied while a
 streaming model is selected, even when diarization is enabled. Continuous
@@ -64,15 +64,16 @@ Use a Moonshine model installed through Manage Models with CPU inference and a
 Moonshine runs on CPU in the current production sidecars. Any future accelerated
 backend needs its own performance and correctness acceptance gates.
 
-## Developer appendix: manual CDN assets
+## Developer appendix: manual model assets
 
 The external-file path remains useful for the ignored real-model adapter test.
-Create a directory outside the repository and download the official
-`tiny-streaming-en` asset set:
+Create a directory outside the repository and download the pinned official
+`tiny-streaming-en` asset set. Verify the downloaded files against the sizes and
+SHA-256 values in [`native/catalog.json`](../../native/catalog.json):
 
 ```sh
 model_dir="$HOME/.local/share/local-dictation/moonshine/tiny-streaming-en"
-base_url="https://download.moonshine.ai/model/tiny-streaming-en/quantized"
+base_url="https://huggingface.co/moonshine-ai/moonshine-voice-assets/resolve/015f7269048251aff164cb60df02bfea76884c8f/model/tiny-streaming-en/quantized_26_07_30"
 mkdir -p "$model_dir"
 
 for file in \

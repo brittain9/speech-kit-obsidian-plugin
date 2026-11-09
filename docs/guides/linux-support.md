@@ -13,7 +13,7 @@ Speech Kit supports desktop Obsidian on x86-64 and ARM64 GNU/Linux. The plugin U
 | System audio        | The default output monitor through PulseAudio, or PipeWire's PulseAudio compatibility service                                                                                                                                                                                                                                       |
 | Obsidian packages   | Native packages and the Flathub build; sandbox changes are needed only when permissions were restricted or CUDA needs host libraries                                                                                                                                                                                                |
 
-32-bit Linux, musl-only systems such as Alpine, and mobile Obsidian are not release targets. The project does not yet publish a frozen minimum glibc version. NixOS and other distributions that do not run ordinary glibc binaries are best-effort rather than first-class until the project has a tested packaging path for them.
+32-bit Linux, musl-only systems such as Alpine, and mobile Obsidian are not release targets. There is no single frozen minimum glibc version across all architectures and releases; use the ARM64 requirement above for the current ARM64 build. NixOS and other distributions that do not run ordinary glibc binaries are best-effort rather than first-class until the project has a tested packaging path for them.
 
 ## Current test coverage
 
