@@ -284,6 +284,7 @@ export default class LocalSttPlugin extends Plugin {
         Session.createFromActiveEditor(this.app, {
           callbacks,
           leafPinManager: this.temporaryLeafPinLeaseManager,
+          pinNoteDuringTranscription: this.settings.pinNoteDuringTranscription,
           logger: this.logger,
           placement,
           rendererOptions,
@@ -464,6 +465,7 @@ export default class LocalSttPlugin extends Plugin {
         Session.createFromTarget(this.app, target, {
           callbacks,
           leafPinManager: this.temporaryLeafPinLeaseManager,
+          pinNoteDuringTranscription: this.settings.pinNoteDuringTranscription,
           logger: this.logger,
           placement,
           rendererOptions,

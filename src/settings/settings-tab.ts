@@ -130,6 +130,14 @@ export function renderAutomaticCopyFinalizedUtterancesSetting(
   });
 }
 
+export function renderNotePinningSetting(parent: HTMLElement, access: SettingAccess): Setting {
+  return addToggleSetting(parent, access, {
+    name: t('settings.pinNoteDuringTranscription.name'),
+    desc: t('settings.pinNoteDuringTranscription.desc'),
+    key: 'pinNoteDuringTranscription',
+  });
+}
+
 export function renderReadAloudHighlightSetting(
   parent: HTMLElement,
   access: SettingAccess,
@@ -371,6 +379,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
       options: DICTATION_ANCHOR_OPTIONS,
       isValid: isDictationAnchor,
     });
+
+    renderNotePinningSetting(outputCard, this.access);
 
     renderAutomaticCopyFinalizedUtterancesSetting(outputCard, this.access);
 

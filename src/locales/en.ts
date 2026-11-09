@@ -538,6 +538,9 @@ export const en = {
   'settings.listeningMode.oneSentence': 'One sentence',
   'settings.listeningMode.name': 'Listening mode',
   'settings.listeningMode.desc': 'Continuous, or stop after one sentence.',
+  'settings.pinNoteDuringTranscription.name': 'Temporarily pin the target note',
+  'settings.pinNoteDuringTranscription.desc':
+    'Prevents links from replacing the target tab during the next dictation or file transcription. Speech Kit removes its temporary pin when processing ends. When off, opening another note in the same tab stops dictation; completed text stays in the original note.',
   'settings.autoCopyFinalizedUtterances.name': 'Automatically copy finalized utterances',
   'settings.autoCopyFinalizedUtterances.desc':
     'Each finalized phrase replaces the system clipboard.',
