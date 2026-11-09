@@ -184,6 +184,7 @@ export const it = {
   'settings.groups.capture': 'Acquisizione',
   'settings.groups.transcriptOutput': 'Output della trascrizione',
   'settings.groups.llmTransformation': 'Trasformazione LLM',
+  'settings.groups.llmProviders': 'Fornitore e modello',
   'settings.groups.engine': 'Motore',
   'settings.groups.advanced': 'Avanzate',
   'settings.listeningMode.alwaysOn': 'Sempre attiva',
@@ -274,7 +275,7 @@ export const it = {
     'Secondi prima di un’interruzione di paragrafo ({min}-{max}).',
   'settings.llm.enableFeatures.name': 'Abilita le funzionalità LLM',
   'settings.llm.enableFeatures.desc':
-    'Rende disponibili le trasformazioni LLM. Attiva o disattiva la trasformazione nella barra laterale.',
+    'Controlla le trasformazioni LLM nelle impostazioni o nella barra laterale.',
   'settings.llm.restoreDefaults.name': 'Ripristina i valori predefiniti della trasformazione',
   'settings.llm.restoreDefaults.desc':
     'Ripristina preset, tempistica, contesto, numero minimo di parole e temperatura. I preset e i modelli salvati vengono mantenuti.',
@@ -444,6 +445,7 @@ export const it = {
   'llm.routing.openRouterModel.name': 'Modello OpenRouter',
   'llm.routing.openRouterModel.description': 'Digita per cercare tra i modelli OpenRouter.',
   'llm.routing.testConnection': 'Verifica la chiave API e il modello',
+  'llm.routing.connectionSuccessful': 'Connessione riuscita',
   'llm.sidebar.eyebrow': 'Flusso di lavoro della trascrizione',
   'llm.sidebar.title': 'Trasforma la dettatura',
   'llm.sidebar.description':
@@ -529,9 +531,8 @@ export const it = {
   'llm.preset.editor.promptSize':
     '~{tokens} token ({characters} caratteri) — inviato con ogni richiesta',
   'llm.preset.editor.timing': 'Tempistica',
-  'llm.preset.editor.timingDescription':
-    'Quando viene eseguita la trasformazione. “Entrambe” segue la tempistica della barra laterale.',
-  'llm.preset.editor.timingEither': 'Entrambe (segue la barra laterale)',
+  'llm.preset.editor.timingDescription': 'Scegli quando eseguire questa configurazione.',
+  'llm.preset.editor.timingEither': 'Usa impostazione di trasformazione',
   'llm.preset.editor.timingPerUtterance': 'Dopo ogni frase',
   'llm.preset.editor.timingBatch': 'Una volta all’interruzione',
   'llm.preset.editor.output': 'Output',

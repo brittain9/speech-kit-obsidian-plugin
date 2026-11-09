@@ -12,7 +12,7 @@ interface SettingsTabRefreshHost {
   update?: () => void;
 }
 
-interface SettingsFocus {
+export interface SettingsFocus {
   controlIndex: number;
   settingName: string;
 }
@@ -45,7 +45,7 @@ export class SettingsTabLifecycle {
   }
 }
 
-function captureSettingsFocus(containerEl: HTMLElement): SettingsFocus | null {
+export function captureSettingsFocus(containerEl: HTMLElement): SettingsFocus | null {
   const activeElement = containerEl.ownerDocument.activeElement;
   if (activeElement === null || !containerEl.contains(activeElement)) {
     return null;
@@ -66,7 +66,7 @@ function captureSettingsFocus(containerEl: HTMLElement): SettingsFocus | null {
   return controlIndex < 0 ? null : { controlIndex, settingName };
 }
 
-function restoreSettingsFocus(containerEl: HTMLElement, focus: SettingsFocus | null): void {
+export function restoreSettingsFocus(containerEl: HTMLElement, focus: SettingsFocus | null): void {
   if (focus === null) {
     return;
   }

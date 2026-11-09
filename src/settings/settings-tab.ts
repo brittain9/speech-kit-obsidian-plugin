@@ -23,13 +23,17 @@ import type { SidecarConnection } from '../sidecar/sidecar-connection';
 import type { SidecarInstallManager } from '../sidecar/sidecar-install-manager';
 import type { SidecarLifecycleGate } from '../sidecar/sidecar-lifecycle-gate';
 import { ConfirmModal } from '../ui/confirm-modal';
-import { styleDestructiveButton } from '../ui/destructive-button';
+import { LlmContextSettingsModal } from '../ui/llm-context-settings-modal';
+import { LlmModelSettingsModal } from '../ui/llm-model-settings-modal';
+import { LlmTimingSettingsModal } from '../ui/llm-timing-settings-modal';
 import { MediaToolInstallModal } from '../ui/media-tool-install-modal';
+import { PresetManagerModal } from '../ui/preset-manager-modal';
 import { diarizationSettingDescription } from './diarization-setting';
 import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
 import { changeHardwareAcceleration } from './hardware-acceleration-action';
 import { renderHardwareAccelerationSetting } from './hardware-acceleration-setting';
+import type { LlmPresetStateMutation, PluginSettingsMutation } from './llm-preset-state';
 import { renderLlmProviderSettings } from './llm-provider-settings-section';
 import { renderMediaToolSetting } from './media-tool-setting';
 import { renderMicrophonePicker } from './microphone-picker';
@@ -57,6 +61,7 @@ import {
   addEnumSetting,
   addToggleSetting,
   appendInfoTooltip,
+  createSettingAccess,
   createSettingGroup,
   type DropdownOption,
   type SettingAccess,
@@ -80,17 +85,19 @@ import {
 interface SettingsTabDependencies {
   feedback: Pick<UserFeedback, 'show'>;
   getSettings: () => PluginSettings;
+  getSecret: (id: string) => string;
+  mutateLlmSettings: (mutation: PluginSettingsMutation) => Promise<void>;
+  mutatePresetState: (mutation: LlmPresetStateMutation) => Promise<void>;
+  synchronizePresets: () => Promise<void>;
   isDictationBusy: () => boolean;
   logger?: PluginLogger | undefined;
   modelInstallManager: ModelInstallManager;
   openModelPicker: (options?: ModelPickerOptions) => Promise<void>;
-  openLlmSidebar: () => Promise<void>;
   openSetupWizard: () => Promise<void>;
   sidecarVersion: string;
   resolvePluginDirectory: () => Promise<string>;
   resetLlmTransformation: () => Promise<void>;
   restartSidecar: () => Promise<void>;
-  saveSettings: (settings: PluginSettings) => Promise<void>;
   sidecarConnection: Pick<SidecarConnection, 'probeSystemAudio' | 'shutdown'>;
   sidecarInstallManager: SidecarInstallManager;
   sidecarLifecycleGate: SidecarLifecycleGate;
@@ -156,6 +163,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
   private disposeDiarizationDesc: (() => void) | null = null;
   private disposeEngineSection: (() => void) | null = null;
   private disposeMicrophoneSection: (() => void) | null = null;
+  private disposeLlmSection: (() => void) | null = null;
+  private llmSectionGeneration = 0;
   private disposeMediaToolSetting: (() => void) | null = null;
   private disposeModelSection: (() => void) | null = null;
   private disposeReadAloudSection: (() => void) | null = null;
@@ -171,15 +180,9 @@ export class LocalSttSettingTab extends PluginSettingTab {
   ) {
     super(app, plugin);
     this.lifecycle = new SettingsTabLifecycle(this);
-    this.access = {
-      getSettings: () => this.dependencies.getSettings(),
-      persistOne: async (key, value) => {
-        await this.dependencies.saveSettings({
-          ...this.dependencies.getSettings(),
-          [key]: value,
-        });
-      },
-    };
+    this.access = createSettingAccess(this.dependencies.getSettings, {
+      mutateSettings: this.dependencies.mutateLlmSettings,
+    });
   }
 
   override getSettingDefinitions(): never[] {
@@ -408,9 +411,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
         .onClick(() => {
           new DiarizationSettingsModal(this.app, {
             getSettings: () => this.dependencies.getSettings(),
-            saveSettings: async (nextSettings) => {
-              await this.dependencies.saveSettings(nextSettings);
-            },
+            savePatch: (patch) =>
+              this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
           }).open();
         });
       button.extraSettingsEl.setAttribute('aria-label', t('settings.speakerLabels.modal.title'));
@@ -465,18 +467,18 @@ export class LocalSttSettingTab extends PluginSettingTab {
       manager,
       openModelPicker: (options) => this.dependencies.openModelPicker(options),
       persistLanguages: async (sourceLanguage, targetLanguage) => {
-        await this.dependencies.saveSettings({
-          ...this.dependencies.getSettings(),
+        await this.dependencies.mutateLlmSettings((current) => ({
+          ...current,
           translationSourceLanguage: sourceLanguage,
           translationTargetLanguage: targetLanguage,
-        });
+        }));
       },
       persistStyle: async (translationStyle, translationStyleInstruction) => {
-        await this.dependencies.saveSettings({
-          ...this.dependencies.getSettings(),
+        await this.dependencies.mutateLlmSettings((current) => ({
+          ...current,
           translationStyle,
           translationStyleInstruction,
-        });
+        }));
       },
     } satisfies TranslationSettingsDependencies;
 
@@ -492,41 +494,61 @@ export class LocalSttSettingTab extends PluginSettingTab {
       translationSettingsDependencies,
     );
 
-    const llmCard = createSettingGroup(containerEl, t('settings.groups.llmTransformation'));
-    const enableLlmSetting = new Setting(llmCard)
-      .setName(t('settings.llm.enableFeatures.name'))
-      .setDesc(t('settings.llm.enableFeatures.desc'));
-    enableLlmSetting.addToggle((toggle) => {
-      toggle.setValue(settings.llmFeaturesEnabled);
-      toggle.onChange(async (value) => {
-        await this.access.persistOne('llmFeaturesEnabled', value);
-        this.refreshSettingsTab();
-      });
-    });
-
-    if (settings.llmFeaturesEnabled) {
-      renderLlmProviderSettings(llmCard, () => void this.dependencies.openLlmSidebar());
-    }
-
-    new Setting(llmCard)
-      .setName(t('settings.llm.restoreDefaults.name'))
-      .setDesc(t('settings.llm.restoreDefaults.editableDesc'))
-      .addButton((button) => {
-        styleDestructiveButton(
-          button.setButtonText(t('settings.llm.restoreDefaults.button')),
-        ).onClick(() => {
-          new ConfirmModal(this.app, {
-            confirmLabel: t('settings.llm.restoreDefaults.button'),
-            destructive: true,
-            message: t('settings.llm.restoreDefaults.confirmEditableMessage'),
-            onConfirm: async () => {
-              await this.dependencies.resetLlmTransformation();
-              this.refreshSettingsTab();
-            },
-            title: t('settings.llm.restoreDefaults.name'),
+    const llmSection = containerEl.createDiv();
+    const llmSectionGeneration = this.llmSectionGeneration;
+    this.disposeLlmSection = renderLlmProviderSettings(llmSection, {
+      app: this.app,
+      feedback: this.dependencies.feedback,
+      getSecret: this.dependencies.getSecret,
+      getSettings: this.dependencies.getSettings,
+      logger: this.dependencies.logger,
+      persist: (mutation) => this.dependencies.mutateLlmSettings(mutation),
+      mutatePresetState: this.dependencies.mutatePresetState,
+      managePresets: () => {
+        void this.dependencies.synchronizePresets().then(() => {
+          if (this.llmSectionGeneration !== llmSectionGeneration) return;
+          new PresetManagerModal(this.app, {
+            feedback: this.dependencies.feedback,
+            getSettings: this.dependencies.getSettings,
+            mutatePresetState: this.dependencies.mutatePresetState,
+            onClose: () => this.refreshSettingsTab(),
           }).open();
         });
-      });
+      },
+      openContextSettings: () => {
+        new LlmContextSettingsModal(this.app, {
+          getSettings: this.dependencies.getSettings,
+          savePatch: (patch) =>
+            this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
+        }).open();
+      },
+      openTimingSettings: () => {
+        new LlmTimingSettingsModal(this.app, {
+          getSettings: this.dependencies.getSettings,
+          savePatch: (patch) =>
+            this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
+        }).open();
+      },
+      openModelSettings: () => {
+        new LlmModelSettingsModal(this.app, {
+          getSettings: this.dependencies.getSettings,
+          savePatch: (patch) =>
+            this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
+        }).open();
+      },
+      restoreDefaults: () => {
+        new ConfirmModal(this.app, {
+          confirmLabel: t('settings.llm.restoreDefaults.button'),
+          destructive: true,
+          message: t('settings.llm.restoreDefaults.confirmEditableMessage'),
+          onConfirm: async () => {
+            await this.dependencies.resetLlmTransformation();
+            this.refreshSettingsTab();
+          },
+          title: t('settings.llm.restoreDefaults.name'),
+        }).open();
+      },
+    });
 
     // --- Engine options ---
     // Built inline (rather than via createSettingGroup) so renderEngineOptions
@@ -637,6 +659,9 @@ export class LocalSttSettingTab extends PluginSettingTab {
   }
 
   private tearDown(): void {
+    this.llmSectionGeneration += 1;
+    this.disposeLlmSection?.();
+    this.disposeLlmSection = null;
     this.disposeModelSection?.();
     this.disposeModelSection = null;
     this.disposeReadAloudSection?.();
@@ -704,9 +729,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
         .onClick(() => {
           new SmartParagraphSettingsModal(this.app, {
             getSettings: () => this.dependencies.getSettings(),
-            saveSettings: async (settings) => {
-              await this.dependencies.saveSettings(settings);
-            },
+            savePatch: (patch) =>
+              this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
           }).open();
         });
       button.extraSettingsEl.setAttribute('aria-label', t('settings.smartParagraph.modal.title'));
@@ -731,9 +755,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
         .onClick(() => {
           new TimestampSettingsModal(this.app, {
             getSettings: () => this.dependencies.getSettings(),
-            saveSettings: async (nextSettings) => {
-              await this.dependencies.saveSettings(nextSettings);
-            },
+            savePatch: (patch) =>
+              this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
           }).open();
         });
       button.extraSettingsEl.setAttribute('aria-label', t('settings.timestamps.modal.title'));
