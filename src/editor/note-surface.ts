@@ -169,6 +169,7 @@ export class NoteSurface {
   private readonly createdAt = nextSurfaceOrder;
   private desynchronization: SurfaceDesynchronization | null = null;
   private disposed = false;
+  private followCaret: boolean;
   private initialAnchorPos: number;
   private readonly initialBoundaryPos: number;
   private pendingInitialPrefix = '';
@@ -189,6 +190,8 @@ export class NoteSurface {
   ) {
     nextSurfaceOrder += 1;
     this.initialAnchorPos = this.computePinPosition();
+    this.followCaret =
+      view.state.selection.main.empty && view.state.selection.main.head === this.initialAnchorPos;
     this.insertInitialPrefix();
     this.initialBoundaryPos = this.initialAnchorPos;
     // Register before pinning the anchor so the ownership check below sees this
@@ -201,9 +204,25 @@ export class NoteSurface {
   }
 
   observeTransaction(update: ViewUpdate): SurfaceDesynchronization | null {
-    if (this.disposed || update.view !== this.view || !update.docChanged) {
+    if (this.disposed || update.view !== this.view) {
       return null;
     }
+    for (const transaction of update.transactions) {
+      const ownDispatch = this.pendingDispatches.some(
+        (pending) => transaction.annotation(noteSurfaceDispatch) === pending.token,
+      );
+      if (
+        !ownDispatch &&
+        (transaction.selection !== undefined ||
+          transaction.isUserEvent('input') ||
+          transaction.isUserEvent('delete') ||
+          transaction.isUserEvent('undo') ||
+          transaction.isUserEvent('redo'))
+      ) {
+        this.followCaret = false;
+      }
+    }
+    if (!update.docChanged) return null;
     for (const pending of this.pendingDispatches) {
       if (
         update.transactions.some(
@@ -295,6 +314,7 @@ export class NoteSurface {
         annotations: noteSurfaceInsertOrder.of(this.createdAt),
         changes: { from, insert: projection.projectedText },
         effects: this.ownerAnchorEffects(to),
+        ...(this.followCaret && this.isAnchorOwner() ? { selection: { anchor: to } } : {}),
       });
     } finally {
       this.pendingUtteranceIds.delete(utteranceId);
@@ -416,12 +436,18 @@ export class NoteSurface {
     const position = range?.to ?? this.writingRegionTail();
     const prefix = position === 0 ? '' : '\n\n';
     const suffix = position === this.view.state.doc.length ? '' : '\n\n';
-    this.view.dispatch({
+    this.dispatchTracked({
       annotations: [
         noteSurfaceInsertOrder.of(this.createdAt),
         noteSurfaceInsertAfter.of({ order: this.createdAt, position }),
       ],
       changes: { from: position, insert: `${prefix}${text}${suffix}` },
+      ...(this.followCaret &&
+      this.isAnchorOwner() &&
+      this.view.state.selection.main.empty &&
+      this.view.state.selection.main.head === position
+        ? { selection: { anchor: position + prefix.length + text.length } }
+        : {}),
     });
     return true;
   }
@@ -478,9 +504,8 @@ export class NoteSurface {
         annotations: bypassSessionProcessingLock.of(true),
         changes: { from: range.from, to: range.to, insert: newText },
         effects: this.ownerAnchorEffects(end),
-        // Only move the real caret when this surface owns the cursor, so a batch
-        // rewrite from an older session can't yank focus from a newer session.
-        ...(ownsAnchor ? { selection: { anchor: end } } : {}),
+        // Preserve any caret the user moved while this session was active.
+        ...(ownsAnchor && this.followCaret ? { selection: { anchor: end } } : {}),
       },
       () => {
         if (this.disposed || this.desynchronization !== null) return;
@@ -520,7 +545,11 @@ export class NoteSurface {
     const pending = { token: {}, seen: false, updates: [] as ViewUpdate[] };
     this.pendingDispatches.push(pending);
     try {
-      this.view.dispatch(spec, { annotations: noteSurfaceDispatch.of(pending.token) });
+      const annotations = spec.annotations === undefined ? [] : [spec.annotations].flat();
+      this.view.dispatch({
+        ...spec,
+        annotations: [...annotations, noteSurfaceDispatch.of(pending.token)],
+      });
       afterDispatch?.();
     } finally {
       this.pendingDispatches.splice(this.pendingDispatches.indexOf(pending), 1);
