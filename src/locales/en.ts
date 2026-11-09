@@ -1412,7 +1412,7 @@ export const en = {
     'Balanced live-dictation model at 123M parameters.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Most accurate Moonshine streaming model at 245M parameters.',
-  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
     'English buffered live transcription with the NVIDIA Parakeet Unified model.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     "NVIDIA's 0.6B multilingual RNNT, exported to int8 ONNX for cache-aware live transcription in eight verified languages.",

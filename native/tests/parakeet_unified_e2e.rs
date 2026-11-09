@@ -185,3 +185,12 @@ fn sustained_worker_stream_finishes_without_queue_errors() {
         samples.len() * 1000 / 16_000
     );
 }
+
+#[test]
+#[ignore = "needs the 1120 ms Parakeet Unified ONNX export"]
+fn buffered_1120_profile_loads() {
+    let encoder = common::model::require_parakeet_unified_model();
+    ParakeetUnifiedAdapter
+        .load_streaming(&encoder, GpuConfig { use_gpu: false })
+        .expect("the 1120 ms buffered export should load");
+}

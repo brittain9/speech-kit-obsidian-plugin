@@ -856,7 +856,7 @@ export const fr = {
     'Modèle de dictée en direct équilibré avec 123 millions de paramètres.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Modèle de streaming Moonshine le plus précis à 245M paramètres.',
-  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
     'Transcription en direct en anglais avec tampon par NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'RNNT multilingue 0,6B de NVIDIA, exporté vers int8 ONNX pour une transcription en direct prenant en compte le cache dans huit langues vérifiées.',

@@ -864,7 +864,7 @@ export const it = {
     'Modello equilibrato per la dettatura in tempo reale, con 123 milioni di parametri.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Il modello di streaming Moonshine più accurato, con 245 milioni di parametri.',
-  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
     'Trascrizione dal vivo in inglese con buffer tramite NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'RNNT multilingue di NVIDIA da 0,6 miliardi di parametri, esportato in ONNX int8 per la trascrizione in tempo reale ottimizzata per la cache in otto lingue verificate.',

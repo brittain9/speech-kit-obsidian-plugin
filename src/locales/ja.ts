@@ -849,7 +849,7 @@ export const ja = {
     '1 億 2,300 万パラメータのバランスのとれたライブ ディクテーション モデル。',
   'catalog.moonshine_medium_streaming_en.summary':
     '245M パラメーターで最も正確な Moonshine ストリーミング モデル。',
-  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
     'NVIDIA Parakeet Unified を使用した英語のバッファ付きライブ文字起こし。',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'NVIDIA の 0.6B 多言語 RNNT。8 つの検証済み言語でのキャッシュ対応ライブ文字起こしのために int8 ONNX にエクスポートされます。',

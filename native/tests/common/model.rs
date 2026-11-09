@@ -18,7 +18,7 @@ use sha2::{Digest, Sha256};
 /// keeps the suite cheap while still exercising the real inference path.
 pub const TEST_MODEL_ID: &str = "whisper_tiny_en_q8_0";
 pub const MULTILINGUAL_WHISPER_MODEL_ID: &str = "whisper_large_v3_turbo_q8_0";
-pub const PARAKEET_UNIFIED_MODEL_ID: &str = "parakeet_unified_en_0_6b_int8_streaming_560ms";
+pub const PARAKEET_UNIFIED_MODEL_ID: &str = "parakeet_unified_en_0_6b_int8_streaming_1120ms";
 pub const NEMOTRON_MODEL_ID: &str = "nemotron_asr_0_6b_int8_streaming_560ms";
 pub const POCKET_TTS_MODEL_ID: &str = "pocket_tts_english_2026_04_int8";
 pub const SUPERTONIC_MODEL_ID: &str = "supertonic_3_multilingual_2026_05";

@@ -853,7 +853,7 @@ export const pt = {
     'Modelo equilibrado de ditado em direto, com 123 milhões de parâmetros.',
   'catalog.moonshine_medium_streaming_en.summary':
     'O modelo Moonshine com transcrição em direto mais preciso, com 245 milhões de parâmetros.',
-  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
     'Transcrição ao vivo em inglês com buffer usando NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'RNNT multilingue de 0,6 mil milhões de parâmetros da NVIDIA, exportado para ONNX int8 para transcrição em direto com gestão de cache em oito idiomas verificados.',

@@ -1095,7 +1095,7 @@ export const hr = {
     'Uravnotežen model za diktiranje uživo sa 123 milijuna parametara.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Najtočniji Moonshine streaming model s 245 milijuna parametara.',
-  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
     'Međuspremana transkripcija engleskog govora uživo s modelom NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'NVIDIA-in višejezični RNNT s 0,6 milijardi parametara, izvezen u int8 ONNX za transkripciju uživo s predmemorijom konteksta na osam provjerenih jezika.',

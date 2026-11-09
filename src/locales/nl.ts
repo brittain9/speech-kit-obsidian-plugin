@@ -849,7 +849,7 @@ export const nl = {
     'Gebalanceerd live-dicteermodel met 123 miljoen parameters.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Meest nauwkeurige Moonshine-streamingmodel met 245 miljoen parameters.',
-  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
     'Engelse live transcriptie met buffer via NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     "NVIDIA's 0,6B meertalige RNNT, geëxporteerd naar int8 ONNX voor cachebewuste live transcriptie in acht geverifieerde talen.",

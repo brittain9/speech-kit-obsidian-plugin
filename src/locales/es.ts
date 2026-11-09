@@ -854,7 +854,7 @@ export const es = {
     'Modelo equilibrado de dictado en vivo con parámetros de 123M.',
   'catalog.moonshine_medium_streaming_en.summary':
     'Modelo de transmisión Moonshine más preciso con parámetros de 245M.',
-  'catalog.parakeet_unified_en_0_6b_int8_streaming_560ms.summary':
+  'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
     'Transcripción en directo en inglés con búfer usando NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
     'RNNT multilingüe 0.6B de NVIDIA, exportado a int8 ONNX para transcripción en vivo con reconocimiento de caché en ocho idiomas verificados.',

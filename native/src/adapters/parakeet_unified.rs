@@ -23,8 +23,8 @@ use std::time::Duration;
 const SAMPLE_RATE: usize = 16_000;
 const FEATURE_DIM: usize = 128;
 const LEFT: usize = 560 * 160;
-const CHUNK: usize = 16 * 160;
-const RIGHT: usize = 40 * 160;
+const CHUNK: usize = 56 * 160;
+const RIGHT: usize = 56 * 160;
 const VOCAB: usize = 1025;
 const HIDDEN: usize = 640;
 const ENCODER_DIM: usize = 1024;
@@ -139,11 +139,11 @@ impl Model {
             ("feat_dim", "128"),
             ("subsampling_factor", "8"),
             ("left_feature_frames", "560"),
-            ("chunk_feature_frames", "16"),
-            ("right_feature_frames", "40"),
+            ("chunk_feature_frames", "56"),
+            ("right_feature_frames", "56"),
             ("left_encoder_frames", "70"),
-            ("chunk_encoder_frames", "2"),
-            ("right_encoder_frames", "5"),
+            ("chunk_encoder_frames", "7"),
+            ("right_encoder_frames", "7"),
             ("pred_hidden", "640"),
             ("pred_rnn_layers", "2"),
         ] {
