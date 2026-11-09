@@ -140,12 +140,19 @@ vi.mock('obsidian', () => {
       return this;
     }
   }
-  return { Modal, Setting, getLanguage: () => 'en', setIcon: () => {}, setTooltip: () => {} };
+  return {
+    Modal,
+    Setting,
+    getLanguage: () => 'en',
+    setIcon: () => {},
+    setTooltip: () => {},
+  };
 });
 
 import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import { renderMediaProgressStatus } from '../src/ui/media-progress-presenter';
 import { MediaTranscriptionModalRegistry } from '../src/ui/media-transcription-modal';
+import { YouTubeTranscriptModalRegistry } from '../src/ui/youtube-transcript-modal';
 
 Object.assign(HTMLElement.prototype, {
   addClass(this: HTMLElement, name: string) {
@@ -196,12 +203,22 @@ Object.assign(HTMLElement.prototype, {
   },
 });
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.body.replaceChildren();
+});
 
 it('reopens retained partial recovery from the status button without starting a job', async () => {
   const registry = new MediaTranscriptionModalRegistry();
   const startFile = vi.fn(async () => {});
-  const copy = vi.fn(async () => {});
+  let resolveCopy!: () => void;
+  let rejectCopy!: (error: Error) => void;
+  const copy = vi.fn(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        resolveCopy = resolve;
+        rejectCopy = reject;
+      }),
+  );
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copy } });
   let partial: string | null = null;
   let targetMatches = false;
@@ -247,8 +264,27 @@ it('reopens retained partial recovery from the status button without starting a 
   expect(copyButton).toBeDefined();
   expect(insertButton).toBeDefined();
   expect(document.activeElement).toBe(statusButton);
+  copyButton?.focus();
+  copyButton?.click();
   copyButton?.click();
   expect(copy).toHaveBeenCalledWith('retained partial');
+  expect(copy).toHaveBeenCalledTimes(1);
+  expect(document.activeElement).toBe(copyButton);
+  const feedback = document.querySelector<HTMLElement>('.local-stt-partial-copy-status');
+  expect(feedback?.getAttribute('role')).toBe('status');
+  expect(feedback?.textContent).toBe('');
+  resolveCopy();
+  await vi.waitFor(() => expect(feedback?.textContent).toBe('Partial transcript copied.'));
+  copyButton?.click();
+  rejectCopy(new Error('private clipboard failure'));
+  await vi.waitFor(() =>
+    expect(feedback?.textContent).toBe(
+      'Could not copy. Try again or insert the partial transcript in its original note.',
+    ),
+  );
+  expect(feedback?.textContent).not.toContain('private clipboard failure');
+  expect(partial).toBe('retained partial');
+  copyButton?.click();
   insertButton?.click();
   expect(document.body.textContent).toContain('Return to the original note');
   expect(partial).toBe('retained partial');
@@ -256,6 +292,109 @@ it('reopens retained partial recovery from the status button without starting a 
   insertButton?.click();
   expect(partial).toBeNull();
   expect(document.querySelector('.local-stt-media-partial-actions button')).toBeNull();
+  resolveCopy();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(feedback?.textContent).toBe('');
   expect(startFile).not.toHaveBeenCalled();
+  registry.closeAll();
+});
+
+it.each(['resolve', 'reject'] as const)(
+  'does not show a late copy result after closing (%s)',
+  async (outcome) => {
+    let resolveCopy!: () => void;
+    let rejectCopy!: (error: Error) => void;
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          resolveCopy = resolve;
+          rejectCopy = reject;
+        }),
+    );
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const registry = new MediaTranscriptionModalRegistry();
+    registry.open({} as never, {
+      cancel: vi.fn(async () => {}),
+      getModels: () => [],
+      getLastError: () => null,
+      getLastMediaAiResult: () => null,
+      getPartialTranscript: () => 'retained partial',
+      insertPartialTranscript: () => false,
+      getProgress: () => null,
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      isTranscribing: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => true,
+      isDecoderInstalled: async () => true,
+      openDecoderInstaller: vi.fn(),
+      onManageModels: vi.fn(),
+      onManagePresets: vi.fn(),
+      startFile: vi.fn(async () => {}),
+      subscribeProgress: () => () => {},
+    });
+    const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (candidate) => candidate.textContent === 'Copy partial transcript',
+    );
+    expect(button).toBeDefined();
+    const feedback = document.querySelector<HTMLElement>('.local-stt-partial-copy-status');
+    expect(feedback).not.toBeNull();
+    button?.click();
+    registry.closeAll();
+    if (outcome === 'resolve') resolveCopy();
+    else rejectCopy(new Error('private clipboard failure'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(feedback?.textContent).toBe('');
+  },
+);
+
+it('reports clipboard failure for a YouTube partial without removing recovery actions', async () => {
+  let active = true;
+  const registry = new YouTubeTranscriptModalRegistry();
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: vi.fn(async () => {
+        throw new Error('private clipboard failure');
+      }),
+    },
+  });
+  registry.open({} as never, {
+    cancel: async () => {
+      active = false;
+    },
+    getProgress: () => null,
+    getPartialTranscript: () => 'retained partial',
+    getResultSource: () => null,
+    getCompletedVideoId: () => null,
+    getAiResult: () => null,
+    getError: () => null,
+    getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+    insertPartialTranscript: () => false,
+    isBusy: () => active,
+    isJobActive: () => active,
+    wasLastJobCancelled: () => !active,
+    onManagePresets: vi.fn(),
+    start: vi.fn(async () => {}),
+    subscribeProgress: () => () => {},
+  });
+  const cancel = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+    (button) => button.textContent === 'Cancel transcription',
+  );
+  if (!cancel) throw new Error('Missing cancel action');
+  cancel.click();
+  await vi.waitFor(() => expect(document.body.textContent).toContain('Copy partial transcript'));
+  const copy = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+    (button) => button.textContent === 'Copy partial transcript',
+  );
+  copy?.click();
+  await vi.waitFor(() =>
+    expect(document.querySelector('.local-stt-partial-copy-status')?.textContent).toBe(
+      'Could not copy. Try again or insert the partial transcript in its original note.',
+    ),
+  );
+  expect(document.body.textContent).toContain('Insert partial transcript');
+  expect(document.body.textContent).not.toContain('private clipboard failure');
   registry.closeAll();
 });

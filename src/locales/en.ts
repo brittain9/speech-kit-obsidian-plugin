@@ -317,6 +317,9 @@ export const en = {
   'media.modal.partialAvailable':
     'A partial transcript is available. It is incomplete. Copy it before starting another job.',
   'media.modal.copyPartial': 'Copy partial transcript',
+  'media.modal.partialCopied': 'Partial transcript copied.',
+  'media.modal.partialCopyFailed':
+    'Could not copy. Try again or insert the partial transcript in its original note.',
   'media.modal.insertPartial': 'Insert partial transcript',
   'media.modal.partialTargetChanged':
     'Return to the original note to insert the partial transcript, or copy it instead.',

@@ -636,9 +636,36 @@ class MediaTranscriptionModal extends Modal {
     const partial = this.dependencies.getPartialTranscript();
     if (partial === null || this.partialEl === null) return;
     this.partialEl.createEl('p', { text: t('media.modal.partialAvailable') });
+    const feedback = this.partialEl.createDiv({
+      cls: 'local-stt-partial-copy-status',
+      attr: { role: 'status', 'aria-live': 'polite' },
+    });
     const copy = this.partialEl.createEl('button', { text: t('media.modal.copyPartial') });
+    let copying = false;
     copy.addEventListener('click', () => {
-      void navigator.clipboard.writeText(partial);
+      if (copying) return;
+      copying = true;
+      feedback.setText('');
+      void (async () => {
+        try {
+          await navigator.clipboard.writeText(partial);
+          if (
+            !this.closed &&
+            feedback.isConnected &&
+            this.dependencies.getPartialTranscript() === partial
+          )
+            feedback.setText(t('media.modal.partialCopied'));
+        } catch {
+          if (
+            !this.closed &&
+            feedback.isConnected &&
+            this.dependencies.getPartialTranscript() === partial
+          )
+            feedback.setText(t('media.modal.partialCopyFailed'));
+        } finally {
+          copying = false;
+        }
+      })();
     });
     const insert = this.partialEl.createEl('button', { text: t('media.modal.insertPartial') });
     insert.addEventListener('click', () => {
