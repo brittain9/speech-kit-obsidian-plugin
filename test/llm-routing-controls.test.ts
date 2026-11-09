@@ -662,6 +662,95 @@ describe('LlmRoutingControls.refreshActiveProviders', () => {
     );
   });
 
+  it('clears a cached model list when another settings host changes the endpoint', async () => {
+    createProviderMock.mockReturnValue(
+      createFakeLlmProvider({
+        listModels: vi.fn(async () => [{ id: 'old-model', displayName: 'Old model' }]),
+      }),
+    );
+    let settings: PluginSettings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      llmProviderConfigurations: {
+        ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations,
+        openai_compatible: {
+          ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations.openai_compatible,
+          baseUrl: 'http://localhost:1001/v1',
+        },
+      },
+      llmRoutingPolicy: { kind: 'fixed', providerId: 'openai_compatible' },
+    };
+    const controls = new LlmRoutingControls({
+      app: {} as App,
+      feedback: { show: vi.fn() },
+      getSecret: () => '',
+      getSettings: () => settings,
+      persist: vi.fn(async () => {}),
+      requestRerender: vi.fn(),
+    });
+    await controls.refreshActiveProviders();
+    settings = {
+      ...settings,
+      llmProviderConfigurations: {
+        ...settings.llmProviderConfigurations,
+        openai_compatible: {
+          ...settings.llmProviderConfigurations.openai_compatible,
+          baseUrl: 'http://localhost:1002/v1',
+        },
+      },
+    };
+    controls.render(new TestElement() as unknown as HTMLElement, settings);
+    expect(MockSetting.named('Model').controlEl.querySelector('datalist')?.children).toHaveLength(
+      0,
+    );
+  });
+
+  it('does not show models from an endpoint changed by another settings host', async () => {
+    let finish!: (models: Array<{ id: string; displayName: string }>) => void;
+    const listModels = vi.fn(
+      () =>
+        new Promise<Array<{ id: string; displayName: string }>>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    createProviderMock.mockReturnValue(createFakeLlmProvider({ listModels }));
+    let settings: PluginSettings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      llmProviderConfigurations: {
+        ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations,
+        openai_compatible: {
+          ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations.openai_compatible,
+          baseUrl: 'http://localhost:1001/v1',
+        },
+      },
+      llmRoutingPolicy: { kind: 'fixed', providerId: 'openai_compatible' },
+    };
+    const controls = new LlmRoutingControls({
+      app: {} as App,
+      feedback: { show: vi.fn() },
+      getSecret: () => '',
+      getSettings: () => settings,
+      persist: vi.fn(async () => {}),
+      requestRerender: vi.fn(),
+    });
+    const request = controls.refreshActiveProviders();
+    settings = {
+      ...settings,
+      llmProviderConfigurations: {
+        ...settings.llmProviderConfigurations,
+        openai_compatible: {
+          ...settings.llmProviderConfigurations.openai_compatible,
+          baseUrl: 'http://localhost:1002/v1',
+        },
+      },
+    };
+    finish([{ id: 'old-model', displayName: 'Old model' }]);
+    await request;
+    controls.render(new TestElement() as unknown as HTMLElement, settings);
+    expect(MockSetting.named('Model').controlEl.querySelector('datalist')?.children).toHaveLength(
+      0,
+    );
+  });
+
   it('refreshes the new endpoint while an old endpoint request is pending', async () => {
     let finishOld!: (models: Array<{ id: string; displayName: string }>) => void;
     const oldList = vi.fn(

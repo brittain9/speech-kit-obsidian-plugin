@@ -122,6 +122,9 @@ export class LlmRoutingControls {
   private modelsRefreshInFlight: Partial<
     Record<LlmProviderId, { state: ProviderState; promise: Promise<void> }>
   > = {};
+  private readonly discoveryConfigurations: Partial<
+    Record<LlmProviderId, { baseUrl: string; secretId: string; secret: string }>
+  > = {};
   private readonly configurationRevisions: Record<LlmProviderId, number> = {
     ollama: 0,
     openrouter: 0,
@@ -354,6 +357,7 @@ export class LlmRoutingControls {
     settings: PluginSettings,
     providerId: LlmProviderId,
   ): void {
+    this.syncDiscoveryConfiguration(providerId);
     switch (providerId) {
       case 'ollama':
         this.renderOllamaModel(parent, settings);
@@ -653,6 +657,7 @@ export class LlmRoutingControls {
   }
 
   private recheckModels(providerId: LlmProviderId): Promise<void> {
+    this.syncDiscoveryConfiguration(providerId);
     const state = this.providers[providerId];
     return state.modelsLoaded && state.health.kind === 'ready'
       ? Promise.resolve()
@@ -669,6 +674,7 @@ export class LlmRoutingControls {
             : this.refreshModels(providerId, automatic),
         () => undefined,
       );
+    this.syncDiscoveryConfiguration(providerId);
     const currentRefresh = this.modelsRefreshInFlight[providerId];
     const state = this.providers[providerId];
     if (currentRefresh?.state === state) return currentRefresh.promise;
@@ -686,12 +692,15 @@ export class LlmRoutingControls {
   }
 
   private async loadModels(providerId: LlmProviderId, state: ProviderState): Promise<void> {
+    const configuration = this.discoveryConfiguration(providerId);
     try {
       const models = await this.createProvider(providerId).listModels();
+      if (!this.sameDiscoveryConfiguration(providerId, configuration)) return;
       state.models = models;
       state.health =
         models.length === 0 ? { kind: 'no_models' } : { kind: 'ready', modelCount: models.length };
     } catch (error) {
+      if (!this.sameDiscoveryConfiguration(providerId, configuration)) return;
       state.models = [];
       state.health = providerHealthFromError(error);
       this.dependencies.logger?.warn(
@@ -699,11 +708,48 @@ export class LlmRoutingControls {
         `${formatLlmProviderName(providerId)} refresh failed (${error instanceof ProviderError ? error.code : 'unknown'}).`,
       );
     } finally {
-      state.modelsLoaded = true;
+      if (this.sameDiscoveryConfiguration(providerId, configuration)) state.modelsLoaded = true;
+      else if (this.providers[providerId] === state)
+        this.providers[providerId] = emptyProviderState();
       if (this.modelsRefreshInFlight[providerId]?.state === state)
         delete this.modelsRefreshInFlight[providerId];
+      this.requestRerender();
     }
-    this.requestRerender();
+  }
+
+  private syncDiscoveryConfiguration(providerId: LlmProviderId): void {
+    const previous = this.discoveryConfigurations[providerId];
+    if (previous !== undefined && !this.sameDiscoveryConfiguration(providerId, previous)) {
+      this.providers[providerId] = emptyProviderState();
+    }
+    this.discoveryConfigurations[providerId] = this.discoveryConfiguration(providerId);
+  }
+
+  private discoveryConfiguration(providerId: LlmProviderId): {
+    baseUrl: string;
+    secretId: string;
+    secret: string;
+  } {
+    const settings = this.dependencies.getSettings();
+    const config = settings.llmProviderConfigurations[providerId];
+    const secretId = 'secretId' in config ? config.secretId : '';
+    return {
+      baseUrl: 'baseUrl' in config ? config.baseUrl : '',
+      secretId,
+      secret: secretId.length === 0 ? '' : this.dependencies.getSecret(secretId),
+    };
+  }
+
+  private sameDiscoveryConfiguration(
+    providerId: LlmProviderId,
+    expected: { baseUrl: string; secretId: string; secret: string },
+  ): boolean {
+    const current = this.discoveryConfiguration(providerId);
+    return (
+      current.baseUrl === expected.baseUrl &&
+      current.secretId === expected.secretId &&
+      current.secret === expected.secret
+    );
   }
 
   private scheduleSecretRefresh(providerId: 'openrouter' | 'openai_compatible'): void {
@@ -745,10 +791,20 @@ export class LlmRoutingControls {
 
   private async refreshProviderHealth(providerId: 'openrouter'): Promise<void> {
     const state = this.providers[providerId];
+    const configuration = this.discoveryConfiguration(providerId);
     try {
-      state.health = await this.createProvider(providerId).probe();
+      const health = await this.createProvider(providerId).probe();
+      if (
+        this.providers[providerId] === state &&
+        this.sameDiscoveryConfiguration(providerId, configuration)
+      )
+        state.health = health;
     } catch (error) {
-      state.health = providerHealthFromError(error);
+      if (
+        this.providers[providerId] === state &&
+        this.sameDiscoveryConfiguration(providerId, configuration)
+      )
+        state.health = providerHealthFromError(error);
     }
     this.requestRerender();
   }
