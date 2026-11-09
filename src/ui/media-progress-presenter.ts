@@ -4,9 +4,27 @@ import { t } from '../shared/i18n';
 export function renderMediaProgressStatus(
   element: HTMLElement,
   progress: MediaTranscriptionProgress | null,
+  hasPartialRecovery = false,
+  openRecovery?: () => void,
 ): void {
   element.empty();
   element.removeAttribute('aria-label');
+  if (progress === null && hasPartialRecovery) {
+    const message = t('media.progress.needsAttention');
+    element.removeAttribute('role');
+    element.removeAttribute('aria-live');
+    const button = element.createEl('button', {
+      attr: { type: 'button' },
+      cls: 'local-stt-status-action',
+      text: message,
+    });
+    button.addEventListener('click', () => openRecovery?.());
+    const live = element.createSpan({ cls: 'local-stt-status-live', text: message });
+    live.setAttribute('role', 'status');
+    live.setAttribute('aria-live', 'polite');
+    element.toggle(true);
+    return;
+  }
   if (progress === null) {
     element.toggle(false);
     element.removeAttribute('role');

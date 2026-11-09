@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderMediaProgressStatus } from '../src/ui/media-progress-presenter';
+import { TestElement } from './__mocks__/obsidian';
 
 function statusElement() {
   return {
@@ -32,6 +33,21 @@ describe('media progress presenter', () => {
     renderMediaProgressStatus(element, null);
     expect(element.toggle).toHaveBeenLastCalledWith(false);
     expect(element.removeAttribute).toHaveBeenCalledWith('aria-live');
+  });
+
+  it('opens existing recovery from a native button when partial text is retained', async () => {
+    const element = new TestElement();
+    const reopen = vi.fn();
+    renderMediaProgressStatus(element as unknown as HTMLElement, null, true, reopen);
+    const button = element.querySelector('button');
+    expect(button?.textContent).toBe('Needs attention · Partial transcript available');
+    expect(element.findByClass('local-stt-status-live')?.attributes.get('aria-live')).toBe(
+      'polite',
+    );
+    await button?.click();
+    expect(reopen).toHaveBeenCalledOnce();
+    renderMediaProgressStatus(element as unknown as HTMLElement, null, false, reopen);
+    expect(element.querySelector('button')).toBeNull();
   });
 
   it('does not accept or render source metadata', () => {

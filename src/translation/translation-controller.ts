@@ -122,7 +122,11 @@ interface TranslationControllerDependencies {
     'cancelTranslation' | 'startTranslation' | 'subscribe' | 'subscribeProcessStop'
   >;
   sidecarLifecycleGate: SidecarLifecycleGate;
-  setDetachedStatus?: (state: TranslationJobState | null, reopen: () => void) => void;
+  setDetachedStatus?: (
+    state: TranslationJobState | null,
+    reopen: () => void,
+    options?: { preserveFocus?: boolean },
+  ) => void;
 }
 interface ActiveTranslation {
   configuration: TranslationConfiguration;
@@ -148,6 +152,7 @@ interface TranslationConfiguration {
 export class TranslationController {
   private active: ActiveTranslation | null = null;
   private activeModal: TranslationModal | null = null;
+  private terminalFocus: { modal: TranslationModal; active: ActiveTranslation } | null = null;
   constructor(private readonly dependencies: TranslationControllerDependencies) {}
 
   translateSelection(editor: Editor, view: MarkdownFileInfo): void {
@@ -312,7 +317,7 @@ export class TranslationController {
   private openModal(otherNote = false): void {
     const active = this.active;
     if (active === null || this.activeModal !== null) return;
-    this.dependencies.setDetachedStatus?.(null, () => {});
+    this.dependencies.setDetachedStatus?.(null, () => {}, { preserveFocus: true });
     const modal = new TranslationModal(this.dependencies.app, {
       canReadAloud: this.dependencies.canReadAloud,
       editor: active.editor,
@@ -328,8 +333,8 @@ export class TranslationController {
       isModelSelectionPending: () => active.modelSelectionPendingGeneration !== null,
       snapshot: active.snapshot,
       reviewedOutput: active.reviewedOutput,
-      onApplied: () => this.clearActive(),
-      onDismissed: () => this.clearActive(),
+      onApplied: () => this.clearActive(true),
+      onDismissed: () => this.clearActive(true),
       subscribeConfiguration: (listener) => {
         active.configurationListeners.add(listener);
         return () => {
@@ -339,8 +344,14 @@ export class TranslationController {
       onClosed: () => {
         if (this.activeModal === modal) {
           this.activeModal = null;
-          if (this.active === active)
+          if (this.active === active) {
             this.dependencies.setDetachedStatus?.(active.job.state(), () => this.openModal());
+          } else if (this.terminalFocus?.modal === modal) {
+            const target = this.terminalFocus.active;
+            this.terminalFocus = null;
+            if (this.active === null && target.sourceView.file === target.sourceFile)
+              target.editor.focus();
+          }
         }
       },
       onLanguageChange: (sourceLanguage, targetLanguage) => {
@@ -467,8 +478,12 @@ export class TranslationController {
     this.activeModal = modal;
     modal.open();
   }
-  private clearActive(): void {
+  private clearActive(terminal = false): void {
     const active = this.active;
+    this.terminalFocus =
+      terminal && active !== null && this.activeModal !== null
+        ? { modal: this.activeModal, active }
+        : null;
     this.active = null;
     active?.configurationListeners.clear();
     active?.release();

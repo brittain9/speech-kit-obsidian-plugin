@@ -323,6 +323,7 @@ export class AudioFileTranscriptionController {
       });
       if (result.kind !== 'accepted') return false;
       this.partialRecovery = null;
+      this.dependencies.onMediaProgress?.(this.mediaProgress);
       return true;
     } finally {
       session.dispose();
