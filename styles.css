@@ -2047,6 +2047,9 @@
   .local-stt-model-summary-list
   .setting-item.local-stt-model-summary-row {
   position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
   min-height: 0;
   margin: 0;
   padding: 0;
@@ -2060,6 +2063,10 @@
 }
 .local-stt-model-summary-group .setting-item .local-stt-model-summary-info {
   flex: 1 1 auto;
+  align-self: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -2077,6 +2084,7 @@
 }
 .local-stt-model-summary-group .setting-item button.local-stt-model-summary-open {
   display: grid;
+  box-sizing: border-box;
   grid-template-columns: 20px minmax(0, 1fr) 16px;
   align-items: center;
   gap: 12px;
