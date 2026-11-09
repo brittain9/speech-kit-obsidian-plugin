@@ -95,6 +95,64 @@ function state(
 }
 
 describe('Read Aloud settings incremental refresh', () => {
+  it('shows missing status only after discovery and refreshes when an empty-voice model is installed or removed', () => {
+    Setting.reset();
+    let currentState = {
+      ...state([], null, 'pocket_tts_english_2026_04_int8', true),
+      installedModels: [],
+      loadStatus: 'loading' as ModelManagerState['loadStatus'],
+    };
+    let notify = () => {};
+    const manager = {
+      getState: () => currentState,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => {};
+      },
+    } as unknown as ModelInstallManager;
+    const parent = new TestElement();
+    const modelControls = parent.createDiv();
+    const readAloudControls = parent.createDiv();
+    const before = readAloudControls.createDiv();
+    renderTextToSpeechSettings(
+      modelControls as unknown as HTMLDivElement,
+      readAloudControls as unknown as HTMLDivElement,
+      before as unknown as HTMLElement,
+      {
+        getSettings: () => ({
+          ...DEFAULT_PLUGIN_SETTINGS,
+          selectedTtsModel: currentState.selectedTtsModel,
+        }),
+        manager,
+        openSelectedModelDetails: vi.fn(),
+        openModelPicker: vi.fn(async () => {}),
+        persistLanguage: vi.fn(async () => {}),
+        persistVoice: vi.fn(async () => {}),
+      },
+    );
+    const description = () => {
+      const desc = Setting.instances
+        .filter((setting) => setting.name === 'Text-to-speech model')
+        .at(-1)?.descEl;
+      return [desc?.textContent, ...(desc?.children.map((child) => child.textContent) ?? [])].join(
+        '',
+      );
+    };
+    expect(description()).not.toContain('Not installed');
+    currentState = { ...currentState, loadStatus: 'error', loadError: 'unavailable' };
+    notify();
+    expect(description()).not.toContain('Not installed');
+    currentState = { ...currentState, loadStatus: 'ready', loadError: null };
+    notify();
+    expect(description()).toContain('Not installed');
+    currentState = { ...currentState, installedModels: state([]).installedModels };
+    notify();
+    expect(description()).not.toContain('Not installed');
+    currentState = { ...currentState, installedModels: [] };
+    notify();
+    expect(description()).toContain('Not installed');
+    expect(currentState.selectedTtsModel?.kind).toBe('catalog_model');
+  });
   it('shows the speed value dynamically and persists changes', () => {
     const slider = new SliderComponent();
     const persistSpeed = vi.fn(async () => {});
