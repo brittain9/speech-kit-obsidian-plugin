@@ -55,7 +55,11 @@ An actual debug sidecar, SHA-256 `0f313d5c8bb24c2c598e41193331a53a8327e940b83523
 
 Every completed speech run emitted increasing revisions with a preserved prefix and one final. Every stop and cancellation reached its matching terminal event. All four processes exited successfully. The German profiles produced the expected fixture sentence. These small functional checks establish that the selected artifacts execute through the product path. They do not establish comparative model quality. [Curated results](../quality/2026-11-08-nemotron-profiles.json) contain public-fixture text and protocol outcomes only.
 
-The final local Rust gate passed formatting, Clippy with warnings denied, and 409 tests, with 26 opt-in tests ignored. The five profile tests then passed with real local assets, including the VAD/worker revision path for both new profiles. The full Metal sidecar build passed. A clean Node 24.22.2 dependency install and frontend gate passed both typechecks, both linters, 1,784 tests with 10 skipped, and the production bundle.
+After integration with the current Parakeet and model-store changes, the local Rust gate passed formatting, Clippy with warnings denied, and 418 tests, with 32 opt-in tests ignored. All five real-profile tests passed again, including the VAD/worker revision path for both new profiles. The combined Metal sidecar build and build-output verification passed. A clean Node 24.22.2 dependency install preceded the frontend checks. The combined frontend gate passed both typechecks, both linters, 1,844 tests with 10 skipped, and the production bundle.
+
+Public UI tests first failed on the former 3.5-only external-file guidance and raw terms-review badge. They now pass with a generic Nemotron family name, all three supported profiles, and localized **License terms** text.
+
+Native Obsidian checks passed with the pinned English export and the multilingual 160 ms German profile in a combined build. Public speech fixtures played through system capture produced live partials, a final, and a normal stop. Model selection and language configuration were restored afterward, with capture and system audio off. Acoustic playback verifies the workflow; it is not an accuracy comparison.
 
 To repeat the real-model checks, set `STT_TEST_NEMOTRON_ENGLISH_DIR` and `STT_TEST_NEMOTRON_160MS_DIR` to verified local model directories, then run:
 
@@ -65,4 +69,4 @@ cargo test --manifest-path native/Cargo.toml --no-default-features \
   -- --include-ignored --test-threads=1
 ```
 
-Native Obsidian UI checks and final platform CI remain pending.
+Final platform CI remains pending.
