@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import catalog from '../native/catalog.json';
 
 describe('Nemotron streaming catalog profiles', () => {
-  it('offers the pinned English v2603 export with English-only capabilities', () => {
+  it('offers the pinned April English export with English-only capabilities', () => {
     const model = catalog.models.find(
-      (item) => item.modelId === 'nemotron_speech_streaming_en_v2603_int8_560ms',
+      (item) => item.modelId === 'nemotron_speech_streaming_en_0_6b_int8_560ms',
     );
     expect(model).toMatchObject({
       runtimeId: 'onnx_runtime',

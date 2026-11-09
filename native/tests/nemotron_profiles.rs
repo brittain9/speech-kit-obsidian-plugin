@@ -76,8 +76,8 @@ fn new_profiles_publish_live_revisions_and_stop() {
 }
 
 #[test]
-#[ignore = "requires verified English v2603 assets in STT_TEST_NEMOTRON_ENGLISH_DIR"]
-fn english_v2603_loads_streams_and_rejects_other_languages() {
+#[ignore = "requires verified English 560 ms assets in STT_TEST_NEMOTRON_ENGLISH_DIR"]
+fn english_560ms_export_loads_streams_and_rejects_other_languages() {
     let encoder = local_encoder("STT_TEST_NEMOTRON_ENGLISH_DIR");
     assert_eq!(
         NemotronAsrAdapter
@@ -104,7 +104,7 @@ fn english_v2603_loads_streams_and_rejects_other_languages() {
         }
     }
     let final_text = joined_text(&model.finalize_utterance().unwrap());
-    eprintln!("English v2603 final: {final_text}");
+    eprintln!("English 560 ms final: {final_text}");
     assert!(!partials.is_empty());
     assert!(
         partials

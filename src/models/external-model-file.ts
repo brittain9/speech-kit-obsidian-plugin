@@ -27,7 +27,7 @@ export const EXTERNAL_FILE_ENGINES: readonly ExternalFileEngineOption[] = [
   {
     entryFilename: 'encoder.int8.onnx',
     entryFilenameErrorKey: 'models.external.validation.nemotronEntryFile',
-    label: 'NVIDIA Nemotron 3.5 ASR (ONNX Runtime)',
+    label: 'NVIDIA Nemotron ASR (ONNX Runtime)',
     placeholder: '/absolute/path/to/nemotron/encoder.int8.onnx',
     requirements: [
       t('models.external.requirements.nemotron.entry'),

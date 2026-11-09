@@ -6,7 +6,7 @@
   "binarySha256": "0f313d5c8bb24c2c598e41193331a53a8327e940b83523a62f677da11927ef67",
   "runs": [
     {
-      "model": "english-v2603-560ms",
+      "model": "english-560ms-apr2026-export",
       "fixture": "7021-79740-0000",
       "language": "en",
       "cancelled": false,
@@ -21,7 +21,7 @@
       "automaticLanguageDetection": false
     },
     {
-      "model": "english-v2603-560ms",
+      "model": "english-560ms-apr2026-export",
       "fixture": "silence",
       "language": "en",
       "cancelled": false,
@@ -36,7 +36,7 @@
       "automaticLanguageDetection": false
     },
     {
-      "model": "english-v2603-560ms",
+      "model": "english-560ms-apr2026-export",
       "fixture": "7021-79740-0000",
       "language": "en",
       "cancelled": true,

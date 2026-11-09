@@ -403,6 +403,23 @@ describe('deriveCurrentModelDisplay', () => {
     });
   });
 
+  it('labels an external Nemotron selection without claiming a particular checkpoint', () => {
+    const state = buildState({
+      selectedModel: {
+        familyId: 'nemotron_asr',
+        filePath: '/models/nemotron/encoder.int8.onnx',
+        kind: 'external_file',
+        runtimeId: 'onnx_runtime',
+      },
+    });
+    state.catalog.families = [];
+    expect(deriveCurrentModelDisplay(state)).toMatchObject({
+      displayName: 'encoder.int8.onnx',
+      engineLabel: 'NVIDIA Nemotron ASR',
+      sourceLabel: 'External file',
+    });
+  });
+
   it('reports a successfully probed external model as ready', () => {
     const selection = {
       familyId: 'whisper' as const,

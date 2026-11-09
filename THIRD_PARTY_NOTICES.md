@@ -92,8 +92,10 @@ No endorsement by Tencent, llama.cpp, or llama-cpp-2 contributors is implied.
 
 ## NVIDIA Nemotron Speech English streaming model
 
-- Work: `nvidia/nemotron-speech-streaming-en-0.6b`, March 2026 checkpoint
-- NVIDIA checkpoint revision: `ac0580bb7d3d6e39c4361db6afe28db9211793e4`
+- Work: `nvidia/nemotron-speech-streaming-en-0.6b`
+- Related NVIDIA model documentation revision:
+  `ebe59e5a817142986528bbbee5dba8db7b38ed50`
+- The exact NVIDIA checkpoint used by the published conversion is not recorded.
 - Derived 560 ms int8 ONNX export revision:
   `52056fdc070914a48dcd68b31b44d6a6f5b85902`
 - Export implementation: sherpa-onnx

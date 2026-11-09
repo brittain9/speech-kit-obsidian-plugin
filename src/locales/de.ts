@@ -739,16 +739,16 @@ export const de = {
     'Der Dateipfad des Modells muss auf eine Datei zeigen: {path}',
   'models.external.validation.selectEntryFile': 'Wählen Sie {filename} aus.',
   'models.external.validation.nemotronEntryFile':
-    'Nemotron 3.5 ASR benötigt sein Artefakt encoder.int8.onnx. Wählen Sie encoder.int8.onnx aus dem angehefteten 560 ms Modellverzeichnis.',
+    'Nemotron ASR: Wählen Sie encoder.int8.onnx aus einem unterstützten Nemotron-int8-Export.',
   'models.external.validation.moonshineEntryFile':
     'Moonshine erfordert sein primäres frontend.ort-Artefakt. Wählen Sie frontend.ort aus dem Streaming-Modellverzeichnis aus.',
   'models.external.validation.generic': 'Die Sprach-Engine konnte dieses Modell nicht validieren.',
   'models.external.requirements.nemotron.entry':
-    'Wählen Sie encoder.int8.onnx aus dem gepinnten Nemotron 3.5 ASR 560 ms int8-Export.',
+    'Wählen Sie encoder.int8.onnx aus einem unterstützten Nemotron-int8-Export.',
   'models.external.requirements.nemotron.siblings':
     'Das gleiche Verzeichnis muss decoder.int8.onnx, joiner.int8.onnx und tokens.txt enthalten.',
   'models.external.requirements.nemotron.compatibility':
-    'Andere Blockgrößen und ORT GenAI-Exporte sind mit diesem Adapter nicht kompatibel.',
+    'Unterstützte Exporte: Englisch 560 ms und mehrsprachig 160 ms oder 560 ms. ORT GenAI-Exporte werden nicht unterstützt.',
   'models.external.requirements.moonshine.entry':
     'Wählen Sie frontend.ort aus einem Verzeichnis für Moonshine-v2-Streaming-ORT-Modelle.',
   'models.external.requirements.moonshine.siblings':
@@ -781,6 +781,7 @@ export const de = {
   'models.capability.languageSelection': 'Sprachauswahl',
   'models.tag.fullPrecision': 'Volle Präzision',
   'models.tag.reducedSize': 'Reduzierte Größe',
+  'models.tag.licenseTerms': 'Lizenzbedingungen',
   'models.progress.preparing': 'Installation wird vorbereitet',
   'models.progress.downloading': 'Herunterladen',
   'models.progress.verifying': 'Download wird verifiziert',

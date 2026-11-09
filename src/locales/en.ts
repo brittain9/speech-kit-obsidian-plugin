@@ -1135,7 +1135,7 @@ export const en = {
   'setup.wizard.modelIntro':
     'Install a transcription model to enable dictation. You can install more later — smaller models are faster, larger models are more accurate.',
   'setup.wizard.modelKinds':
-    'Two kinds are available: streaming models show words live as you speak; standard models transcribe after each pause. For hands-free dictation, start with the recommended Moonshine Small model. Nemotron 3.5 ASR is a higher-resource streaming option.',
+    'Two kinds are available: streaming models show words live as you speak; standard models transcribe after each pause. For hands-free dictation, start with the recommended Moonshine Small model. Nemotron ASR is a higher-resource streaming option.',
   'setup.wizard.gpuNote':
     'Whisper models can run much faster with GPU acceleration. If you have an NVIDIA GPU, you can install the CUDA build later from Settings.',
   'setup.wizard.recommendation.title': 'Recommended for your setup',
@@ -1277,7 +1277,7 @@ export const en = {
   'models.external.requirements.nemotron.siblings':
     'The same directory must contain decoder.int8.onnx, joiner.int8.onnx, and tokens.txt.',
   'models.external.requirements.nemotron.compatibility':
-    'Other chunk sizes and ORT GenAI exports are not compatible with this adapter.',
+    'Supports English 560 ms and multilingual 160 ms or 560 ms exports. ORT GenAI exports are not supported.',
   'models.external.requirements.moonshine.entry':
     'Select frontend.ort from a Moonshine v2 streaming ORT model directory.',
   'models.external.requirements.moonshine.siblings':
@@ -1318,6 +1318,7 @@ export const en = {
   'models.capability.languageSelection': 'Language selection',
   'models.tag.fullPrecision': 'Full precision',
   'models.tag.reducedSize': 'Reduced size',
+  'models.tag.licenseTerms': 'License terms',
   'models.progress.preparing': 'Preparing install',
   'models.progress.downloading': 'Downloading',
   'models.progress.verifying': 'Verifying download',
@@ -1407,7 +1408,7 @@ export const en = {
     "NVIDIA's 0.6B multilingual RNNT, exported to int8 ONNX for cache-aware live transcription in nine verified languages.",
   'catalog.nemotron_asr_0_6b_int8_streaming_160ms.summary':
     'A shorter encoder-chunk option for the existing multilingual 0.6B checkpoint. Supports the same verified languages as the 560 ms profile.',
-  'catalog.nemotron_speech_streaming_en_v2603_int8_560ms.summary':
+  'catalog.nemotron_speech_streaming_en_0_6b_int8_560ms.summary':
     'NVIDIA\u2019s English-only 0.6B streaming RNNT with punctuation and capitalization. Uses 560 ms encoder chunks.',
   'catalog.pocket_tts_english_2026_04_int8.summary':
     'Natural local English read-aloud synthesis with selectable curated voices.',

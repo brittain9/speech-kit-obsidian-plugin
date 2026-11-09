@@ -731,16 +731,16 @@ export const es = {
     'La ruta del archivo del modelo debe apuntar a un archivo: {path}',
   'models.external.validation.selectEntryFile': 'Selecciona {filename}.',
   'models.external.validation.nemotronEntryFile':
-    'Nemotron 3.5 ASR requiere su artefacto encoder.int8.onnx. Seleccione encoder.int8.onnx del directorio del modelo de 560 ms anclado.',
+    'Nemotron ASR: Selecciona encoder.int8.onnx de una exportación Nemotron int8 compatible.',
   'models.external.validation.moonshineEntryFile':
     'Moonshine requiere su artefacto frontend.ort principal. Seleccione frontend.ort en el directorio del modelo de transmisión.',
   'models.external.validation.generic': 'El motor de voz no pudo validar este modelo.',
   'models.external.requirements.nemotron.entry':
-    'Seleccione encoder.int8.onnx de la exportación int8 Nemotron 3.5 ASR 560 ms fijada.',
+    'Selecciona encoder.int8.onnx de una exportación Nemotron int8 compatible.',
   'models.external.requirements.nemotron.siblings':
     'El mismo directorio debe contener decoder.int8.onnx, joiner.int8.onnx y tokens.txt.',
   'models.external.requirements.nemotron.compatibility':
-    'Otros tamaños de fragmentos y exportaciones ORT GenAI no son compatibles con este adaptador.',
+    'Exportaciones compatibles: inglés 560 ms y multilingües 160 ms o 560 ms. Las exportaciones ORT GenAI no son compatibles.',
   'models.external.requirements.moonshine.entry':
     'Seleccione frontend.ort de un directorio de modelo ORT de transmisión Moonshine v2.',
   'models.external.requirements.moonshine.siblings':
@@ -773,6 +773,7 @@ export const es = {
   'models.capability.languageSelection': 'Selección de idioma',
   'models.tag.fullPrecision': 'Precisión total',
   'models.tag.reducedSize': 'Tamaño reducido',
+  'models.tag.licenseTerms': 'Términos de licencia',
   'models.progress.preparing': 'Preparando la instalación',
   'models.progress.downloading': 'Descargando',
   'models.progress.verifying': 'Verificando descarga',

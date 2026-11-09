@@ -5,6 +5,7 @@ const MODEL_TAG_LABELS: Readonly<Record<string, string>> = {
   'full-precision': t('models.tag.fullPrecision'),
   gpu: 'GPU',
   'reduced-size': t('models.tag.reducedSize'),
+  'requires-terms-review': t('models.tag.licenseTerms'),
 };
 
 export function formatModelTagLabel(tag: string): string {

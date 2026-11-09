@@ -876,7 +876,7 @@ export const hr = {
   'setup.wizard.modelIntro':
     'Instalirajte model za transkripciju kako biste omogućili diktiranje. Dodatne modele možete instalirati kasnije — manji modeli su brži, a veći su točniji.',
   'setup.wizard.modelKinds':
-    'Dostupne su dvije vrste: streaming modeli prikazuju riječi uživo dok govorite, a standardni modeli transkribiraju nakon svake stanke. Za diktiranje bez upotrebe ruku počnite s preporučenim modelom Moonshine Small. Nemotron 3.5 ASR je streaming opcija koja traži više resursa.',
+    'Dostupne su dvije vrste: streaming modeli prikazuju riječi uživo dok govorite, a standardni modeli transkribiraju nakon svake stanke. Za diktiranje bez upotrebe ruku počnite s preporučenim modelom Moonshine Small. Nemotron ASR je streaming opcija koja traži više resursa.',
   'setup.wizard.gpuNote':
     'Whisper modeli mogu raditi znatno brže uz GPU ubrzanje. Ako imate NVIDIA GPU, CUDA izdanje možete instalirati kasnije u postavkama.',
   'setup.wizard.openModelPicker': 'Otvori odabir modela',
@@ -966,7 +966,7 @@ export const hr = {
   'models.external.requirements.nemotron.siblings':
     'Isti direktorij mora sadržavati decoder.int8.onnx, joiner.int8.onnx i tokens.txt.',
   'models.external.requirements.nemotron.compatibility':
-    'Ostale veličine odsječaka i ORT GenAI izvozi nisu kompatibilni s ovim adapterom.',
+    'Podržani su engleski izvoz s odsječcima od 560 ms i višejezični izvozi od 160 ms ili 560 ms. ORT GenAI izvozi nisu podržani.',
   'models.external.requirements.moonshine.entry':
     'Odaberite frontend.ort iz direktorija Moonshine v2 streaming ORT modela.',
   'models.external.requirements.moonshine.siblings':
@@ -1007,6 +1007,7 @@ export const hr = {
   'models.capability.languageSelection': 'Odabir jezika',
   'models.tag.fullPrecision': 'Puna preciznost',
   'models.tag.reducedSize': 'Smanjena veličina',
+  'models.tag.licenseTerms': 'Uvjeti licence',
   'models.progress.preparing': 'Priprema instalacije',
   'models.progress.downloading': 'Preuzimanje',
   'models.progress.verifying': 'Provjera preuzimanja',

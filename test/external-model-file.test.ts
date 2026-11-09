@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_EXTERNAL_FILE_ENGINE_SELECTION,
@@ -79,6 +79,25 @@ describe('validateExternalModelFilePath', () => {
 });
 
 describe('external model guidance', () => {
+  it('keeps supported Nemotron profiles and the license badge readable in German', async () => {
+    vi.resetModules();
+    vi.doMock('obsidian', () => ({ getLanguage: () => 'de' }));
+    try {
+      const localized = await import('../src/models/external-model-file');
+      const labels = await import('../src/models/model-guidance');
+      const option = localized.getExternalFileEngineOption({
+        familyId: 'nemotron_asr',
+        runtimeId: 'onnx_runtime',
+      });
+      expect(option?.label).toBe('NVIDIA Nemotron ASR (ONNX Runtime)');
+      expect(option?.requirements.join(' ')).toContain('160 ms');
+      expect(labels.formatModelTagLabel('requires-terms-review')).toBe('Lizenzbedingungen');
+    } finally {
+      vi.doUnmock('obsidian');
+      vi.resetModules();
+    }
+  });
+
   it('keeps Whisper as the explicit default independent of option ordering', () => {
     expect(DEFAULT_EXTERNAL_FILE_ENGINE_SELECTION).toEqual({
       familyId: 'whisper',
@@ -128,11 +147,13 @@ describe('external model guidance', () => {
     });
     const guidance = option?.requirements.join(' ') ?? '';
 
+    expect(option?.label).toBe('NVIDIA Nemotron ASR (ONNX Runtime)');
     expect(guidance).toContain('encoder.int8.onnx');
     expect(guidance).toContain('decoder.int8.onnx');
     expect(guidance).toContain('joiner.int8.onnx');
     expect(guidance).toContain('tokens.txt');
-    expect(guidance).toContain('Other chunk sizes');
+    expect(guidance).toContain('English 560 ms');
+    expect(guidance).toContain('multilingual 160 ms or 560 ms');
     expect(guidance).toContain('ORT GenAI');
   });
 

@@ -744,9 +744,9 @@
       "runtimeId": "onnx_runtime",
       "familyId": "nemotron_asr",
       "task": "stt",
-      "modelId": "nemotron_speech_streaming_en_v2603_int8_560ms",
+      "modelId": "nemotron_speech_streaming_en_0_6b_int8_560ms",
       "collectionId": "nemotron_asr_streaming",
-      "displayName": "Nemotron Speech English v2603 · 560 ms",
+      "displayName": "Nemotron Speech English 560 ms",
       "summary": "NVIDIA’s English-only 0.6B streaming RNNT with punctuation and capitalization. Uses 560 ms encoder chunks.",
       "languageTags": ["en"],
       "supportsAutomaticLanguageDetection": false,
@@ -756,7 +756,7 @@
       "sourceUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-speech-streaming-en-0.6b-560ms-int8-2026-04-25/tree/52056fdc070914a48dcd68b31b44d6a6f5b85902",
       "modelCardUrl": "https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b/tree/ebe59e5a817142986528bbbee5dba8db7b38ed50",
       "notes": [
-        "Uses NVIDIA’s March 2026 English checkpoint and the sherpa-onnx int8 export.",
+        "Uses the pinned English sherpa-onnx export published April 25, 2026. The conversion recipe does not pin its exact NVIDIA source checkpoint.",
         "The four required files total about 631 MiB. Encoder chunk size is not end-to-end dictation latency.",
         "English only; automatic language detection is unavailable.",
         "The model weights use the NVIDIA Open Model License. Installing or using the model accepts those terms."

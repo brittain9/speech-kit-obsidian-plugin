@@ -721,16 +721,16 @@ export const ja = {
     'モデル ファイル パスは次のファイルを指す必要があります: {path}',
   'models.external.validation.selectEntryFile': '{filename}を選択してください。',
   'models.external.validation.nemotronEntryFile':
-    'Nemotron 3.5 ASR には、encoder.int8.onnx アーティファクトが必要です。固定された 560 ミリ秒モデル ディレクトリから encoder.int8.onnx を選択します。',
+    'Nemotron ASR: 対応する Nemotron int8 エクスポートから encoder.int8.onnx を選択してください。',
   'models.external.validation.moonshineEntryFile':
     'Moonshine には、プライマリのfrontend.ort アーティファクトが必要です。ストリーミング モデル ディレクトリからfrontend.ortを選択します。',
   'models.external.validation.generic': '音声エンジンはこのモデルを検証できませんでした。',
   'models.external.requirements.nemotron.entry':
-    '固定された Nemotron 3.5 ASR 560 ms int8 エクスポートから encoder.int8.onnx を選択します。',
+    '対応する Nemotron int8 エクスポートから encoder.int8.onnx を選択してください。',
   'models.external.requirements.nemotron.siblings':
     '同じディレクトリに、decoder.int8.onnx、joiner.int8.onnx、および tokens.txt が含まれている必要があります。',
   'models.external.requirements.nemotron.compatibility':
-    '他のチャンク サイズおよび ORT GenAI エクスポートは、このアダプターと互換性がありません。',
+    '対応するエクスポートは英語 560 ms と多言語 160 ms または 560 ms です。ORT GenAI 形式には対応していません。',
   'models.external.requirements.moonshine.entry':
     'Moonshine v2 ストリーミング ORT モデル ディレクトリからfrontend.ort を選択します。',
   'models.external.requirements.moonshine.siblings':
@@ -763,6 +763,7 @@ export const ja = {
   'models.capability.languageSelection': '言語の選択',
   'models.tag.fullPrecision': '完全な精度',
   'models.tag.reducedSize': '縮小サイズ',
+  'models.tag.licenseTerms': 'ライセンス条項',
   'models.progress.preparing': 'インストールの準備中',
   'models.progress.downloading': 'ダウンロード中',
   'models.progress.verifying': 'ダウンロードの検証中',
