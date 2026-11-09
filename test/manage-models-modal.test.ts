@@ -490,12 +490,7 @@ describe('model browser', () => {
     });
     modal.open();
     const content = modal.contentEl as unknown as TestElement;
-    const filipino = content
-      .querySelectorAll('.local-stt-language-rail__button')
-      .find((button) => button.findByText('Filipino') !== undefined);
-
-    expect(filipino).toBeDefined();
-    await filipino?.click();
+    await selectLanguage(modal, 'Filipino');
 
     expect(texts(content)).toEqual(
       expect.arrayContaining([
@@ -835,17 +830,36 @@ describe('model browser', () => {
     globalThis.createFragment = () => new TestElement() as unknown as DocumentFragment;
     try {
       modal.open();
-      const familyTabs = () =>
-        (modal.contentEl as unknown as TestElement).querySelectorAll('.local-stt-tab');
-      const activeFamily = () =>
-        familyTabs().find((tab) => tab.getAttribute('aria-selected') === 'true')?.textContent;
+      const filters = (modal.contentEl as unknown as TestElement).querySelectorAll(
+        '.local-stt-model-filter',
+      );
+      expect(filters).toHaveLength(2);
+      expect(filters.flatMap(texts)).toEqual(
+        expect.arrayContaining(['Languages', 'Model families']),
+      );
+      const search = (modal.contentEl as unknown as TestElement).querySelectorAll('input')[0];
+      if (search === undefined) throw new Error('Search input missing');
+      Object.assign(search, { value: 'no-such-model' });
+      search.dispatchEvent({ type: 'input' });
+      expect(texts(modal.contentEl as unknown as TestElement)).toContain(
+        'No models match your search. Clear or change the search.',
+      );
+      Object.assign(search, { value: '' });
+      search.dispatchEvent({ type: 'input' });
+      const activeFamily = () => selectedFilterLabel(modal, 'Model families');
       expect(activeFamily()).toBe('Nemotron');
+      const languageControl = filterDropdown(modal, 'Languages').selectEl;
+      languageControl.focus();
       await selectLanguage(modal, 'English');
+      expect(filterDropdown(modal, 'Languages').selectEl).toBe(languageControl);
+      expect(languageControl.ownerDocument.activeElement).toBe(languageControl);
       expect(activeFamily()).toBe('Moonshine');
       await selectLanguage(modal, 'All languages');
-      await familyTabs()
-        .find((tab) => tab.textContent === 'Nemotron')
-        ?.click();
+      const familyControl = filterDropdown(modal, 'Model families').selectEl;
+      familyControl.focus();
+      await selectFilter(modal, 'Model families', 'Nemotron');
+      expect(filterDropdown(modal, 'Model families').selectEl).toBe(familyControl);
+      expect(familyControl.ownerDocument.activeElement).toBe(familyControl);
       expect(activeFamily()).toBe('Nemotron');
       await selectLanguage(modal, 'Français');
       expect(activeLanguage(modal)).toBe('Français');
@@ -1211,20 +1225,36 @@ function texts(element: TestElement): string[] {
 }
 
 function activeLanguage(modal: ManageModelsModal): string | null {
-  const content = modal.contentEl as unknown as TestElement;
-  const active = content
-    .querySelectorAll('.local-stt-language-rail__button')
-    .find((button) => button.classList.contains('is-active'));
-  return active === undefined ? null : (texts(active).find((text) => text.length > 0) ?? null);
+  return selectedFilterLabel(modal, 'Languages');
 }
 
 async function selectLanguage(modal: ManageModelsModal, label: string): Promise<void> {
+  await selectFilter(modal, 'Languages', label);
+}
+
+function filterDropdown(modal: ManageModelsModal, name: string) {
   const content = modal.contentEl as unknown as TestElement;
-  const button = content
-    .querySelectorAll('.local-stt-language-rail__button')
-    .find((candidate) => texts(candidate).find((text) => text.length > 0) === label);
-  if (button === undefined) throw new Error(`Language filter not found: ${label}`);
-  await button.click();
+  const setting = Setting.instances.find(
+    (candidate) => candidate.name === name && content.contains(candidate.settingEl),
+  );
+  if (setting === undefined) throw new Error(`Model filter not found: ${name}`);
+  return setting.onlyDropdown();
+}
+
+function selectedFilterLabel(modal: ManageModelsModal, name: string): string | null {
+  const dropdown = filterDropdown(modal, name);
+  return (
+    dropdown.selectEl.options.find((option) => option.value === dropdown.selectEl.value)?.label ??
+    null
+  );
+}
+
+async function selectFilter(modal: ManageModelsModal, name: string, label: string): Promise<void> {
+  const dropdown = filterDropdown(modal, name);
+  const option = dropdown.selectEl.options.find((candidate) => candidate.label === label);
+  if (option === undefined) throw new Error(`Filter option not found: ${label}`);
+  dropdown.change(option.value);
+  await Promise.resolve();
 }
 
 async function selectTask(modal: ManageModelsModal, label: string): Promise<void> {

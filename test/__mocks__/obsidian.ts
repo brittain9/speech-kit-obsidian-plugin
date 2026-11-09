@@ -436,6 +436,7 @@ export class SearchComponent extends TextComponent {
     super();
     const searchContainer = container.createDiv({ cls: 'search-input-container' });
     searchContainer.append(this.inputEl);
+    this.inputEl.addEventListener('input', () => this.change(this.inputEl.value));
     this.clearButtonEl = searchContainer.createDiv({ cls: 'search-input-clear-button' });
   }
 }

@@ -1243,6 +1243,7 @@ export const en = {
   'models.manage.capabilitiesRetry': 'Retry capabilities',
   'models.manage.capabilitiesChecking': 'Checking capabilities…',
   'models.manage.noneAvailable': 'No models available for this engine.',
+  'models.manage.noSearchResults': 'No models match your search. Clear or change the search.',
   'models.manage.installed': 'Installed',
   'models.manage.downloadable': 'Downloadable',
   'models.manage.compatibleLanguage': 'Compatible with {language}',

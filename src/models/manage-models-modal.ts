@@ -248,7 +248,6 @@ export class ManageModelsModal extends Modal {
   private listContainer: HTMLDivElement | null = null;
   private readonly progressElements = new Map<string, HTMLDivElement>();
   private releaseSubscription: (() => void) | null = null;
-  private tabButtons = new Map<string, HTMLButtonElement>();
   private tabBarEl: HTMLDivElement | null = null;
   private search: SearchComponent | null = null;
   private searchQuery = '';
@@ -282,7 +281,6 @@ export class ManageModelsModal extends Modal {
     this.tabBarEl = null;
     this.listContainer = null;
     this.search = null;
-    this.tabButtons.clear();
     this.taskButtons.clear();
 
     const state = this.deps.manager.getState();
@@ -347,15 +345,10 @@ export class ManageModelsModal extends Modal {
     this.search.inputEl.setAttribute('aria-label', searchLabel);
 
     this.browserEl = this.contentEl.createDiv({ cls: 'local-stt-model-browser' });
-    this.navigationEl = this.browserEl.createDiv({
-      cls: 'local-stt-model-browser__navigation local-stt-language-rail',
-    });
-    const results = this.browserEl.createDiv({ cls: 'local-stt-model-browser__results' });
-    this.tabBarEl = results.createDiv({
-      attr: { 'aria-label': t('models.manage.familiesLabel'), role: 'tablist' },
-      cls: 'local-stt-tab-bar',
-    });
-    this.listContainer = results.createDiv({ cls: 'local-stt-model-list' });
+    const filters = this.browserEl.createDiv({ cls: 'local-stt-model-filters' });
+    this.navigationEl = filters.createDiv();
+    this.tabBarEl = filters.createDiv();
+    this.listContainer = this.browserEl.createDiv({ cls: 'local-stt-model-list' });
     this.renderNavigation();
     this.renderModelList();
   }
@@ -391,7 +384,6 @@ export class ManageModelsModal extends Modal {
     this.listContainer = null;
     this.tabBarEl = null;
     this.search = null;
-    this.tabButtons.clear();
     this.taskButtons.clear();
     this.progressElements.clear();
     this.renderedFailureId = null;
@@ -433,58 +425,56 @@ export class ManageModelsModal extends Modal {
 
   private renderNavigation(): void {
     if (this.navigationEl === null) return;
-    this.renderLanguageRail();
+    const focused = this.navigationEl.ownerDocument.activeElement;
+    const focusLanguage = focused !== null && this.navigationEl.contains(focused);
+    const focusFamily = focused !== null && (this.tabBarEl?.contains(focused) ?? false);
+    this.renderLanguageFilter();
     this.renderTabs();
     this.navigationSignature = this.buildNavigationSignature();
+    if (focusLanguage) this.navigationEl.querySelector('select')?.focus();
+    if (focusFamily) this.tabBarEl?.querySelector('select')?.focus();
   }
 
-  private renderLanguageRail(): void {
+  private renderLanguageFilter(): void {
     if (this.navigationEl === null) return;
     this.navigationEl.empty();
-    this.navigationEl.addClass('local-stt-language-rail');
-    this.navigationEl.setAttribute('role', 'tablist');
-    this.navigationEl.setAttribute('aria-label', t('models.manage.languagesLabel'));
     const options = deriveModelLanguageOptions(
       this.getRunnableRows().map((row) => row.model),
       this.activeTask,
     );
     const activeLanguage = this.getActiveLanguage();
-    for (const [index, language] of options.entries()) {
-      const selected = languageFiltersEqual(language.filter, activeLanguage);
-      const button = this.navigationEl.createEl('button', {
-        attr: {
-          'aria-selected': String(selected),
-          role: 'tab',
-          tabindex: selected ? '0' : '-1',
-          type: 'button',
-        },
-        cls: 'local-stt-language-rail__button',
+    const value = activeLanguage.kind === 'all' ? '' : activeLanguage.tag;
+    const label = t('models.manage.languagesLabel');
+    new Setting(this.navigationEl)
+      .setClass('local-stt-model-filter')
+      .setName(label)
+      .addDropdown((dropdown) => {
+        dropdown.selectEl.setAttribute('aria-label', label);
+        for (const language of options) {
+          dropdown.addOption(
+            language.filter.kind === 'all' ? '' : language.filter.tag,
+            language.label,
+          );
+        }
+        if (
+          activeLanguage.kind === 'language' &&
+          !options.some((option) => languageFiltersEqual(option.filter, activeLanguage))
+        ) {
+          dropdown.addOption(activeLanguage.tag, modelLanguageLabel(activeLanguage.tag));
+        }
+        dropdown.setValue(value).onChange((selected) => {
+          this.selectLanguage(
+            selected === '' ? ALL_MODEL_LANGUAGES : { kind: 'language', tag: selected },
+          );
+        });
       });
-      button.createSpan({ cls: 'local-stt-language-rail__name', text: language.label });
-      if (language.code !== null) {
-        button.createSpan({ cls: 'local-stt-language-rail__code', text: language.code });
-      }
-      button.toggleClass('is-active', selected);
-      button.addEventListener('click', () => this.selectLanguage(language.filter));
-      button.addEventListener('keydown', (event) => {
-        const nextIndex = resolveTabNavigationIndex(index, event.key, options.length);
-        if (nextIndex === null) return;
-        event.preventDefault();
-        const next = options[nextIndex];
-        if (next === undefined) return;
-        this.selectLanguage(next.filter);
-        this.navigationEl
-          ?.querySelectorAll<HTMLButtonElement>('.local-stt-language-rail__button')
-          .item(nextIndex)
-          .focus();
-      });
-    }
   }
 
   private selectLanguage(language: ModelLanguageFilter): void {
     if (languageFiltersEqual(language, this.getActiveLanguage())) return;
     this.activeLanguages.set(this.activeTask, language);
-    this.renderNavigation();
+    this.renderTabs();
+    this.navigationSignature = this.buildNavigationSignature();
     this.renderModelList();
   }
 
@@ -494,7 +484,6 @@ export class ManageModelsModal extends Modal {
     }
 
     this.tabBarEl.empty();
-    this.tabButtons.clear();
 
     const state = this.deps.manager.getState();
     const rows = this.getRunnableRows();
@@ -552,57 +541,27 @@ export class ManageModelsModal extends Modal {
       }
     }
 
-    for (const [index, adapter] of adapters.entries()) {
-      const tabKey: AdapterTabKey = {
-        runtimeId: adapter.runtimeId,
-        familyId: adapter.familyId,
-      };
-      const btn = this.tabBarEl.createEl('button', {
-        cls: 'local-stt-tab',
-        text: adapter.displayName,
+    const label = t('models.manage.familiesLabel');
+    const selected = this.getActiveTab();
+    new Setting(this.tabBarEl)
+      .setClass('local-stt-model-filter')
+      .setName(label)
+      .addDropdown((dropdown) => {
+        dropdown.selectEl.setAttribute('aria-label', label);
+        if (adapters.length === 0) dropdown.addOption('', t('models.manage.noneAvailable'));
+        for (const adapter of adapters)
+          dropdown.addOption(adapterTabId(adapter), adapter.displayName);
+        dropdown.setValue(selected === null ? '' : adapterTabId(selected));
+        dropdown.setDisabled(adapters.length === 0).onChange((id) => {
+          const adapter = adapters.find((candidate) => adapterTabId(candidate) === id);
+          if (adapter !== undefined) this.selectFamily(adapter);
+        });
       });
-
-      const selected = matchesAdapterTab(tabKey, this.getActiveTab());
-      if (selected) {
-        btn.addClass('local-stt-tab--active');
-      }
-      btn.setAttribute('aria-selected', String(selected));
-      btn.setAttribute('role', 'tab');
-      btn.setAttribute('tabindex', selected ? '0' : '-1');
-
-      btn.addEventListener('click', () => {
-        this.selectFamily(tabKey);
-      });
-      btn.addEventListener('keydown', (event) => {
-        const nextIndex = resolveTabNavigationIndex(index, event.key, adapters.length);
-        if (nextIndex === null) return;
-        event.preventDefault();
-        const next = adapters[nextIndex];
-        if (next === undefined) return;
-        const nextTab = { familyId: next.familyId, runtimeId: next.runtimeId };
-        this.selectFamily(nextTab);
-        this.tabButtons.get(adapterTabId(nextTab))?.focus();
-      });
-
-      this.tabButtons.set(adapterTabId(tabKey), btn);
-    }
-  }
-
-  private updateTabActiveStates(): void {
-    const activeTab = this.getActiveTab();
-    const activeId = activeTab === null ? null : adapterTabId(activeTab);
-    for (const [tabId, btn] of this.tabButtons) {
-      const selected = tabId === activeId;
-      btn.toggleClass('local-stt-tab--active', selected);
-      btn.setAttribute('aria-selected', String(selected));
-      btn.setAttribute('tabindex', selected ? '0' : '-1');
-    }
   }
 
   private selectFamily(tab: AdapterTabKey): void {
     if (matchesAdapterTab(tab, this.getActiveTab())) return;
     this.activeTabs.set(this.activeTask, tab);
-    this.updateTabActiveStates();
     this.renderModelList();
   }
 
@@ -693,7 +652,11 @@ export class ManageModelsModal extends Modal {
     if (tabRows.length === 0) {
       this.listContainer.createEl('p', {
         cls: 'local-stt-empty-state',
-        text: t('models.manage.noneAvailable'),
+        text: t(
+          this.searchQuery.trim().length > 0
+            ? 'models.manage.noSearchResults'
+            : 'models.manage.noneAvailable',
+        ),
       });
       return;
     }
