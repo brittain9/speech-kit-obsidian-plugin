@@ -2043,7 +2043,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .local-stt-media-spinner {
+  .local-stt-media-spinner,
+  .local-stt-translation-modal__spinner,
+  .local-dictation-connection-test--loading svg {
     animation: none;
   }
 }
@@ -2062,4 +2064,28 @@
   .local-stt-translation-modal__swap {
     justify-self: center;
   }
+}
+
+.local-stt-status-action {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.local-stt-status-action:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+.local-stt-status-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }

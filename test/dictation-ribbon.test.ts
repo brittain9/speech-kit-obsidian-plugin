@@ -211,6 +211,17 @@ describe('DictationRibbonController hold lifecycle interactions', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('announces real queue pressure without replacing the current icon', () => {
+    const { controller, element } = makeController();
+    controller.setState('speech_detected');
+    const icon = element.innerHTML;
+    controller.setQueueTier('falling_behind');
+    expect(element.attributes['aria-label']).toContain('Falling behind');
+    expect(element.innerHTML).toBe(icon);
+    controller.setQueueTier('normal');
+    expect(element.attributes['aria-label']).not.toContain('Falling behind');
+  });
+
   it('setQueueTier during the hold does not rewrite the live SVG', () => {
     const { controller, element } = makeController();
     controller.setState('listening');

@@ -65,6 +65,14 @@ export type DictationControllerState =
   | 'speech_detected'
   | 'error';
 
+export interface DictationWorkflowStatus {
+  capture: 'starting' | 'listening' | null;
+  transcribing: boolean;
+  queue: QueueBackpressureTier;
+  finishing: boolean;
+  providerCleanup: boolean;
+}
+
 type ControllerSession = Pick<
   Session,
   | 'acceptTranscript'
@@ -132,7 +140,10 @@ interface ManagedSession {
   microphoneRecordingLink: string | null;
   captureStop: Promise<void> | null;
   pendingTranscriptWork: Set<Promise<void>>;
+  providerWork: number;
   phase: SessionPhase;
+  nativeState: SessionState;
+  queueTier: QueueBackpressureTier;
   session: ControllerSession;
   speechLease: SidecarLifecycleLease;
   snapshot: ActiveSessionSnapshot;
@@ -173,6 +184,7 @@ interface DictationSessionControllerDependencies {
   onFinalizedUtteranceAccepted?: (text: string) => void;
   onRawTranscriptRecoveryAvailable?: (receipt: RawTranscriptRecoveryReceipt) => void;
   onModelMissing?: () => void;
+  onWorkflowStatus?: (status: DictationWorkflowStatus) => void;
   onSidecarMissing?: () => void;
   countAudioInputDevices?: () => Promise<number | null>;
   setRibbonQueueTier: (tier: QueueBackpressureTier) => void;
@@ -256,6 +268,52 @@ export class DictationSessionController {
 
   getState(): DictationControllerState {
     return this.state;
+  }
+
+  getWorkflowStatus(): DictationWorkflowStatus {
+    const entries = [...this.sessions.values()];
+    const queueRank: QueueBackpressureTier[] = [
+      'normal',
+      'catching_up',
+      'falling_behind',
+      'saturated',
+    ];
+    const queue = entries.reduce<QueueBackpressureTier>(
+      (highest, entry) =>
+        entry.phase !== 'stopped' &&
+        entry.phase !== 'cancelling' &&
+        queueRank.indexOf(entry.queueTier) > queueRank.indexOf(highest)
+          ? entry.queueTier
+          : highest,
+      'normal',
+    );
+    return {
+      capture:
+        this.state === 'starting'
+          ? 'starting'
+          : this.activeSessionId !== null &&
+              (this.state === 'listening' || this.state === 'speech_detected')
+            ? 'listening'
+            : null,
+      transcribing: entries.some(
+        (entry) =>
+          entry.phase !== 'stopped' &&
+          entry.phase !== 'cancelling' &&
+          entry.nativeState === 'transcribing',
+      ),
+      queue,
+      finishing: entries.some(
+        (entry) =>
+          entry.phase === 'stopping' ||
+          (entry.phase === 'stopped' &&
+            (entry.pendingTranscriptWork.size > 0 || entry.captureStop !== null)),
+      ),
+      providerCleanup: entries.some((entry) => entry.providerWork > 0),
+    };
+  }
+
+  private publishWorkflowStatus(): void {
+    this.dependencies.onWorkflowStatus?.(this.getWorkflowStatus());
   }
 
   isBusy(): boolean {
@@ -480,7 +538,10 @@ export class DictationSessionController {
       microphoneRecordingLink: null,
       captureStop: null,
       pendingTranscriptWork: new Set(),
+      providerWork: 0,
       phase: 'starting',
+      nativeState: 'idle',
+      queueTier: 'normal',
       session,
       speechLease,
       snapshot,
@@ -746,8 +807,10 @@ export class DictationSessionController {
     const captureStop = this.stopCaptureForTeardown(saveRecording);
     const entry = this.sessions.get(sessionId);
     if (entry !== undefined) entry.captureStop = captureStop;
+    this.publishWorkflowStatus();
     await captureStop;
     if (entry?.captureStop === captureStop) entry.captureStop = null;
+    this.publishWorkflowStatus();
   }
 
   private async stopCaptureForTeardown(saveRecording = false): Promise<void> {
@@ -772,6 +835,7 @@ export class DictationSessionController {
   private applyUiState(state: DictationControllerState): void {
     this.state = state;
     this.dependencies.setRibbonState(state);
+    this.publishWorkflowStatus();
   }
 
   private latestSessionId(): string | null {
@@ -790,6 +854,7 @@ export class DictationSessionController {
     entry.session.dispose();
     this.sessions.delete(sessionId);
     entry.speechLease.release();
+    this.publishWorkflowStatus();
 
     if (this.activeSessionId === sessionId) {
       this.activeSessionId = null;
@@ -833,6 +898,7 @@ export class DictationSessionController {
       controller.abort();
     }
     entry.cleanupAbortControllers.clear();
+    this.publishWorkflowStatus();
   }
 
   private async handleSidecarEvent(event: SidecarEvent): Promise<void> {
@@ -889,6 +955,8 @@ export class DictationSessionController {
       return;
     }
 
+    entry.nativeState = event.state;
+    this.publishWorkflowStatus();
     this.applySessionStateToAnchor(entry, event.state);
 
     const audioActive = this.dependencies.captureStream.isCapturing();
@@ -910,6 +978,9 @@ export class DictationSessionController {
       return;
     }
 
+    if (entry.phase === 'stopped' || entry.phase === 'cancelling') return;
+    entry.queueTier = event.tier;
+    this.publishWorkflowStatus();
     if (event.sessionId === this.activeSessionId) {
       this.dependencies.setRibbonQueueTier(event.tier);
     }
@@ -975,6 +1046,7 @@ export class DictationSessionController {
     // from the retained local entry while earlier cleanup is still finishing.
     const work = this.processTranscriptReady(entry, event);
     entry.pendingTranscriptWork.add(work);
+    this.publishWorkflowStatus();
     try {
       await work;
     } catch (error) {
@@ -988,6 +1060,7 @@ export class DictationSessionController {
       );
     } finally {
       entry.pendingTranscriptWork.delete(work);
+      this.publishWorkflowStatus();
     }
   }
 
@@ -1104,6 +1177,8 @@ export class DictationSessionController {
     const startedAt = Date.now();
     const abortController = new AbortController();
     entry.cleanupAbortControllers.add(abortController);
+    entry.providerWork += 1;
+    this.publishWorkflowStatus();
 
     try {
       if (entry.llmDisabled) {
@@ -1174,6 +1249,8 @@ export class DictationSessionController {
       };
     } finally {
       entry.cleanupAbortControllers.delete(abortController);
+      entry.providerWork -= 1;
+      this.publishWorkflowStatus();
     }
   }
 
@@ -1257,12 +1334,12 @@ export class DictationSessionController {
     // idempotent, so the call in `disposeLocalSession` still covers the paths
     // where `session_stopped` never arrives.
     entry.speechLease.release();
+    this.publishWorkflowStatus();
 
     if (event.sessionId === this.activeSessionId) {
-      this.activeSessionId = null;
-      this.dependencies.audioLevelMeter.clearSession(event.sessionId);
-      this.applyUiState('idle');
-      this.resetQueueTier();
+      // A one-sentence timeout or completion can stop natively before the user
+      // stops capture. Release the microphone and join recording finalization.
+      void this.clearActiveSession(event.sessionId, event.reason !== 'user_cancel');
     }
 
     if (shouldRunBatchCleanup(entry, event.reason)) {
@@ -1376,6 +1453,8 @@ export class DictationSessionController {
 
     const abortController = new AbortController();
     entry.cleanupAbortControllers.add(abortController);
+    entry.providerWork += 1;
+    this.publishWorkflowStatus();
 
     try {
       if (entry.llmDisabled) {
@@ -1437,6 +1516,8 @@ export class DictationSessionController {
       this.disposeLocalSession(sessionId);
     } finally {
       entry.cleanupAbortControllers.delete(abortController);
+      entry.providerWork -= 1;
+      this.publishWorkflowStatus();
     }
   }
 

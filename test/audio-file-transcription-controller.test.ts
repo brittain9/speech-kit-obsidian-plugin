@@ -931,6 +931,28 @@ describe('AudioFileTranscriptionController', () => {
     );
   });
 
+  it('publishes retained partial recovery and clears the status after insertion', async () => {
+    const onMediaProgress = vi.fn();
+    const harness = createHarness({ onMediaProgress });
+    const operation = harness.controller.transcribe();
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+    const sessionId =
+      harness.sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    if (!sessionId) throw new Error('Expected an audio-file session');
+    harness.sidecarConnection.emit(transcriptReady(sessionId, 'public sample'));
+    await Promise.resolve();
+    await harness.controller.cancel();
+    await operation;
+    expect(harness.controller.getPartialTranscript()).toBe('public sample');
+    expect(onMediaProgress).toHaveBeenLastCalledWith(null);
+    onMediaProgress.mockClear();
+    expect(harness.controller.insertPartialTranscript()).toBe(true);
+    expect(harness.controller.getPartialTranscript()).toBeNull();
+    expect(onMediaProgress).toHaveBeenLastCalledWith(null);
+  });
+
   it('keeps user cancellation silent when the sidecar exits during native cancellation', async () => {
     let resolveCancel:
       | ((value: { reason: 'user_cancel'; sessionId: string; type: 'session_stopped' }) => void)
