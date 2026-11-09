@@ -47,7 +47,6 @@ export interface LlmRoutingControlsDependencies {
   getSettings: () => PluginSettings;
   logger?: PluginLogger | undefined;
   persist: (mutation: PluginSettingsMutation, options?: { rerender?: boolean }) => Promise<void>;
-  requestRerender: () => void;
 }
 
 const SECRET_REFRESH_DEBOUNCE_MS = 500;
@@ -119,6 +118,8 @@ export class LlmRoutingControls {
   private readonly modelListId = `local-dictation-openai-compatible-models-${randomUUID()}`;
   private disposed = false;
   private renderGeneration = 0;
+  private readinessHost: HTMLElement | null = null;
+  private providerViewUpdates: Partial<Record<LlmProviderId, () => void>> = {};
   private modelsRefreshInFlight: Partial<
     Record<LlmProviderId, { state: ProviderState; promise: Promise<void> }>
   > = {};
@@ -131,15 +132,10 @@ export class LlmRoutingControls {
     openai_compatible: 0,
   };
   private readonly configurationSaves: Partial<Record<LlmProviderId, Promise<void>>> = {};
-  private onModelInput: ((element: HTMLElement) => void) | null = null;
   private secretRefreshTimerId: number | null = null;
   private readonly testsInFlight = new Map<LlmProviderId, number>();
 
   constructor(private readonly dependencies: LlmRoutingControlsDependencies) {}
-
-  setInputTracker(tracker: (element: HTMLElement) => void): void {
-    this.onModelInput = tracker;
-  }
 
   dispose(): void {
     this.disposed = true;
@@ -147,10 +143,6 @@ export class LlmRoutingControls {
       window.clearTimeout(this.secretRefreshTimerId);
       this.secretRefreshTimerId = null;
     }
-  }
-
-  private requestRerender(): void {
-    if (!this.disposed) this.dependencies.requestRerender();
   }
 
   refreshActiveProviders(options: { forceLocal?: boolean } = {}): Promise<void> {
@@ -165,8 +157,10 @@ export class LlmRoutingControls {
 
   render(parent: HTMLElement, settings: PluginSettings): void {
     this.renderGeneration += 1;
+    this.providerViewUpdates = {};
     this.renderProviderSelection(parent, settings);
-    this.renderReadiness(parent, settings);
+    this.readinessHost = parent.createDiv();
+    this.renderReadiness(this.readinessHost, settings);
 
     const policy = settings.llmRoutingPolicy;
     if (policy === null) {
@@ -352,6 +346,18 @@ export class LlmRoutingControls {
     });
   }
 
+  private updateReadiness(): void {
+    if (this.disposed || this.readinessHost === null) return;
+    this.readinessHost.empty();
+    this.renderReadiness(this.readinessHost, this.dependencies.getSettings());
+  }
+
+  private updateProviderView(providerId: LlmProviderId): void {
+    if (this.disposed) return;
+    this.providerViewUpdates[providerId]?.();
+    this.updateReadiness();
+  }
+
   private renderProviderConfiguration(
     parent: HTMLElement,
     settings: PluginSettings,
@@ -360,7 +366,7 @@ export class LlmRoutingControls {
     this.syncDiscoveryConfiguration(providerId);
     switch (providerId) {
       case 'ollama':
-        this.renderOllamaModel(parent, settings);
+        this.renderOllamaModel(parent);
         return;
       case 'openrouter':
         this.renderSecret(parent, settings, providerId);
@@ -374,21 +380,27 @@ export class LlmRoutingControls {
     }
   }
 
-  private renderOllamaModel(parent: HTMLElement, settings: PluginSettings): void {
+  private renderOllamaModel(parent: HTMLElement): void {
     const providerId = 'ollama';
-    const state = this.providers[providerId];
-    const selectedModel = getProviderModel(settings.llmProviderConfigurations, providerId);
-    const hasSelectedModel = state.models.some((model) => model.id === selectedModel);
+    let updateModels: () => void = () => {};
     new Setting(parent)
       .setName(t('llm.routing.providerModel', { provider: formatLlmProviderName(providerId) }))
       .setDesc(t('llm.routing.ollamaModelDescription'))
       .addDropdown((dropdown) => {
-        dropdown.addOption('', t('llm.routing.selectModel'));
-        if (selectedModel.length > 0 && !hasSelectedModel) {
-          dropdown.addOption(selectedModel, selectedModel);
-        }
-        for (const model of state.models) dropdown.addOption(model.id, model.displayName);
-        dropdown.setValue(selectedModel);
+        updateModels = () => {
+          const state = this.providers[providerId];
+          const selectedModel = getProviderModel(
+            this.dependencies.getSettings().llmProviderConfigurations,
+            providerId,
+          );
+          dropdown.selectEl.empty();
+          dropdown.addOption('', t('llm.routing.selectModel'));
+          if (selectedModel.length > 0 && !state.models.some((model) => model.id === selectedModel))
+            dropdown.addOption(selectedModel, selectedModel);
+          for (const model of state.models) dropdown.addOption(model.id, model.displayName);
+          dropdown.setValue(selectedModel);
+        };
+        updateModels();
         dropdown.onChange(async (model) => {
           await this.persistModel(providerId, model);
           const updated = this.dependencies.getSettings();
@@ -405,7 +417,11 @@ export class LlmRoutingControls {
           .setTooltip(t('llm.routing.refreshModels', { provider: 'Ollama' }))
           .onClick(() => void this.refreshModels(providerId));
       });
-    this.renderStatusRow(parent, providerId);
+    const updateStatus = this.renderStatusRow(parent, providerId);
+    this.providerViewUpdates[providerId] = () => {
+      updateModels();
+      updateStatus();
+    };
   }
 
   private renderCustomBaseUrl(parent: HTMLElement, settings: PluginSettings): void {
@@ -416,10 +432,6 @@ export class LlmRoutingControls {
       .addText((text) => {
         text.setPlaceholder('http://localhost:1234/v1');
         text.setValue(config.baseUrl);
-        this.onModelInput?.(text.inputEl);
-        text.inputEl.addEventListener('blur', () => {
-          this.requestRerender();
-        });
         text.onChange(async (baseUrl) => {
           this.configurationRevisions.openai_compatible += 1;
           this.providers.openai_compatible = emptyProviderState();
@@ -430,20 +442,31 @@ export class LlmRoutingControls {
               baseUrl,
             ),
           }));
+          if (this.disposed || this.renderGeneration !== generation) return;
+          updateDestination();
+          this.updateProviderView('openai_compatible');
         });
       });
 
-    const validation = validateOpenAiCompatibleBaseUrl(config.baseUrl);
-    if (!validation.valid) return;
-    const url = new URL(validation.normalizedUrl);
-    const destination = parent.createDiv({ cls: 'local-dictation-route-field__hint' });
-    destination.setText(t('llm.routing.customDestination', { host: url.host }));
-    if (url.protocol === 'http:' && !isLoopbackHostname(url.hostname)) {
-      const warning = parent.createDiv({
-        cls: 'local-dictation-status local-dictation-status--warning',
-      });
-      warning.setText(t('llm.routing.insecureHttpWarning'));
-    }
+    const generation = this.renderGeneration;
+    const destinationHost = parent.createDiv();
+    const updateDestination = (): void => {
+      destinationHost.empty();
+      const validation = validateOpenAiCompatibleBaseUrl(
+        this.dependencies.getSettings().llmProviderConfigurations.openai_compatible.baseUrl,
+      );
+      if (!validation.valid) return;
+      const url = new URL(validation.normalizedUrl);
+      const destination = destinationHost.createDiv({ cls: 'local-dictation-route-field__hint' });
+      destination.setText(t('llm.routing.customDestination', { host: url.host }));
+      if (url.protocol === 'http:' && !isLoopbackHostname(url.hostname)) {
+        const warning = destinationHost.createDiv({
+          cls: 'local-dictation-status local-dictation-status--warning',
+        });
+        warning.setText(t('llm.routing.insecureHttpWarning'));
+      }
+    };
+    updateDestination();
   }
 
   private renderSecret(
@@ -477,6 +500,7 @@ export class LlmRoutingControls {
                 secretId,
               ),
             }));
+            this.updateProviderView(providerId);
             const updated = this.dependencies.getSettings();
             if (
               !this.disposed &&
@@ -485,7 +509,7 @@ export class LlmRoutingControls {
             ) {
               this.scheduleSecretRefresh(providerId);
             } else {
-              this.requestRerender();
+              this.updateReadiness();
             }
           }),
       );
@@ -499,6 +523,7 @@ export class LlmRoutingControls {
     const selectedModel = getProviderModel(settings.llmProviderConfigurations, providerId);
     const renderGeneration = this.renderGeneration;
     let refreshStatus: () => void = () => {};
+    let refreshOptions: () => void = () => {};
     const setting = new Setting(parent)
       .setName(
         providerId === 'openrouter'
@@ -514,10 +539,6 @@ export class LlmRoutingControls {
     setting.addText((text) => {
       text.setPlaceholder(providerId === 'openrouter' ? 'anthropic/claude-sonnet-4.5' : 'model-id');
       text.setValue(selectedModel);
-      this.onModelInput?.(text.inputEl);
-      text.inputEl.addEventListener('blur', () => {
-        this.requestRerender();
-      });
       if (providerId === 'openrouter') {
         new ModelSuggest(
           this.dependencies.app,
@@ -525,15 +546,21 @@ export class LlmRoutingControls {
           () => this.providers[providerId].models,
           (model) =>
             void this.persistModel(providerId, model, false).then(() => {
-              if (!this.disposed && this.renderGeneration === renderGeneration) refreshStatus();
+              if (!this.disposed && this.renderGeneration === renderGeneration) {
+                refreshStatus();
+                this.updateReadiness();
+              }
             }),
         );
       } else {
-        this.renderOpenAiCompatibleModelOptions(setting.controlEl, text.inputEl);
+        refreshOptions = this.renderOpenAiCompatibleModelOptions(setting.controlEl, text.inputEl);
       }
       text.onChange(async (model) => {
         await this.persistModel(providerId, model, false);
-        if (!this.disposed && this.renderGeneration === renderGeneration) refreshStatus();
+        if (!this.disposed && this.renderGeneration === renderGeneration) {
+          refreshStatus();
+          this.updateReadiness();
+        }
       });
     });
     setting.addExtraButton((button) => {
@@ -550,17 +577,27 @@ export class LlmRoutingControls {
       button.onClick(() => void this.runConnectionTest(providerId, button));
     });
     refreshStatus = this.renderStatusRow(parent, providerId);
+    this.providerViewUpdates[providerId] = () => {
+      refreshOptions();
+      refreshStatus();
+    };
   }
 
-  private renderOpenAiCompatibleModelOptions(control: HTMLElement, input: HTMLInputElement): void {
+  private renderOpenAiCompatibleModelOptions(
+    control: HTMLElement,
+    input: HTMLInputElement,
+  ): () => void {
     const listId = this.modelListId;
     input.setAttribute('list', listId);
     const datalist = control.createEl('datalist', { attr: { id: listId } });
-    for (const model of this.providers.openai_compatible.models) {
-      datalist.createEl('option', {
-        attr: { label: model.displayName, value: model.id },
-      });
-    }
+    const update = (): void => {
+      datalist.empty();
+      for (const model of this.providers.openai_compatible.models) {
+        datalist.createEl('option', { attr: { label: model.displayName, value: model.id } });
+      }
+    };
+    update();
+    return update;
   }
 
   private renderStatusRow(parent: HTMLElement, providerId: LlmProviderId): () => void {
@@ -713,7 +750,7 @@ export class LlmRoutingControls {
         this.providers[providerId] = emptyProviderState();
       if (this.modelsRefreshInFlight[providerId]?.state === state)
         delete this.modelsRefreshInFlight[providerId];
-      this.requestRerender();
+      this.updateProviderView(providerId);
     }
   }
 
@@ -774,7 +811,7 @@ export class LlmRoutingControls {
         const secretId =
           this.dependencies.getSettings().llmProviderConfigurations.openrouter.secretId;
         if (secretId.length === 0 || this.dependencies.getSecret(secretId).length === 0) {
-          this.requestRerender();
+          this.updateProviderView(providerId);
           return;
         }
       }
@@ -809,7 +846,7 @@ export class LlmRoutingControls {
       )
         state.health = providerHealthFromError(error);
     }
-    this.requestRerender();
+    this.updateProviderView(providerId);
   }
 
   private async runConnectionTest(

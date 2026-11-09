@@ -16,7 +16,6 @@ import { createFakeLlmProvider } from './fixtures/llm';
 
 function createControls(overrides: Partial<PluginSettings> = {}, secret = '') {
   const show = vi.fn();
-  const requestRerender = vi.fn();
   const persist = vi.fn(async (_settings: PluginSettings, _options?: { rerender?: boolean }) => {});
   const controls = new LlmRoutingControls({
     app: {} as App,
@@ -25,9 +24,8 @@ function createControls(overrides: Partial<PluginSettings> = {}, secret = '') {
     getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, ...overrides }),
     persist: async (mutation, options) =>
       persist(mutation({ ...DEFAULT_PLUGIN_SETTINGS, ...overrides }), options),
-    requestRerender,
   });
-  return { controls, persist, requestRerender, show };
+  return { controls, persist, show };
 }
 
 beforeEach(() => {
@@ -66,7 +64,6 @@ describe('LlmRoutingControls.render', () => {
       feedback: { show: vi.fn() },
       getSecret: () => '',
       getSettings: () => settings,
-      requestRerender: vi.fn(),
       persist: async (mutation) => {
         await new Promise<void>((resolve) => {
           commit = resolve;
@@ -100,7 +97,6 @@ describe('LlmRoutingControls.render', () => {
       feedback: { show: vi.fn() },
       getSecret: () => '',
       getSettings: () => settings,
-      requestRerender: vi.fn(),
       persist: async (mutation) => {
         await new Promise<void>((resolve) => {
           commit = resolve;
@@ -149,7 +145,6 @@ describe('LlmRoutingControls.render', () => {
         });
         settings = mutation(settings);
       },
-      requestRerender: vi.fn(),
     });
     controls.render(new TestElement() as unknown as HTMLElement, settings);
     MockSetting.named('Ollama model').onlyDropdown().change('model');
@@ -329,11 +324,11 @@ describe('LlmRoutingControls.render', () => {
 });
 
 describe('LlmRoutingControls.refreshActiveProviders', () => {
-  it('does not rerender a closed host after a delayed model request completes', async () => {
-    let finish!: (models: []) => void;
+  it('does not update closed controls after a delayed model request completes', async () => {
+    let finish!: (models: Array<{ id: string; displayName: string }>) => void;
     const listModels = vi.fn(
       () =>
-        new Promise<[]>((resolve) => {
+        new Promise<Array<{ id: string; displayName: string }>>((resolve) => {
           finish = resolve;
         }),
     );
@@ -342,12 +337,50 @@ describe('LlmRoutingControls.refreshActiveProviders', () => {
       ...DEFAULT_PLUGIN_SETTINGS,
       llmRoutingPolicy: { kind: 'fixed' as const, providerId: 'ollama' as const },
     };
-    const { controls, requestRerender } = createControls(settings);
+    const { controls } = createControls(settings);
+    controls.render(new TestElement() as unknown as HTMLElement, settings);
+    const dropdown = MockSetting.named('Ollama model').onlyDropdown();
     const pending = controls.refreshActiveProviders();
     controls.dispose();
-    finish([]);
+    finish([{ id: 'old-model', displayName: 'Old model' }]);
     await pending;
-    expect(requestRerender).not.toHaveBeenCalled();
+    expect(dropdown.selectEl.options.map((option) => option.value)).toEqual(['']);
+  });
+
+  it('updates a model list in place when discovery completes', async () => {
+    let finish!: (models: Array<{ id: string; displayName: string }>) => void;
+    const listModels = vi.fn(
+      () =>
+        new Promise<Array<{ id: string; displayName: string }>>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    createProviderMock.mockReturnValue(
+      createFakeLlmProvider({ listModels, id: 'openai_compatible' }),
+    );
+    const settings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      llmProviderConfigurations: {
+        ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations,
+        openai_compatible: {
+          ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations.openai_compatible,
+          baseUrl: 'http://localhost:1234/v1',
+        },
+      },
+      llmRoutingPolicy: { kind: 'fixed' as const, providerId: 'openai_compatible' as const },
+    };
+    const { controls } = createControls(settings);
+    const parent = new TestElement();
+    controls.render(parent as unknown as HTMLElement, settings);
+    const row = MockSetting.named('Model').settingEl;
+    const datalist = MockSetting.named('Model').controlEl.querySelector('datalist');
+    const pending = controls.refreshActiveProviders();
+    finish([{ id: 'new-model', displayName: 'New model' }]);
+    await pending;
+    expect(parent.contains(row)).toBe(true);
+    expect(datalist?.children.map((option) => option.attributes.get('value'))).toEqual([
+      'new-model',
+    ]);
   });
 
   it('refreshes only providers used by the active policy', async () => {
@@ -546,7 +579,6 @@ describe('LlmRoutingControls.refreshActiveProviders', () => {
         persist: async (mutation) => {
           settings = mutation(settings);
         },
-        requestRerender: vi.fn(),
       });
       controls.render(new TestElement() as unknown as HTMLElement, settings);
       await SecretComponent.instances[0]?.change('new-key');
@@ -597,7 +629,6 @@ describe('LlmRoutingControls.refreshActiveProviders', () => {
             });
           settings = mutation(settings);
         },
-        requestRerender: vi.fn(),
       });
       controls.render(new TestElement() as unknown as HTMLElement, settings);
       await SecretComponent.instances[0]?.change('first');
@@ -640,7 +671,6 @@ describe('LlmRoutingControls.refreshActiveProviders', () => {
         });
         settings = mutation(settings);
       },
-      requestRerender: vi.fn(),
     });
     controls.render(new TestElement() as unknown as HTMLElement, settings);
     MockSetting.named('Base URL').onlyText().change('http://localhost:1002/v1');
@@ -687,7 +717,6 @@ describe('LlmRoutingControls.refreshActiveProviders', () => {
       getSecret: () => secret,
       getSettings: () => settings,
       persist: vi.fn(async () => {}),
-      requestRerender: vi.fn(),
     });
     await controls.refreshActiveProviders();
     secret = 'synthetic-two';
@@ -720,7 +749,6 @@ describe('LlmRoutingControls.refreshActiveProviders', () => {
       getSecret: () => '',
       getSettings: () => settings,
       persist: vi.fn(async () => {}),
-      requestRerender: vi.fn(),
     });
     await controls.refreshActiveProviders();
     settings = {
@@ -765,7 +793,6 @@ describe('LlmRoutingControls.refreshActiveProviders', () => {
       getSecret: () => '',
       getSettings: () => settings,
       persist: vi.fn(async () => {}),
-      requestRerender: vi.fn(),
     });
     const request = controls.refreshActiveProviders();
     settings = {
@@ -817,7 +844,6 @@ describe('LlmRoutingControls.refreshActiveProviders', () => {
       persist: async (mutation) => {
         settings = mutation(settings);
       },
-      requestRerender: vi.fn(),
     });
     controls.render(new TestElement() as unknown as HTMLElement, settings);
     const old = controls.refreshActiveProviders();
@@ -858,7 +884,6 @@ describe('LlmRoutingControls.refreshActiveProviders', () => {
       getSecret: () => '',
       getSettings: () => settings,
       persist: vi.fn(async () => {}),
-      requestRerender: vi.fn(),
       logger: { warn, debug: vi.fn(), error: vi.fn() },
     });
     await controls.refreshActiveProviders();
@@ -980,7 +1005,6 @@ describe('LlmRoutingControls.testProvider', () => {
       getSecret: () => 'key',
       getSettings: () => settings,
       persist: vi.fn(async () => {}),
-      requestRerender: vi.fn(),
     });
     controls.render(new TestElement() as unknown as HTMLElement, settings);
     const button = MockSetting.named('Model').extraButtonComponents.find(
@@ -1027,7 +1051,6 @@ describe('LlmRoutingControls.testProvider', () => {
       persist: async (mutation) => {
         settings = mutation(settings);
       },
-      requestRerender: vi.fn(),
     });
     controls.render(new TestElement() as unknown as HTMLElement, settings);
     const button = MockSetting.named('Model').extraButtonComponents.find(
@@ -1063,7 +1086,6 @@ describe('LlmRoutingControls.testProvider', () => {
           fail = reject;
         });
       },
-      requestRerender: vi.fn(),
     });
     controls.render(new TestElement() as unknown as HTMLElement, settings);
     const saving = SecretComponent.instances[0]?.change('new-key');
@@ -1099,7 +1121,6 @@ describe('LlmRoutingControls.testProvider', () => {
         });
         settings = mutation(settings);
       },
-      requestRerender: vi.fn(),
     });
     controls.render(new TestElement() as unknown as HTMLElement, settings);
     MockSetting.named('Base URL').onlyText().change('http://localhost:5678/v1');

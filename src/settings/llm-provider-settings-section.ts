@@ -6,9 +6,9 @@ import {
   type LlmRoutingControlsDependencies,
 } from '../ui/llm-routing-controls';
 import type { LlmPresetStateMutation } from './llm-preset-state';
+import { captureSettingsFocus, restoreSettingsFocus } from './settings-tab-lifecycle';
 
-interface LlmProviderSettingsDependencies
-  extends Omit<LlmRoutingControlsDependencies, 'requestRerender'> {
+interface LlmProviderSettingsDependencies extends LlmRoutingControlsDependencies {
   managePresets: () => void;
   mutatePresetState: (mutation: LlmPresetStateMutation) => Promise<void>;
   openContextSettings: () => void;
@@ -23,15 +23,9 @@ export function renderLlmProviderSettings(
   const dailyHost = parent.createDiv({ cls: 'local-dictation-settings-rows' });
   const routingHost = parent.createDiv({ cls: 'local-dictation-settings-rows' });
   let disposed = false;
-  let focusedInput: HTMLElement | null = null;
-  let pendingRender = false;
   const render = (): void => {
     if (disposed) return;
-    if (focusedInput?.isConnected) {
-      pendingRender = true;
-      return;
-    }
-    pendingRender = false;
+    const focus = captureSettingsFocus(parent);
     dailyHost.empty();
     renderLlmDailyControls(dailyHost, {
       getSettings: dependencies.getSettings,
@@ -41,6 +35,7 @@ export function renderLlmProviderSettings(
     });
     routingHost.empty();
     controls.render(routingHost, dependencies.getSettings());
+    restoreSettingsFocus(parent, focus);
   };
   const controls = new LlmRoutingControls({
     ...dependencies,
@@ -48,16 +43,6 @@ export function renderLlmProviderSettings(
       await dependencies.persist(settings, options);
       if (options?.rerender ?? true) render();
     },
-    requestRerender: render,
-  });
-  controls.setInputTracker((input) => {
-    input.addEventListener('focus', () => {
-      focusedInput = input;
-    });
-    input.addEventListener('blur', () => {
-      if (focusedInput === input) focusedInput = null;
-      if (pendingRender) render();
-    });
   });
   render();
   new Setting(parent).setName(t('llm.timing.title')).addButton((button) => {
