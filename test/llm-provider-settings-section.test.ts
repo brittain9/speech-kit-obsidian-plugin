@@ -90,6 +90,67 @@ it('persists the global enable switch without overwriting other settings', async
   expect(settings.llmNetworkTimeoutSec).toBe(42);
 });
 
+it('keeps the saved transform mode while global features are disabled', async () => {
+  Setting.reset();
+  let settings: PluginSettings = {
+    ...DEFAULT_PLUGIN_SETTINGS,
+    llmFeaturesEnabled: false,
+    llmPostprocessMode: 'batch',
+  };
+  renderLlmProviderSettings(new TestElement() as unknown as HTMLElement, {
+    app: {} as App,
+    feedback: { show: vi.fn() },
+    getSecret: () => '',
+    getSettings: () => settings,
+    managePresets: vi.fn(),
+    mutatePresetState: vi.fn(async () => {}),
+    openContextSettings: vi.fn(),
+    openModelSettings: vi.fn(),
+    openTimingSettings: vi.fn(),
+    persist: async (mutation) => {
+      settings = mutation(settings);
+    },
+    restoreDefaults: vi.fn(),
+  });
+  const transform = Setting.named('Transform new dictation').onlyToggle();
+  expect(transform.toggleEl.disabled).toBe(true);
+  expect(transform.value).toBe(true);
+  Setting.named('Enable LLM features').onlyToggle().change(true);
+  await vi.waitFor(() => expect(settings.llmFeaturesEnabled).toBe(true));
+  await vi.waitFor(() => {
+    const current = Setting.instances
+      .filter((setting) => setting.name === 'Transform new dictation')
+      .at(-1);
+    expect(current?.onlyToggle().toggleEl.disabled).toBe(false);
+  });
+  expect(settings.llmPostprocessMode).toBe('batch');
+});
+
+it('opens advanced model settings before a provider is selected', async () => {
+  Setting.reset();
+  const openModelSettings = vi.fn();
+  renderLlmProviderSettings(new TestElement() as unknown as HTMLElement, {
+    app: {} as App,
+    feedback: { show: vi.fn() },
+    getSecret: () => '',
+    getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+    managePresets: vi.fn(),
+    mutatePresetState: vi.fn(async () => {}),
+    openContextSettings: vi.fn(),
+    openModelSettings,
+    openTimingSettings: vi.fn(),
+    persist: vi.fn(async () => {}),
+    restoreDefaults: vi.fn(),
+  });
+  const button = Setting.named('Provider').extraButtonComponents.find(
+    (candidate) => candidate.tooltip === 'Advanced model settings',
+  );
+  expect(button).toBeDefined();
+  expect(button?.extraSettingsEl.getAttribute('aria-label')).toBe('Advanced model settings');
+  await button?.click();
+  expect(openModelSettings).toHaveBeenCalledOnce();
+});
+
 it('groups daily and provider controls and opens advanced settings beside their choices', async () => {
   Setting.reset();
   const managePresets = vi.fn();

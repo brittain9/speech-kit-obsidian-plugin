@@ -265,6 +265,7 @@ export class LlmRoutingControls {
       });
     this.readinessHost = selection.descEl.createDiv();
     this.renderReadiness(this.readinessHost, settings);
+    if (policy === null) this.addModelSettingsAction(selection);
 
     if (policy !== null) {
       new Setting(parent)

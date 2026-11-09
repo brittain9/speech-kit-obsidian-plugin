@@ -28,7 +28,9 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
     .setDesc(t('llm.sidebar.enabled.description'))
     .addToggle((toggle) => {
       toggle.setValue(settings.llmPostprocessMode !== 'off');
+      toggle.setDisabled(!settings.llmFeaturesEnabled);
       toggle.onChange(async (enabled) => {
+        if (!deps.getSettings().llmFeaturesEnabled) return;
         await deps.mutateSettings((current) => ({
           ...current,
           llmPostprocessMode: enabled ? current.llmPostprocessLastEnabledMode : 'off',
