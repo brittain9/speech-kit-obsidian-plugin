@@ -418,7 +418,7 @@ export const hr = {
   'settings.modelStoreOverride.apply': 'Primijeni',
   'settings.modelStoreOverride.updated': 'Mapa za pohranu modela je ažurirana.',
   'settings.modelStoreOverride.failed':
-    'Nije moguće promijeniti mapu za pohranu modela. Provjerite mapu i pokušajte ponovno.',
+    'Nije moguće promijeniti mapu za pohranu modela. Odaberite apsolutnu putanju do dostupne mape i pokušajte ponovno.',
   'settings.modelStoreOverride.name': 'Zamjenska mapa za pohranu modela',
   'settings.modelStoreOverride.desc': 'Prilagođena mapa u koju dodatak preuzima modele.',
   'settings.modelStoreOverride.placeholder': 'Koristi zajedničku zadanu pohranu modela',

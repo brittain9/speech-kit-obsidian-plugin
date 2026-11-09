@@ -140,6 +140,22 @@ describe('ModelInstallManager', () => {
     expect(harness.manager.getState().modelStore.path).toBe('/models');
   });
 
+  it('keeps the configured store when native folder validation fails', async () => {
+    configureSidecarForInit(harness.sidecarConnection);
+    await harness.manager.init();
+    const oldModels = harness.manager.getState().installedModels;
+    harness.sidecarConnection.getModelStore.mockRejectedValueOnce(
+      new Error('Model store folder is not usable'),
+    );
+
+    await expect(harness.manager.changeModelStore('/file/child')).rejects.toThrow(
+      'Model store folder is not usable',
+    );
+    expect(harness.getSettings().modelStorePathOverride).toBe('');
+    expect(harness.manager.getState().installedModels).toEqual(oldModels);
+    expect(harness.manager.getState().modelStore.path).toBe('/models');
+  });
+
   it('does not change stores while a model install is active', async () => {
     configureSidecarForInit(harness.sidecarConnection);
     await harness.manager.init();

@@ -15,7 +15,7 @@ use crate::engine::registry::EngineRegistry;
 use crate::installer::{InstallRequest, ModelInstallManager, ModelProbe};
 use crate::model_store::{
     remove_installed_model, resolve_catalog_model_runtime_path, resolve_model_install_dir,
-    resolve_model_store_info, scan_installed_models,
+    resolve_model_store_info, scan_installed_models, validate_model_store_destination,
 };
 use crate::protocol::{
     AccelerationPreference, AudioFrame, Command, CompiledAdapterInfo, CompiledRuntimeInfo,
@@ -340,7 +340,12 @@ impl AppState {
                 model_store_path_override,
                 request_id,
             } => {
-                match resolve_model_store_info(model_store_path_override.as_deref()) {
+                match resolve_model_store_info(model_store_path_override.as_deref()).and_then(
+                    |info| {
+                        validate_model_store_destination(&info.path)?;
+                        Ok(info)
+                    },
+                ) {
                     Ok(info) => events.push(Event::ModelStore {
                         request_id,
                         override_path: info.override_path.map(|path| path.display().to_string()),
@@ -2624,6 +2629,53 @@ mod tests {
         assert!(
             matches!(events.as_slice(), [Event::Error { request_id: Some(id), code, .. }] if id == "bad-store" && code == "invalid_model_store")
         );
+    }
+
+    #[test]
+    fn get_model_store_rejects_a_file_ancestor_without_changing_it() {
+        let root = temp_dir().join(format!("store-preflight-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create test folder");
+        let file = root.join("file");
+        std::fs::write(&file, b"unchanged").expect("create test file");
+        let path = file.join("models");
+        let (_, events) = test_app().handle_command(Command::GetModelStore {
+            model_store_path_override: Some(path.display().to_string()),
+            request_id: Some("invalid-folder".into()),
+        });
+        assert!(
+            matches!(events.as_slice(), [Event::Error { request_id: Some(id), code, .. }] if id == "invalid-folder" && code == "invalid_model_store")
+        );
+        assert_eq!(std::fs::read(&file).unwrap(), b"unchanged");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn get_model_store_accepts_read_only_directory_and_rejects_broken_link() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+        let root = temp_dir().join(format!("store-permissions-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+        let read_only = root.join("read-only");
+        std::fs::create_dir(&read_only).unwrap();
+        std::fs::set_permissions(&read_only, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let (_, events) = test_app().handle_command(Command::GetModelStore {
+            model_store_path_override: Some(read_only.display().to_string()),
+            request_id: Some("read-only".into()),
+        });
+        assert!(
+            matches!(events.as_slice(), [Event::ModelStore { request_id: Some(id), .. }] if id == "read-only")
+        );
+        let broken = root.join("broken");
+        symlink(root.join("absent"), &broken).unwrap();
+        let (_, events) = test_app().handle_command(Command::GetModelStore {
+            model_store_path_override: Some(broken.join("models").display().to_string()),
+            request_id: Some("broken".into()),
+        });
+        assert!(
+            matches!(events.as_slice(), [Event::Error { request_id: Some(id), code, .. }] if id == "broken" && code == "invalid_model_store")
+        );
+        std::fs::set_permissions(&read_only, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

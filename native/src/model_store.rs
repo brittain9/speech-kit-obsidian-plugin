@@ -254,6 +254,32 @@ pub fn resolve_model_store_info(model_store_path_override: Option<&str>) -> Resu
     }
 }
 
+/// Check an existing store or the nearest existing parent without modifying it.
+/// This detects common invalid paths, but cannot guarantee a later write succeeds.
+pub fn validate_model_store_destination(path: &Path) -> Result<()> {
+    let mut candidate = path;
+    loop {
+        match std::fs::metadata(candidate) {
+            Ok(metadata) => {
+                ensure!(
+                    metadata.is_dir(),
+                    "Model store destination is not a directory."
+                );
+                return Ok(());
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if std::fs::symlink_metadata(candidate).is_ok() {
+                    anyhow::bail!("Model store path contains a broken symbolic link.");
+                }
+                candidate = candidate
+                    .parent()
+                    .ok_or_else(|| anyhow!("Model store parent is unavailable."))?;
+            }
+            Err(error) => return Err(error).context("Cannot access the model store folder"),
+        }
+    }
+}
+
 pub fn remove_installed_model(
     model_store_root: &Path,
     runtime_id: RuntimeId,

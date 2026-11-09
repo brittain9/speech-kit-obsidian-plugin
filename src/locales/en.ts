@@ -643,7 +643,7 @@ export const en = {
   'settings.modelStoreOverride.apply': 'Apply',
   'settings.modelStoreOverride.updated': 'Model store folder updated.',
   'settings.modelStoreOverride.failed':
-    'Could not change the model store folder. Check the folder and try again.',
+    'Could not change the model store folder. Choose an absolute path to an accessible folder and try again.',
   'settings.modelStoreOverride.name': 'Model store folder override',
   'settings.modelStoreOverride.desc': 'Custom folder for managed model downloads.',
   'settings.modelStoreOverride.placeholder': 'Use the shared default model store',
