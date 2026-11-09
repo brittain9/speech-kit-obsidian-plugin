@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   AbstractInputSuggest,
   type App,
@@ -123,7 +123,7 @@ export class LlmRoutingControls {
     Record<LlmProviderId, { state: ProviderState; promise: Promise<void> }>
   > = {};
   private readonly discoveryConfigurations: Partial<
-    Record<LlmProviderId, { baseUrl: string; secretId: string; secret: string }>
+    Record<LlmProviderId, { baseUrl: string; secretId: string; secretFingerprint: string }>
   > = {};
   private readonly configurationRevisions: Record<LlmProviderId, number> = {
     ollama: 0,
@@ -728,7 +728,7 @@ export class LlmRoutingControls {
   private discoveryConfiguration(providerId: LlmProviderId): {
     baseUrl: string;
     secretId: string;
-    secret: string;
+    secretFingerprint: string;
   } {
     const settings = this.dependencies.getSettings();
     const config = settings.llmProviderConfigurations[providerId];
@@ -736,19 +736,22 @@ export class LlmRoutingControls {
     return {
       baseUrl: 'baseUrl' in config ? config.baseUrl : '',
       secretId,
-      secret: secretId.length === 0 ? '' : this.dependencies.getSecret(secretId),
+      secretFingerprint:
+        secretId.length === 0
+          ? ''
+          : createHash('sha256').update(this.dependencies.getSecret(secretId)).digest('hex'),
     };
   }
 
   private sameDiscoveryConfiguration(
     providerId: LlmProviderId,
-    expected: { baseUrl: string; secretId: string; secret: string },
+    expected: { baseUrl: string; secretId: string; secretFingerprint: string },
   ): boolean {
     const current = this.discoveryConfiguration(providerId);
     return (
       current.baseUrl === expected.baseUrl &&
       current.secretId === expected.secretId &&
-      current.secret === expected.secret
+      current.secretFingerprint === expected.secretFingerprint
     );
   }
 

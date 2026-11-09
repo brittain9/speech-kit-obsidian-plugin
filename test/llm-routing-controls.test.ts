@@ -662,6 +662,41 @@ describe('LlmRoutingControls.refreshActiveProviders', () => {
     );
   });
 
+  it('clears cached models if a stored secret changes under the same reference', async () => {
+    createProviderMock.mockReturnValue(
+      createFakeLlmProvider({
+        listModels: vi.fn(async () => [{ id: 'old-model', displayName: 'Old model' }]),
+      }),
+    );
+    let secret = 'synthetic-one';
+    const settings: PluginSettings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      llmProviderConfigurations: {
+        ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations,
+        openai_compatible: {
+          ...DEFAULT_PLUGIN_SETTINGS.llmProviderConfigurations.openai_compatible,
+          baseUrl: 'http://localhost:1001/v1',
+          secretId: 'test-secret',
+        },
+      },
+      llmRoutingPolicy: { kind: 'fixed', providerId: 'openai_compatible' },
+    };
+    const controls = new LlmRoutingControls({
+      app: {} as App,
+      feedback: { show: vi.fn() },
+      getSecret: () => secret,
+      getSettings: () => settings,
+      persist: vi.fn(async () => {}),
+      requestRerender: vi.fn(),
+    });
+    await controls.refreshActiveProviders();
+    secret = 'synthetic-two';
+    controls.render(new TestElement() as unknown as HTMLElement, settings);
+    expect(MockSetting.named('Model').controlEl.querySelector('datalist')?.children).toHaveLength(
+      0,
+    );
+  });
+
   it('clears a cached model list when another settings host changes the endpoint', async () => {
     createProviderMock.mockReturnValue(
       createFakeLlmProvider({
