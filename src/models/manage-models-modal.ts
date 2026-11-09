@@ -619,7 +619,7 @@ export class ManageModelsModal extends Modal {
         });
       }
       for (const row of familyRows) {
-        const container = details.createDiv();
+        const container = details.createDiv({ cls: 'local-stt-model-row-container' });
         container.setAttribute('data-model-key', getRowKey(row));
         this.renderRow(row, container);
       }
@@ -1091,19 +1091,11 @@ export class ManageModelsModal extends Modal {
         return;
       }
 
-      // Progress ticks for a model outside the active task/language do not
-      // affect visible rows. Avoid rebuilding the DOM under the user's cursor.
-      const installingModel = state.catalog.models.find((model) =>
-        matchesModelTriple(
-          model,
-          activeInstall.installUpdate.runtimeId,
-          activeInstall.installUpdate.familyId,
-          activeInstall.installUpdate.modelId,
-        ),
-      );
-      const visible =
-        installingModel?.task === this.activeTask &&
-        modelMatchesLanguageFilter(installingModel, this.getActiveLanguage());
+      // Hidden models do not affect the displayed rows, including when a
+      // search excludes them. Keep open controls and focus intact.
+      const visible = [
+        ...this.listContainer.querySelectorAll('.local-stt-model-row-container'),
+      ].some((row) => row.getAttribute('data-model-key') === key);
       if (!visible) {
         return;
       }

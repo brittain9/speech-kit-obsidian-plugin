@@ -87,6 +87,9 @@ vi.mock('obsidian', async () => {
     setCta(): this {
       return this;
     }
+    setWarning(): this {
+      return this;
+    }
     setButtonText(text: string): this {
       this.buttonEl.textContent = text;
       return this;
@@ -205,6 +208,7 @@ it('searches all task families and restores disclosure choices', async () => {
     model('French', 'nemotron_asr', ['fr']),
     model('Parakeet', 'parakeet_unified', ['en']),
     model('German', 'pocket_tts', ['de'], 'tts'),
+    model('Supertonic', 'supertonic', ['de'], 'tts'),
   ];
   const families = [
     { familyId: 'moonshine', displayName: 'Moonshine', task: 'stt' },
@@ -215,6 +219,7 @@ it('searches all task families and restores disclosure choices', async () => {
       task: 'stt',
     },
     { familyId: 'pocket_tts', displayName: 'Pocket TTS', task: 'tts' },
+    { familyId: 'supertonic', displayName: 'Supertonic', task: 'tts' },
   ].map((entry) => ({ ...entry, runtimeId: 'onnx_runtime', summary: '' }));
   const state = {
     activeInstall: null,
@@ -242,6 +247,36 @@ it('searches all task families and restores disclosure choices', async () => {
     selectedTtsModelCapabilities: { status: 'none' },
     selectedTranslationModel: null,
   };
+  Object.assign(models[3] ?? {}, {
+    artifacts: [
+      {
+        artifactId: 'voice-extra',
+        role: 'voice',
+        required: false,
+        voiceId: 'alba',
+        filename: 'voice.bin',
+        sizeBytes: 10,
+        sha256: '0'.repeat(64),
+        downloadUrl: 'https://example.com/voice',
+      },
+    ],
+  });
+  Object.assign(state, {
+    installedModels: [
+      {
+        catalogVersion: 1,
+        runtimeId: 'onnx_runtime',
+        familyId: 'pocket_tts',
+        modelId: 'German',
+        installPath: '/models/pocket',
+        installedArtifactIds: [],
+        installedAtUnixMs: 1,
+        installedVoiceIds: [],
+        runtimePath: null,
+        totalSizeBytes: 10,
+      },
+    ],
+  });
   let notify = (): void => {};
   const modal = new ManageModelsModal({} as never, {
     feedback: { show: vi.fn() },
@@ -349,6 +384,35 @@ it('searches all task families and restores disclosure choices', async () => {
     '',
   );
   expect(group('Pocket TTS')?.open).toBe(true);
+  search.value = 'Pocket';
+  search.dispatchEvent(new Event('input', { bubbles: true }));
+  const voices = group('Pocket TTS')?.querySelector<HTMLDetailsElement>(
+    '.local-stt-voice-management',
+  );
+  const voicesSummary = voices?.querySelector('summary');
+  if (!voices || !voicesSummary) throw new Error('Missing voice management');
+  voicesSummary.click();
+  voicesSummary.focus();
+  expect(voices.open).toBe(true);
+  Object.assign(state, {
+    activeInstall: {
+      phase: 'installing',
+      lastError: null,
+      installUpdate: {
+        runtimeId: 'onnx_runtime',
+        familyId: 'supertonic',
+        modelId: 'Supertonic',
+        state: 'downloading',
+      },
+    },
+  });
+  notify();
+  expect(voices.isConnected).toBe(true);
+  expect(voices.open).toBe(true);
+  expect(document.activeElement).toBe(voicesSummary);
+  Object.assign(state, { activeInstall: null });
+  search.value = '';
+  search.dispatchEvent(new Event('input', { bubbles: true }));
   group('Pocket TTS')?.querySelector('summary')?.click();
   expect(group('Pocket TTS')?.open).toBe(false);
   tts.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
