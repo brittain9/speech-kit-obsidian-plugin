@@ -180,6 +180,7 @@ export const ja = {
   'settings.groups.capture': '録音',
   'settings.groups.transcriptOutput': 'トランスクリプト出力',
   'settings.groups.llmTransformation': 'LLM変換',
+  'settings.groups.llmProviders': 'プロバイダーとモデル',
   'settings.groups.engine': 'エンジン',
   'settings.groups.advanced': '詳細設定',
   'settings.listeningMode.alwaysOn': '常時オン',
@@ -266,8 +267,7 @@ export const ja = {
   'settings.smartParagraph.paragraphPause.name': '段落の一時停止',
   'settings.smartParagraph.paragraphPause.desc': '段落区切り前の秒数 ({min}-{max})。',
   'settings.llm.enableFeatures.name': 'LLM 機能を有効にする',
-  'settings.llm.enableFeatures.desc':
-    'LLM 変換を利用可能にします。サイドバーで変換をオンまたはオフにします。',
+  'settings.llm.enableFeatures.desc': '設定またはサイドバーでLLM変換を操作します。',
   'settings.llm.restoreDefaults.name': '変換のデフォルトを復元する',
   'settings.llm.restoreDefaults.desc':
     'プリセット、タイミング、コンテキスト、最小ワード、温度をリセットします。保存されたプリセットとモデルは保持されます。',
@@ -435,6 +435,7 @@ export const ja = {
   'llm.routing.openRouterModel.name': 'OpenRouterモデル',
   'llm.routing.openRouterModel.description': '入力して OpenRouter モデルを検索します。',
   'llm.routing.testConnection': 'API キーとモデルをテストする',
+  'llm.routing.connectionSuccessful': '接続に成功しました',
   'llm.sidebar.eyebrow': 'トランスクリプトのワークフロー',
   'llm.sidebar.title': 'ディクテーションの変換',
   'llm.sidebar.description': '話されたテキストがメモに届く前にどのように形成されるかを選択します。',
@@ -519,9 +520,8 @@ export const ja = {
   'llm.preset.editor.promptSize':
     '~{tokens} トークン ({characters} 文字) — すべてのリクエストで送信されます',
   'llm.preset.editor.timing': 'タイミング',
-  'llm.preset.editor.timingDescription':
-    '変換が実行されるとき。 「どちらか」はサイドバーのタイミングに従います。',
-  'llm.preset.editor.timingEither': 'どちらでも（サイドバーに従う）',
+  'llm.preset.editor.timingDescription': 'このプリセットを実行するタイミングを選択します。',
+  'llm.preset.editor.timingEither': '変換の実行設定を使用',
   'llm.preset.editor.timingPerUtterance': '各フレーズの後に',
   'llm.preset.editor.timingBatch': '停止時に一度',
   'llm.preset.editor.output': '出力',

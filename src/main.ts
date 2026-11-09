@@ -244,13 +244,18 @@ export default class LocalSttPlugin extends Plugin {
       (leaf) =>
         new LocalDictationView(leaf, {
           feedback: this.feedback,
+          openSettings: () => {
+            const host = this.app as unknown as {
+              setting?: { open?: () => void; openTabById?: (id: string) => void };
+            };
+            host.setting?.open?.();
+            host.setting?.openTabById?.(this.manifest.id);
+          },
           getSecret: (secretId) => this.getSecret(secretId),
           getSettings: () => this.settings,
           getLlmCleanupFailure: () => this.llmCleanupFailure,
           logger: this.logger,
-          saveSettings: async (nextSettings) => {
-            await this.updateSettings(nextSettings);
-          },
+          mutateSettings: (mutation) => this.requirePresetStateStore().mutateSettings(mutation),
           mutatePresetState: async (mutation) => {
             await this.requirePresetStateStore().mutate(mutation);
           },
@@ -551,17 +556,16 @@ export default class LocalSttPlugin extends Plugin {
       new LocalSttSettingTab(this.app, this, {
         feedback: this.feedback,
         getSettings: () => this.settings,
+        getSecret: (id) => this.getSecret(id),
+        mutateLlmSettings: (mutation) => this.requirePresetStateStore().mutateSettings(mutation),
+        mutatePresetState: (mutation) => this.requirePresetStateStore().mutate(mutation),
+        synchronizePresets: () => this.requirePresetStateStore().synchronize(),
         isDictationBusy: () =>
           (this.dictationController?.isBusy() ?? false) ||
           (this.audioFileTranscriptionController?.isBusy() ?? false),
         logger: this.logger,
         modelInstallManager: this.requireModelInstallManager(),
         openModelPicker: (options) => this.openModelPicker(options),
-        openLlmSidebar: async () => {
-          await this.ensureLocalDictationSidebar();
-          const leaf = this.app.workspace.getLeavesOfType(LOCAL_DICTATION_VIEW_TYPE)[0];
-          if (leaf) await this.app.workspace.revealLeaf(leaf);
-        },
         openSetupWizard: () => this.openSetupWizard(),
         sidecarVersion: REQUIRED_SIDECAR_VERSION,
         resolvePluginDirectory: () => this.resolvePluginDirectoryPath(),
@@ -571,9 +575,6 @@ export default class LocalSttPlugin extends Plugin {
           }),
         restartSidecar: async () => {
           await this.restartSidecarConnection();
-        },
-        saveSettings: async (nextSettings) => {
-          await this.updateSettings(nextSettings);
         },
         sidecarConnection: this.requireSidecarConnection(),
         sidecarInstallManager: this.requireSidecarInstallManager(),

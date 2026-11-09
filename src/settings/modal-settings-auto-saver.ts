@@ -3,7 +3,7 @@ import type { PluginSettings } from './plugin-settings';
 export interface ModalSettingsPersistence {
   getSettings: () => PluginSettings;
   onSave?: () => void;
-  saveSettings: (settings: PluginSettings) => Promise<void>;
+  savePatch: (patch: Partial<PluginSettings>) => Promise<void>;
 }
 
 export class ModalSettingsAutoSaver {
@@ -13,10 +13,7 @@ export class ModalSettingsAutoSaver {
 
   persist(patch: Partial<PluginSettings>): Promise<void> {
     const operation = this.operationTail.then(async () => {
-      await this.dependencies.saveSettings({
-        ...this.dependencies.getSettings(),
-        ...patch,
-      });
+      await this.dependencies.savePatch(patch);
       this.dependencies.onSave?.();
     });
     this.operationTail = operation.catch(() => {});

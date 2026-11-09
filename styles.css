@@ -1120,16 +1120,16 @@
 
 /* --- LLM routing control ------------------------------------------ */
 
-.local-dictation-route-field {
-  padding: var(--size-4-2) var(--size-4-3) var(--size-4-3);
-}
-
 .local-dictation-route-field__hint {
   margin: 0;
-  padding: 0 var(--size-4-3) var(--size-4-3);
+  padding: var(--size-2-1) 0 0;
   overflow-wrap: anywhere;
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
+}
+
+.setting-item-description .local-dictation-status {
+  padding: var(--size-2-1) 0 0;
 }
 
 .local-dictation-segmented {

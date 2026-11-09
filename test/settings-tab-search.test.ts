@@ -1,7 +1,10 @@
+import type { App } from 'obsidian';
 import { Setting, type SettingDefinitionRender, type SettingGroup } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
-
-import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
+import { DiarizationSettingsModal } from '../src/settings/diarization-settings-modal';
+import { LlmPresetStateStore } from '../src/settings/llm-preset-state';
+import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
+import { createSettingAccess } from '../src/settings/setting-helpers';
 import {
   LocalSttSettingTab,
   renderAutomaticCopyFinalizedUtterancesSetting,
@@ -51,6 +54,82 @@ describe('LocalSttSettingTab Obsidian 1.13 compatibility', () => {
     });
 
     expect(container.findByText('Microphone')).toBeDefined();
+  });
+
+  it('preserves a queued provider change when an unrelated setting is toggled', async () => {
+    let current: PluginSettings = { ...DEFAULT_PLUGIN_SETTINGS };
+    let release!: () => void;
+    let started!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const store = new LlmPresetStateStore({
+      getSettings: () => current,
+      loadData: async () => current,
+      commit: async (next) => {
+        if (next.llmNetworkTimeoutSec === 42 && current.llmNetworkTimeoutSec !== 42) {
+          started();
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        }
+        current = next;
+      },
+      onExternalChange: vi.fn(),
+      warn: vi.fn(),
+    });
+    const llmSave = store.mutateSettings((settings) => ({ ...settings, llmNetworkTimeoutSec: 42 }));
+    await waiting;
+    const access = createSettingAccess(() => current, store);
+    const setting = renderAutomaticCopyFinalizedUtterancesSetting(
+      new TestElement() as unknown as HTMLElement,
+      access,
+    ) as unknown as MockSetting;
+    setting.onlyToggle().change(true);
+    release();
+    await llmSave;
+    await vi.waitFor(() => expect(current.autoCopyFinalizedUtterances).toBe(true));
+    expect(current.llmNetworkTimeoutSec).toBe(42);
+  });
+
+  it('preserves a queued provider change when an unrelated settings modal saves', async () => {
+    let current: PluginSettings = { ...DEFAULT_PLUGIN_SETTINGS, diarizationEnabled: true };
+    let release!: () => void;
+    let started!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const store = new LlmPresetStateStore({
+      getSettings: () => current,
+      loadData: async () => current,
+      commit: async (next) => {
+        if (next.llmNetworkTimeoutSec === 42 && current.llmNetworkTimeoutSec !== 42) {
+          started();
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        }
+        current = next;
+      },
+      onExternalChange: vi.fn(),
+      warn: vi.fn(),
+    });
+    const llmSave = store.mutateSettings((settings) => ({ ...settings, llmNetworkTimeoutSec: 42 }));
+    await waiting;
+    const modal = new DiarizationSettingsModal({} as App, {
+      getSettings: () => current,
+      savePatch: (patch) => store.mutateSettings((settings) => ({ ...settings, ...patch })),
+    });
+    modal.open();
+    (Setting as unknown as typeof import('./__mocks__/obsidian').Setting)
+      .named('Maximum speakers')
+      .onlyDropdown()
+      .change('2');
+    await Promise.resolve();
+    release();
+    await llmSave;
+    await vi.waitFor(() => expect(current.diarizationMaxSpeakers).toBe(2));
+    expect(current.llmNetworkTimeoutSec).toBe(42);
   });
 
   it('renders a default-off automatic-copy toggle with explicit clipboard replacement copy', async () => {

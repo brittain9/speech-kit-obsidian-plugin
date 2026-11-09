@@ -432,6 +432,7 @@ export const en = {
   'settings.groups.capture': 'Capture',
   'settings.groups.transcriptOutput': 'Transcript output',
   'settings.groups.llmTransformation': 'LLM transformation',
+  'settings.groups.llmProviders': 'Provider and model',
   'settings.llm.provider.name': 'AI provider and model',
   'settings.llm.provider.desc':
     'Choose a provider and model in the Speech Kit sidebar. Close settings to see it.',
@@ -626,7 +627,7 @@ export const en = {
   'settings.smartParagraph.paragraphPause.desc': 'Seconds before a paragraph break ({min}-{max}).',
   'settings.llm.enableFeatures.name': 'Enable LLM features',
   'settings.llm.enableFeatures.desc':
-    'Make LLM transformations available. Turn transformation on or off in the sidebar.',
+    'Make LLM transformations available. Control them in Settings or the sidebar.',
   'settings.llm.mediaProcessing.name': 'Process media transcripts with AI',
   'settings.llm.mediaProcessing.desc':
     'After a local media transcript finishes, use the active preset on its text. You will preview or confirm the result before it is applied; media and source details are never sent.',
@@ -812,11 +813,13 @@ export const en = {
   'llm.failure.authInvalid': '{provider} API key rejected. Check settings.',
   'llm.failure.permissionDenied':
     '{provider} denied access. Check credentials, account permissions, or model access.',
-  'llm.failure.rateLimited': '{provider} rate limit hit. Falling back to raw text.',
-  'llm.failure.network': 'Network error reaching {provider}.',
-  'llm.failure.modelNotConfigured': '{provider} model is not configured. Choose one under Model.',
-  'llm.failure.unknownModel': '{provider} model not found. Choose another under Model.',
-  'llm.failure.unknown': 'LLM transform failed. See console.',
+  'llm.failure.rateLimited': '{provider} rate limit reached. Wait and try again.',
+  'llm.failure.network':
+    'Cannot reach {provider}. Check its address and connection, then try again.',
+  'llm.failure.modelNotConfigured':
+    '{provider} model is not configured. Choose one in Speech Kit settings.',
+  'llm.failure.unknownModel': '{provider} model not found. Choose another in Speech Kit settings.',
+  'llm.failure.unknown': 'Transform failed. Check the provider settings and try again.',
   'llm.status.selectOllamaModel': 'Select an Ollama model below.',
   'llm.status.selectOpenRouterModel': 'Select an OpenRouter model below.',
   'llm.status.selectCustomModel': 'Enter a model ID below.',
@@ -848,6 +851,7 @@ export const en = {
   'llm.routing.openRouterModel.name': 'OpenRouter model',
   'llm.routing.openRouterModel.description': 'Type to search OpenRouter models.',
   'llm.routing.testConnection': 'Test API key and model',
+  'llm.routing.connectionSuccessful': 'Connection successful',
   'llm.routing.testingConnection': 'Testing connection…',
   'llm.provider.ollama': 'Ollama',
   'llm.provider.openrouter': 'OpenRouter',
@@ -887,13 +891,15 @@ export const en = {
   'llm.validation.baseUrl.credentials': 'Remove credentials from the URL and use Secret Storage.',
   'llm.validation.baseUrl.queryOrFragment':
     'The base URL cannot contain a query string or fragment.',
+  'llm.routing.settingsSaveFailed': 'Could not save the provider settings. Try again.',
+  'llm.sidebar.openSettings': 'Open settings',
   'llm.sidebar.eyebrow': 'Transcript workflow',
   'llm.sidebar.title': 'Transform dictation',
   'llm.sidebar.description': 'Choose how spoken text is shaped before it reaches your note.',
   'llm.sidebar.group.preset': 'Preset',
   'llm.sidebar.group.model': 'Model',
   'llm.sidebar.group.context': 'Context',
-  'llm.sidebar.enabled.name': 'Enabled',
+  'llm.sidebar.enabled.name': 'Transform new dictation',
   'llm.sidebar.enabled.description': 'Apply the active preset to new dictated text.',
   'llm.sidebar.showOriginal.name': 'Show original transcript',
   'llm.sidebar.showOriginal.description':
@@ -1073,9 +1079,8 @@ export const en = {
   'llm.preset.editor.promptDescription': 'Sent to the model as the system prompt.',
   'llm.preset.editor.promptSize': '~{tokens} tokens ({characters} chars) — sent with every request',
   'llm.preset.editor.timing': 'Timing',
-  'llm.preset.editor.timingDescription':
-    'When the transform runs. “Either” follows the sidebar timing.',
-  'llm.preset.editor.timingEither': 'Either (follow sidebar)',
+  'llm.preset.editor.timingDescription': 'Choose when this preset runs.',
+  'llm.preset.editor.timingEither': 'Use Run transform setting',
   'llm.preset.editor.timingPerUtterance': 'After each phrase',
   'llm.preset.editor.timingBatch': 'Once on stop',
   'llm.preset.editor.output': 'Output',

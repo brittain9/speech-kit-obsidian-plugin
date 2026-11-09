@@ -1,5 +1,5 @@
 import { Setting } from 'obsidian';
-
+import type { LlmPresetStateStore } from './llm-preset-state';
 import type { PluginSettings } from './plugin-settings';
 
 // Filters PluginSettings keys whose value type is exactly T (not just assignable
@@ -13,6 +13,16 @@ export type SettingsKeyOf<T> = {
       : never
     : never;
 }[keyof PluginSettings];
+
+export function createSettingAccess(
+  getSettings: () => PluginSettings,
+  store: Pick<LlmPresetStateStore, 'mutateSettings'>,
+): SettingAccess {
+  return {
+    getSettings,
+    persistOne: (key, value) => store.mutateSettings((current) => ({ ...current, [key]: value })),
+  };
+}
 
 export interface SettingSpec {
   name: string;

@@ -5,8 +5,9 @@ import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 import { LocalDictationView } from '../src/ui/local-dictation-view';
 import { Setting, type TestElement } from './__mocks__/obsidian';
 
-it('allows provider selection while dictation transformation is off', () => {
+it('opens Settings from the compact daily sidebar', async () => {
   Setting.reset();
+  const openSettings = vi.fn();
   const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
     feedback: { show: vi.fn() },
     getSecret: () => '',
@@ -16,17 +17,43 @@ it('allows provider selection while dictation transformation is off', () => {
       llmPostprocessMode: 'off',
     }),
     mutatePresetState: vi.fn(async () => {}),
-    saveSettings: vi.fn(async () => {}),
+    mutateSettings: vi.fn(async () => {}),
     synchronizePresets: vi.fn(async () => {}),
+    openSettings,
   });
-
   view.refresh();
+  await Setting.buttonNamed('Open settings').click();
+  expect(openSettings).toHaveBeenCalledOnce();
+  expect(Setting.instances.map((setting) => setting.name)).not.toContain('Provider');
+});
 
-  expect(
-    Setting.named('Provider')
-      .onlyDropdown()
-      .selectEl.options.map((option) => option.label),
-  ).toContain('Ollama');
+it('preserves another setting changed while enabling transformation is waiting to save', async () => {
+  Setting.reset();
+  let settings = {
+    ...DEFAULT_PLUGIN_SETTINGS,
+    llmFeaturesEnabled: true,
+    llmPostprocessMode: 'off' as const,
+  } as import('../src/settings/plugin-settings').PluginSettings;
+  let commit!: () => void;
+  const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
+    feedback: { show: vi.fn() },
+    getSecret: () => '',
+    getSettings: () => settings,
+    mutatePresetState: vi.fn(async () => {}),
+    synchronizePresets: vi.fn(async () => {}),
+    mutateSettings: async (mutation) => {
+      await new Promise<void>((resolve) => {
+        commit = resolve;
+      });
+      settings = mutation(settings);
+    },
+  });
+  view.refresh();
+  Setting.named('Transform new dictation').onlyToggle().change(true);
+  settings = { ...settings, llmNetworkTimeoutSec: 42 };
+  commit();
+  await vi.waitFor(() => expect(settings.llmPostprocessMode).not.toBe('off'));
+  expect(settings.llmNetworkTimeoutSec).toBe(42);
 });
 
 it('announces the changing sidebar workflow summary as one atomic status', () => {
@@ -35,7 +62,7 @@ it('announces the changing sidebar workflow summary as one atomic status', () =>
     getSecret: () => '',
     getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, llmFeaturesEnabled: false }),
     mutatePresetState: vi.fn(async () => {}),
-    saveSettings: vi.fn(async () => {}),
+    mutateSettings: vi.fn(async () => {}),
     synchronizePresets: vi.fn(async () => {}),
   });
 
@@ -55,7 +82,7 @@ it('preserves the sidebar scroll position across a settings rerender', () => {
     getSecret: () => '',
     getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, llmFeaturesEnabled: false }),
     mutatePresetState: vi.fn(async () => {}),
-    saveSettings: vi.fn(async () => {}),
+    mutateSettings: vi.fn(async () => {}),
     synchronizePresets: vi.fn(async () => {}),
   });
 
