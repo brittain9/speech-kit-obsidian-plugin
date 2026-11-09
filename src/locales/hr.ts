@@ -889,7 +889,7 @@ export const hr = {
   'setup.wizard.modelIntro':
     'Instalirajte model za transkripciju kako biste omogućili diktiranje. Dodatne modele možete instalirati kasnije — manji modeli su brži, a veći su točniji.',
   'setup.wizard.modelKinds':
-    'Dostupne su dvije vrste: streaming modeli prikazuju riječi uživo dok govorite, a standardni modeli transkribiraju nakon svake stanke. Za diktiranje bez upotrebe ruku počnite s preporučenim modelom Moonshine Small. Nemotron 3.5 ASR je streaming opcija koja traži više resursa.',
+    'Dostupne su dvije vrste: streaming modeli prikazuju riječi uživo dok govorite, a standardni modeli transkribiraju nakon svake stanke. Za diktiranje bez upotrebe ruku počnite s preporučenim modelom Moonshine Small. Nemotron ASR je streaming opcija koja traži više resursa.',
   'setup.wizard.gpuNote':
     'Whisper modeli mogu raditi znatno brže uz GPU ubrzanje. Ako imate NVIDIA GPU, CUDA izdanje možete instalirati kasnije u postavkama.',
   'setup.wizard.openModelPicker': 'Otvori odabir modela',
@@ -970,16 +970,16 @@ export const hr = {
     'Putanja do datoteke modela mora upućivati na datoteku: {path}',
   'models.external.validation.selectEntryFile': 'Odaberite {filename}.',
   'models.external.validation.nemotronEntryFile':
-    'Nemotron 3.5 ASR zahtijeva artefakt encoder.int8.onnx. Odaberite encoder.int8.onnx iz direktorija modela s prozorom od 560 ms.',
+    'Nemotron ASR zahtijeva artefakt encoder.int8.onnx. Odaberite encoder.int8.onnx iz podržanog direktorija Nemotron int8 modela.',
   'models.external.validation.moonshineEntryFile':
     'Moonshine zahtijeva svoj glavni artefakt frontend.ort. Odaberite frontend.ort iz direktorija streaming modela.',
   'models.external.validation.generic': 'Govorni modul nije mogao provjeriti ovaj model.',
   'models.external.requirements.nemotron.entry':
-    'Odaberite encoder.int8.onnx iz Nemotron 3.5 ASR int8 izvoza s prozorom od 560 ms.',
+    'Odaberite encoder.int8.onnx iz podržanog Nemotron int8 izvoza.',
   'models.external.requirements.nemotron.siblings':
     'Isti direktorij mora sadržavati decoder.int8.onnx, joiner.int8.onnx i tokens.txt.',
   'models.external.requirements.nemotron.compatibility':
-    'Ostale veličine odsječaka i ORT GenAI izvozi nisu kompatibilni s ovim adapterom.',
+    'Podržani su engleski izvoz s odsječcima od 560 ms i višejezični izvozi od 160 ms ili 560 ms. ORT GenAI izvozi nisu podržani.',
   'models.external.requirements.moonshine.entry':
     'Odaberite frontend.ort iz direktorija Moonshine v2 streaming ORT modela.',
   'models.external.requirements.moonshine.siblings':
@@ -1020,6 +1020,7 @@ export const hr = {
   'models.capability.languageSelection': 'Odabir jezika',
   'models.tag.fullPrecision': 'Puna preciznost',
   'models.tag.reducedSize': 'Smanjena veličina',
+  'models.tag.licenseTerms': 'Uvjeti licence',
   'models.progress.preparing': 'Priprema instalacije',
   'models.progress.downloading': 'Preuzimanje',
   'models.progress.verifying': 'Provjera preuzimanja',
@@ -1111,7 +1112,7 @@ export const hr = {
   'catalog.parakeet_unified_en_0_6b_int8_streaming_1120ms.summary':
     'Međuspremana transkripcija engleskog govora uživo s modelom NVIDIA Parakeet Unified.',
   'catalog.nemotron_asr_0_6b_int8_streaming_560ms.summary':
-    'NVIDIA-in višejezični RNNT s 0,6 milijardi parametara, izvezen u int8 ONNX za transkripciju uživo s predmemorijom konteksta na osam provjerenih jezika.',
+    'NVIDIA-in višejezični RNNT s 0,6 milijardi parametara, izvezen u int8 ONNX za transkripciju uživo s predmemorijom konteksta na devet provjerenih jezika.',
   'catalog.pocket_tts_english_2026_04_int8.summary':
     'Prirodna lokalna sinteza čitanja naglas na engleskom uz izbor pomno odabranih glasova.',
   'catalog.pocket_tts_french_24l_int8.summary':
@@ -1135,7 +1136,7 @@ export const hr = {
   'catalog.family.parakeet_unified.summary':
     'Međuspremana transkripcija engleskog govora uživo. Ovaj model znatno opterećuje CPU.',
   'catalog.family.nemotron_asr.summary':
-    'Višejezični streaming visoke točnosti uz veće preuzimanje i veću potrošnju resursa. Moonshine Small i dalje je preporučeni zadani izbor za diktiranje na engleskom uživo.',
+    'Streaming na engleskom i drugim jezicima uz veća preuzimanja i veću potrošnju resursa. Moonshine Small i dalje je preporučeni zadani izbor za diktiranje na engleskom uživo.',
   'catalog.family.supertonic.summary':
     'Munjevito brz višejezični TTS na uređaju putem ONNX Runtimea.',
   'catalog.family.pocket_tts.summary':

@@ -725,16 +725,16 @@ export const nl = {
     'Het modelbestandspad moet naar een bestand verwijzen: {path}',
   'models.external.validation.selectEntryFile': 'Selecteer {filename}.',
   'models.external.validation.nemotronEntryFile':
-    'Nemotron 3.5 ASR vereist het encoder.int8.onnx-artefact. Selecteer encoder.int8.onnx in de vastgezette 560 ms-modelmap.',
+    'Nemotron ASR: Selecteer encoder.int8.onnx uit een ondersteunde Nemotron-int8-export.',
   'models.external.validation.moonshineEntryFile':
     'Moonshine vereist het primaire frontend.ort-artefact. Selecteer frontend.ort in de streamingmodelmap.',
   'models.external.validation.generic': 'De spraakengine kon dit model niet valideren.',
   'models.external.requirements.nemotron.entry':
-    'Selecteer encoder.int8.onnx uit de vastgezette Nemotron 3.5 ASR 560 ms int8-export.',
+    'Selecteer encoder.int8.onnx uit een ondersteunde Nemotron-int8-export.',
   'models.external.requirements.nemotron.siblings':
     'Dezelfde map moet decoder.int8.onnx, joiner.int8.onnx en tokens.txt bevatten.',
   'models.external.requirements.nemotron.compatibility':
-    'Andere chunkgroottes en ORT GenAI-exports zijn niet compatibel met deze adapter.',
+    'Ondersteunde exports: Engels 560 ms en meertalig 160 ms of 560 ms. ORT GenAI-exports worden niet ondersteund.',
   'models.external.requirements.moonshine.entry':
     'Selecteer frontend.ort in een Moonshine v2 streaming ORT-modelmap.',
   'models.external.requirements.moonshine.siblings':
@@ -767,6 +767,7 @@ export const nl = {
   'models.capability.languageSelection': 'Taalkeuze',
   'models.tag.fullPrecision': 'Volledige precisie',
   'models.tag.reducedSize': 'Verkleind formaat',
+  'models.tag.licenseTerms': 'Licentievoorwaarden',
   'models.progress.preparing': 'Installatie voorbereiden',
   'models.progress.downloading': 'Downloaden',
   'models.progress.verifying': 'Downloaden verifiëren',

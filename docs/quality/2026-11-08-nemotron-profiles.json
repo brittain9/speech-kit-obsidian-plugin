@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-08",
+  "hardware": "Apple M2 Pro, 16 GiB, macOS 27.2 arm64",
+  "method": "Actual framed sidecar stdin/stdout; CPU ONNX; 16 kHz mono PCM; 640-byte audio frames paced every 20 ms, followed by 1.2 s generated silence; separate silence and speech-cancel sessions in the same process.",
+  "binarySha256": "0f313d5c8bb24c2c598e41193331a53a8327e940b83523a62f677da11927ef67",
+  "runs": [
+    {
+      "model": "english-560ms-apr2026-export",
+      "fixture": "7021-79740-0000",
+      "language": "en",
+      "cancelled": false,
+      "partials": 16,
+      "finals": 1,
+      "text": "To such persons, these indirect modes of training children in habits of subordination to their will, or rather of yielding to their influence, are specially useful",
+      "stopReason": "user_stop",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "english_only"
+      },
+      "automaticLanguageDetection": false
+    },
+    {
+      "model": "english-560ms-apr2026-export",
+      "fixture": "silence",
+      "language": "en",
+      "cancelled": false,
+      "partials": 0,
+      "finals": 0,
+      "text": "",
+      "stopReason": "user_stop",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "english_only"
+      },
+      "automaticLanguageDetection": false
+    },
+    {
+      "model": "english-560ms-apr2026-export",
+      "fixture": "7021-79740-0000",
+      "language": "en",
+      "cancelled": true,
+      "partials": 3,
+      "finals": 0,
+      "text": "",
+      "stopReason": "user_cancel",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "english_only"
+      },
+      "automaticLanguageDetection": false
+    },
+    {
+      "model": "multilingual-160ms",
+      "fixture": "de-fleurs-1577",
+      "language": "de",
+      "cancelled": false,
+      "partials": 16,
+      "finals": 1,
+      "text": "Das erschien mir nicht sinnvoll.  Es war ganz gewiss nicht fair.",
+      "stopReason": "user_stop",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "list",
+        "tags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr"]
+      },
+      "automaticLanguageDetection": true
+    },
+    {
+      "model": "multilingual-160ms",
+      "fixture": "silence",
+      "language": "de",
+      "cancelled": false,
+      "partials": 0,
+      "finals": 0,
+      "text": "",
+      "stopReason": "user_stop",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "list",
+        "tags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr"]
+      },
+      "automaticLanguageDetection": true
+    },
+    {
+      "model": "multilingual-160ms",
+      "fixture": "de-fleurs-1577",
+      "language": "de",
+      "cancelled": true,
+      "partials": 6,
+      "finals": 0,
+      "text": "",
+      "stopReason": "user_cancel",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "list",
+        "tags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr"]
+      },
+      "automaticLanguageDetection": true
+    },
+    {
+      "model": "multilingual-160ms",
+      "fixture": "7021-79740-0000",
+      "language": "auto",
+      "cancelled": false,
+      "partials": 36,
+      "finals": 1,
+      "text": "To such persons, these indirect modes of training children inhabits of subordination to their will, or rather of yielding to their influence, are specially useful.",
+      "stopReason": "user_stop",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "list",
+        "tags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr"]
+      },
+      "automaticLanguageDetection": true
+    },
+    {
+      "model": "multilingual-160ms",
+      "fixture": "silence",
+      "language": "auto",
+      "cancelled": false,
+      "partials": 0,
+      "finals": 0,
+      "text": "",
+      "stopReason": "user_stop",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "list",
+        "tags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr"]
+      },
+      "automaticLanguageDetection": true
+    },
+    {
+      "model": "multilingual-160ms",
+      "fixture": "7021-79740-0000",
+      "language": "auto",
+      "cancelled": true,
+      "partials": 7,
+      "finals": 0,
+      "text": "",
+      "stopReason": "user_cancel",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "list",
+        "tags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr"]
+      },
+      "automaticLanguageDetection": true
+    },
+    {
+      "model": "multilingual-560ms",
+      "fixture": "de-fleurs-1577",
+      "language": "de",
+      "cancelled": false,
+      "partials": 6,
+      "finals": 1,
+      "text": "Das erschien mir nicht sinnvoll.  Es war ganz gewiss nicht fair.",
+      "stopReason": "user_stop",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "list",
+        "tags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr"]
+      },
+      "automaticLanguageDetection": true
+    },
+    {
+      "model": "multilingual-560ms",
+      "fixture": "silence",
+      "language": "de",
+      "cancelled": false,
+      "partials": 0,
+      "finals": 0,
+      "text": "",
+      "stopReason": "user_stop",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "list",
+        "tags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr"]
+      },
+      "automaticLanguageDetection": true
+    },
+    {
+      "model": "multilingual-560ms",
+      "fixture": "de-fleurs-1577",
+      "language": "de",
+      "cancelled": true,
+      "partials": 3,
+      "finals": 0,
+      "text": "",
+      "stopReason": "user_cancel",
+      "ready": "ready",
+      "languageSupport": {
+        "kind": "list",
+        "tags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr"]
+      },
+      "automaticLanguageDetection": true
+    }
+  ]
+}

@@ -62,8 +62,8 @@
       "familyId": "nemotron_asr",
       "task": "stt",
       "runtimeId": "onnx_runtime",
-      "displayName": "NVIDIA Nemotron 3.5 ASR",
-      "summary": "High-accuracy multilingual streaming with a larger download and higher resource use. Moonshine Small remains the recommended English live-dictation default."
+      "displayName": "NVIDIA Nemotron ASR",
+      "summary": "English and multilingual streaming with larger downloads and higher resource use. Moonshine Small remains the recommended English live-dictation default."
     },
     {
       "familyId": "parakeet_unified",
@@ -115,8 +115,8 @@
     },
     {
       "collectionId": "nemotron_asr_streaming",
-      "displayName": "NVIDIA Nemotron 3.5 ASR",
-      "summary": "Multilingual streaming transcription using the pinned 560 ms int8 export."
+      "displayName": "NVIDIA Nemotron ASR",
+      "summary": "English and multilingual streaming with pinned int8 exports and encoder-chunk options."
     },
     {
       "collectionId": "parakeet_unified_streaming",
@@ -756,10 +756,131 @@
       "runtimeId": "onnx_runtime",
       "familyId": "nemotron_asr",
       "task": "stt",
+      "modelId": "nemotron_speech_streaming_en_0_6b_int8_560ms",
+      "collectionId": "nemotron_asr_streaming",
+      "displayName": "Nemotron Speech English 560 ms",
+      "summary": "NVIDIA’s English-only 0.6B streaming RNNT with punctuation and capitalization. Uses 560 ms encoder chunks.",
+      "languageTags": ["en"],
+      "supportsAutomaticLanguageDetection": false,
+      "uxTags": ["streaming", "cpu", "requires-terms-review"],
+      "licenseLabel": "NVIDIA Open Model License",
+      "licenseUrl": "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/",
+      "sourceUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-speech-streaming-en-0.6b-560ms-int8-2026-04-25/tree/52056fdc070914a48dcd68b31b44d6a6f5b85902",
+      "modelCardUrl": "https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b/tree/ebe59e5a817142986528bbbee5dba8db7b38ed50",
+      "notes": [
+        "Uses the pinned English sherpa-onnx export published April 25, 2026. The conversion recipe does not pin its exact NVIDIA source checkpoint.",
+        "The four required files total about 631 MiB. Encoder chunk size is not end-to-end dictation latency.",
+        "English only; automatic language detection is unavailable.",
+        "The model weights use the NVIDIA Open Model License. Installing or using the model accepts those terms."
+      ],
+      "artifacts": [
+        {
+          "artifactId": "encoder",
+          "role": "transcription_model",
+          "required": true,
+          "filename": "encoder.int8.onnx",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-speech-streaming-en-0.6b-560ms-int8-2026-04-25/resolve/52056fdc070914a48dcd68b31b44d6a6f5b85902/encoder.int8.onnx",
+          "sha256": "7d932213491ad355c6e5576705dc3494731a52af87d7a1b954559340147909d8",
+          "sizeBytes": 652916849
+        },
+        {
+          "artifactId": "decoder",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "decoder.int8.onnx",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-speech-streaming-en-0.6b-560ms-int8-2026-04-25/resolve/52056fdc070914a48dcd68b31b44d6a6f5b85902/decoder.int8.onnx",
+          "sha256": "0be9702c2f427a2b6bb241d298e0d3836a558de1f5b9fd3018f1cce6e2b3fa98",
+          "sizeBytes": 7257753
+        },
+        {
+          "artifactId": "joiner",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "joiner.int8.onnx",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-speech-streaming-en-0.6b-560ms-int8-2026-04-25/resolve/52056fdc070914a48dcd68b31b44d6a6f5b85902/joiner.int8.onnx",
+          "sha256": "a35eac38a22ebceb04d230ed7afe0d68f446ba6914a036b97f14fece95967e23",
+          "sizeBytes": 1735862
+        },
+        {
+          "artifactId": "tokens",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "tokens.txt",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-speech-streaming-en-0.6b-560ms-int8-2026-04-25/resolve/52056fdc070914a48dcd68b31b44d6a6f5b85902/tokens.txt",
+          "sha256": "dc0b4584ab2e4ddbf888425c076c61b736e7356a015250db7d307e6f1a8188ff",
+          "sizeBytes": 8952
+        }
+      ]
+    },
+    {
+      "runtimeId": "onnx_runtime",
+      "familyId": "nemotron_asr",
+      "task": "stt",
+      "modelId": "nemotron_asr_0_6b_int8_streaming_160ms",
+      "collectionId": "nemotron_asr_streaming",
+      "displayName": "Nemotron 3.5 ASR 160 ms",
+      "summary": "A shorter encoder-chunk option for the existing multilingual 0.6B checkpoint. Supports the same verified languages as the 560 ms profile.",
+      "languageTags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr"],
+      "supportsAutomaticLanguageDetection": true,
+      "uxTags": ["streaming", "accuracy", "cpu"],
+      "licenseLabel": "OpenMDW-1.1",
+      "licenseUrl": "https://openmdw.ai/license/1-1/",
+      "sourceUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-160ms-int8-2026-06-11/tree/b3a4dbde84fba1a13cb4270e6730b525ac6a2db6",
+      "modelCardUrl": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b/tree/f3d333391852ba876df169dcc9ba902d25b6ab0b",
+      "notes": [
+        "Uses the same NVIDIA checkpoint as the 560 ms profile, with a 160 ms encoder-chunk export. This is an additional latency option.",
+        "Encoder chunk size is not end-to-end dictation latency. Shorter chunks can trade accuracy for responsiveness.",
+        "The four required files total about 651 MiB. Installed profiles keep separate copies.",
+        "Supports English, Spanish, German, French, Portuguese, Italian, Dutch, Japanese, Croatian, and automatic detection.",
+        "The derived model weights are licensed under OpenMDW-1.1. Installing or using the model accepts those terms."
+      ],
+      "artifacts": [
+        {
+          "artifactId": "encoder",
+          "role": "transcription_model",
+          "required": true,
+          "filename": "encoder.int8.onnx",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-160ms-int8-2026-06-11/resolve/b3a4dbde84fba1a13cb4270e6730b525ac6a2db6/encoder.int8.onnx",
+          "sha256": "e1b39e5e16bef578a54ed2fba5f031438e000cc36c3ea2ca49d55699d5baebd4",
+          "sizeBytes": 657601518
+        },
+        {
+          "artifactId": "decoder",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "decoder.int8.onnx",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-160ms-int8-2026-06-11/resolve/b3a4dbde84fba1a13cb4270e6730b525ac6a2db6/decoder.int8.onnx",
+          "sha256": "19f9c98fc6d0a2c33a65a43b36fdb2e914c26c0aa9764be3aebc502a1e982fb0",
+          "sizeBytes": 14978075
+        },
+        {
+          "artifactId": "joiner",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "joiner.int8.onnx",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-160ms-int8-2026-06-11/resolve/b3a4dbde84fba1a13cb4270e6730b525ac6a2db6/joiner.int8.onnx",
+          "sha256": "4101c7c679a0bc30483794b27a059e34e79232aa2068d78d51231a22c8b0d7ce",
+          "sizeBytes": 9504438
+        },
+        {
+          "artifactId": "tokens",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "tokens.txt",
+          "downloadUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-160ms-int8-2026-06-11/resolve/b3a4dbde84fba1a13cb4270e6730b525ac6a2db6/tokens.txt",
+          "sha256": "729cc103155bafa785f9cd45746cd41cabe97eab7182fc04d594129587958f8a",
+          "sizeBytes": 131440
+        }
+      ]
+    },
+    {
+      "runtimeId": "onnx_runtime",
+      "familyId": "nemotron_asr",
+      "task": "stt",
       "modelId": "nemotron_asr_0_6b_int8_streaming_560ms",
       "collectionId": "nemotron_asr_streaming",
       "displayName": "Nemotron 3.5 ASR 560 ms",
-      "summary": "NVIDIA's 0.6B multilingual RNNT, exported to int8 ONNX for cache-aware live transcription in eight verified languages.",
+      "summary": "NVIDIA's 0.6B multilingual RNNT, exported to int8 ONNX for cache-aware live transcription in nine verified languages.",
       "languageTags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr"],
       "supportsAutomaticLanguageDetection": true,
       "uxTags": ["streaming", "accuracy", "cpu"],
@@ -768,7 +889,7 @@
       "sourceUrl": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11/tree/ab43d895f5985b1bbab8b6eac8607fcdc05343f3",
       "modelCardUrl": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b/tree/f3d333391852ba876df169dcc9ba902d25b6ab0b",
       "notes": [
-        "Supports manual English, Spanish, German, French, Portuguese, Italian, Dutch, and Japanese selection, plus automatic detection.",
+        "Supports manual English, Spanish, German, French, Portuguese, Italian, Dutch, Japanese, and Croatian selection, plus automatic detection.",
         "The four required artifacts total about 651 MiB and use the cache-aware 560 ms encoder contract.",
         "The derived model weights are licensed under OpenMDW-1.1, not this project's MIT license. Installing or using the model accepts those terms."
       ],

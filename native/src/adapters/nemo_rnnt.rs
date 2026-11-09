@@ -375,3 +375,124 @@ pub(crate) fn graph_shape_error(name: &str, shape: &[i64]) -> TranscriptionError
         format!("unexpected {name} shape {shape:?}"),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+    use std::path::PathBuf;
+
+    #[test]
+    fn non_snipping_frame_count_waits_for_complete_frames_until_flush() {
+        assert_eq!(frame_count(0, false), 0);
+        assert_eq!(frame_count(320, false), 1);
+        assert_eq!(frame_count(320, true), 2);
+        assert_eq!(frame_count(16_000, false), 99);
+        assert_eq!(frame_count(16_000, true), 100);
+    }
+
+    #[test]
+    fn preemphasis_preserves_first_sample_and_zero_pads_stft_edges() {
+        let audio = [0.5, 0.25];
+        assert_eq!(preemphasized_sample(&audio, -1), 0.0);
+        assert_eq!(preemphasized_sample(&audio, 0), 0.5);
+        assert_eq!(preemphasized_sample(&audio, 1), 0.25 - 0.97 * 0.5);
+        assert_eq!(preemphasized_sample(&audio, 2), 0.0);
+    }
+
+    #[test]
+    fn symmetric_hann_has_zero_endpoints() {
+        let window = build_symmetric_hann_window();
+        assert_eq!(window[0], 0.0);
+        assert!(window[FRAME_LENGTH_SAMPLES / 2] > 0.999);
+        assert!(window[FRAME_LENGTH_SAMPLES - 1].abs() < 1e-6);
+    }
+
+    #[test]
+    fn tokenizer_requires_contiguous_ids_and_blank_last() {
+        let tokenizer = NemoTokenizer {
+            pieces: vec![
+                "▁hello".to_string(),
+                "<en-US>".to_string(),
+                "▁world".to_string(),
+                "<blk>".to_string(),
+            ],
+        };
+        tokenizer.validate(4).unwrap();
+        assert_eq!(tokenizer.decode(&[0, 1, 2]).unwrap(), "hello world");
+        assert!(tokenizer.validate(3).is_err());
+    }
+
+    #[test]
+    fn feature_windows_zero_pad_missing_tail_without_normalization() {
+        let mut extractor = OnlineNemoFeatures::new();
+        extractor.accept(&vec![0_i16; 8_000]);
+        let window = extractor.window(40, 65);
+        assert_eq!(window.len(), 65 * FEATURE_DIM);
+        assert!(window.iter().all(|value| value.is_finite()));
+        assert!(window[10 * FEATURE_DIM..].iter().all(|&value| value == 0.0));
+    }
+
+    #[test]
+    fn frontend_matches_pinned_nemo_oracle() {
+        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let golden: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixtures.join("nemotron/golden-560ms.json")).unwrap())
+                .unwrap();
+        let mut reader =
+            hound::WavReader::open(fixtures.join("audio/7021-79740-0000.wav")).unwrap();
+        let samples: Vec<i16> = reader.samples::<i16>().map(Result::unwrap).collect();
+        let mut extractor = OnlineNemoFeatures::new();
+        extractor.accept(&samples);
+        extractor.finish();
+
+        let frontend = &golden["frontend"];
+        assert_eq!(
+            extractor.len(),
+            frontend["shape"][1].as_u64().unwrap() as usize
+        );
+        assert_eq!(frontend["shape"][0].as_u64().unwrap() as usize, FEATURE_DIM);
+        assert_eq!(
+            frontend["oraclePath"].as_str().unwrap(),
+            "frontend-560ms.f32le"
+        );
+        let oracle = include_bytes!("../../tests/fixtures/nemotron/frontend-560ms.f32le");
+        assert_eq!(
+            oracle.len(),
+            FEATURE_DIM * extractor.len() * std::mem::size_of::<f32>()
+        );
+        let oracle_sha256 = Sha256::digest(oracle)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        assert_eq!(
+            oracle_sha256,
+            frontend["oracleSha256"].as_str().unwrap(),
+            "the committed NeMo frontend oracle bytes changed"
+        );
+
+        let tolerance = frontend["maxAbsError"].as_f64().unwrap() as f32;
+        let mut worst = (0.0_f32, 0_usize, 0_usize, 0.0_f32, 0.0_f32);
+        for feature in 0..FEATURE_DIM {
+            for frame in 0..extractor.len() {
+                let offset = (feature * extractor.len() + frame) * std::mem::size_of::<f32>();
+                let expected = f32::from_le_bytes(oracle[offset..offset + 4].try_into().unwrap());
+                let actual = extractor.features[frame][feature];
+                let error = (actual - expected).abs();
+                if error > worst.0 {
+                    worst = (error, frame, feature, expected, actual);
+                }
+            }
+        }
+        assert!(
+            worst.0 <= tolerance,
+            "full NeMo frontend parity failed at frame {}, bin {}: expected {}, found {}, absolute error {} exceeds {}",
+            worst.1,
+            worst.2,
+            worst.3,
+            worst.4,
+            worst.0,
+            tolerance
+        );
+    }
+}

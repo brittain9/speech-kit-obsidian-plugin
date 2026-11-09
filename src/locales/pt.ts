@@ -729,16 +729,16 @@ export const pt = {
     'O caminho do ficheiro do modelo tem de apontar para um ficheiro: {path}',
   'models.external.validation.selectEntryFile': 'Selecione {filename}.',
   'models.external.validation.nemotronEntryFile':
-    'O Nemotron 3.5 ASR requer o artefacto encoder.int8.onnx. Selecione encoder.int8.onnx no diretório da versão específica do modelo de 560 ms.',
+    'Nemotron ASR: Selecione encoder.int8.onnx de uma exportação Nemotron int8 compatível.',
   'models.external.validation.moonshineEntryFile':
     'O Moonshine requer o artefacto principal frontend.ort. Selecione frontend.ort no diretório do modelo com transcrição em direto.',
   'models.external.validation.generic': 'O motor de voz não conseguiu validar este modelo.',
   'models.external.requirements.nemotron.entry':
-    'Selecione encoder.int8.onnx na exportação int8 específica de 560 ms do Nemotron 3.5 ASR.',
+    'Selecione encoder.int8.onnx de uma exportação Nemotron int8 compatível.',
   'models.external.requirements.nemotron.siblings':
     'O mesmo diretório tem de conter decoder.int8.onnx, joiner.int8.onnx e tokens.txt.',
   'models.external.requirements.nemotron.compatibility':
-    'Outros tamanhos de bloco e exportações ORT GenAI não são compatíveis com este adaptador.',
+    'Exportações compatíveis: inglês 560 ms e multilíngues 160 ms ou 560 ms. Exportações ORT GenAI não são compatíveis.',
   'models.external.requirements.moonshine.entry':
     'Selecione frontend.ort num diretório de modelo ORT com transcrição em direto do Moonshine v2.',
   'models.external.requirements.moonshine.siblings':
@@ -771,6 +771,7 @@ export const pt = {
   'models.capability.languageSelection': 'Seleção do idioma',
   'models.tag.fullPrecision': 'Precisão total',
   'models.tag.reducedSize': 'Tamanho reduzido',
+  'models.tag.licenseTerms': 'Termos da licença',
   'models.progress.preparing': 'A preparar a instalação',
   'models.progress.downloading': 'A transferir',
   'models.progress.verifying': 'A verificar a transferência',
