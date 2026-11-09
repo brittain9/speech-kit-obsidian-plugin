@@ -76,6 +76,22 @@ Prefer Obsidian's attachment location, link generation, native audio player, set
 
 Correct misleading documentation as part of the affected workflow. Do not add controls for hypothetical future uses.
 
+### Transformation configuration and note pinning
+
+Make Obsidian Settings a complete place to configure text transformations: providers, models, secret references, presets, and advanced model/context settings. Reuse existing forms, secure secret storage, and preset state ownership. Keep the sidebar focused on useful daily controls and provide a clear path to configuration. Do not contact providers merely because a disabled feature is rendered. Protect in-flight request completions when a surface closes, and preserve unrelated settings when more than one surface is open.
+
+Improve actionable, sanitized error messages for missing configuration, unavailable providers, failed requests, and timeouts. Validate the complete workflow with synthetic public text and a local test endpoint; do not use private note contents or unknown production credentials.
+
+Add an explicit preference for temporary target-note pinning. Preserve user-created pins and existing note identity checks. Explain why the tab is pinned, when Speech Kit removes its pin, and what happens if navigation replaces an unpinned editor. Apply preference changes to new sessions.
+
+### Exploratory power-saving mode and long-session reliability
+
+Treat reliable, sustained dictation as a core product constraint. Inspect current behavior with dictation off, listening without speech, model caches, and idle worker/helper processes before adding a new mode. Measure meaningful CPU work and wakeups separately from retained memory; loaded memory alone does not prove battery drain.
+
+Assess an optional power-saving mode by expected benefit, reload latency, and implementation cost. Unloading a recognizer during an active listening session requires preserved VAD and pre-roll, bounded audio buffering during reload, ordered transcription and final drain, cancellation, and explicit failure recovery. Do not ship a mode that can miss the beginning of speech, silently drop buffered audio, or make note output unsafe. Prefer simple event-driven idle improvements when supported by measurements. Defer a mode when its benefit does not justify the complexity, and record the reasoning.
+
+Use bounded long-session and pause/resume tests to look for missing or duplicated speech, growing queues, resource drift, and unsafe recovery. State the actual tested duration; a short test does not prove hours of uninterrupted use. No comparative battery-life claim is required or permitted without suitable evidence.
+
 ### Model research and integration
 
 Use primary sources: official model cards, model repositories, runtime documentation, source code, licenses, and release notes. Compare candidates with the current catalog before proposing additions.
@@ -90,7 +106,10 @@ For each serious candidate, record:
 
 Prioritize catalog-only additions and small adapters to existing engines. A conversion is unverified until a compatible artifact actually loads and works. Treat a new runtime as a separate architectural decision with a clear benefit and cost; it is not a default consequence of finding an interesting model.
 
-Implement the strongest practical candidates when the evidence supports them. Validate the actual plugin path with representative fixtures. Compare quality, latency, memory, and download cost with an existing model under comparable conditions. Keep unsupported claims and untested models out of the catalog.
+Implement the strongest practical candidates when the evidence supports them. Validate the actual plugin path with representative fixtures. Compare quality, latency, memory, and download cost with an existing model under comparable conditions unless the user explicitly waives comparative benchmarking. Keep unsupported claims and untested models out of the catalog.
+
+The user approved three NVIDIA additions: English Nemotron Speech Streaming v2603, Parakeet Unified English 0.6B, and an optional 160 ms profile for the existing Nemotron 3.5 model. Preserve the existing Nemotron 3.5 560 ms selection and assets; a new latency profile is not a new checkpoint. Comparative accuracy benchmarks are waived for these additions. Exact artifact provenance, hashes, licensing, real loading, transcription, streaming/finalization, silence, reset, cancellation, and native QA remain required. Record throughput observations and practical limits without making comparative accuracy claims. Qwen3-ASR is excluded from implementation.
+
 
 ## Execution loop
 
