@@ -21,6 +21,7 @@ it('offers provider configuration and preset and context settings in Settings', 
     openModelSettings,
     openTimingSettings,
     persist: vi.fn(async () => {}),
+    restoreDefaults: vi.fn(),
   });
   expect(
     Setting.named('Provider')
@@ -31,14 +32,6 @@ it('offers provider configuration and preset and context settings in Settings', 
   expect(Setting.named('Active preset').onlyDropdown()).toBeDefined();
   expect(Setting.named('Run transform').onlyDropdown()).toBeDefined();
   expect(Setting.named('Show original transcript').onlyToggle()).toBeDefined();
-  await Setting.buttonNamed('Timing settings').click();
-  expect(openTimingSettings).toHaveBeenCalledOnce();
-  await Setting.buttonNamed('Advanced model settings').click();
-  expect(openModelSettings).toHaveBeenCalledOnce();
-  await Setting.buttonNamed('Manage presets').click();
-  await Setting.buttonNamed('Context settings').click();
-  expect(managePresets).toHaveBeenCalledOnce();
-  expect(openContextSettings).toHaveBeenCalledOnce();
 });
 
 it('keeps the secret control mounted when leaving the edited URL for a click', async () => {
@@ -61,6 +54,7 @@ it('keeps the secret control mounted when leaving the edited URL for a click', a
     persist: async (mutation) => {
       settings = mutation(settings);
     },
+    restoreDefaults: vi.fn(),
   });
   const url = Setting.named('Base URL').onlyText();
   const secretRow = Setting.named('API key').settingEl;
@@ -71,4 +65,84 @@ it('keeps the secret control mounted when leaving the edited URL for a click', a
   parent.dispatchEvent({ type: 'pointerdown' });
   url.inputEl.dispatchEvent({ type: 'blur' });
   expect(parent.contains(secretRow)).toBe(true);
+});
+
+it('persists the global enable switch without overwriting other settings', async () => {
+  Setting.reset();
+  let settings: PluginSettings = { ...DEFAULT_PLUGIN_SETTINGS, llmNetworkTimeoutSec: 42 };
+  renderLlmProviderSettings(new TestElement() as unknown as HTMLElement, {
+    app: {} as App,
+    feedback: { show: vi.fn() },
+    getSecret: () => '',
+    getSettings: () => settings,
+    managePresets: vi.fn(),
+    mutatePresetState: vi.fn(async () => {}),
+    openContextSettings: vi.fn(),
+    openModelSettings: vi.fn(),
+    openTimingSettings: vi.fn(),
+    persist: async (mutation) => {
+      settings = mutation(settings);
+    },
+    restoreDefaults: vi.fn(),
+  });
+  Setting.named('Enable LLM features').onlyToggle().change(true);
+  await vi.waitFor(() => expect(settings.llmFeaturesEnabled).toBe(true));
+  expect(settings.llmNetworkTimeoutSec).toBe(42);
+});
+
+it('groups daily and provider controls and opens advanced settings beside their choices', async () => {
+  Setting.reset();
+  const managePresets = vi.fn();
+  const openContextSettings = vi.fn();
+  const openModelSettings = vi.fn();
+  const openTimingSettings = vi.fn();
+  const parent = new TestElement();
+  const settings: PluginSettings = {
+    ...DEFAULT_PLUGIN_SETTINGS,
+    llmRoutingPolicy: { kind: 'fixed', providerId: 'openai_compatible' },
+  };
+  renderLlmProviderSettings(parent as unknown as HTMLElement, {
+    app: {} as App,
+    feedback: { show: vi.fn() },
+    getSecret: () => '',
+    getSettings: () => settings,
+    managePresets,
+    mutatePresetState: vi.fn(async () => {}),
+    openContextSettings,
+    openModelSettings,
+    openTimingSettings,
+    persist: vi.fn(async () => {}),
+    restoreDefaults: vi.fn(),
+  });
+  const preset = Setting.named('Active preset');
+  const timing = Setting.named('Run transform');
+  const context = Setting.named('Use current note as context');
+  const provider = Setting.named('Provider');
+  const model = Setting.named('Model');
+  const dailyGroup = preset.settingEl.closest('.setting-group');
+  const providerGroup = provider.settingEl.closest('.setting-group');
+  expect(dailyGroup).not.toBeNull();
+  expect(providerGroup).not.toBeNull();
+  expect(providerGroup).not.toBe(dailyGroup);
+  expect(Setting.named('Enable LLM features').settingEl.closest('.setting-group')).toBe(dailyGroup);
+  expect(timing.settingEl.closest('.setting-group')).toBe(dailyGroup);
+  expect(model.settingEl.closest('.setting-group')).toBe(providerGroup);
+  const action = (setting: Setting, label: string) => {
+    const button = setting.extraButtonComponents.find((candidate) => candidate.tooltip === label);
+    if (button === undefined) throw new Error(`Missing adjacent action: ${label}`);
+    expect(button.extraSettingsEl.getAttribute('aria-label')).toBe(label);
+    return button;
+  };
+  await action(preset, 'Manage presets').click();
+  await action(timing, 'Timing settings').click();
+  await action(context, 'Context settings').click();
+  await action(model, 'Advanced model settings').click();
+  expect(managePresets).toHaveBeenCalledOnce();
+  expect(openTimingSettings).toHaveBeenCalledOnce();
+  expect(openContextSettings).toHaveBeenCalledOnce();
+  expect(openModelSettings).toHaveBeenCalledOnce();
+  expect(Setting.instances.some((setting) => setting.name === 'Manage presets')).toBe(false);
+  expect(Setting.named('Enable LLM features').descEl.textContent).toContain(
+    'Settings or the sidebar',
+  );
 });

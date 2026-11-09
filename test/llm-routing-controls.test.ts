@@ -1217,7 +1217,7 @@ describe('LlmRoutingControls.testProvider', () => {
         providerId: 'openai_compatible' as const,
       },
     };
-    const { controls } = createControls(settings, 'secret');
+    const { controls, show } = createControls(settings, 'secret');
     controls.render(new TestElement() as unknown as HTMLElement, settings);
     const button = MockSetting.named('Model').extraButtonComponents.find(
       (candidate) => candidate.icon === 'plug-zap',
@@ -1238,5 +1238,8 @@ describe('LlmRoutingControls.testProvider', () => {
       expect(button.disabled).toBe(false);
     });
     expect(button.icon).toBe('check');
+    expect(button.tooltip).toBe('Connection successful');
+    expect(button.extraSettingsEl.getAttribute('aria-label')).toBe('Connection successful');
+    expect(show).toHaveBeenCalledWith({ intent: 'success', message: 'Connection successful' });
   });
 });

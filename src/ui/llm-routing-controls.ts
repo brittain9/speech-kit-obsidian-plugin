@@ -47,6 +47,7 @@ export interface LlmRoutingControlsDependencies {
   getSettings: () => PluginSettings;
   logger?: PluginLogger | undefined;
   persist: (mutation: PluginSettingsMutation, options?: { rerender?: boolean }) => Promise<void>;
+  openModelSettings?: () => void;
 }
 
 const SECRET_REFRESH_DEBOUNCE_MS = 500;
@@ -159,8 +160,6 @@ export class LlmRoutingControls {
     this.renderGeneration += 1;
     this.providerViewUpdates = {};
     this.renderProviderSelection(parent, settings);
-    this.readinessHost = parent.createDiv();
-    this.renderReadiness(this.readinessHost, settings);
 
     const policy = settings.llmRoutingPolicy;
     if (policy === null) {
@@ -232,7 +231,7 @@ export class LlmRoutingControls {
         ? t('llm.routing.defaultProvider')
         : t('llm.routing.provider');
 
-    new Setting(parent)
+    const selection = new Setting(parent)
       .setName(name)
       .setDesc(t('llm.routing.audioPrivacy'))
       .addDropdown((dropdown) => {
@@ -264,6 +263,8 @@ export class LlmRoutingControls {
           );
         });
       });
+    this.readinessHost = selection.descEl.createDiv();
+    this.renderReadiness(this.readinessHost, settings);
 
     if (policy !== null) {
       new Setting(parent)
@@ -383,7 +384,7 @@ export class LlmRoutingControls {
   private renderOllamaModel(parent: HTMLElement): void {
     const providerId = 'ollama';
     let updateModels: () => void = () => {};
-    new Setting(parent)
+    const setting = new Setting(parent)
       .setName(t('llm.routing.providerModel', { provider: formatLlmProviderName(providerId) }))
       .setDesc(t('llm.routing.ollamaModelDescription'))
       .addDropdown((dropdown) => {
@@ -417,7 +418,8 @@ export class LlmRoutingControls {
           .setTooltip(t('llm.routing.refreshModels', { provider: 'Ollama' }))
           .onClick(() => void this.refreshModels(providerId));
       });
-    const updateStatus = this.renderStatusRow(parent, providerId);
+    this.addModelSettingsAction(setting);
+    const updateStatus = this.renderStatusRow(setting.descEl, providerId);
     this.providerViewUpdates[providerId] = () => {
       updateModels();
       updateStatus();
@@ -426,7 +428,7 @@ export class LlmRoutingControls {
 
   private renderCustomBaseUrl(parent: HTMLElement, settings: PluginSettings): void {
     const config = settings.llmProviderConfigurations.openai_compatible;
-    new Setting(parent)
+    const setting = new Setting(parent)
       .setName(t('llm.routing.customBaseUrl.name'))
       .setDesc(t('llm.routing.customBaseUrl.description'))
       .addText((text) => {
@@ -449,7 +451,7 @@ export class LlmRoutingControls {
       });
 
     const generation = this.renderGeneration;
-    const destinationHost = parent.createDiv();
+    const destinationHost = setting.descEl.createDiv();
     const updateDestination = (): void => {
       destinationHost.empty();
       const validation = validateOpenAiCompatibleBaseUrl(
@@ -576,11 +578,22 @@ export class LlmRoutingControls {
       button.extraSettingsEl.setAttribute('aria-label', t('llm.routing.testConnection'));
       button.onClick(() => void this.runConnectionTest(providerId, button));
     });
-    refreshStatus = this.renderStatusRow(parent, providerId);
+    this.addModelSettingsAction(setting);
+    refreshStatus = this.renderStatusRow(setting.descEl, providerId);
     this.providerViewUpdates[providerId] = () => {
       refreshOptions();
       refreshStatus();
     };
+  }
+
+  private addModelSettingsAction(setting: Setting): void {
+    const open = this.dependencies.openModelSettings;
+    if (!open) return;
+    const label = t('llm.model.title');
+    setting.addExtraButton((button) => {
+      button.setIcon('settings').setTooltip(label).onClick(open);
+      button.extraSettingsEl.setAttribute('aria-label', label);
+    });
   }
 
   private renderOpenAiCompatibleModelOptions(
@@ -861,6 +874,7 @@ export class LlmRoutingControls {
       .setDisabled(true)
       .setIcon('loader-circle')
       .setTooltip(t('llm.routing.testingConnection'));
+    button.extraSettingsEl.setAttribute('aria-label', t('llm.routing.testingConnection'));
     button.extraSettingsEl.addClass('local-dictation-connection-test--loading');
     try {
       while (this.configurationSaves[providerId] !== undefined)
@@ -892,25 +906,37 @@ export class LlmRoutingControls {
         beforeUrl !== afterUrl ||
         secret !== this.dependencies.getSecret(after.secretId)
       ) {
-        if (!this.disposed && this.renderGeneration === generation)
+        if (!this.disposed && this.renderGeneration === generation) {
           button.setIcon('plug-zap').setTooltip(t('llm.routing.testConnection'));
+          button.extraSettingsEl.setAttribute('aria-label', t('llm.routing.testConnection'));
+        }
         return;
       }
       button.setIcon(failure === null ? 'check' : 'x');
       if (failure !== null) {
+        button.setTooltip(t('llm.routing.testConnection'));
+        button.extraSettingsEl.setAttribute('aria-label', t('llm.routing.testConnection'));
         this.dependencies.feedback.show({ intent: 'warning', message: failure });
+      } else {
+        const message = t('llm.routing.connectionSuccessful');
+        button.setTooltip(message);
+        button.extraSettingsEl.setAttribute('aria-label', message);
+        this.dependencies.feedback.show({ intent: 'success', message });
       }
       window.setTimeout(() => {
         if (
           !this.disposed &&
           this.renderGeneration === generation &&
           this.configurationRevisions[providerId] === revision
-        )
+        ) {
           button.setIcon('plug-zap').setTooltip(t('llm.routing.testConnection'));
+          button.extraSettingsEl.setAttribute('aria-label', t('llm.routing.testConnection'));
+        }
       }, TEST_RESULT_ICON_MS);
     } catch {
       if (!this.disposed && this.renderGeneration === generation) {
-        button.setIcon('x');
+        button.setIcon('x').setTooltip(t('llm.routing.testConnection'));
+        button.extraSettingsEl.setAttribute('aria-label', t('llm.routing.testConnection'));
         this.dependencies.feedback.show({
           intent: 'warning',
           message: t('llm.routing.settingsSaveFailed'),
@@ -919,8 +945,10 @@ export class LlmRoutingControls {
     } finally {
       if (this.testsInFlight.get(providerId) === generation) this.testsInFlight.delete(providerId);
       if (!this.disposed && this.renderGeneration === generation) {
-        if (this.configurationRevisions[providerId] !== revision)
+        if (this.configurationRevisions[providerId] !== revision) {
           button.setIcon('plug-zap').setTooltip(t('llm.routing.testConnection'));
+          button.extraSettingsEl.setAttribute('aria-label', t('llm.routing.testConnection'));
+        }
         button.extraSettingsEl.removeClass('local-dictation-connection-test--loading');
         button.setDisabled(false);
       }

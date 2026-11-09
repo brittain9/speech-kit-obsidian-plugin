@@ -23,7 +23,6 @@ import type { SidecarConnection } from '../sidecar/sidecar-connection';
 import type { SidecarInstallManager } from '../sidecar/sidecar-install-manager';
 import type { SidecarLifecycleGate } from '../sidecar/sidecar-lifecycle-gate';
 import { ConfirmModal } from '../ui/confirm-modal';
-import { styleDestructiveButton } from '../ui/destructive-button';
 import { LlmContextSettingsModal } from '../ui/llm-context-settings-modal';
 import { LlmModelSettingsModal } from '../ui/llm-model-settings-modal';
 import { LlmTimingSettingsModal } from '../ui/llm-timing-settings-modal';
@@ -495,23 +494,9 @@ export class LocalSttSettingTab extends PluginSettingTab {
       translationSettingsDependencies,
     );
 
-    const llmCard = createSettingGroup(containerEl, t('settings.groups.llmTransformation'));
-    const enableLlmSetting = new Setting(llmCard)
-      .setName(t('settings.llm.enableFeatures.name'))
-      .setDesc(t('settings.llm.enableFeatures.desc'));
-    enableLlmSetting.addToggle((toggle) => {
-      toggle.setValue(settings.llmFeaturesEnabled);
-      toggle.onChange(async (value) => {
-        await this.dependencies.mutateLlmSettings((current) => ({
-          ...current,
-          llmFeaturesEnabled: value,
-        }));
-        this.refreshSettingsTab();
-      });
-    });
-
+    const llmSection = containerEl.createDiv();
     const llmSectionGeneration = this.llmSectionGeneration;
-    this.disposeLlmSection = renderLlmProviderSettings(llmCard, {
+    this.disposeLlmSection = renderLlmProviderSettings(llmSection, {
       app: this.app,
       feedback: this.dependencies.feedback,
       getSecret: this.dependencies.getSecret,
@@ -551,27 +536,19 @@ export class LocalSttSettingTab extends PluginSettingTab {
             this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
         }).open();
       },
+      restoreDefaults: () => {
+        new ConfirmModal(this.app, {
+          confirmLabel: t('settings.llm.restoreDefaults.button'),
+          destructive: true,
+          message: t('settings.llm.restoreDefaults.confirmEditableMessage'),
+          onConfirm: async () => {
+            await this.dependencies.resetLlmTransformation();
+            this.refreshSettingsTab();
+          },
+          title: t('settings.llm.restoreDefaults.name'),
+        }).open();
+      },
     });
-
-    new Setting(llmCard)
-      .setName(t('settings.llm.restoreDefaults.name'))
-      .setDesc(t('settings.llm.restoreDefaults.editableDesc'))
-      .addButton((button) => {
-        styleDestructiveButton(
-          button.setButtonText(t('settings.llm.restoreDefaults.button')),
-        ).onClick(() => {
-          new ConfirmModal(this.app, {
-            confirmLabel: t('settings.llm.restoreDefaults.button'),
-            destructive: true,
-            message: t('settings.llm.restoreDefaults.confirmEditableMessage'),
-            onConfirm: async () => {
-              await this.dependencies.resetLlmTransformation();
-              this.refreshSettingsTab();
-            },
-            title: t('settings.llm.restoreDefaults.name'),
-          }).open();
-        });
-      });
 
     // --- Engine options ---
     // Built inline (rather than via createSettingGroup) so renderEngineOptions

@@ -239,6 +239,7 @@ export const hr = {
   'settings.groups.capture': 'Snimanje',
   'settings.groups.transcriptOutput': 'Ispis transkripta',
   'settings.groups.llmTransformation': 'LLM transformacija',
+  'settings.groups.llmProviders': 'Pružatelj i model',
   'settings.groups.engine': 'Govorni modul',
   'settings.groups.advanced': 'Napredno',
   'settings.readAloud.hotkey': 'Preporučeni tipkovni prečac',
@@ -403,7 +404,7 @@ export const hr = {
     'Broj sekundi prije prijeloma odlomka ({min}-{max}).',
   'settings.llm.enableFeatures.name': 'Uključivanje LLM značajki',
   'settings.llm.enableFeatures.desc':
-    'Čini LLM transformacije dostupnima. Transformaciju uključite ili isključite u bočnoj traci.',
+    'Upravljajte LLM transformacijama u postavkama ili bočnoj traci.',
   'settings.llm.restoreDefaults.name': 'Vraćanje zadanih postavki transformacije',
   'settings.llm.restoreDefaults.desc':
     'Vraća predložak, vrijeme izvođenja, kontekst, najmanji broj riječi i temperaturu na zadane vrijednosti. Spremljeni predlošci i modeli ostaju sačuvani.',
@@ -628,6 +629,7 @@ export const hr = {
   'llm.routing.openRouterModel.name': 'OpenRouter model',
   'llm.routing.openRouterModel.description': 'Upišite tekst za pretraživanje OpenRouter modela.',
   'llm.routing.testConnection': 'Testiraj API ključ i model',
+  'llm.routing.connectionSuccessful': 'Povezivanje uspješno',
   'llm.routing.testingConnection': 'Testiranje veze…',
   'llm.provider.ollama': 'Ollama',
   'llm.provider.openrouter': 'OpenRouter',
@@ -757,9 +759,8 @@ export const hr = {
   'llm.preset.editor.promptSize':
     '~{tokens} tokena ({characters} znakova) — šalje se sa svakim zahtjevom',
   'llm.preset.editor.timing': 'Vrijeme pokretanja',
-  'llm.preset.editor.timingDescription':
-    'Kada se transformacija izvodi. „Bilo koje” slijedi vrijeme postavljeno u bočnoj traci.',
-  'llm.preset.editor.timingEither': 'Bilo koje (prati bočnu traku)',
+  'llm.preset.editor.timingDescription': 'Odaberite kada se ova postavka izvodi.',
+  'llm.preset.editor.timingEither': 'Koristi postavku transformacije',
   'llm.preset.editor.timingPerUtterance': 'Nakon svake fraze',
   'llm.preset.editor.timingBatch': 'Jednom pri zaustavljanju',
   'llm.preset.editor.output': 'Izlaz',

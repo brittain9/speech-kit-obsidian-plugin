@@ -1,11 +1,13 @@
 import { Setting } from 'obsidian';
 import { t } from '../shared/i18n';
+import { styleDestructiveButton } from '../ui/destructive-button';
 import { renderLlmDailyControls } from '../ui/llm-daily-controls';
 import {
   LlmRoutingControls,
   type LlmRoutingControlsDependencies,
 } from '../ui/llm-routing-controls';
 import type { LlmPresetStateMutation } from './llm-preset-state';
+import { createSettingGroup } from './setting-helpers';
 import { captureSettingsFocus, restoreSettingsFocus } from './settings-tab-lifecycle';
 
 interface LlmProviderSettingsDependencies extends LlmRoutingControlsDependencies {
@@ -14,25 +16,47 @@ interface LlmProviderSettingsDependencies extends LlmRoutingControlsDependencies
   openContextSettings: () => void;
   openModelSettings: () => void;
   openTimingSettings: () => void;
+  restoreDefaults: () => void;
 }
 
 export function renderLlmProviderSettings(
   parent: HTMLElement,
   dependencies: LlmProviderSettingsDependencies,
 ): () => void {
-  const dailyHost = parent.createDiv({ cls: 'local-dictation-settings-rows' });
-  const routingHost = parent.createDiv({ cls: 'local-dictation-settings-rows' });
+  const dailyHost = createSettingGroup(parent, t('settings.groups.llmTransformation'));
+  const routingHost = createSettingGroup(parent, t('settings.groups.llmProviders'));
   let disposed = false;
   const render = (): void => {
     if (disposed) return;
     const focus = captureSettingsFocus(parent);
     dailyHost.empty();
+    new Setting(dailyHost)
+      .setName(t('settings.llm.enableFeatures.name'))
+      .setDesc(t('settings.llm.enableFeatures.desc'))
+      .addToggle((toggle) => {
+        toggle.setValue(dependencies.getSettings().llmFeaturesEnabled);
+        toggle.onChange(async (value) => {
+          await dependencies.persist((current) => ({ ...current, llmFeaturesEnabled: value }));
+          render();
+        });
+      });
     renderLlmDailyControls(dailyHost, {
       getSettings: dependencies.getSettings,
       mutateSettings: dependencies.persist,
       mutatePresetState: dependencies.mutatePresetState,
       rerender: render,
+      managePresets: dependencies.managePresets,
+      openTimingSettings: dependencies.openTimingSettings,
+      openContextSettings: dependencies.openContextSettings,
     });
+    new Setting(dailyHost)
+      .setName(t('settings.llm.restoreDefaults.name'))
+      .setDesc(t('settings.llm.restoreDefaults.editableDesc'))
+      .addButton((button) => {
+        styleDestructiveButton(
+          button.setButtonText(t('settings.llm.restoreDefaults.button')),
+        ).onClick(dependencies.restoreDefaults);
+      });
     routingHost.empty();
     controls.render(routingHost, dependencies.getSettings());
     restoreSettingsFocus(parent, focus);
@@ -45,18 +69,6 @@ export function renderLlmProviderSettings(
     },
   });
   render();
-  new Setting(parent).setName(t('llm.timing.title')).addButton((button) => {
-    button.setButtonText(t('llm.timing.title')).onClick(dependencies.openTimingSettings);
-  });
-  new Setting(parent).setName(t('llm.model.title')).addButton((button) => {
-    button.setButtonText(t('llm.model.title')).onClick(dependencies.openModelSettings);
-  });
-  new Setting(parent).setName(t('llm.preset.manager.title')).addButton((button) => {
-    button.setButtonText(t('llm.preset.manager.title')).onClick(dependencies.managePresets);
-  });
-  new Setting(parent).setName(t('llm.context.title')).addButton((button) => {
-    button.setButtonText(t('llm.context.title')).onClick(dependencies.openContextSettings);
-  });
   return () => {
     disposed = true;
     controls.dispose();

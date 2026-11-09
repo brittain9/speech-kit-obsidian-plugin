@@ -432,6 +432,7 @@ export const en = {
   'settings.groups.capture': 'Capture',
   'settings.groups.transcriptOutput': 'Transcript output',
   'settings.groups.llmTransformation': 'LLM transformation',
+  'settings.groups.llmProviders': 'Provider and model',
   'settings.llm.provider.name': 'AI provider and model',
   'settings.llm.provider.desc':
     'Choose a provider and model in the Speech Kit sidebar. Close settings to see it.',
@@ -626,7 +627,7 @@ export const en = {
   'settings.smartParagraph.paragraphPause.desc': 'Seconds before a paragraph break ({min}-{max}).',
   'settings.llm.enableFeatures.name': 'Enable LLM features',
   'settings.llm.enableFeatures.desc':
-    'Make LLM transformations available. Turn transformation on or off in the sidebar.',
+    'Make LLM transformations available. Control them in Settings or the sidebar.',
   'settings.llm.mediaProcessing.name': 'Process media transcripts with AI',
   'settings.llm.mediaProcessing.desc':
     'After a local media transcript finishes, use the active preset on its text. You will preview or confirm the result before it is applied; media and source details are never sent.',
@@ -850,6 +851,7 @@ export const en = {
   'llm.routing.openRouterModel.name': 'OpenRouter model',
   'llm.routing.openRouterModel.description': 'Type to search OpenRouter models.',
   'llm.routing.testConnection': 'Test API key and model',
+  'llm.routing.connectionSuccessful': 'Connection successful',
   'llm.routing.testingConnection': 'Testing connection…',
   'llm.provider.ollama': 'Ollama',
   'llm.provider.openrouter': 'OpenRouter',
@@ -1077,9 +1079,8 @@ export const en = {
   'llm.preset.editor.promptDescription': 'Sent to the model as the system prompt.',
   'llm.preset.editor.promptSize': '~{tokens} tokens ({characters} chars) — sent with every request',
   'llm.preset.editor.timing': 'Timing',
-  'llm.preset.editor.timingDescription':
-    'When the transform runs. “Either” follows the sidebar timing.',
-  'llm.preset.editor.timingEither': 'Either (follow sidebar)',
+  'llm.preset.editor.timingDescription': 'Choose when this preset runs.',
+  'llm.preset.editor.timingEither': 'Use Run transform setting',
   'llm.preset.editor.timingPerUtterance': 'After each phrase',
   'llm.preset.editor.timingBatch': 'Once on stop',
   'llm.preset.editor.output': 'Output',

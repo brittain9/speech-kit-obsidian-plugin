@@ -181,6 +181,7 @@ export const es = {
   'settings.groups.capture': 'Captura',
   'settings.groups.transcriptOutput': 'Salida de transcripción',
   'settings.groups.llmTransformation': 'Transformación LLM',
+  'settings.groups.llmProviders': 'Proveedor y modelo',
   'settings.groups.engine': 'Motor',
   'settings.groups.advanced': 'Avanzado',
   'settings.listeningMode.alwaysOn': 'Siempre encendido',
@@ -273,7 +274,7 @@ export const es = {
     'Segundos antes de un salto de párrafo ({min}-{max}).',
   'settings.llm.enableFeatures.name': 'Habilitar funciones LLM',
   'settings.llm.enableFeatures.desc':
-    'Poner a disposición las transformaciones LLM. Activa o desactiva la transformación en la barra lateral.',
+    'Controla las transformaciones LLM en Ajustes o en la barra lateral.',
   'settings.llm.restoreDefaults.name': 'Restaurar los valores predeterminados de transformación',
   'settings.llm.restoreDefaults.desc':
     'Restablezca el valor preestablecido, el tiempo, el contexto, las palabras mínimas y la temperatura. Se conservan los ajustes preestablecidos y los modelos guardados.',
@@ -445,6 +446,7 @@ export const es = {
   'llm.routing.openRouterModel.name': 'Modelo OpenRouter',
   'llm.routing.openRouterModel.description': 'Escriba para buscar modelos OpenRouter.',
   'llm.routing.testConnection': 'Probar clave de API y modelo',
+  'llm.routing.connectionSuccessful': 'Conexión correcta',
   'llm.sidebar.eyebrow': 'Flujo de trabajo de transcripción',
   'llm.sidebar.title': 'Transformar el dictado',
   'llm.sidebar.description':
@@ -531,9 +533,8 @@ export const es = {
   'llm.preset.editor.promptSize':
     '~{tokens} tokens ({characters} caracteres) — enviados con cada solicitud',
   'llm.preset.editor.timing': 'Momento',
-  'llm.preset.editor.timingDescription':
-    'Cuando se ejecuta la transformación. "Cualquiera de los dos" sigue el tiempo de la barra lateral.',
-  'llm.preset.editor.timingEither': 'Cualquiera (según la barra lateral)',
+  'llm.preset.editor.timingDescription': 'Elige cuándo se ejecuta esta plantilla.',
+  'llm.preset.editor.timingEither': 'Usar el ajuste de transformación',
   'llm.preset.editor.timingPerUtterance': 'Después de cada frase',
   'llm.preset.editor.timingBatch': 'Una vez al detenerse',
   'llm.preset.editor.output': 'Salida',

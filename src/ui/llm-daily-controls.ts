@@ -16,6 +16,9 @@ interface DailyControlDependencies {
   mutateSettings: (mutation: PluginSettingsMutation) => Promise<void>;
   mutatePresetState: (mutation: LlmPresetStateMutation) => Promise<void>;
   rerender: () => void;
+  managePresets?: () => void;
+  openTimingSettings?: () => void;
+  openContextSettings?: () => void;
 }
 
 export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDependencies): void {
@@ -38,7 +41,7 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
     settings.llmPostprocessActivePresetRef,
     settings.llmPostprocessUserPresets,
   );
-  new Setting(parent)
+  const presetSetting = new Setting(parent)
     .setName(t('llm.sidebar.activePreset'))
     .setDesc(active.preset.description ?? describePresetBehavior(active.preset))
     .addDropdown((dropdown) => {
@@ -60,7 +63,15 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
         deps.rerender();
       });
     });
-  new Setting(parent)
+  const managePresets = deps.managePresets;
+  if (managePresets) {
+    const label = t('llm.preset.manager.title');
+    presetSetting.addExtraButton((button) => {
+      button.setIcon('settings').setTooltip(label).onClick(managePresets);
+      button.extraSettingsEl.setAttribute('aria-label', label);
+    });
+  }
+  const timingSetting = new Setting(parent)
     .setName(t('llm.sidebar.runTransform.name'))
     .setDesc(
       active.preset.timing === undefined
@@ -90,6 +101,14 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
         deps.rerender();
       });
     });
+  const openTimingSettings = deps.openTimingSettings;
+  if (openTimingSettings) {
+    const label = t('llm.timing.title');
+    timingSetting.addExtraButton((button) => {
+      button.setIcon('settings').setTooltip(label).onClick(openTimingSettings);
+      button.extraSettingsEl.setAttribute('aria-label', label);
+    });
+  }
   new Setting(parent)
     .setName(t('llm.sidebar.showOriginal.name'))
     .setDesc(t('llm.sidebar.showOriginal.description'))
@@ -100,7 +119,7 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
       });
     });
   const override = activePresetOverride(settings, 'useNoteContext');
-  new Setting(parent)
+  const contextSetting = new Setting(parent)
     .setName(t('llm.context.useCurrentNote.name'))
     .setDesc(
       override !== null
@@ -114,4 +133,12 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
         await deps.mutateSettings((current) => ({ ...current, useLlmNoteContext: value }));
       });
     });
+  const openContextSettings = deps.openContextSettings;
+  if (openContextSettings) {
+    const label = t('llm.context.title');
+    contextSetting.addExtraButton((button) => {
+      button.setIcon('settings').setTooltip(label).onClick(openContextSettings);
+      button.extraSettingsEl.setAttribute('aria-label', label);
+    });
+  }
 }

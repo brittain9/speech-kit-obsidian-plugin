@@ -183,6 +183,7 @@ export const de = {
   'settings.groups.capture': 'Aufnahme',
   'settings.groups.transcriptOutput': 'Transkriptausgabe',
   'settings.groups.llmTransformation': 'LLM-Transformation',
+  'settings.groups.llmProviders': 'Anbieter und Modell',
   'settings.groups.engine': 'Engine',
   'settings.groups.advanced': 'Erweitert',
   'settings.listeningMode.alwaysOn': 'Immer an',
@@ -272,7 +273,7 @@ export const de = {
   'settings.smartParagraph.paragraphPause.desc': 'Sekunden vor einem Absatzumbruch ({min}-{max}).',
   'settings.llm.enableFeatures.name': 'Aktivieren Sie die LLM-Funktionen',
   'settings.llm.enableFeatures.desc':
-    'Machen Sie LLM-Transformationen verfügbar. Schalten Sie die Transformation in der Seitenleiste ein oder aus.',
+    'LLM-Transformationen in den Einstellungen oder der Seitenleiste steuern.',
   'settings.llm.restoreDefaults.name': 'Transformationsstandardwerte wiederherstellen',
   'settings.llm.restoreDefaults.desc':
     'Voreinstellung, Timing, Kontext, Mindestanzahl an Wörtern und Temperatur zurücksetzen. Gespeicherte Voreinstellungen und Modelle bleiben erhalten.',
@@ -447,6 +448,7 @@ export const de = {
   'llm.routing.openRouterModel.description':
     'Geben Sie ein, um nach OpenRouter-Modellen zu suchen.',
   'llm.routing.testConnection': 'Testen Sie den Schlüssel und das Modell API',
+  'llm.routing.connectionSuccessful': 'Verbindung erfolgreich',
   'llm.sidebar.eyebrow': 'Transkript-Workflow',
   'llm.sidebar.title': 'Diktat umwandeln',
   'llm.sidebar.description':
@@ -533,9 +535,8 @@ export const de = {
   'llm.preset.editor.promptSize':
     '~{tokens}-Token ({characters}-Zeichen) — mit jeder Anfrage gesendet',
   'llm.preset.editor.timing': 'Zeitpunkt',
-  'llm.preset.editor.timingDescription':
-    'Wenn die Transformation ausgeführt wird. „Entweder“ folgt dem Timing der Seitenleiste.',
-  'llm.preset.editor.timingEither': 'Entweder (Seitenleiste folgen)',
+  'llm.preset.editor.timingDescription': 'Wähle, wann diese Vorlage ausgeführt wird.',
+  'llm.preset.editor.timingEither': 'Einstellung für Transformation verwenden',
   'llm.preset.editor.timingPerUtterance': 'Nach jedem Satz',
   'llm.preset.editor.timingBatch': 'Einmal auf Stopp',
   'llm.preset.editor.output': 'Ausgabe',

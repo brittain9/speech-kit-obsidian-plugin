@@ -184,6 +184,7 @@ export const pt = {
   'settings.groups.capture': 'Captura',
   'settings.groups.transcriptOutput': 'Saída da transcrição',
   'settings.groups.llmTransformation': 'Transformação por LLM',
+  'settings.groups.llmProviders': 'Fornecedor e modelo',
   'settings.groups.engine': 'Motor',
   'settings.groups.advanced': 'Avançadas',
   'settings.listeningMode.alwaysOn': 'Sempre ativo',
@@ -273,7 +274,7 @@ export const pt = {
     'Segundos antes de uma quebra de parágrafo ({min}-{max}).',
   'settings.llm.enableFeatures.name': 'Ativar funcionalidades de LLM',
   'settings.llm.enableFeatures.desc':
-    'Disponibilizar transformações por LLM. Ative ou desative a transformação na barra lateral.',
+    'Controle as transformações LLM nas configurações ou na barra lateral.',
   'settings.llm.restoreDefaults.name': 'Restaurar valores predefinidos da transformação',
   'settings.llm.restoreDefaults.desc':
     'Repor a predefinição, o momento de execução, o contexto, o número mínimo de palavras e a temperatura. As predefinições e os modelos guardados são mantidos.',
@@ -443,6 +444,7 @@ export const pt = {
   'llm.routing.openRouterModel.name': 'Modelo do OpenRouter',
   'llm.routing.openRouterModel.description': 'Escreva para pesquisar modelos do OpenRouter.',
   'llm.routing.testConnection': 'Testar chave da API e modelo',
+  'llm.routing.connectionSuccessful': 'Conexão bem-sucedida',
   'llm.sidebar.eyebrow': 'Fluxo de trabalho da transcrição',
   'llm.sidebar.title': 'Transformar ditado',
   'llm.sidebar.description': 'Escolha como o texto falado é preparado antes de chegar à nota.',
@@ -527,9 +529,8 @@ export const pt = {
   'llm.preset.editor.promptSize':
     '~{tokens} tokens ({characters} caracteres) — enviados em cada pedido',
   'llm.preset.editor.timing': 'Momento de execução',
-  'llm.preset.editor.timingDescription':
-    'Quando a transformação é executada. «Qualquer modo» segue o momento definido na barra lateral.',
-  'llm.preset.editor.timingEither': 'Qualquer modo (seguir a barra lateral)',
+  'llm.preset.editor.timingDescription': 'Escolha quando esta predefinição é executada.',
+  'llm.preset.editor.timingEither': 'Usar configuração de transformação',
   'llm.preset.editor.timingPerUtterance': 'Após cada frase',
   'llm.preset.editor.timingBatch': 'Uma vez ao parar',
   'llm.preset.editor.output': 'Saída',

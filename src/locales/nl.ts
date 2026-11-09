@@ -182,6 +182,7 @@ export const nl = {
   'settings.groups.capture': 'Opname',
   'settings.groups.transcriptOutput': 'Transcriptuitvoer',
   'settings.groups.llmTransformation': 'LLM-transformatie',
+  'settings.groups.llmProviders': 'Aanbieder en model',
   'settings.groups.engine': 'Engine',
   'settings.groups.advanced': 'Geavanceerd',
   'settings.listeningMode.alwaysOn': 'Altijd aan',
@@ -270,8 +271,7 @@ export const nl = {
   'settings.smartParagraph.paragraphPause.name': 'Paragraaf pauze',
   'settings.smartParagraph.paragraphPause.desc': 'Seconden vóór een alinea-einde ({min}-{max}).',
   'settings.llm.enableFeatures.name': 'Schakel LLM-functies in',
-  'settings.llm.enableFeatures.desc':
-    'LLM-transformaties beschikbaar maken. Schakel transformatie in of uit in de zijbalk.',
+  'settings.llm.enableFeatures.desc': 'Beheer LLM-transformaties in Instellingen of de zijbalk.',
   'settings.llm.restoreDefaults.name': 'Herstel standaardinstellingen voor transformatie',
   'settings.llm.restoreDefaults.desc':
     'Reset preset, timing, context, minimum aantal woorden en temperatuur. Opgeslagen presets en modellen blijven behouden.',
@@ -440,6 +440,7 @@ export const nl = {
   'llm.routing.openRouterModel.name': 'OpenRouter-model',
   'llm.routing.openRouterModel.description': 'Typ om naar OpenRouter-modellen te zoeken.',
   'llm.routing.testConnection': 'Test de API-sleutel en het model',
+  'llm.routing.connectionSuccessful': 'Verbinding geslaagd',
   'llm.sidebar.eyebrow': 'Workflow voor transcriptie',
   'llm.sidebar.title': 'Transformeer dictaat',
   'llm.sidebar.description':
@@ -527,9 +528,8 @@ export const nl = {
   'llm.preset.editor.promptSize':
     '~{tokens}-tokens ({characters}-tekens) — verzonden bij elk verzoek',
   'llm.preset.editor.timing': 'Tijdstip',
-  'llm.preset.editor.timingDescription':
-    'Wanneer de transformatie wordt uitgevoerd. "Ofwel" volgt de timing in de zijbalk.',
-  'llm.preset.editor.timingEither': 'Beide (volg zijbalk)',
+  'llm.preset.editor.timingDescription': 'Kies wanneer deze voorinstelling wordt uitgevoerd.',
+  'llm.preset.editor.timingEither': 'Instelling voor transformatie gebruiken',
   'llm.preset.editor.timingPerUtterance': 'Na elke zin',
   'llm.preset.editor.timingBatch': 'Eenmaal op stop',
   'llm.preset.editor.output': 'Uitvoer',

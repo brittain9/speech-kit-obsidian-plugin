@@ -10,9 +10,23 @@ vi.mock('obsidian', () => ({
     setName(): this {
       return this;
     }
-    addButton(callback: (button: { setButtonText: () => { onClick: () => void } }) => void): this {
+    setHeading(): this {
+      return this;
+    }
+    setDesc(): this {
+      return this;
+    }
+    addToggle(callback: (toggle: { setValue: () => void; onChange: () => void }) => void): this {
+      callback({ setValue: () => {}, onChange: () => {} });
+      return this;
+    }
+    addButton(
+      callback: (button: {
+        setButtonText: () => { setWarning: () => void; onClick: () => void };
+      }) => void,
+    ): this {
       this.parent.append(document.createElement('button'));
-      callback({ setButtonText: () => ({ onClick: () => {} }) });
+      callback({ setButtonText: () => ({ setWarning: () => {}, onClick: () => {} }) });
       return this;
     }
   },
@@ -93,6 +107,7 @@ function setup() {
     openModelSettings: vi.fn(),
     openTimingSettings: vi.fn(),
     persist: vi.fn(async () => {}),
+    restoreDefaults: vi.fn(),
   });
   return { parent, dispose };
 }

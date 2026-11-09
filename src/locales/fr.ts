@@ -181,6 +181,7 @@ export const fr = {
   'settings.groups.capture': 'Capturer',
   'settings.groups.transcriptOutput': 'Sortie de transcription',
   'settings.groups.llmTransformation': 'Transformation LLM',
+  'settings.groups.llmProviders': 'Fournisseur et modèle',
   'settings.groups.engine': 'Moteur',
   'settings.groups.advanced': 'Avancé',
   'settings.listeningMode.alwaysOn': 'Toujours allumé',
@@ -272,7 +273,7 @@ export const fr = {
     'Secondes avant un saut de paragraphe ({min}-{max}).',
   'settings.llm.enableFeatures.name': 'Activer les fonctionnalités du LLM',
   'settings.llm.enableFeatures.desc':
-    'Rendre les transformations LLM disponibles. Activez ou désactivez la transformation dans la barre latérale.',
+    'Contrôlez les transformations LLM dans les paramètres ou la barre latérale.',
   'settings.llm.restoreDefaults.name': 'Restaurer les valeurs par défaut de la transformation',
   'settings.llm.restoreDefaults.desc':
     'Réinitialisez le préréglage, le timing, le contexte, le nombre minimum de mots et la température. Les préréglages et modèles enregistrés sont conservés.',
@@ -444,6 +445,7 @@ export const fr = {
   'llm.routing.openRouterModel.name': 'Modèle OpenRouter',
   'llm.routing.openRouterModel.description': 'Tapez pour rechercher des modèles OpenRouter.',
   'llm.routing.testConnection': "Tester la clé d'API et le modèle",
+  'llm.routing.connectionSuccessful': 'Connexion réussie',
   'llm.sidebar.eyebrow': 'Flux de travail de transcription',
   'llm.sidebar.title': 'Transformez la dictée',
   'llm.sidebar.description':
@@ -530,9 +532,8 @@ export const fr = {
   'llm.preset.editor.promptSize':
     '~{tokens} jetons ({characters} caractères) — envoyés à chaque requête',
   'llm.preset.editor.timing': 'Timing',
-  'llm.preset.editor.timingDescription':
-    "Lorsque la transformation s'exécute. « L'un ou l'autre » suit la synchronisation de la barre latérale.",
-  'llm.preset.editor.timingEither': "L'un ou l'autre (selon la barre latérale)",
+  'llm.preset.editor.timingDescription': 'Choisissez quand ce préréglage est exécuté.',
+  'llm.preset.editor.timingEither': 'Utiliser le réglage de transformation',
   'llm.preset.editor.timingPerUtterance': 'Après chaque phrase',
   'llm.preset.editor.timingBatch': "Une fois à l'arrêt",
   'llm.preset.editor.output': 'Sortie',
