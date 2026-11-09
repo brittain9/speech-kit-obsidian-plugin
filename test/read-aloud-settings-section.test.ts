@@ -97,7 +97,7 @@ function state(
 describe('Read Aloud settings incremental refresh', () => {
   it('shows missing status only after discovery and refreshes when an empty-voice model is installed or removed', () => {
     Setting.reset();
-    let currentState = {
+    let currentState: ModelManagerState = {
       ...state([], null, 'pocket_tts_english_2026_04_int8', true),
       installedModels: [],
       loadStatus: 'loading' as ModelManagerState['loadStatus'],
