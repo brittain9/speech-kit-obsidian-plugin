@@ -228,7 +228,7 @@ export const hr = {
   'settings.dictationLanguage.name': 'Jezik diktiranja',
   'settings.dictationLanguage.englishOnlyDesc': 'Odabrani model, {model}, podržava samo engleski.',
   'settings.dictationLanguage.desc':
-    'Odaberite jezik kojim ćete govoriti. Ručni odabir daje najpredvidljivije čišćenje teksta. Automatsko prepoznavanje može se sporije pokrenuti i bira jedan jezik po iskazu.',
+    'Automatsko prepoznavanje bira jedan jezik po iskazu i može sporije započeti.',
   'settings.dictationLanguage.unsupported': '{language} (nije podržan)',
   'settings.dictationLanguage.noReadAloud': 'Čitanje naglas još ne pokriva jezik {language}.',
   'settings.dictationLanguage.noTranslation': 'Lokalni prijevod još ne pokriva jezik {language}.',
@@ -244,7 +244,7 @@ export const hr = {
   'settings.groups.advanced': 'Napredno',
   'settings.readAloud.hotkey': 'Preporučeni tipkovni prečac',
   'settings.readAloud.hotkeyDesc':
-    'Dodijelite tipkovni prečac naredbi „Speech Kit: Čitaj od odabira ili početka bilješke”. Čita odabrani tekst ili cijelu bilješku ako ništa nije odabrano.',
+    'Dodijelite prečac naredbi „Speech Kit: Čitaj od odabira ili početka bilješke”. Čita odabir ili cijelu bilješku.',
   'settings.readAloud.highlightSpokenText': 'Istakni izgovoreni tekst',
   'settings.readAloud.highlightSpokenTextDesc':
     'Istakni trenutačni izgovoreni blok u uređivaču dok je čitanje naglas aktivno.',
@@ -318,6 +318,9 @@ export const hr = {
   'settings.listeningMode.oneSentence': 'Jedna rečenica',
   'settings.listeningMode.name': 'Način slušanja',
   'settings.listeningMode.desc': 'Neprekidno slušanje ili zaustavljanje nakon jedne rečenice.',
+  'settings.pinNoteDuringTranscription.name': 'Privremeno prikvači ciljnu bilješku',
+  'settings.pinNoteDuringTranscription.desc':
+    'Sprječava zamjenu kartice poveznicama tijekom sljedećeg diktiranja ili transkripcije datoteke. Nakon obrade uklanja samo svoje prikvačenje. Kad je isključeno, promjena bilješke u kartici zaustavlja diktiranje.',
   'settings.autoCopyFinalizedUtterances.name': 'Automatsko kopiranje dovršenih iskaza',
   'settings.autoCopyFinalizedUtterances.desc':
     'Svaka dovršena fraza zamjenjuje sadržaj međuspremnika sustava.',
@@ -445,8 +448,7 @@ export const hr = {
   'settings.noteContext.tooltip':
     'Šalje pojmovnik vlastitih imena i tehničkih pojmova kao početni upit modulu. Koristi se samo za ručno odabrani engleski, uz module koji podržavaju početne upite.',
   'settings.microphone.name': 'Mikrofon',
-  'settings.microphone.desc':
-    'Mikrofon koji se koristi za diktiranje. Promjene se primjenjuju na sljedeću sesiju diktiranja.',
+  'settings.microphone.desc': 'Primjenjuje se pri sljedećem diktiranju.',
   'settings.microphone.default': 'Zadani mikrofon',
   'settings.microphone.labelUnavailable': 'Mikrofon (naziv nije dostupan)',
   'settings.microphone.notConnected': '{microphone} (nije povezan)',
@@ -642,7 +644,7 @@ export const hr = {
     'Šalju se samo tekst transkripta i uključeni kontekst. Zvuk se nikada ne šalje.',
   'llm.routing.useLargeProvider': 'Drugi pružatelj usluge za velike transkripte',
   'llm.routing.useLargeProviderDescription':
-    'Transkripti iznad konfiguriranog praga broja znakova usmjeravaju se drugom pružatelju usluge.',
+    'Iznad zadanog broja znakova koristi drugog pružatelja.',
   'llm.routing.defaultLeg': 'Zadano',
   'llm.routing.largeLeg': 'Veliki transkripti',
   'llm.routing.openRouterApiKey.name': 'OpenRouter API ključ',
@@ -656,8 +658,7 @@ export const hr = {
   'llm.routing.customApiKey.name': 'API ključ',
   'llm.routing.customApiKey.description': 'Neobavezno. Obsidian ga sigurno pohranjuje.',
   'llm.routing.customModel.name': 'Model',
-  'llm.routing.customModel.description':
-    'Odaberite pronađeni model ili unesite ID modela. Ako otkrivanje modela nije dostupno, ručni unos i dalje radi.',
+  'llm.routing.customModel.description': 'Odaberite pronađeni model ili unesite ID modela.',
   'llm.readiness.chooseProvider':
     'Odaberite pružatelja usluge da biste upotrebljavali transformacije.',
   'llm.readiness.chooseModel': 'Odaberite model za pružatelja usluge {provider}.',

@@ -417,7 +417,7 @@ export const en = {
   'settings.dictationLanguage.englishOnlyDesc':
     'The selected model, {model}, supports English only.',
   'settings.dictationLanguage.desc':
-    'Choose the language you will speak. Manual selection gives the most predictable cleanup. Auto detect may start more slowly and chooses one language per utterance.',
+    'Auto detect chooses one language per phrase and may start more slowly.',
   'settings.dictationLanguage.unsupported': '{language} (unsupported)',
   'settings.dictationLanguage.noReadAloud': 'Read aloud does not cover {language} yet.',
   'settings.dictationLanguage.noTranslation': 'Local translation does not cover {language} yet.',
@@ -441,7 +441,7 @@ export const en = {
   'settings.groups.advanced': 'Advanced',
   'settings.readAloud.hotkey': 'Recommended shortcut',
   'settings.readAloud.hotkeyDesc':
-    'Bind “Speech Kit: Read aloud from selection or note start” to a hotkey. It reads selected text, or the entire note when nothing is selected.',
+    'Assign a hotkey to “Speech Kit: Read aloud from selection or note start”. It reads the selection or the whole note.',
   'settings.readAloud.highlightSpokenText': 'Highlight spoken text',
   'settings.readAloud.highlightSpokenTextDesc':
     'Highlight the current spoken block in the editor while Read Aloud is playing.',
@@ -541,7 +541,7 @@ export const en = {
   'settings.listeningMode.desc': 'Continuous, or stop after one sentence.',
   'settings.pinNoteDuringTranscription.name': 'Temporarily pin the target note',
   'settings.pinNoteDuringTranscription.desc':
-    'Prevents links from replacing the target tab during the next dictation or file transcription. Speech Kit removes its temporary pin when processing ends. When off, opening another note in the same tab stops dictation; completed text stays in the original note.',
+    'Keeps links from replacing the tab during the next dictation or file transcription. Removes only its own pin when done. If off, changing notes in the tab stops dictation.',
   'settings.autoCopyFinalizedUtterances.name': 'Automatically copy finalized utterances',
   'settings.autoCopyFinalizedUtterances.desc':
     'Each finalized phrase replaces the system clipboard.',
@@ -673,8 +673,7 @@ export const en = {
   'settings.noteContext.tooltip':
     'Sends a glossary of proper nouns and technical terms as the engine’s initial prompt. Only used for manually selected English with engines that support initial prompts.',
   'settings.microphone.name': 'Microphone',
-  'settings.microphone.desc':
-    'Which microphone to use for dictation. Changes apply on the next dictation session.',
+  'settings.microphone.desc': 'Changes apply to the next dictation session.',
   'settings.microphone.default': 'Default microphone',
   'settings.microphone.labelUnavailable': 'Microphone (label unavailable)',
   'settings.microphone.notConnected': '{microphone} (not connected)',
@@ -863,8 +862,7 @@ export const en = {
   'llm.routing.audioPrivacy':
     'Only transcript text and enabled context are sent. Audio is never sent.',
   'llm.routing.useLargeProvider': 'Use a different provider for large transcripts',
-  'llm.routing.useLargeProviderDescription':
-    'Route transcripts over the configured character threshold to another provider.',
+  'llm.routing.useLargeProviderDescription': 'Use another provider above the character threshold.',
   'llm.routing.defaultLeg': 'Default',
   'llm.routing.largeLeg': 'Large transcripts',
   'llm.routing.openRouterApiKey.name': 'OpenRouter API key',
@@ -878,8 +876,7 @@ export const en = {
   'llm.routing.customApiKey.name': 'API key',
   'llm.routing.customApiKey.description': 'Optional. Stored securely by Obsidian.',
   'llm.routing.customModel.name': 'Model',
-  'llm.routing.customModel.description':
-    "Choose a discovered model or enter a model ID. If discovery isn't available, manual entry still works.",
+  'llm.routing.customModel.description': 'Choose a discovered model or enter a model ID.',
   'llm.readiness.chooseProvider': 'Choose a provider to use transforms.',
   'llm.readiness.chooseModel': 'Choose a model for {provider}.',
   'llm.readiness.apiKeyMissing': 'Choose an OpenRouter API key in Secret Storage.',
