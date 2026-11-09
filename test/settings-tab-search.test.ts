@@ -14,6 +14,10 @@ import {
 import { type Setting as MockSetting, TestElement } from './__mocks__/obsidian';
 
 describe('LocalSttSettingTab Obsidian 1.13 compatibility', () => {
+  it('provides a microphone icon when registered in Settings', () => {
+    const tab = new LocalSttSettingTab({} as never, {} as never, {} as never);
+    expect(tab.icon).toBe('mic');
+  });
   it('opts the composite settings UI out of declarative row rendering', () => {
     const tab = Object.create(LocalSttSettingTab.prototype) as LocalSttSettingTab;
 

@@ -157,7 +157,7 @@ export function renderReadAloudHighlightSetting(
 }
 
 export class LocalSttSettingTab extends PluginSettingTab {
-  override readonly icon = 'audio-lines';
+  override readonly icon = 'mic';
 
   private readonly access: SettingAccess;
   private disposeDiarizationDesc: (() => void) | null = null;
