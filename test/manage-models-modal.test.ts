@@ -751,7 +751,7 @@ describe('model browser', () => {
 
   it('restores each task’s own language filter after task switches', async () => {
     const english = sttModel('english', 'moonshine', ['en', 'fr']);
-    const french = sttModel('french', 'nemotron_asr', ['en', 'fr']);
+    const french = sttModel('french', 'nemotron_asr', ['fr']);
     const german = ttsModel('german', 'de');
     const translation = translationModelWithSupport({
       familyId: 'tencent_hy_mt',
@@ -810,7 +810,12 @@ describe('model browser', () => {
       loadError: null,
       loadStatus: 'ready',
       modelStore: { overridePath: null, path: '/models', usingDefaultPath: true },
-      selectedModel: null,
+      selectedModel: {
+        kind: 'catalog_model',
+        runtimeId: 'onnx_runtime',
+        familyId: 'nemotron_asr',
+        modelId: 'french',
+      },
       selectedModelCapabilities: { status: 'none' },
       selectedTtsModel: null,
       selectedTtsModelCapabilities: { status: 'none' },
@@ -830,6 +835,18 @@ describe('model browser', () => {
     globalThis.createFragment = () => new TestElement() as unknown as DocumentFragment;
     try {
       modal.open();
+      const familyTabs = () =>
+        (modal.contentEl as unknown as TestElement).querySelectorAll('.local-stt-tab');
+      const activeFamily = () =>
+        familyTabs().find((tab) => tab.getAttribute('aria-selected') === 'true')?.textContent;
+      expect(activeFamily()).toBe('Nemotron');
+      await selectLanguage(modal, 'English');
+      expect(activeFamily()).toBe('Moonshine');
+      await selectLanguage(modal, 'All languages');
+      await familyTabs()
+        .find((tab) => tab.textContent === 'Nemotron')
+        ?.click();
+      expect(activeFamily()).toBe('Nemotron');
       await selectLanguage(modal, 'Français');
       expect(activeLanguage(modal)).toBe('Français');
 
@@ -843,6 +860,7 @@ describe('model browser', () => {
 
       await selectTask(modal, 'Speech to text');
       expect(activeLanguage(modal)).toBe('Français');
+      expect(activeFamily()).toBe('Nemotron');
       await selectTask(modal, 'Text to speech');
       expect(activeLanguage(modal)).toBe('Deutsch');
       await selectTask(modal, 'Translation');

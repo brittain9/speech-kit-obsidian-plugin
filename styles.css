@@ -1765,23 +1765,6 @@
   box-sizing: border-box;
 }
 
-@media (max-width: 420px) {
-  .local-stt-youtube-options > .setting-item,
-  .local-stt-media-options-grid > .setting-item,
-  .local-stt-media-preset .setting-item {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .local-stt-youtube-options .setting-item-control,
-  .local-stt-media-options-grid .setting-item-control,
-  .local-stt-media-preset .setting-item-control {
-    width: 100%;
-    justify-content: flex-start;
-  }
-}
-
 .local-stt-media-source-hint {
   margin: 8px 0 0;
   color: var(--text-muted);
@@ -1792,21 +1775,6 @@
 .local-stt-youtube-transcript-modal .local-stt-media-source-hint {
   margin: 0 0 12px;
   line-height: 1.5;
-}
-
-.local-stt-media-source > .setting-item {
-  padding: 0;
-  border: 0;
-}
-
-.local-stt-media-source > .setting-item:first-child {
-  display: block;
-}
-
-.local-stt-media-source > .setting-item:last-child:not(:first-child) {
-  margin-top: 14px;
-  color: var(--text-muted);
-  font-size: var(--font-ui-small);
 }
 
 .local-stt-media-preset {
@@ -1904,12 +1872,6 @@
   min-width: 0;
 }
 
-.local-stt-media-source > .setting-item:first-child input {
-  width: 100%;
-  max-width: none;
-  box-sizing: border-box;
-}
-
 .local-dictation-sidebar .local-dictation-preset-setting .setting-item-control > select {
   flex: 1 1 10rem;
   min-width: min(10rem, 100%);
@@ -1933,33 +1895,56 @@
   border: 0;
 }
 
-.local-stt-youtube-transcript-modal .local-stt-youtube-options > .setting-item {
+.modal.local-stt-youtube-transcript-modal
+  .local-stt-youtube-options
+  > .setting-item:not(.setting-item-heading),
+.modal.local-stt-media-modal
+  .local-stt-media-options-grid
+  > .setting-item:not(.setting-item-heading),
+.modal.local-stt-media-modal .local-stt-media-preset .setting-item:not(.setting-item-heading),
+.modal.local-stt-youtube-transcript-modal
+  .local-stt-media-preset
+  .setting-item:not(.setting-item-heading) {
   min-height: 0;
-  padding: 12px 0;
-  gap: 16px;
-  border-top: 0;
-}
-
-.local-stt-media-modal .local-stt-media-preset .setting-item,
-.local-stt-youtube-transcript-modal .local-stt-media-preset .setting-item {
-  padding: 12px 0;
-  border-top: 0;
-  gap: 16px;
-}
-
-.local-stt-media-modal .local-stt-media-options-grid > .setting-item {
   min-width: 0;
   padding: 12px 0;
   gap: 16px;
   border-top: 0;
 }
 
-.local-stt-youtube-transcript-modal .local-stt-youtube-options > .setting-item + .setting-item {
+.modal.local-stt-youtube-transcript-modal
+  .local-stt-youtube-options
+  > .setting-item
+  + .setting-item:not(.setting-item-heading),
+.modal.local-stt-media-modal
+  .local-stt-media-options-grid
+  > .setting-item
+  + .setting-item:not(.setting-item-heading) {
   border-top: 1px solid var(--background-modifier-border);
 }
 
-.local-stt-media-modal .local-stt-media-options-grid > .setting-item + .setting-item {
-  border-top: 1px solid var(--background-modifier-border);
+@media (max-width: 420px) {
+  .modal.local-stt-youtube-transcript-modal
+    .local-stt-youtube-options
+    > .setting-item:not(.setting-item-heading),
+  .modal.local-stt-media-modal
+    .local-stt-media-options-grid
+    > .setting-item:not(.setting-item-heading),
+  .modal.local-stt-media-modal .local-stt-media-preset .setting-item:not(.setting-item-heading),
+  .modal.local-stt-youtube-transcript-modal
+    .local-stt-media-preset
+    .setting-item:not(.setting-item-heading) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .local-stt-youtube-options .setting-item-control,
+  .local-stt-media-options-grid .setting-item-control,
+  .local-stt-media-preset .setting-item-control {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
 .local-stt-media-footer .setting-item-control {
@@ -1969,11 +1954,6 @@
 .local-dictation-sidebar .local-dictation-model-setting .setting-item-control {
   justify-content: flex-start;
   width: 100%;
-}
-
-.local-stt-media-source > .setting-item:first-child .setting-item-control {
-  display: block;
-  margin-top: 8px;
 }
 
 .local-stt-media-drop-zone {

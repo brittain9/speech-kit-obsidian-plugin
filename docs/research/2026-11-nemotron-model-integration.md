@@ -69,4 +69,4 @@ cargo test --manifest-path native/Cargo.toml --no-default-features \
   -- --include-ignored --test-threads=1
 ```
 
-Final platform CI remains pending.
+The [combined platform CI](https://github.com/brittain9/speech-kit-obsidian-plugin/actions/runs/42541345783) passed on source revision `1dbc428`: portable Linux, Linux ARM, macOS Metal, and Windows x64/ARM. Those build and test lanes do not establish real-model performance on each platform. Real-model inference and native Obsidian checks above ran on macOS arm64. A release must still ship matching native binaries under [ADR 0007](../adr/0007-decouple-plugin-and-sidecar-releases.md).
