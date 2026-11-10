@@ -50,7 +50,7 @@
     "check": "npm run check:js && npm run check:rust"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.4",
+    "@biomejs/biome": "2.6.6",
     "@codemirror/state": "6.5.0",
     "@codemirror/view": "6.38.6",
     "@eslint/js": "^10.0.1",
@@ -60,14 +60,14 @@
     "@typescript/native": "npm:typescript@7.0.2",
     "esbuild": "0.28.2",
     "eslint": "^10.14.0",
-    "eslint-plugin-obsidianmd": "^0.4.2",
+    "eslint-plugin-obsidianmd": "^0.5.1",
     "jsdom": "31.0.0",
     "obsidian": "1.13.1",
     "obsidian-floor": "npm:obsidian@1.11.4",
     "tslib": "2.9.1",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-eslint": "^8.72.1",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   },
   "overrides": {
     "moment": "^2.31.0",
