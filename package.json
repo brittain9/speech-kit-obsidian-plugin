@@ -10,6 +10,8 @@
     "node": "^24.22.2"
   },
   "scripts": {
+    "graphify": "node scripts/graphify.mjs",
+    "graphify:build": "npm run graphify -- extract . --code-only --max-workers 4 && npm run graphify -- cluster-only . --no-label",
     "build:sidecar": "node scripts/build-sidecar.mjs",
     "build:sidecar:release": "node scripts/build-sidecar.mjs --release",
     "build:sidecar:cuda": "bash scripts/build-cuda.sh",

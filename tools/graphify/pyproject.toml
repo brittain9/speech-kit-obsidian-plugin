@@ -1,0 +1,8 @@
+[project]
+name = "speech-kit-code-graph"
+version = "0.0.0"
+requires-python = ">=3.11,<3.14"
+dependencies = ["graphifyy==0.9.111"]
+
+[tool.uv]
+package = false
