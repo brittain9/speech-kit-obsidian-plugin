@@ -8,13 +8,19 @@ Improve daily Speech Kit use through focused fixes, real Obsidian checks, more
 useful speech-to-text choices, and consistent, polished controls. Work from
 observed failures and measured opportunities. The first concrete issue is
 [#540](https://github.com/brittain9/speech-kit-obsidian-plugin/issues/540).
-The other immediate investigation is a Linux microphone recording that exists
-but is silent or will not play.
+The other immediate investigation is discovering dictation controls when the
+sidebar is visible in an existing vault but absent in a fresh vault.
 
 This is the next maintenance pass after
 [the earlier maintenance spec](autonomous-maintenance-2026-11.md). Reuse its
 completed work and evidence. This document defines the current priorities and
 acceptance criteria; it does not claim any proposed change is implemented.
+
+This branch is also a place for reversible exploration. Prototype useful UI,
+workflow, and model ideas, compare alternatives, and retain or remove experiments
+based on evidence and owner feedback. An experiment does not imply a release
+commitment. Keep experiments identifiable and easy to revert; distinguish
+prototypes from verified behavior in the handoff.
 
 ## Operating scope and laptop setup
 
@@ -47,7 +53,7 @@ acceptance criteria; it does not claim any proposed change is implemented.
 
 | Order | Work | Completion evidence |
 | --- | --- | --- |
-| 1 | Fix #540 and characterize the Linux recording report | Reproduced user flow, regression coverage, native QA; Linux result explicitly tracked |
+| 1 | Fix #540 and explore fresh-vault dictation discovery | Reproduced user flow, alternatives, regression coverage, native QA; platform limits tracked |
 | 2 | Exercise the production TypeScript client against the real sidecar | Model-free integration test in normal CI, bounded failure and teardown cases |
 | 3 | Lock down the shared wire contract | Shared fixtures validated by both implementations |
 | 4 | Simplify lifecycle ownership where failures justify it | Adversarial event tests plus unchanged note/output guarantees |
@@ -88,49 +94,41 @@ Acceptance:
 - Write a failing test through the closest practical workflow interface before
   changing behavior. Verify the final visible flow in Obsidian, beyond copy tests.
 
-## 2. Linux saved microphone recording
+## 2. Fresh-vault sidebar and dictation discovery
 
-Reported symptom: a recording attachment exists but is silent or will not play.
-This does not establish whether the fault is capture, encoding, finalization,
-attachment writing, or playback.
+On 2026-11-16 the owner reported that the sidebar was visible in an existing
+Obsidian vault but absent in a newly created test vault on Linux/Omarchy. They
+could not see a clear way to start speech. Assigning Alt+Q to Toggle dictation
+allowed dictation to start and stop successfully.
 
-Initial checks on 2026-11-16:
+Treat this as a discoverability problem to explore. The exact Obsidian/Electron
+versions and which surface was missing were not captured. Compare the two vault
+configurations using only an authorized test environment; do not inspect personal
+vault contents. Distinguish the Obsidian ribbon, a collapsed application sidebar,
+and the Speech Kit view before attributing the difference to the platform,
+workspace configuration, theme, or plugin.
 
-- The Linux PipeWire/PulseAudio server responded and exposed an unmuted default
-  USB microphone. This was a read-only status check, not an audio capture test.
-- Node 24.22.3 ran
-  `node node_modules/vitest/vitest.mjs run test/microphone-recording.test.ts test/audio-capture-stream.test.ts`:
-  2 files and 16 tests passed. The installed runner reported Vitest 4.1.11.
-  These tests simulate browser media objects and do not establish native playback.
-- No affected recording has been decoded yet and no native reproduction or root
-  cause has been established. Earlier Mac playback passed according to
-  [the existing QA report](../quality/2026-11-extended-validation.md).
+Starting points are ribbon registration and view-opening commands in
+`src/main.ts`, `src/ui/dictation-ribbon.ts`, and
+`src/ui/local-dictation-view.ts`.
 
-Investigation route:
+Explore a few concrete alternatives: a clear Open Speech Kit action after setup,
+contextual guidance when controls are hidden, and better command/settings
+discovery. Prototype the promising alternatives in the test vault and show their
+effect on first use, repeat use, and a deliberately hidden sidebar. These are
+options to evaluate, not predetermined new settings or a required redesign.
 
-1. Obtain the path to one affected file with permission to inspect it locally.
-   Keep the recording and transcript out of Git and external services. Record
-   container/codec, byte size, decodability, measured duration where available,
-   and audio levels without publishing personal audio or device identifiers.
-2. Separate an invalid/truncated file, a valid silent file, and valid audible
-   audio that Obsidian cannot play. Use `ffprobe`/`ffmpeg` when installed; absent
-   WebM duration metadata alone is not corruption. Compare independent decoding
-   with native Obsidian playback and progress.
-3. Establish one repeatable pass/fail command for the observed failure. Capture
-   Obsidian/Electron versions and recording MIME type. If a live recording is
-   needed, coordinate a bounded Linux session with the owner and restore settings.
-4. Trace `src/audio/microphone-recording.ts`,
-   `src/audio/audio-capture-stream.ts`, and controller finalization. Change the
-   proven cause and add a regression test that reaches that failure.
+Acceptance for a retained change:
 
-Acceptance: normal Stop produces one playable attachment in the configured
-location and one correctly placed embed; Cancel discards unfinished recording;
-immediate restart, automatic stop, slow file writes, device loss, and recording
-failure preserve dictation and the original note. Tracks and file handles release
-on terminal paths. Microphone recordings retain their microphone-only meaning.
-Verify Linux playback on Linux and Mac playback on Mac. If Linux access is
-unavailable, deliver a candidate fix and an exact verification route, labeled
-unverified on Linux. Do not declare the report fixed from Mac or mocked tests.
+- A fresh-vault user can discover how to start/stop dictation and open the Speech
+  Kit view, including when Obsidian's ribbon or sidebars are hidden.
+- Existing commands and keyboard access remain usable. Alt+Q was a user-selected
+  workaround, not a requested default binding.
+- Respect user workspace visibility preferences. Avoid repeatedly reopening a
+  view the user deliberately closed. Make any first-use opening behavior explicit.
+- Verify default, hidden-ribbon/collapsed-sidebar, and narrow layouts in native
+  Obsidian. Record Mac results separately from the reported Linux environment.
+- Record which alternatives were kept, removed, or left experimental and why.
 
 ## 3. Production TypeScript-to-Rust integration
 
@@ -293,7 +291,7 @@ recovery together. Keep unrelated cleanup out of each fix.
 Update the existing maintenance log with finding, evidence, priority, branch/PR,
 checks, native result, platform limits, and disposition. Store new research in
 `docs/research/` and sanitized QA evidence in `docs/quality/`. Link issue #540 to
-its fix; retain the Linux recording finding until verified on Linux.
+its fix; keep platform-specific sidebar observations distinct from Mac QA.
 
 Finish with the exact tested build installed in the test vault, capture and
 recording off, temporary settings restored, no abandoned helper processes, and
