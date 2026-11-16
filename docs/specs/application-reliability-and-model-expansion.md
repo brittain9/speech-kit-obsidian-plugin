@@ -1,0 +1,302 @@
+# Speech Kit reliability, model expansion, and product polish
+
+Status: implementation handoff, 2026-11-16. Source baseline: `138f865`.
+
+## Outcome
+
+Improve daily Speech Kit use through focused fixes, real Obsidian checks, more
+useful speech-to-text choices, and consistent, polished controls. Work from
+observed failures and measured opportunities. The first concrete issue is
+[#540](https://github.com/brittain9/speech-kit-obsidian-plugin/issues/540).
+The other immediate investigation is a Linux microphone recording that exists
+but is silent or will not play.
+
+This is the next maintenance pass after
+[the earlier maintenance spec](autonomous-maintenance-2026-11.md). Reuse its
+completed work and evidence. This document defines the current priorities and
+acceptance criteria; it does not claim any proposed change is implemented.
+
+## Operating scope and laptop setup
+
+- Run implementation and computer-use QA on the Mac. Use only
+  `~/Documents/test-vault` for vault testing. Do not inspect the personal vault
+  named **Obsidian Vault**. Create synthetic notes and use public audio fixtures.
+- Inspect the actual checkout, installed Obsidian/plugin build, toolchains,
+  models, and existing work before starting. Use the repository's pinned
+  environment and a clean lockfile install. Do not infer installed dependency
+  versions from `package.json` alone.
+- Preserve unrelated changes. The originating workstation has uncommitted Node
+  configuration/documentation changes and an untracked personalized-VAD research
+  document. They are excluded from this spec commit. Do not assume they are
+  present on the laptop or reconstruct them as part of an unrelated fix.
+- Use focused branches/PRs and the existing findings log in `docs/quality/`.
+  Continue reversible fixes, testing, review, and ordinary PR work autonomously.
+  Involve the owner for consequential product choices, material security/data
+  risks, paid resources, or difficult recovery. Do not create a release, release
+  tag, or release version bump during this pass.
+- Keep issue #476 and correction-rules PR #459 outside this pass. The earlier
+  explicit exclusion of Qwen3-ASR implementation remains; it may be revisited
+  in research, but implementation needs a new explicit decision. Willingness to
+  do backend work applies to other justified model integrations too.
+- The Linux workstation remains in normal use. Do not take over its desktop,
+  change audio routing, install a build there, or start recording remotely as
+  part of the Mac run without coordinating that check. A Mac result cannot close
+  a Linux-only finding.
+
+## Priority and execution order
+
+| Order | Work | Completion evidence |
+| --- | --- | --- |
+| 1 | Fix #540 and characterize the Linux recording report | Reproduced user flow, regression coverage, native QA; Linux result explicitly tracked |
+| 2 | Exercise the production TypeScript client against the real sidecar | Model-free integration test in normal CI, bounded failure and teardown cases |
+| 3 | Lock down the shared wire contract | Shared fixtures validated by both implementations |
+| 4 | Simplify lifecycle ownership where failures justify it | Adversarial event tests plus unchanged note/output guarantees |
+| 5 | Expand speech-to-text capabilities | Refreshed research, working adapters, measured product-path results |
+| Ongoing | Improve usability, visual quality, and resource use | Before/after evidence and successful real workflows |
+
+Fix confirmed data loss, security problems, hangs, and leaks ahead of this order.
+Do not postpone a small, well-understood user fix behind an architectural rewrite.
+Research can proceed alongside fixes; keep model downloads and experiments bounded.
+
+## 1. YouTube import during dictation: #540
+
+Read the issue again before implementation. Reproduce the modal flow in native
+Obsidian and identify which busy guard fires. Relevant starting points are
+`src/ui/youtube-transcript-modal.ts`,
+`src/dictation/audio-file-transcription-controller.ts`, and
+`src/media/youtube-captions.ts`.
+
+Treat fetching captions separately from speech inference. Support caption import
+while dictating if both operations can preserve their original note targets and
+independent cancellation. Determine insertion ordering explicitly when both write
+to the same note. Do not assume a second model can run safely in parallel merely
+because caption retrieval can.
+
+Acceptance:
+
+- Active microphone dictation, another media job, engine maintenance, and an
+  actual failure produce distinct, accurate feedback.
+- Captions available and captions unavailable/audio fallback are both exercised.
+  Caption acquisition does not silently stop dictation or acquire unnecessary
+  inference ownership.
+- When work must wait, identify the blocking activity and an actionable next
+  step. Preserve typed and dictated text. An explicit stop-and-continue action
+  must drain accepted speech before continuing. Introduce a queue only if its
+  ownership, cancellation, and visible status earn the added complexity.
+- Repeated submission, modal close/reopen, stop/cancel, note navigation, and late
+  results cannot duplicate output or insert into an unintended note.
+- Write a failing test through the closest practical workflow interface before
+  changing behavior. Verify the final visible flow in Obsidian, beyond copy tests.
+
+## 2. Linux saved microphone recording
+
+Reported symptom: a recording attachment exists but is silent or will not play.
+This does not establish whether the fault is capture, encoding, finalization,
+attachment writing, or playback.
+
+Initial checks on 2026-11-16:
+
+- The Linux PipeWire/PulseAudio server responded and exposed an unmuted default
+  USB microphone. This was a read-only status check, not an audio capture test.
+- Node 24.22.3 ran
+  `node node_modules/vitest/vitest.mjs run test/microphone-recording.test.ts test/audio-capture-stream.test.ts`:
+  2 files and 16 tests passed. The installed runner reported Vitest 4.1.11.
+  These tests simulate browser media objects and do not establish native playback.
+- No affected recording has been decoded yet and no native reproduction or root
+  cause has been established. Earlier Mac playback passed according to
+  [the existing QA report](../quality/2026-11-extended-validation.md).
+
+Investigation route:
+
+1. Obtain the path to one affected file with permission to inspect it locally.
+   Keep the recording and transcript out of Git and external services. Record
+   container/codec, byte size, decodability, measured duration where available,
+   and audio levels without publishing personal audio or device identifiers.
+2. Separate an invalid/truncated file, a valid silent file, and valid audible
+   audio that Obsidian cannot play. Use `ffprobe`/`ffmpeg` when installed; absent
+   WebM duration metadata alone is not corruption. Compare independent decoding
+   with native Obsidian playback and progress.
+3. Establish one repeatable pass/fail command for the observed failure. Capture
+   Obsidian/Electron versions and recording MIME type. If a live recording is
+   needed, coordinate a bounded Linux session with the owner and restore settings.
+4. Trace `src/audio/microphone-recording.ts`,
+   `src/audio/audio-capture-stream.ts`, and controller finalization. Change the
+   proven cause and add a regression test that reaches that failure.
+
+Acceptance: normal Stop produces one playable attachment in the configured
+location and one correctly placed embed; Cancel discards unfinished recording;
+immediate restart, automatic stop, slow file writes, device loss, and recording
+failure preserve dictation and the original note. Tracks and file handles release
+on terminal paths. Microphone recordings retain their microphone-only meaning.
+Verify Linux playback on Linux and Mac playback on Mac. If Linux access is
+unavailable, deliver a candidate fix and an exact verification route, labeled
+unverified on Linux. Do not declare the report fixed from Mac or mocked tests.
+
+## 3. Production TypeScript-to-Rust integration
+
+Existing tests cover protocol pieces, a simulated process in
+`test/sidecar-connection.test.ts`, and the real executable from Rust in
+`native/tests/sidecar_protocol_e2e.rs`. Add the missing composition: production
+TypeScript connection, encoder/parser, process adapter, and actual Rust executable.
+Existing model scripts with their own framing are useful inference checks but
+do not substitute for that production-client test.
+
+Start with model-free startup/system information, orderly shutdown, and process
+exit while work is pending. Add a deterministic invalid request and teardown case
+where supported. Use real client operations when public interfaces support them;
+test malformed wire bytes at the transport seam rather than expanding the
+production interface for tests.
+
+Acceptance:
+
+- Ordinary PR CI builds the binary and runs the integration without model
+  downloads, microphone access, or a live Obsidian session.
+- A deliberate client/server wire mismatch makes the check fail with a useful
+  diagnosis. Establish the failing check before implementation.
+- Every wait has a test deadline; failures close streams and reap the child.
+  Expected shutdown and unexpected exit have correct, distinct outcomes.
+- Reuse the existing native CI build/cache. Avoid duplicate full engine builds.
+  Document one local command and the binary path/build prerequisites. Linux PR CI
+  is the first gate; verify platform-specific process changes on Mac and Windows.
+
+## 4. Shared wire contract fixtures
+
+Add a small repository-owned corpus consumed by TypeScript and Rust tests.
+Specify the expected accepted shape or rejection for each fixture. Cover
+representative session/translation commands and events, binary audio envelopes,
+optional/defaulted fields, unknown fields, malformed/truncated frames, size
+limits, and fragmented/coalesced input where the respective interfaces support it.
+
+Separate semantic JSON expectations from byte-level frame expectations; object
+key order is not a compatibility requirement. Keep intentional asymmetries
+explicit. Use fixtures in each direction so serializers and parsers cannot drift
+together unnoticed. Include negative cases and existing compatibility behavior.
+
+Keep ADR 0007 and `scripts/verify-sidecar-compatibility.mjs` authoritative for
+release policy. Tests supplement that policy. Review its path list when modules
+move; changes under new sender/parser paths must not bypass the release guard.
+Start with fixtures. Introduce schema/type generation only if a demonstrated
+maintenance problem justifies its tooling and migration cost.
+
+## 5. Ownership of translation and dictation work
+
+First read the existing
+[capture](../quality/2026-11-capture-lifecycle-audit.md) and
+[translation](../quality/2026-11-translation-lifecycle-audit.md) audits. Several
+ownership fixes already exist. Reproduce remaining problems before refactoring.
+
+Translation has two real adapters: Bergamot Web Worker and HY-MT native helper.
+Each operation should hide its subscriptions, worker/process callbacks,
+cancellation, and owned resources behind a small interface.
+
+- One user-visible terminal outcome; late progress/results cannot revive it.
+- UI cancellation and confirmed backend termination are distinct. HY-MT already
+  retains its use lease while native work may remain. Preserve that guarantee.
+- A cancellation write failure or missing acknowledgement must not appear as
+  confirmed native termination. Report the blocked state and a safe recovery
+  action. Never release ownership early or silently kill unrelated shared work.
+- Completion, cancellation acknowledgement, startup unwind, process failure,
+  disposal, and cancellation during startup have explicit cleanup guarantees.
+
+For dictation, inventory existing owners and legal transitions before changing
+`DictationSessionController`. Isolate only the lifecycle decisions/resources whose
+coordination is causing demonstrated problems. Preserve capture ownership,
+transcript revision ordering, manual-edit protection, drain behavior, recovery,
+and recording placement. Avoid a generic job framework or global state-machine
+rewrite. Public-interface tests must cover stop during startup, rapid restart,
+late results, cancellation during processing, and sidecar exit.
+
+## 6. More speech-to-text models
+
+Refresh [the existing ASR research](../research/2026-11-asr-model-opportunities.md)
+against the current catalog and primary upstream sources. Earlier rankings and
+availability are historical evidence, not a current adoption decision. Avoid
+re-adding models already supported by the checked-out code.
+
+The owner wants additional useful speech-to-text options and accepts necessary
+backend work. Do not restrict the shortlist to catalog-only additions. Compare
+compact multilingual batch models, additional streaming languages/profiles,
+and models requiring a new adapter/runtime when they provide a distinct benefit.
+Implement candidates that pass the evidence gates; research alone is not the
+desired endpoint. A justified native adapter/helper is in scope. Record material
+runtime choices in an ADR before they become the foundation.
+
+For each serious candidate record the user need, supported languages, true
+streaming/batch behavior, exact assets/tokenizer/frontend, compatible runtime,
+license/notices, artifact provenance and hashes, download size, measured memory,
+CPU/Metal/CUDA feasibility, integration work, and unresolved risks. Do not infer
+compatibility from ONNX/GGUF extensions or reuse text-only helpers for audio
+without implementing the required audio architecture.
+
+Validate the strongest candidate end to end before downloading a whole family.
+Set and record a finite disk/download/experiment budget first; escalate paid or
+materially costly resources. Use representative public speech, silence, short
+utterances, long input, reset, cancellation, and repeated sessions. Compare with
+an existing suitable model under matched conditions. Measure accuracy (WER/CER
+as appropriate), first useful output, finalization delay, throughput, and peak
+memory. Preserve earlier benchmark waivers only for the explicitly named prior
+additions. New additions need their own evidence.
+
+Acceptance: managed install/probe/selection/removal and real transcription work;
+capabilities and language choices match actual behavior; native Obsidian QA
+passes; required notices and platform limits are documented. A model is not
+production-ready solely because an isolated script transcribes one fixture.
+
+## 7. Computer-use product QA and visual polish
+
+Exercise actual tasks in native Obsidian: first-run setup, model discovery and
+installation, daily dictation while typing/pasting, file transcription, YouTube
+import, translation preview/apply, and read aloud. Include missing models,
+permissions/errors, cancellation/retry, note changes, concurrent work, reload,
+and repeated use. Keep one owner of the shared QA desktop.
+
+Improve demonstrated friction as it is found. Match Obsidian's theme, typography,
+spacing, native controls, attachment behavior, and existing Speech Kit styling.
+Check light/dark themes, normal/narrow widths, long labels, keyboard navigation,
+focus restoration, readable contrast, and all important loading/empty/error/
+disabled states. Explain active work and output destinations clearly.
+
+Capture before/after screenshots from synthetic notes for material visual fixes.
+Use visual alternatives/annotations when a meaningful design decision benefits
+from review. Routine spacing, clipping, focus, copy, and consistency fixes can
+proceed directly. Preserve model selection, preview-before-edit, localization,
+and safe note insertion. Avoid adding controls without a concrete daily use.
+
+## 8. Runtime cost and diagnostic evidence
+
+Use existing logging and QA tools. Measure startup, first partial, stop-to-final
+transcript, cancellation/backend termination, idle cost, and repeated-operation
+resource retention. Record hardware, build/model versions, warm/cold state,
+fixture, and repetitions. Select regression thresholds after the baseline and
+before optimizing. Distinguish CPU/memory observations from battery claims.
+
+When current logs cannot explain a failure, add bounded opt-in timing and
+operation identifiers. Keep notes, transcripts, microphone audio, credentials,
+and identifying device details out of routine diagnostics and committed evidence.
+Do not replace the existing deliberate suppression of routine protocol logs
+with always-on event dumps. Fix measured problems; instrumentation is not itself
+proof of a user-visible improvement.
+
+## Verification, review, and completion
+
+For every behavior change, first write and run a failing check through the
+closest practical real-user interface. Fix in small slices, run affected checks,
+and exercise the outcome in native Obsidian. Use `npm run check:frontend` for
+frontend gates and the existing Rust/build/protocol checks for native changes.
+Keep heavy real-model validation bounded and record what actually ran.
+
+Give substantial changes a fresh holistic review, resolve routine findings,
+then verify affected interactions in the combined build. Review note safety,
+async ownership, compatibility, background resources, accessibility, and failure
+recovery together. Keep unrelated cleanup out of each fix.
+
+Update the existing maintenance log with finding, evidence, priority, branch/PR,
+checks, native result, platform limits, and disposition. Store new research in
+`docs/research/` and sanitized QA evidence in `docs/quality/`. Link issue #540 to
+its fix; retain the Linux recording finding until verified on Linux.
+
+Finish with the exact tested build installed in the test vault, capture and
+recording off, temporary settings restored, no abandoned helper processes, and
+a short brief linking changes, evidence, unresolved work, and a smoke-test route.
+Mark outcomes as observed, inferred, proposed, or unverified. Continue useful
+independent work when one item needs owner input; do not call a blocked item done.
