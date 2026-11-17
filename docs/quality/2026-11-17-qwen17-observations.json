@@ -1,0 +1,104 @@
+{
+  "sourceCommit": "80f75a0cef738070790a2a4aad5cdd27d84cdcd8",
+  "host": {
+    "chip": "Apple M2 Pro",
+    "macOS": "27.2.1"
+  },
+  "runtime": "Existing pinned llama-cpp-2 0.1.160 / llama-cpp-sys-2 0.1.161, debug all-engine Metal helper",
+  "method": "One load and one request per fixture per model and acceleration setting. CPU used frozen 75459ec5 helper; Metal used same model/protocol source with temporary stderr diagnostics. No timing repetitions or isolated host benchmark.",
+  "fixtures": [
+    {
+      "path": "native/tests/fixtures/audio/de-fleurs-1577.wav",
+      "sha256": "5cc126e8ece51d0b58549a4b00f0e52b1c45f79759bc79741dd3293395377c13"
+    },
+    {
+      "path": "native/tests/fixtures/audio/7021-79740-0000.wav",
+      "sha256": "d0d6bcf2e108dde9e7c1575ad843512213b1cff5ea77b9231e7f256591aa0986"
+    }
+  ],
+  "runs": [
+    {
+      "gpuRequested": false,
+      "observations": [
+        {
+          "size": "0.6B",
+          "fixture": "de-fleurs-1577.wav",
+          "language": "de",
+          "audioSeconds": 5.4,
+          "loadMs": 1144,
+          "processingMs": 812,
+          "text": "Das erschien mir nicht sinnvoll, es war ganz gewiss nicht fair."
+        },
+        {
+          "size": "0.6B",
+          "fixture": "7021-79740-0000.wav",
+          "language": "en",
+          "audioSeconds": 11.125,
+          "loadMs": 1144,
+          "processingMs": 859,
+          "text": "To such persons, these indirect modes of training children in habits of subordination to their will, or rather of yielding to their influence, are specially useful."
+        },
+        {
+          "size": "1.7B",
+          "fixture": "de-fleurs-1577.wav",
+          "language": "de",
+          "audioSeconds": 5.4,
+          "loadMs": 3423,
+          "processingMs": 1610,
+          "text": "Das erschien mir nicht sinnvoll. Es war ganz gewiss nicht fair."
+        },
+        {
+          "size": "1.7B",
+          "fixture": "7021-79740-0000.wav",
+          "language": "en",
+          "audioSeconds": 11.125,
+          "loadMs": 3423,
+          "processingMs": 1647,
+          "text": "To such persons, these indirect modes of training children in habits of subordination to their will, or rather of yielding to their influence, are specially useful."
+        }
+      ]
+    },
+    {
+      "gpuRequested": true,
+      "observations": [
+        {
+          "size": "0.6B",
+          "fixture": "de-fleurs-1577.wav",
+          "language": "de",
+          "audioSeconds": 5.4,
+          "loadMs": 397,
+          "processingMs": 349,
+          "text": "Das erschien mir nicht sinnvoll, es war ganz gewiss nicht fair."
+        },
+        {
+          "size": "0.6B",
+          "fixture": "7021-79740-0000.wav",
+          "language": "en",
+          "audioSeconds": 11.125,
+          "loadMs": 397,
+          "processingMs": 520,
+          "text": "To such persons, these indirect modes of training children in habits of subordination to their will, or rather of yielding to their influence, are specially useful."
+        },
+        {
+          "size": "1.7B",
+          "fixture": "de-fleurs-1577.wav",
+          "language": "de",
+          "audioSeconds": 5.4,
+          "loadMs": 1264,
+          "processingMs": 786,
+          "text": "Das erschien mir nicht sinnvoll. Es war ganz gewiss nicht fair."
+        },
+        {
+          "size": "1.7B",
+          "fixture": "7021-79740-0000.wav",
+          "language": "en",
+          "audioSeconds": 11.125,
+          "loadMs": 1264,
+          "processingMs": 812,
+          "text": "To such persons, these indirect modes of training children in habits of subordination to their will, or rather of yielding to their influence, are specially useful."
+        }
+      ]
+    }
+  ],
+  "negativeObservation": "Both sizes returned inference_failed when the restricted tool process could not access a Metal device. Diagnostic stderr reported default device (null) and failed to create command queue. The same diagnostic helper and files passed with real Apple M2 Pro Metal access outside that sandbox. No production native source changed."
+}

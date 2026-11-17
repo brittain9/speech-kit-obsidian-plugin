@@ -88,3 +88,47 @@ Exact alignment/matched baseline and the 1.7B model were not run. The raw Englis
 not a user acceptance threshold. Streaming and model-derived word timestamps
 remain unsupported. See the current
 [integration evidence](../quality/2026-11-16-qwen-asr-prototype.md).
+
+## Optional 1.7B model, 17 November
+
+The user subsequently authorized adding the larger model beside 0.6B. Both remain
+optional; existing defaults and saved selections are preserved. This uses the
+same helper and batch capabilities: text appears after voice-detected phrases,
+with no live partial text or model timestamps. Eight product languages and
+automatic detection remain available. No new runtime, dependency, or streaming
+implementation is introduced.
+
+The pinned [ggml-org export](https://huggingface.co/ggml-org/Qwen3-ASR-1.7B-GGUF/tree/36a678687ba7d07a74ca70ccb0e36902e005fb80)
+identifies the official Qwen 1.7B base. The immutable API metadata and both actual
+downloaded files independently match these sizes and SHA-256 values:
+
+| Artifact                        |         Bytes | SHA-256                                                          |
+| ------------------------------- | ------------: | ---------------------------------------------------------------- |
+| Qwen3-ASR-1.7B-Q8_0.gguf        | 2,165,034,944 | 58e22d0532d4eacaf034cfac17a6fed159f37c41390c710186783be439d1fc57 |
+| mmproj-Qwen3-ASR-1.7B-Q8_0.gguf |   355,709,344 | 46c1d533af3f354ceb37ce855dbceff7da7fa7cf1e6a523df3b13440bd164c0d |
+
+One pair transfer consumed 2,520,744,288 bytes. The incremental allowance is
+5.1 GB network, including a subsequent normal managed install, and 7 GB disk,
+including its managed copy. Approximately 33 GiB was free before the transfer.
+Existing 0.6B files and shared build caches were preserved.
+
+[Raw observations](../quality/2026-11-17-qwen17-observations.json) retain exact
+hypotheses and fixture hashes. Both sizes transcribed the same public 5.4-second
+German and 11.125-second English clips on CPU and Metal, returned control-free
+text, accepted a second request in the same helper, and shut down/reaped. On this
+single Apple M2 Pro run, 1.7B CPU requests took 1,610/1,647 ms versus 812/859 ms
+for 0.6B; Metal requests took 786/812 ms versus 349/520 ms. These descriptive
+observations are not a controlled benchmark or a broader accuracy claim.
+
+The first GPU attempts failed for both sizes because the restricted tool process
+had no accessible Metal device. A temporary Rust-only diagnostic helper exposed
+`failed to create command queue`; the same helper passed outside that sandbox
+with Apple M2 Pro detected. No C++ configuration, production native behavior, or
+CPU fallback was changed to conceal the failure. This does not qualify Windows
+CUDA or Linux GPU behavior.
+
+Catalog and managed-manager regressions cover the required pair, stable saved
+0.6B/1.7B selection, unchanged default, install completion/probe, speech task
+routing, selected-model removal protection, and clear-then-remove. Actual normal
+managed download and native Obsidian selection/transcription remain pending the
+combined build and root's UI verification.
