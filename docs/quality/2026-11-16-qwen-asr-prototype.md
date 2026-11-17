@@ -38,3 +38,16 @@ streaming claim. The branch is a reviewable draft, not ready for daily-use
 installation. Existing defaults and releases remain unchanged. See
 [research and pinned artifacts](../research/2026-11-16-qwen-asr-native.md) and
 [ADR 0013](../adr/0013-use-native-llama-cpp-for-qwen-asr.md).
+
+## Resumed validation, 17 November
+
+The real public `LoadedModel` cancellation/retry slice passed after the safety
+fixes. It first transcribes the German fixture with a resident helper, cancels a
+23.1-second request after 150 ms, and requires the canceled helper PID to be absent
+when cancellation returns. It then transcribes a different English JFK recording
+through the same loaded-model interface, verifies a fresh helper PID and no
+canceled German text, and requires model disposal to reap that replacement too.
+The complete test passed in 3.90 s; cancellation itself has a three-second bound.
+These are lifecycle observations, not a matched inference-speed benchmark.
+The full sidecar command cancellation and managed-install/UI checks remain
+separate integration steps.

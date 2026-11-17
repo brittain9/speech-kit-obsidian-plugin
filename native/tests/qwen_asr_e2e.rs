@@ -234,3 +234,100 @@ fn public_probe_rejects_a_fifo_companion_before_helper_launch() {
         "probe must reject the FIFO before checking the missing helper: {events:?}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+#[ignore = "requires STT_QWEN_MODEL; runs real helper cancellation and a different-clip retry"]
+fn real_inflight_cancel_reaps_helper_and_retry_uses_a_fresh_process() {
+    use local_dictation_sidecar::adapters::qwen_asr::QwenAsrAdapter;
+    use local_dictation_sidecar::engine::traits::ModelFamilyAdapter;
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::{Duration, Instant};
+    unsafe extern "C" {
+        fn kill(pid: i32, signal: i32) -> i32;
+    }
+    let alive = |pid| unsafe { kill(pid, 0) == 0 };
+    struct Fixture(PathBuf);
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let dir = Fixture(std::env::temp_dir().join(format!("qwen-cancel-{}", uuid::Uuid::new_v4())));
+    std::fs::create_dir_all(&dir.0).unwrap();
+    let marker = dir.0.join("pid");
+    let wrapper = dir.0.join("helper");
+    let quote = |text: &str| format!("'{}'", text.replace('\'', "'\\''"));
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nprintf '%s' \"$$\" > {}\nexec {}\n",
+            quote(marker.to_str().unwrap()),
+            quote(env!("CARGO_BIN_EXE_local-dictation-asr-helper"))
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let path = PathBuf::from(std::env::var("STT_QWEN_MODEL").unwrap());
+    let mut model = QwenAsrAdapter::with_helper_executable(wrapper)
+        .load(&path, GpuConfig { use_gpu: false })
+        .unwrap();
+    let request = |audio: &str, language: &str| TranscriptionRequest {
+        audio_samples: common::audio::decode_wav_16k_mono(&common::fixtures_dir().join(audio))
+            .unwrap()
+            .into_iter()
+            .map(|s| f32::from(s) / 32768.0)
+            .collect(),
+        detailed_timestamps_enabled: false,
+        gpu_config: GpuConfig { use_gpu: false },
+        language: language.into(),
+        model_file_path: path.clone(),
+        context: None,
+    };
+    let warm = model
+        .transcribe(&request("audio/de-fleurs-1577.wav", "de"))
+        .unwrap();
+    assert!(common::text::joined_text(&warm).contains("fair"));
+    let old_pid = std::fs::read_to_string(&marker)
+        .unwrap()
+        .parse::<i32>()
+        .unwrap();
+    assert!(
+        alive(old_pid),
+        "the real helper must be resident before cancellation"
+    );
+    let long = request("audio/de-fleurs-1617.wav", "de");
+    let started = Instant::now();
+    let result =
+        model.transcribe_cancellable(&long, &|| started.elapsed() >= Duration::from_millis(150));
+    assert_eq!(result.unwrap_err().code, "transcription_cancelled");
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "cancel did not terminate and join bounded pipe workers"
+    );
+    assert!(
+        !alive(old_pid),
+        "cancel must reap the helper, not leave a running or zombie child"
+    );
+    let retry = model.transcribe(&request("audio/jfk.wav", "en")).unwrap();
+    let new_pid = std::fs::read_to_string(&marker)
+        .unwrap()
+        .parse::<i32>()
+        .unwrap();
+    assert_ne!(old_pid, new_pid);
+    let text = common::text::joined_text(&retry).to_lowercase();
+    assert!(
+        text.contains("fellow americans"),
+        "fresh English retry failed: {text}"
+    );
+    assert!(
+        !text.contains("kruger"),
+        "cancelled German output leaked into retry"
+    );
+    drop(model);
+    assert!(
+        !alive(new_pid),
+        "dropping the loaded model must reap the retried helper"
+    );
+    eprintln!("real helper cancellation/reap and different-language retry passed");
+}

@@ -19,9 +19,9 @@ Host verified: Apple M2 Pro, 17,179,869,184 bytes RAM, approximately 56 GiB free
 
 First candidate: [ggml-org's 0.6B Q8 export](https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF/tree/928ab958557df9aa2ef1c93e0e83c7ad0933fae2), converted from the official checkpoint. Fetch exactly two files once and verify pinned Hugging Face LFS size/SHA-256 before use:
 
-| Artifact | Bytes | SHA-256 |
-| --- | ---: | --- |
-| Qwen3-ASR-0.6B-Q8_0.gguf | 804,749,248 | bca259818b50ca7c4c05e9bdb35a5dc04fa039653a6d6f3f0f331f96f6aa1971 |
+| Artifact                        |       Bytes | SHA-256                                                          |
+| ------------------------------- | ----------: | ---------------------------------------------------------------- |
+| Qwen3-ASR-0.6B-Q8_0.gguf        | 804,749,248 | bca259818b50ca7c4c05e9bdb35a5dc04fa039653a6d6f3f0f331f96f6aa1971 |
 | mmproj-Qwen3-ASR-0.6B-Q8_0.gguf | 214,392,480 | 41a342b5e4c514e968cb756de6cd1b7be39eff43c44c57a2ef5fc6522e36603d |
 
 Total planned initial weights: **1,019,141,728 bytes**. Installer replays should use these verified local files to avoid another remote transfer.
@@ -35,7 +35,6 @@ A feature-gated Qwen ASR `ModelFamilyAdapter` supervises a version-matched nativ
 ADR 0005 requires process isolation from Whisper because of GGML symbol collisions. The new helper follows the existing translation-helper packaging and supervision patterns, with a separate protocol/lifetime; it does not import the main library. The initial pair transferred once (1,019,141,728 bytes), and both size/hash checks passed. No inference had run at this checkpoint.
 
 Initial native proof: the standalone isolated helper and the public Rust registry/adapter path both transcribed the pinned 5.4-second German fixture with zero normalized WER; manual selection and automatic `de` output passed, without control tokens or invented word timestamps. Public tests failed before family support and passed after implementation. Broader quality, managed-install, cancellation, and partial-transcription acceptance remain pending.
-
 
 ## Wrap-up status
 
