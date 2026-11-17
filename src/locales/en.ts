@@ -930,10 +930,12 @@ export const en = {
   'llm.sidebar.title': 'Transform dictation',
   'llm.sidebar.description': 'Choose how spoken text is shaped before it reaches your note.',
   'llm.sidebar.group.preset': 'Preset',
+  'llm.sidebar.group.transforms': 'AI transformations',
   'llm.sidebar.group.model': 'Model',
   'llm.sidebar.group.context': 'Context',
   'llm.sidebar.enabled.name': 'Transform new dictation',
-  'llm.sidebar.enabled.description': 'Apply the active preset to new dictated text.',
+  'llm.sidebar.enabled.description':
+    'Apply the active preset to new dictated text. Off inserts the raw transcript.',
   'llm.sidebar.showOriginal.name': 'Show original transcript',
   'llm.sidebar.showOriginal.description':
     'Keep it in a collapsible callout below each transformed result.',

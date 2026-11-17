@@ -126,7 +126,6 @@ export class LocalDictationView extends ItemView {
         });
 
       const presentation = resolveLlmSidebarPresentation(settings);
-      if (settings.llmFeaturesEnabled) this.renderOverview(contentEl, presentation);
       new Setting(contentEl).addButton((button) => {
         button
           .setButtonText(t('llm.sidebar.openSettings'))
@@ -135,7 +134,8 @@ export class LocalDictationView extends ItemView {
 
       if (!settings.llmFeaturesEnabled) return;
 
-      const dailyGroup = createSettingGroup(contentEl, t('llm.sidebar.group.preset'));
+      const dailyGroup = createSettingGroup(contentEl, t('llm.sidebar.group.transforms'));
+      if (presentation.state === 'active') this.renderTransformStatus(dailyGroup, presentation);
       renderLlmDailyControls(dailyGroup, {
         getSettings: this.dependencies.getSettings,
         mutateSettings: this.dependencies.mutateSettings,
@@ -145,9 +145,7 @@ export class LocalDictationView extends ItemView {
           ? {}
           : { editPreset: (ref: string) => this.openPresetEditor(ref) }),
       });
-      if (settings.llmPostprocessMode === 'off') {
-        this.renderEmptyState(contentEl, presentation);
-      } else {
+      if (settings.llmPostprocessMode !== 'off') {
         this.renderRuntimeFailureBanner(dailyGroup);
       }
     } finally {
@@ -179,47 +177,14 @@ export class LocalDictationView extends ItemView {
     if (!this.closed) this.scheduleRender();
   }
 
-  private renderOverview(parent: HTMLElement, presentation: LlmSidebarPresentation): void {
-    const header = parent.createEl('header', { cls: 'local-dictation-sidebar__header' });
-    header.createDiv({
-      cls: 'local-dictation-sidebar__eyebrow',
-      text: t('llm.sidebar.eyebrow'),
+  private renderTransformStatus(parent: HTMLElement, presentation: LlmSidebarPresentation): void {
+    const status = parent.createEl('p', {
+      cls: 'local-dictation-sidebar__summary setting-item-description',
+      text: presentation.summary,
     });
-    header.createEl('h2', {
-      cls: 'local-dictation-sidebar__title',
-      text: t('llm.sidebar.title'),
-    });
-    header.createEl('p', {
-      cls: 'local-dictation-sidebar__description',
-      text: t('llm.sidebar.description'),
-    });
-
-    const status = header.createDiv({ cls: 'local-dictation-sidebar__summary' });
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
     status.setAttribute('aria-atomic', 'true');
-    status.createSpan({
-      cls: `local-dictation-sidebar__badge local-dictation-sidebar__badge--${presentation.state}`,
-      text: presentation.statusLabel,
-    });
-    status.createSpan({
-      cls: 'local-dictation-sidebar__summary-text',
-      text: presentation.summary,
-      title: presentation.summary,
-    });
-  }
-
-  private renderEmptyState(parent: HTMLElement, presentation: LlmSidebarPresentation): void {
-    if (presentation.emptyState === null) {
-      return;
-    }
-
-    const emptyState = parent.createDiv({ cls: 'local-dictation-sidebar__empty' });
-    const icon = emptyState.createDiv({ cls: 'local-dictation-sidebar__empty-icon' });
-    icon.setAttribute('aria-hidden', 'true');
-    setIcon(icon, presentation.emptyState.icon);
-    emptyState.createEl('h3', { text: presentation.emptyState.title });
-    emptyState.createEl('p', { text: presentation.emptyState.description });
   }
 
   private renderRuntimeFailureBanner(parent: HTMLElement): void {

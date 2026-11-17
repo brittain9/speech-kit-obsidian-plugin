@@ -66,7 +66,11 @@ it('announces the changing sidebar workflow summary as one atomic status', () =>
     getSecret: () => '',
     getDictationState: () => 'idle',
     toggleDictation: vi.fn(async () => {}),
-    getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, llmFeaturesEnabled: true }),
+    getSettings: () => ({
+      ...DEFAULT_PLUGIN_SETTINGS,
+      llmFeaturesEnabled: true,
+      llmPostprocessMode: 'batch',
+    }),
     mutatePresetState: vi.fn(async () => {}),
     mutateSettings: vi.fn(async () => {}),
     synchronizePresets: vi.fn(async () => {}),
@@ -154,4 +158,27 @@ it('opens the active preset from its timing summary and ignores close callbacks 
   await view.onClose();
   onClosed?.();
   expect(content.children[0]).toBe(first);
+});
+
+it('keeps raw dictation controls in one native section without repeated mode banners', () => {
+  Setting.reset();
+  const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
+    feedback: { show: vi.fn() },
+    getSecret: () => '',
+    getDictationState: () => 'idle',
+    toggleDictation: vi.fn(async () => {}),
+    getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, llmPostprocessMode: 'off' }),
+    mutatePresetState: vi.fn(async () => {}),
+    mutateSettings: vi.fn(async () => {}),
+    synchronizePresets: vi.fn(async () => {}),
+  });
+  view.refresh();
+  const content = view.contentEl as unknown as TestElement;
+  expect(content.findByClass('local-dictation-sidebar__header')).toBeUndefined();
+  expect(content.findByClass('local-dictation-sidebar__empty')).toBeUndefined();
+  expect(content.findByClass('local-dictation-sidebar__summary')).toBeUndefined();
+  expect(Setting.named('AI transformations')).toBeDefined();
+  expect(Setting.named('Transform new dictation').onlyToggle().value).toBe(false);
+  expect(Setting.named('Transform new dictation').descEl.textContent).toContain('raw transcript');
+  expect(Setting.buttonNamed('Start dictation')).toBeDefined();
 });

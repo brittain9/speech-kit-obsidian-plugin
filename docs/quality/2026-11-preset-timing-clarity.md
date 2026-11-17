@@ -37,3 +37,19 @@ pending with the shared QA owner; unit tests do not establish those outcomes.
 
 `npm run check:frontend` passed: 1,956 tests passed, 10 skipped, both typechecks,
 Biome, Obsidian ESLint, and the production build. No release was created.
+
+
+## Sidebar restraint followup
+
+The daily sidebar uses a native AI transformations heading instead of the
+oversized workflow title, eyebrow, and explanation. With transformation off,
+the native toggle description explains raw transcript insertion once; the
+separate Off badge/status and large raw-mode card are removed. Active
+transformation retains a small accessible status summary. The preset and timing
+controls keep their visible timing/output guidance and direct Edit preset action.
+No operation or saved preference semantics change.
+
+The public view regression failed on the previous repeated raw-mode presentation
+and passes with the compact native section. Active status announcements, primary
+dictation controls, scroll retention, and active-preset editing regressions pass.
+The combined native visual review remains with the shared QA owner.
