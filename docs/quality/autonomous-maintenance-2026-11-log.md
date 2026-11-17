@@ -2,6 +2,13 @@
 
 Guided by [the run spec](../specs/autonomous-maintenance-2026-11.md). This log tracks discovery, decisions, implementation, and validation. It is not a release announcement.
 
+## Current pass: November 16
+
+The [reliability and model expansion spec](../specs/application-reliability-and-model-expansion.md)
+and [current findings/evidence](2026-11-16-reliability-run.md) govern the new pass.
+The release authorization below is historical: this pass explicitly prohibits
+releases, release tags, and release version bumps.
+
 ## Starting baseline
 
 - Baseline main: `db75b7e`, after the initial maintenance PRs #492, #493, #496, #497, #498, #452, #457, #499, #500, #501, and #502.
