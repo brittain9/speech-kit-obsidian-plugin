@@ -25,6 +25,16 @@ export const DEFAULT_EXTERNAL_FILE_ENGINE_SELECTION = {
 
 export const EXTERNAL_FILE_ENGINES: readonly ExternalFileEngineOption[] = [
   {
+    label: 'Qwen3 ASR (llama.cpp)',
+    placeholder: '/absolute/path/to/Qwen3-ASR-0.6B-Q8_0.gguf',
+    requirements: [
+      t('models.external.requirements.qwen.entry'),
+      t('models.external.requirements.qwen.siblings'),
+      t('models.external.requirements.qwen.compatibility'),
+    ],
+    selection: { familyId: 'qwen3_asr', runtimeId: 'llama_cpp' },
+  },
+  {
     entryFilename: 'encoder.int8.onnx',
     entryFilenameErrorKey: 'models.external.validation.nemotronEntryFile',
     label: 'NVIDIA Nemotron ASR (ONNX Runtime)',

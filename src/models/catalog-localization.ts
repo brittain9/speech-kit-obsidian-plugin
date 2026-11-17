@@ -1,6 +1,7 @@
 import { t } from '../shared/i18n';
 
 const MODEL_SUMMARY_KEYS = {
+  qwen3_asr_0_6b_q8_0: 'catalog.qwen3_asr_0_6b_q8_0.summary',
   cohere_transcribe_fp16: 'catalog.cohere_transcribe_fp16.summary',
   cohere_transcribe_int8: 'catalog.cohere_transcribe_int8.summary',
   cohere_transcribe_q4: 'catalog.cohere_transcribe_q4.summary',
@@ -32,6 +33,7 @@ const MODEL_SUMMARY_KEYS = {
 } as const;
 
 const FAMILY_SUMMARY_KEYS = {
+  qwen3_asr: 'catalog.family.qwen3_asr.summary',
   cohere_transcribe: 'catalog.family.cohere_transcribe.summary',
   firefox_translations: 'catalog.family.firefox_translations.summary',
   tencent_hy_mt: 'catalog.family.tencent_hy_mt.summary',

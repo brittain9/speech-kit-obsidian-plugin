@@ -1496,6 +1496,16 @@ export const en = {
   'sidecarError.vad_error': 'Voice activity detection failed on an audio frame.',
   'sidecarError.vad_init_failed': 'Failed to initialize the bundled Silero VAD.',
   'sidecarError.worker_panic': 'The speech engine transcription worker stopped unexpectedly.',
+  'catalog.qwen3_asr_0_6b_q8_0.summary':
+    'Compact multilingual speech recognition. 1.02 GB download.',
+  'catalog.family.qwen3_asr.summary':
+    'Multilingual speech recognition. Text appears after each phrase; live partial text is unavailable.',
+  'models.external.requirements.qwen.entry':
+    'Select the Qwen3-ASR decoder GGUF, not the mmproj audio encoder.',
+  'models.external.requirements.qwen.siblings':
+    'Keep the matching mmproj- GGUF beside the decoder with its original filename.',
+  'models.external.requirements.qwen.compatibility':
+    'The packaged ASR helper validates the pair before selection. Batch transcription only; no live partials or model timestamps.',
   'catalog.whisper_tiny_en_q8_0.summary':
     'Fastest model with lowest resource cost. Good for testing or low-power machines.',
   'catalog.whisper_base_en_q8_0.summary':
@@ -1570,6 +1580,11 @@ export const en = {
   'sidecarError.helper_unavailable': 'The packaged translation helper could not be started.',
   'sidecarError.helper_write_failed': 'The translation helper stopped unexpectedly.',
   'sidecarError.inference_failed': 'Translation failed.',
+  'sidecarError.model_not_loaded':
+    'The speech model is not loaded. Select the model and try again.',
+  'sidecarError.model_pair_load_failed':
+    'The speech model and audio encoder could not be loaded. Check that both matching files are installed.',
+  'sidecarError.transcription_cancelled': 'Speech recognition was cancelled.',
   'sidecarError.model_load_failed': 'The translation model could not be loaded.',
   'sidecarError.invalid_translation_request': 'Translation could not be started.',
   'sidecarError.translation_busy': 'Another translation is already running.',

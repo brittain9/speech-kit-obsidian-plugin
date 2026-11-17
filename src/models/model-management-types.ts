@@ -7,6 +7,7 @@ export type RuntimeId = (typeof RUNTIME_IDS)[number];
 export const MODEL_FAMILY_IDS = [
   'firefox_translations',
   'tencent_hy_mt',
+  'qwen3_asr',
   'cohere_transcribe',
   'moonshine',
   'nemotron_asr',
