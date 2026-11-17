@@ -27,7 +27,8 @@ This follows GitHub's guidance for
 [required checks with conditional jobs](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks).
 
 The platform matrix covers macOS Metal, Windows x64/ARM64 and Linux ARM64; the
-portable lane covers Linux x64 and the production TypeScript client against the
+portable lane uses the Ubuntu 24.04 Linux x64 release baseline and the production
+TypeScript client against the
 real sidecar. Native changes receive this coverage before merge, rather than
 discovering platform compilation failures only on main. These are build and
 correctness checks, not a claim of real microphone/GPU testing on every host.

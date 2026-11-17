@@ -69,7 +69,8 @@ jobs:
   sidecar-quality:
     needs: changes
     if: needs.changes.outputs.native == 'true'
-    runs-on: ubuntu-latest
+    # Match the Linux release compiler/glibc floor rather than a moving image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:
