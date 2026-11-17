@@ -27,10 +27,33 @@ fn main() -> Result<()> {
     install_logging_hooks();
 
     let catalog = ModelCatalog::load_bundled()?;
-    run_stdio(catalog, env!("CARGO_PKG_VERSION").to_string())
+    let (desktop_tx, desktop_rx) = mpsc::channel();
+    let (event_tx, event_rx) = mpsc::channel();
+    let sink = Arc::new(move |event| {
+        let _ = event_tx.send(event);
+    });
+    let worker = thread::spawn(move || {
+        let result = run_stdio(
+            catalog,
+            env!("CARGO_PKG_VERSION").to_string(),
+            desktop_tx.clone(),
+            event_rx,
+        );
+        let _ = desktop_tx.send(local_dictation_sidecar::desktop::Message::Quit);
+        result
+    });
+    local_dictation_sidecar::desktop::run(desktop_rx, sink)?;
+    worker
+        .join()
+        .map_err(|_| anyhow::anyhow!("Protocol thread panicked"))?
 }
 
-fn run_stdio(catalog: ModelCatalog, sidecar_version: String) -> Result<()> {
+fn run_stdio(
+    catalog: ModelCatalog,
+    sidecar_version: String,
+    desktop_tx: Sender<local_dictation_sidecar::desktop::Message>,
+    desktop_events: mpsc::Receiver<Event>,
+) -> Result<()> {
     let stdout = io::stdout();
     let mut writer = io::BufWriter::new(stdout.lock());
     let (input_tx, input_rx) = mpsc::channel();
@@ -50,6 +73,7 @@ fn run_stdio(catalog: ModelCatalog, sidecar_version: String) -> Result<()> {
 
     loop {
         write_events(&mut writer, app_state.drain_pending_outputs())?;
+        write_events(&mut writer, desktop_events.try_iter().collect())?;
 
         match input_rx.recv_timeout(Duration::from_millis(10)) {
             Ok(InputMessage::Frame(frame)) => {
@@ -58,6 +82,43 @@ fn run_stdio(catalog: ModelCatalog, sidecar_version: String) -> Result<()> {
                         ControlFlow::Continue,
                         app_state.handle_audio_frame(audio_frame),
                     ),
+                    IncomingFrame::Command(Command::ConfigureDesktop {
+                        request_id,
+                        generation,
+                        shortcut,
+                        show_icon,
+                        vault_name,
+                        labels,
+                    }) => {
+                        let _ =
+                            desktop_tx.send(local_dictation_sidecar::desktop::Message::Configure(
+                                local_dictation_sidecar::desktop::Configuration {
+                                    request_id,
+                                    generation,
+                                    shortcut,
+                                    show_icon,
+                                    vault_name,
+                                    labels,
+                                },
+                            ));
+                        (ControlFlow::Continue, Vec::new())
+                    }
+                    IncomingFrame::Command(Command::UpdateDesktopStatus {
+                        generation,
+                        status,
+                        destination,
+                        can_start,
+                    }) => {
+                        let _ = desktop_tx.send(local_dictation_sidecar::desktop::Message::Status(
+                            local_dictation_sidecar::desktop::Status {
+                                generation,
+                                status,
+                                destination,
+                                can_start,
+                            },
+                        ));
+                        (ControlFlow::Continue, Vec::new())
+                    }
                     IncomingFrame::Command(Command::ProbeSystemAudio) => {
                         spawn_system_audio_probe(input_tx.clone());
                         (ControlFlow::Continue, Vec::new())

@@ -183,6 +183,15 @@ export class SidecarConnection {
       new SidecarProcess(options.resolveLaunchSpec, handlers);
   }
 
+  async configureDesktop(command: import('./protocol').ConfigureDesktopCommand): Promise<void> {
+    await this.ensureStarted();
+    this.process.write(encodeJsonFrame(command));
+  }
+
+  updateDesktopStatus(command: import('./protocol').UpdateDesktopStatusCommand): void {
+    if (this.process.isRunning()) this.process.write(encodeJsonFrame(command));
+  }
+
   async ensureStarted(): Promise<void> {
     await this.process.start();
   }

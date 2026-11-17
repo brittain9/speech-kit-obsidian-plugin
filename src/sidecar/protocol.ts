@@ -272,12 +272,56 @@ export type SidecarCommand =
   | ProbeSystemAudioCommand
   | ProbeModelSelectionCommand
   | RemoveModelCommand
+  | ConfigureDesktopCommand
+  | UpdateDesktopStatusCommand
   | ShutdownCommand
   | StartSessionCommand
   | StartSynthesisCommand
   | StartTranslationCommand
   | SynthesisPlaybackPositionCommand
   | StopSessionCommand;
+
+export type DesktopState = 'ready' | 'starting' | 'recording' | 'finishing' | 'unavailable';
+export interface DesktopLabels {
+  ready: string;
+  starting: string;
+  recording: string;
+  finishing: string;
+  unavailable: string;
+  start: string;
+  stop: string;
+  cancelStart: string;
+  openTarget: string;
+  settings: string;
+}
+export interface ConfigureDesktopCommand extends EnvelopeBase<'configure_desktop'> {
+  requestId: string;
+  generation: string;
+  shortcut: string | null;
+  showIcon: boolean;
+  vaultName: string;
+  labels: DesktopLabels;
+}
+export interface UpdateDesktopStatusCommand extends EnvelopeBase<'update_desktop_status'> {
+  generation: string;
+  status: DesktopState;
+  destination: string;
+  canStart: boolean;
+}
+export interface DesktopStatusEvent extends EnvelopeBase<'desktop_status'> {
+  requestId?: string;
+  generation: string;
+  shortcutStatus: 'disabled' | 'registered' | 'unavailable' | 'conflict';
+  effectiveShortcut?: string;
+  iconAvailable: boolean;
+  owner: boolean;
+  error?: string;
+}
+export interface DesktopActionEvent extends EnvelopeBase<'desktop_action'> {
+  generation: string;
+  actionId: number;
+  action: 'toggle' | 'open_target' | 'open_settings';
+}
 
 export interface HealthOkEvent extends EnvelopeBase<'health_ok'> {
   sidecarVersion: string;
@@ -447,6 +491,8 @@ export type SidecarEvent =
   | ContextRequestEvent
   | ErrorEvent
   | FileAudioProgressEvent
+  | DesktopStatusEvent
+  | DesktopActionEvent
   | HealthOkEvent
   | InstalledModelsEvent
   | ModelCatalogEvent
@@ -675,6 +721,8 @@ export interface SynthesisAudioFrame {
 export type ParsedFrame<TEnvelope> = AudioFrame | JsonFrame<TEnvelope> | SynthesisAudioFrame;
 
 const SIDECAR_EVENT_TYPE_FLAGS = {
+  desktop_status: 1,
+  desktop_action: 1,
   audio_level: 1,
   context_request: 1,
   error: 1,
@@ -817,6 +865,8 @@ export function parseEventFrame(jsonText: string): SidecarEvent {
     throw new Error(`Unsupported sidecar event type: ${String(parsedValue.type)}`);
   }
 
+  if (parsedValue.type.startsWith('desktop_')) validateDesktopEvent(parsedValue);
+
   if (parsedValue.type.startsWith('translation_')) validateTranslationEvent(parsedValue);
 
   if (parsedValue.type === 'transcript_ready') {
@@ -911,3 +961,23 @@ function normalizeSessionId(sessionId: string): string {
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+
+function validateDesktopEvent(event: Record<string, unknown>): void {
+  const invalid = (): never => {
+    throw new Error('Invalid desktop event.');
+  };
+  if (typeof event.generation !== 'string' || event.generation.length === 0) invalid();
+  if (event.type === 'desktop_action') {
+    if (
+      !Number.isSafeInteger(event.actionId) ||
+      Number(event.actionId) < 0 ||
+      !['toggle', 'open_target', 'open_settings'].includes(String(event.action))
+    )
+      invalid();
+  } else if (
+    typeof event.iconAvailable !== 'boolean' ||
+    typeof event.owner !== 'boolean' ||
+    !['disabled', 'registered', 'unavailable', 'conflict'].includes(String(event.shortcutStatus))
+  )
+    invalid();
+}

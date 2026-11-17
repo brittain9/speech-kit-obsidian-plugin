@@ -23,3 +23,5 @@ pub mod translation_helper_protocol;
 pub mod translation_worker;
 pub mod vad;
 pub mod worker;
+
+pub mod desktop;

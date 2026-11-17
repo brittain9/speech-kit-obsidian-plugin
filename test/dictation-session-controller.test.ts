@@ -177,6 +177,98 @@ class FakeAudioLevelMeter {
   public readonly update = vi.fn((_event: Extract<SidecarEvent, { type: 'audio_level' }>) => {});
 }
 
+describe('desktop session boundary', () => {
+  it('suppresses model pickers for a background start', async () => {
+    const onModelMissing = vi.fn();
+    const controller = createController({
+      getSettings: () => createSettings({ selectedModel: null }),
+      onModelMissing,
+    });
+    await controller.startDictation({ background: true });
+    expect(onModelMissing).not.toHaveBeenCalled();
+    expect(controller.isCaptureActive()).toBe(false);
+  });
+
+  it('snapshots the target before native startup and keeps it when the active target changes', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    let release!: () => void;
+    sidecarConnection.ensureStarted.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const target = {
+      file: { path: 'original.md' },
+      kind: 'active',
+      view: {},
+    } as import('../src/session/session').SessionTarget;
+    const created = vi.fn();
+    let activeTarget = target;
+    const captureTarget = vi.fn(() => activeTarget);
+    const controller = createController({
+      sidecarConnection,
+      captureTarget,
+      createSession: (_session, options) => created(options),
+    });
+    const starting = controller.startDictation({ background: true });
+    await vi.waitFor(() => expect(release).toBeDefined());
+    activeTarget = { ...target, file: { ...target.file, path: 'changed.md' } };
+    release();
+    await starting;
+    expect(created).toHaveBeenCalledWith(expect.objectContaining({ target }));
+    expect(captureTarget).toHaveBeenCalledOnce();
+    await controller.dispose();
+  });
+
+  it('does not report recording while cancelling pending microphone setup', async () => {
+    const captureStream = new FakeCaptureStream();
+    let finish!: () => void;
+    captureStream.start.mockImplementation(async () => {
+      captureStream.capturing = true;
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    });
+    const observed: boolean[] = [];
+    let controller!: DictationSessionController;
+    controller = createController({
+      captureStream,
+      onWorkflowStatus: () => {
+        if (controller) observed.push(controller.isMicrophoneRecording());
+      },
+    });
+    const starting = controller.startDictation();
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    await controller.stopDictation();
+    finish();
+    await starting;
+    expect(observed).not.toContain(true);
+    await controller.dispose();
+  });
+
+  it('keeps microphone status recording until capture teardown completes', async () => {
+    const captureStream = new FakeCaptureStream();
+    const controller = createController({ captureStream });
+    await controller.startDictation();
+    let release!: () => void;
+    captureStream.stop.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const stopping = controller.stopDictation();
+    await vi.waitFor(() => expect(release).toBeDefined());
+    expect(controller.isMicrophoneRecording()).toBe(true);
+    captureStream.capturing = false;
+    release();
+    await stopping;
+    expect(controller.isMicrophoneRecording()).toBe(false);
+    await controller.dispose();
+  });
+});
+
 describe('DictationSessionController', () => {
   it('releases microphone capture and session ownership when the sidecar exits', async () => {
     const sidecarConnection = new FakeSidecarConnection();
@@ -4147,6 +4239,7 @@ function createController({
   createMicrophoneRecording,
   countAudioInputDevices,
   createSession,
+  captureTarget,
   llmRouter = createFakeLlmRouter(),
   getSettings = () => createSettings({ selectedModel: createExternalModelSelection() }),
   hasDictationTarget = () => true,
@@ -4172,6 +4265,7 @@ function createController({
   ) => MicrophoneRecordingLike;
   countAudioInputDevices?: () => Promise<number | null>;
   createSession?: (session: FakeSession, options: CreateSessionOptions) => void;
+  captureTarget?: () => import('../src/session/session').SessionTarget | null;
   getSettings?: () => PluginSettings;
   hasDictationTarget?: () => boolean;
   llmRouter?: LlmRouter | null;
@@ -4200,6 +4294,7 @@ function createController({
       createSession?.(session, _options);
       return session;
     },
+    ...(captureTarget !== undefined ? { captureTarget } : {}),
     createLlmRouter: () => llmRouter,
     feedback,
     getSettings,

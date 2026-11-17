@@ -1,0 +1,178 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
+
+vi.mock('virtual:build-mode', () => ({ IS_PRODUCTION_BUILD: false }));
+vi.mock('virtual:pcm-recorder-worklet-source', () => ({ PCM_RECORDER_WORKLET_SOURCE: '' }));
+vi.mock('virtual:bergamot-worker-source', () => ({ BERGAMOT_WORKER_SOURCE: '' }));
+vi.mock('electron', () => ({ shell: {} }));
+vi.mock('obsidian', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Plugin: class {
+    constructor(
+      public app: unknown,
+      public manifest: unknown,
+    ) {}
+  },
+}));
+
+import LocalSttPlugin from '../src/main';
+
+interface PluginHarness {
+  settings: typeof DEFAULT_PLUGIN_SETTINGS;
+  desktopDisposed: boolean;
+  handleDesktopProcessStop(unexpected: boolean): void;
+  desktopRecoveryAttempted: boolean;
+  desktopActionRevision: number;
+  configureDesktop(): Promise<void>;
+  desktopConfiguration: string;
+  desktopGeneration: string;
+  sidecarConnection: {
+    configureDesktop: ReturnType<typeof vi.fn>;
+    updateDesktopStatus: ReturnType<typeof vi.fn>;
+  };
+  desktopControls: { setGeneration: ReturnType<typeof vi.fn> };
+  desktopConfigureQueue: Promise<void>;
+}
+function harness(): PluginHarness {
+  return Object.assign(Object.create(LocalSttPlugin.prototype), {
+    settings: { ...DEFAULT_PLUGIN_SETTINGS },
+    desktopDisposed: false,
+    desktopConfiguration: '',
+    desktopGeneration: '',
+    desktopConfigureQueue: Promise.resolve(),
+    desktopControls: { setGeneration: vi.fn() },
+    sidecarConnection: { configureDesktop: vi.fn(async () => {}), updateDesktopStatus: vi.fn() },
+    app: { vault: { getName: () => 'Private vault' } },
+    publishDesktopStatus: vi.fn(),
+    notifyDesktop: vi.fn(),
+  });
+}
+
+afterEach(() => vi.unstubAllGlobals());
+describe('installed plugin desktop orchestration', () => {
+  it('does not report failure when a second desktop toggle cancels startup', async () => {
+    const plugin = new LocalSttPlugin(
+      {} as import('obsidian').App,
+      { id: 'local-dictation' } as import('obsidian').PluginManifest,
+    );
+    let active = false;
+    let finish!: () => void;
+    const notify = vi.fn();
+    const target = { file: { path: 'note.md' }, kind: 'active', view: {} };
+    Object.assign(plugin, {
+      settings: { ...DEFAULT_PLUGIN_SETTINGS, selectedModel: {} },
+      desktopTarget: target,
+      isDesktopTargetOpen: () => true,
+      notifyDesktop: notify,
+      dictationController: {
+        isCaptureActive: () => active,
+        startDictation: () => {
+          active = true;
+          return new Promise<void>((resolve) => {
+            finish = resolve;
+          });
+        },
+        stopDictation: async () => {
+          active = false;
+          finish();
+        },
+      },
+    });
+    const controls = (
+      plugin as unknown as {
+        desktopControls: import('../src/desktop/desktop-controls').DesktopControls;
+      }
+    ).desktopControls;
+    controls.setGeneration('current');
+    const starting = controls.handleAction({
+      generation: 'current',
+      actionId: 1,
+      action: 'toggle',
+    });
+    await controls.handleAction({ generation: 'current', actionId: 2, action: 'toggle' });
+    await starting;
+    expect(notify).not.toHaveBeenCalled();
+  });
+  it('does not start the sidecar or request permission with defaults', async () => {
+    const plugin = harness();
+    const permission = vi.fn();
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: permission });
+    await plugin.configureDesktop();
+    expect(permission).not.toHaveBeenCalled();
+    expect(plugin.sidecarConnection.configureDesktop).not.toHaveBeenCalled();
+  });
+  it('invalidates actions immediately and performs one recovery after repeated exits', async () => {
+    const plugin = harness();
+    plugin.settings.showDesktopStatusIcon = true;
+    vi.stubGlobal('Notification', { permission: 'denied' });
+    plugin.handleDesktopProcessStop(true);
+    expect(plugin.desktopControls.setGeneration).toHaveBeenCalledWith('disconnected');
+    plugin.handleDesktopProcessStop(true);
+    await plugin.desktopConfigureQueue;
+    expect(plugin.sidecarConnection.configureDesktop).toHaveBeenCalledTimes(1);
+    expect(plugin.desktopRecoveryAttempted).toBe(true);
+  });
+  it('never recovers an intentional stop or an exit after unload', async () => {
+    const plugin = harness();
+    plugin.settings.showDesktopStatusIcon = true;
+    plugin.handleDesktopProcessStop(false);
+    plugin.desktopDisposed = true;
+    plugin.handleDesktopProcessStop(true);
+    await plugin.desktopConfigureQueue;
+    expect(plugin.sidecarConnection.configureDesktop).not.toHaveBeenCalled();
+  });
+  it('registers once for the same settings, and sends disable after opt-out', async () => {
+    const plugin = harness();
+    vi.stubGlobal('Notification', { permission: 'denied' });
+    plugin.settings.showDesktopStatusIcon = true;
+    await plugin.configureDesktop();
+    await plugin.configureDesktop();
+    expect(plugin.sidecarConnection.configureDesktop).toHaveBeenCalledTimes(1);
+    plugin.settings.showDesktopStatusIcon = false;
+    await plugin.configureDesktop();
+    expect(plugin.sidecarConnection.configureDesktop).toHaveBeenLastCalledWith(
+      expect.objectContaining({ showIcon: false, shortcut: null }),
+    );
+  });
+  it('never registers after unloading during permission approval', async () => {
+    const plugin = harness();
+    plugin.settings.showDesktopStatusIcon = true;
+    let approve!: () => void;
+    vi.stubGlobal('Notification', {
+      permission: 'default',
+      requestPermission: () =>
+        new Promise<void>((resolve) => {
+          approve = resolve;
+        }),
+    });
+    const configuring = plugin.configureDesktop();
+    await vi.waitFor(() => expect(approve).toBeDefined());
+    plugin.desktopDisposed = true;
+    approve();
+    await configuring;
+    expect(plugin.sidecarConnection.configureDesktop).not.toHaveBeenCalled();
+  });
+  it('drops an obsolete config if disabled while permission approval is pending', async () => {
+    const plugin = harness();
+    plugin.settings.showDesktopStatusIcon = true;
+    let approve!: () => void;
+    vi.stubGlobal('Notification', {
+      permission: 'default',
+      requestPermission: () =>
+        new Promise<void>((resolve) => {
+          approve = resolve;
+        }),
+    });
+    const configuring = plugin.configureDesktop();
+    await vi.waitFor(() => expect(approve).toBeDefined());
+    plugin.settings.showDesktopStatusIcon = false;
+    const disabled = plugin.configureDesktop();
+    approve();
+    await configuring;
+    await disabled;
+    expect(plugin.sidecarConnection.configureDesktop).toHaveBeenCalledTimes(1);
+    expect(plugin.sidecarConnection.configureDesktop).toHaveBeenCalledWith(
+      expect.objectContaining({ showIcon: false }),
+    );
+  });
+});

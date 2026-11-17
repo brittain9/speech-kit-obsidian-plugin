@@ -96,6 +96,9 @@ interface SettingsTabDependencies {
   openModelPicker: (options?: ModelPickerOptions) => Promise<void>;
   openSetupWizard: () => Promise<void>;
   openSpeechKit?: () => Promise<void>;
+  getDesktopStatus?: () => string;
+  subscribeDesktopStatus?: (listener: () => void) => () => void;
+  retryDesktopControls?: () => Promise<void>;
   sidecarVersion: string;
   resolvePluginDirectory: () => Promise<string>;
   resetLlmTransformation: () => Promise<void>;
@@ -164,6 +167,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
   private readonly access: SettingAccess;
   private disposeDiarizationDesc: (() => void) | null = null;
   private disposeEngineSection: (() => void) | null = null;
+  private disposeDesktopStatus: (() => void) | null = null;
   private disposeMicrophoneSection: (() => void) | null = null;
   private disposeLlmSection: (() => void) | null = null;
   private llmSectionGeneration = 0;
@@ -291,8 +295,44 @@ export class LocalSttSettingTab extends PluginSettingTab {
     // --- Capture ---
     const captureCard = createSettingGroup(containerEl, t('settings.groups.capture'));
 
+    new Setting(captureCard)
+      .setName(t('desktop.shortcut'))
+      .setDesc(t('desktop.shortcutDesc'))
+      .addText((text) => {
+        text.setValue(settings.globalDictationShortcut);
+        text.inputEl.addEventListener('blur', () => {
+          const value = text.getValue().trim();
+          if (value !== this.access.getSettings().globalDictationShortcut) {
+            void this.access.persistOne('globalDictationShortcut', value);
+          }
+        });
+      });
+    addToggleSetting(captureCard, this.access, {
+      name: t('desktop.icon'),
+      desc: t('desktop.iconDesc'),
+      key: 'showDesktopStatusIcon',
+    });
+    addToggleSetting(captureCard, this.access, {
+      name: t('desktop.sounds'),
+      desc: t('desktop.soundsDesc'),
+      key: 'playRecordingSounds',
+    });
+    const desktopStatusSetting = new Setting(captureCard)
+      .setName(t('desktop.retry'))
+      .setDesc(this.dependencies.getDesktopStatus?.() ?? '')
+      .addButton((button) => {
+        button.setButtonText(t('desktop.retry')).onClick(async () => {
+          await this.dependencies.retryDesktopControls?.();
+          this.refreshSettingsTab();
+        });
+      });
+
     const systemAudioSupported = isSystemAudioSupportedOnCurrentPlatform();
 
+    this.disposeDesktopStatus =
+      this.dependencies.subscribeDesktopStatus?.(() => {
+        desktopStatusSetting.setDesc(this.dependencies.getDesktopStatus?.() ?? '');
+      }) ?? null;
     this.disposeMicrophoneSection = renderMicrophonePicker(captureCard, {
       access: this.access,
       feedback: this.dependencies.feedback,
@@ -709,6 +749,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
   }
 
   private tearDown(): void {
+    this.disposeDesktopStatus?.();
+    this.disposeDesktopStatus = null;
     this.llmSectionGeneration += 1;
     this.disposeLlmSection?.();
     this.disposeLlmSection = null;

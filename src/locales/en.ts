@@ -1,4 +1,28 @@
 export const en = {
+  'desktop.ready': 'Ready',
+  'desktop.starting': 'Starting',
+  'desktop.recording': 'Recording',
+  'desktop.finishing': 'Finishing',
+  'desktop.unavailable': 'Unavailable',
+  'desktop.stopped': 'Microphone stopped. Finishing transcript.',
+  'desktop.failed':
+    'Dictation could not start or desktop controls disconnected. Check Speech Kit in Obsidian.',
+  'desktop.targetClosed': 'The dictation target note is no longer open.',
+  'desktop.ownershipConflict':
+    'Desktop controls belong to another open vault. Disable them there, then retry here.',
+  'desktop.cancelStart': 'Cancel start',
+  'desktop.openTarget': 'Open target note',
+  'desktop.settings': 'Settings…',
+  'desktop.shortcut': 'Global dictation shortcut',
+  'desktop.shortcutDesc':
+    'Start or stop from another app. Leave empty to disable. Use a chord such as Control+Shift+D. On Wayland, your desktop approves the binding.',
+  'desktop.icon': 'Show desktop status icon',
+  'desktop.iconDesc':
+    'Show controls in the menu bar or system tray. GNOME requires a compatible AppIndicator extension; shortcuts work without it.',
+  'desktop.sounds': 'Play recording sounds',
+  'desktop.soundsDesc': 'Play a short cue when microphone recording starts or stops.',
+  'desktop.retry': 'Retry desktop controls',
+
   'notice.dictationNotActive': 'Dictation is not currently active.',
   'audio-file-model-required':
     'Select and validate a local speech-to-text model in Manage models, then try the audio file again.',

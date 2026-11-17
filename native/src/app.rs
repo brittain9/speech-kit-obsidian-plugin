@@ -320,6 +320,9 @@ impl AppState {
         let mut events = Vec::new();
 
         match command {
+            Command::ConfigureDesktop { .. } | Command::UpdateDesktopStatus { .. } => {
+                (ControlFlow::Continue, Vec::new())
+            }
             Command::Health => {
                 events.push(Event::HealthOk {
                     sidecar_version: self.sidecar_version.clone(),

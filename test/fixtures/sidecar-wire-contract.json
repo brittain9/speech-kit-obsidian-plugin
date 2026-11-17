@@ -181,6 +181,68 @@
         "texts": [7],
         "translationId": "translation-fixture"
       }
+    },
+    {
+      "id": "desktop-configure",
+      "accepted": true,
+      "wire": {
+        "type": "configure_desktop",
+        "requestId": "request-desktop",
+        "generation": "desktop-1",
+        "shortcut": "Control+Shift+D",
+        "showIcon": true,
+        "vaultName": "Test vault",
+        "labels": {
+          "ready": "Ready",
+          "starting": "Starting",
+          "recording": "Recording",
+          "finishing": "Finishing",
+          "unavailable": "Unavailable",
+          "start": "Start",
+          "stop": "Stop",
+          "cancelStart": "Cancel start",
+          "openTarget": "Open target",
+          "settings": "Settings"
+        }
+      },
+      "canonical": {
+        "type": "configure_desktop",
+        "requestId": "request-desktop",
+        "generation": "desktop-1",
+        "shortcut": "Control+Shift+D",
+        "showIcon": true,
+        "vaultName": "Test vault",
+        "labels": {
+          "ready": "Ready",
+          "starting": "Starting",
+          "recording": "Recording",
+          "finishing": "Finishing",
+          "unavailable": "Unavailable",
+          "start": "Start",
+          "stop": "Stop",
+          "cancelStart": "Cancel start",
+          "openTarget": "Open target",
+          "settings": "Settings"
+        }
+      }
+    },
+    {
+      "id": "desktop-update",
+      "accepted": true,
+      "wire": {
+        "type": "update_desktop_status",
+        "generation": "desktop-1",
+        "status": "recording",
+        "destination": "Test vault / note.md",
+        "canStart": false
+      },
+      "canonical": {
+        "type": "update_desktop_status",
+        "generation": "desktop-1",
+        "status": "recording",
+        "destination": "Test vault / note.md",
+        "canStart": false
+      }
     }
   ],
   "events": [
@@ -211,7 +273,7 @@
       "wire": {
         "type": "translation_complete",
         "translationId": "translation-fixture",
-        "translations": ["Texto público."]
+        "translations": ["Texto p\u00fablico."]
       }
     },
     {
@@ -282,6 +344,28 @@
         "code": "cancelled",
         "message": "Public failure."
       }
+    },
+    {
+      "id": "desktop-status",
+      "wire": {
+        "type": "desktop_status",
+        "generation": "desktop-1",
+        "shortcutStatus": "registered",
+        "effectiveShortcut": "Control+Shift+D",
+        "iconAvailable": true,
+        "owner": true
+      },
+      "tsAccepted": true
+    },
+    {
+      "id": "desktop-action",
+      "wire": {
+        "type": "desktop_action",
+        "generation": "desktop-1",
+        "actionId": 1,
+        "action": "toggle"
+      },
+      "tsAccepted": true
     }
   ],
   "frames": [
