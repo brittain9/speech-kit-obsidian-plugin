@@ -79,6 +79,25 @@ describe('PcmPlaybackQueue', () => {
     expect(harness.onCurrentSequenceChange).toHaveBeenLastCalledWith(1);
   });
 
+  it('starts paused and preserves an explicit Resume during pending suspension', async () => {
+    const harness = createHarness();
+    let complete: (() => void) | undefined;
+    harness.context.suspend.mockReturnValueOnce(
+      new Promise<undefined>((resolve) => {
+        complete = () => resolve(undefined);
+      }),
+    );
+    const started = harness.queue.start(true);
+    expect(harness.queue.isPaused()).toBe(true);
+    expect(harness.context.suspend).toHaveBeenCalledOnce();
+    await expect(harness.queue.togglePaused()).resolves.toBe(false);
+    complete?.();
+    await started;
+    expect(harness.queue.isPaused()).toBe(false);
+    expect(harness.context.resume).toHaveBeenCalledOnce();
+    harness.queue.stop();
+  });
+
   it('suspends and resumes the audio context', async () => {
     const harness = createHarness();
     harness.queue.start();

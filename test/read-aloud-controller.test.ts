@@ -312,6 +312,69 @@ describe('ReadAloudController', () => {
     expect(harness.controller.canReadText('Hola. ¿Cómo estás?', 'es')).toBe(true);
   });
 
+  it('keeps paused playback paused when the speed changes until Resume is requested', async () => {
+    const harness = controllerHarness({ selected: true });
+    await harness.controller.readText('First sentence. Second sentence.', 'en');
+    playback.togglePaused.mockResolvedValueOnce(true);
+    await harness.controller.togglePaused();
+    expect(harness.controller.getState()).toBe('paused');
+
+    await harness.controller.restartRemainingPlayback(1.25);
+
+    expect(harness.controller.getState()).toBe('paused');
+    expect(playback.start).toHaveBeenLastCalledWith(true);
+    expect(harness.startSynthesis.mock.calls.at(-1)?.[0].speed).toBe(1.25);
+    playback.togglePaused.mockResolvedValueOnce(false);
+    await harness.controller.togglePaused();
+    expect(harness.controller.getState()).toBe('reading');
+    harness.controller.dispose();
+  });
+
+  it('lets the latest rapid speed change own paused playback', async () => {
+    const harness = controllerHarness({ selected: true });
+    await harness.controller.readText('First sentence. Second sentence.', 'en');
+    playback.togglePaused.mockResolvedValueOnce(true);
+    await harness.controller.togglePaused();
+    let completeFirst: (() => void) | undefined;
+    playback.start.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        completeFirst = resolve;
+      }),
+    );
+    const first = harness.controller.restartRemainingPlayback(1.25);
+    await harness.controller.restartRemainingPlayback(1.5);
+    completeFirst?.();
+    await first;
+    expect(harness.startSynthesis).toHaveBeenCalledTimes(2);
+    expect(harness.startSynthesis.mock.calls.at(-1)?.[0].speed).toBe(1.5);
+    expect(harness.controller.getState()).toBe('paused');
+    harness.controller.dispose();
+  });
+
+  it.each(['stop', 'resume'] as const)(
+    'honors %s while a paused speed restart prepares playback',
+    async (action) => {
+      const harness = controllerHarness({ selected: true });
+      await harness.controller.readText('First sentence. Second sentence.', 'en');
+      playback.togglePaused.mockResolvedValueOnce(true);
+      await harness.controller.togglePaused();
+      let complete: (() => void) | undefined;
+      playback.start.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          complete = resolve;
+        }),
+      );
+      const restarting = harness.controller.restartRemainingPlayback(1.25);
+      if (action === 'stop') harness.controller.stop();
+      else await harness.controller.togglePaused();
+      complete?.();
+      await restarting;
+      expect(harness.controller.getState()).toBe(action === 'stop' ? 'idle' : 'reading');
+      expect(harness.startSynthesis).toHaveBeenCalledTimes(action === 'stop' ? 1 : 2);
+      harness.controller.dispose();
+    },
+  );
+
   it('keeps the translated target language when settings restart preview playback', async () => {
     const harness = controllerHarness({ selected: true, dictationLanguage: 'en' });
 
