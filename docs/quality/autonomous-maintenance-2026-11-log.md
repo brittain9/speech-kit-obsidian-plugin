@@ -29,7 +29,6 @@ Guided by [the run spec](../specs/autonomous-maintenance-2026-11.md). This log t
 | P01 | Medium   | Efficiency            | Establish stopped and active resource observations before optimization.                                                | Bounded stopped and read-aloud samples found no high-CPU idle loop in the tested configuration; the 396-word reading completed. Silence-triggered unloading is deferred. These observations do not establish a battery improvement or leak freedom. [Measurements](2026-11-extended-validation.md).               |
 | Q01 | High     | Native workflow QA    | Exercise daily use and interactions, then the final combined build.                                                    | Native dictation, typing/link paste, recording, German, translation, read-aloud, recovery, model management and normal/compact layout checks passed. Release metadata and final CI remain pending.                                                                                                                |
 
-
 ## Merged follow-up scope
 
 - **Translation preview (#516):** preserve the source identity and edited draft across view changes and rename. Native replacement affected only the original renamed note. [Validation](2026-11-extended-validation.md#translation-preview-source-and-reviewed-text).

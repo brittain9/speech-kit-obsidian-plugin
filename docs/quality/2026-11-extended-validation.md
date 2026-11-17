@@ -97,8 +97,6 @@ On macOS, the merged settings and modal changes passed native normal- and half-w
 
 A 120-second public-speech playback used a local test-only slow 560 ms Parakeet profile to exercise workflow-status work (#524). The native UI showed listening and growing backlog, then showed finishing after Stop while accepted speech drained. The final fixture phrase appeared; a typed marker and pasted public URL remained once each, and the temporary pin cleared. Recording was off. This is a bounded functional drain check, not an accuracy or performance comparison, and it does not change the production 1,120 ms profile. The final #524 head passed its exact-head [platform CI](https://github.com/brittain9/speech-kit-obsidian-plugin/actions/runs/42551420748) on `10d222a`, then merged.
 
-
-
 ## Sustained live dictation
 
 With the production native engine and Moonshine Tiny, a 300-second public speech replay completed while the session stayed listening. A further 47 seconds included a typed marker and pasted public URL. After Stop, accepted speech drained and the temporary pin was removed. The original note prefix, typed marker, and URL were preserved; each manual addition appeared once. The saved text contained the expected 29 repeat markers and no zero-width spaces. Recording was off, and system audio was turned off afterward. This 347-second functional check is not an accuracy, battery, or hours-long reliability benchmark.
@@ -118,8 +116,6 @@ A cancelled public audio-file job retained an incomplete transcript. After closi
 ## Remaining validation
 
 A native check of the merged caret-order fix (#527) preserved the first transcript and recording as the prefix of a second consecutive session, with both recording links in chronological order. The dropdown model-picker prototype (#531) was rejected. Its grouped replacement (#533) passed native and platform checks and merged. Workflow status (#524) is merged. Clipboard feedback (#532) is merged and passed the native check above. The user-selected Models settings summary passed native checks. Release metadata and final CI remain pending. Push-to-talk is deferred by explicit user direction: the required configurable hold shortcut needs key-release information unavailable through the public command callback, and no separate shortcut framework is being added in this pass. A clean main checkout passed dependency installation, frontend checks, build, and output verification; the installed candidate is recorded below. Native Windows, Linux, mobile and screen-reader behavior are not established by the Mac checks above. No battery or energy saving has been demonstrated.
-
-
 
 ## Models settings summary candidate
 
