@@ -189,26 +189,26 @@ when its prompt would need to be selected.
 ## Acceptance
 
 - [x] No shared constant can make an engine claim a language it cannot serve;
-  the Nemotron equality test is gone and its support derives from the prompt
-  table.
+      the Nemotron equality test is gone and its support derives from the prompt
+      table.
 - [x] `hr` and `sr` persist as distinct choices with endonym labels; Serbian is
-  explicitly Cyrillic and has no second script option.
+      explicitly Cyrillic and has no second script option.
 - [x] Whisper transcribes both, with pinned FLEURS fixtures at sentence 1577.
-  Native review still outstanding.
+      Native review still outstanding.
 - [x] Nemotron accepts `hr` at index 29 and rejects `sr` before audio capture.
 - [x] Supertonic reads Croatian aloud and rejects `sr` explicitly — read aloud
-  refuses a language the selected voice model does not declare rather than
-  falling through to the language-neutral `na` branch.
+      refuses a language the selected voice model does not declare rather than
+      falling through to the language-neutral `na` branch.
 - [x] Translation UI remains unchanged and offers neither Croatian nor Serbian.
 - [x] The eight existing languages are unchanged.
 - [x] Settings shows what the selected language actually covers, so Serbian
-  users learn the shape of their support without hitting a failure.
+      users learn the shape of their support without hitting a failure.
 - [x] README states three separate capability counts, not one.
 - [x] `npm run check` green, less `biome check .` — twelve stale worktrees under
-  `.worktree/` carry nested configs that abort the run; scoped
-  `biome check src test scripts` is clean.
+      `.worktree/` carry nested configs that abort the run; scoped
+      `biome check src test scripts` is clean.
 - [ ] `multilingual-quality` dispatched and linked; native review recorded in
-  `docs/quality/`. Needs the branch pushed first.
+      `docs/quality/`. Needs the branch pushed first.
 - [x] Support matrix in the playbook updated.
 
 ## Non-goals

@@ -167,3 +167,25 @@ describe('setup ready actions', () => {
     expect(harness.startDictation).toHaveBeenCalledOnce();
   });
 });
+
+it('opens the controls only after setup is saved and closed, without starting the microphone', async () => {
+  const openSpeechKit = vi.fn(async () => {});
+  const harness = createHarness({ openSpeechKit });
+  await harness.actions.openSpeechKit();
+  expect(harness.events).toEqual(['completed', 'closed']);
+  expect(openSpeechKit).toHaveBeenCalledOnce();
+  expect(harness.startDictation).not.toHaveBeenCalled();
+});
+
+it('keeps setup open if saving fails before opening the controls', async () => {
+  const openSpeechKit = vi.fn(async () => {});
+  const harness = createHarness({
+    onCompleted: vi.fn(async () => {
+      throw new Error('save failed');
+    }),
+    openSpeechKit,
+  });
+  await harness.actions.openSpeechKit();
+  expect(harness.closeWizard).not.toHaveBeenCalled();
+  expect(openSpeechKit).not.toHaveBeenCalled();
+});

@@ -190,6 +190,7 @@ shipped.
 
 **(B) Bounded-tail partial decode — SHIPPED.** Persist the generated token sequence and
 self-KV cache across partials on the open utterance. Each partial:
+
 - keeps the committed prefix (tokens older than a lookback window
   `PARTIAL_REDECODE_WINDOW_TOKENS`) and their self-KV,
 - truncates self-KV to the commit boundary,

@@ -7,6 +7,7 @@ interface SetupReadyActionDependencies {
   hasDictationTarget: () => boolean;
   isDictationBusy: () => boolean;
   onCompleted: () => Promise<void>;
+  openSpeechKit?: () => Promise<void>;
   prepareDictationTarget: () => Promise<boolean>;
   startDictation: () => Promise<void>;
 }
@@ -19,6 +20,10 @@ export class SetupReadyActions {
 
   async done(): Promise<void> {
     await this.complete(false);
+  }
+
+  async openSpeechKit(): Promise<void> {
+    await this.complete(false, this.dependencies.openSpeechKit);
   }
 
   async tryDictationNow(): Promise<void> {
@@ -68,7 +73,7 @@ export class SetupReadyActions {
     return false;
   }
 
-  private async complete(startDictation: boolean): Promise<void> {
+  private async complete(startDictation: boolean, afterClose?: () => Promise<void>): Promise<void> {
     if (this.pending) {
       return;
     }
@@ -88,6 +93,7 @@ export class SetupReadyActions {
       }
 
       this.dependencies.closeWizard();
+      await afterClose?.();
       if (startDictation) {
         await this.dependencies.startDictation();
       }

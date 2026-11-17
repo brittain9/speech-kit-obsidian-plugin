@@ -141,7 +141,7 @@ fn open_loopback_client() -> Result<
     let enumerator =
         wasapi::DeviceEnumerator::new().map_err(|e| SystemAudioError::Capture(format!("{e}")))?;
     let device = enumerator
-        .get_default_device(&Direction::Render)
+        .get_default_device(Direction::Render)
         .map_err(|e| SystemAudioError::Capture(format!("{e}")))?;
     let mut client = device
         .get_iaudioclient()
@@ -159,11 +159,12 @@ fn open_loopback_client() -> Result<
     client
         .initialize_client(
             &wave_format,
-            &Direction::Capture,
-            &StreamMode::PollingShared {
+            Direction::Capture,
+            StreamMode::PollingShared {
                 autoconvert: false,
                 buffer_duration_hns: def_period,
             },
+            None,
         )
         .map_err(|e| SystemAudioError::Capture(format!("{e}")))?;
 

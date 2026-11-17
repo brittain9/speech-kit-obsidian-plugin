@@ -110,7 +110,6 @@ Implement the strongest practical candidates when the evidence supports them. Va
 
 The user approved three NVIDIA additions: English Nemotron Speech Streaming v2603, Parakeet Unified English 0.6B, and an optional 160 ms profile for the existing Nemotron 3.5 model. Preserve the existing Nemotron 3.5 560 ms selection and assets; a new latency profile is not a new checkpoint. Comparative accuracy benchmarks are waived for these additions. Exact artifact provenance, hashes, licensing, real loading, transcription, streaming/finalization, silence, reset, cancellation, and native QA remain required. Record throughput observations and practical limits without making comparative accuracy claims. Qwen3-ASR is excluded from implementation.
 
-
 ## Execution loop
 
 1. **Baseline:** inspect git, installed build, toolchains, process state, test-vault configuration, and existing checks. Keep prior maintenance results and unfinished follow-ups distinct.

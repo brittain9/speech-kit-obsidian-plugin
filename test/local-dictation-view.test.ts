@@ -11,6 +11,8 @@ it('opens Settings from the compact daily sidebar', async () => {
   const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
     feedback: { show: vi.fn() },
     getSecret: () => '',
+    getDictationState: () => 'idle',
+    toggleDictation: vi.fn(async () => {}),
     getSettings: () => ({
       ...DEFAULT_PLUGIN_SETTINGS,
       llmFeaturesEnabled: true,
@@ -38,6 +40,8 @@ it('preserves another setting changed while enabling transformation is waiting t
   const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
     feedback: { show: vi.fn() },
     getSecret: () => '',
+    getDictationState: () => 'idle',
+    toggleDictation: vi.fn(async () => {}),
     getSettings: () => settings,
     mutatePresetState: vi.fn(async () => {}),
     synchronizePresets: vi.fn(async () => {}),
@@ -60,7 +64,9 @@ it('announces the changing sidebar workflow summary as one atomic status', () =>
   const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
     feedback: { show: vi.fn() },
     getSecret: () => '',
-    getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, llmFeaturesEnabled: false }),
+    getDictationState: () => 'idle',
+    toggleDictation: vi.fn(async () => {}),
+    getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, llmFeaturesEnabled: true }),
     mutatePresetState: vi.fn(async () => {}),
     mutateSettings: vi.fn(async () => {}),
     synchronizePresets: vi.fn(async () => {}),
@@ -80,6 +86,8 @@ it('preserves the sidebar scroll position across a settings rerender', () => {
   const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
     feedback: { show: vi.fn() },
     getSecret: () => '',
+    getDictationState: () => 'idle',
+    toggleDictation: vi.fn(async () => {}),
     getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, llmFeaturesEnabled: false }),
     mutatePresetState: vi.fn(async () => {}),
     mutateSettings: vi.fn(async () => {}),
@@ -93,4 +101,29 @@ it('preserves the sidebar scroll position across a settings rerender', () => {
   view.requestRefresh();
 
   expect(content.scrollTop).toBe(320);
+});
+
+it('keeps dictation controls available when AI transformations are disabled', async () => {
+  Setting.reset();
+  const toggleDictation = vi.fn(async () => {});
+  const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
+    feedback: { show: vi.fn() },
+    getSecret: () => '',
+    getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, llmFeaturesEnabled: false }),
+    getDictationState: () => 'idle',
+    toggleDictation,
+    mutatePresetState: vi.fn(async () => {}),
+    mutateSettings: vi.fn(async () => {}),
+    synchronizePresets: vi.fn(async () => {}),
+  });
+  view.refresh();
+  const start = Setting.buttonNamed('Start dictation');
+  await start.click();
+  expect(toggleDictation).toHaveBeenCalledOnce();
+  view.updateDictationState('listening');
+  expect(start.text).toBe('Stop dictation');
+  view.updateDictationState('speech_detected');
+  expect(start.text).toBe('Stop dictation');
+  view.updateDictationState('idle');
+  expect(start.text).toBe('Start dictation');
 });
