@@ -41,6 +41,11 @@ export class DiarizationSettingsModal extends Modal {
       text: t('settings.speakerLabels.modal.intro'),
     });
 
+    this.contentEl.createEl('p', {
+      cls: 'setting-item-description',
+      text: t('settings.speakerLabels.numberedVoices'),
+    });
+
     new Setting(this.contentEl)
       .setName(t('settings.speakerLabels.maximumSpeakers.name'))
       .setDesc(
