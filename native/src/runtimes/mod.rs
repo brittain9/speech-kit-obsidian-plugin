@@ -8,6 +8,7 @@ pub mod llama_cpp;
     feature = "engine-moonshine",
     feature = "engine-nemotron-asr",
     feature = "engine-parakeet-unified",
+    feature = "engine-parakeet-tdt",
     feature = "engine-pocket-tts",
     feature = "engine-supertonic"
 ))]

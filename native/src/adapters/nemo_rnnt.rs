@@ -67,6 +67,14 @@ impl NemoTokenizer {
         Ok(())
     }
 
+    #[cfg(feature = "engine-parakeet-tdt")]
+    pub(crate) fn piece(&self, id: i32) -> Option<&str> {
+        usize::try_from(id)
+            .ok()
+            .and_then(|id| self.pieces.get(id))
+            .map(String::as_str)
+    }
+
     pub(crate) fn decode(&self, token_ids: &[i32]) -> Result<String, TranscriptionError> {
         let mut text = String::new();
         for &id in token_ids {
