@@ -13,6 +13,7 @@ Open **Settings → Speech Kit** to manage models, capture, output, reading, tra
 
 - [Contributing](../CONTRIBUTING.md) covers the development setup and checks.
 - [System architecture](system-architecture.md) describes the current design; [ADRs](adr/) record design decisions.
+- [Code graph](guides/code-graph.md) covers local Graphify setup and queries.
 - [Guides](guides/) include compatibility and model testing instructions.
 - [Quality](quality/) and [research](research/) contain validation and investigation records.
 - [Release](release/) contains the release process and historical release notes. [Specifications](specs/) record proposed and implemented designs.

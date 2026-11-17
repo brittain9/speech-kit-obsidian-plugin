@@ -31,3 +31,8 @@ stats/
 AGENTS.md
 CLAUDE.md
 PLANS.md
+
+# Local code graph and its isolated Python environment.
+graphify-out/
+tools/graphify/.venv/
+tools/graphify/.cache/
