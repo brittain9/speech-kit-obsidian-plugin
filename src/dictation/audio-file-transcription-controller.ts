@@ -320,7 +320,9 @@ export class AudioFileTranscriptionController {
         utteranceIndex: 0,
         utteranceStartMsInSession: 0,
       });
-      if (result.kind !== 'accepted') return false;
+      if (result.kind !== 'accepted' || session.wasLastTranscriptInserted?.() === false) {
+        return false;
+      }
       this.partialRecovery = null;
       this.dependencies.onMediaProgress?.(this.mediaProgress);
       return true;
@@ -1256,11 +1258,6 @@ export class AudioFileTranscriptionController {
     }
     await managed.transcript.drainPendingProjections();
     await managed.releaseMediaLease();
-    if (!runPostCompletion || !this.completedFeeds.has(managed)) {
-      const text = managed.transcript.getPartialText();
-      const target = this.sessionTargets.get(managed);
-      if (text.length > 0 && target !== undefined) this.partialRecovery = { target, text };
-    }
     if (runPostCompletion && !quarantined) {
       try {
         await managed.runPostCompletion();
@@ -1269,6 +1266,11 @@ export class AudioFileTranscriptionController {
         this.dependencies.logger?.warn('llm', 'media transcript post-completion failed', error);
       }
     }
+    // A successful commit clears staged text. Anything still staged, including
+    // a complete transcript whose insertion failed, belongs to recovery.
+    const text = managed.transcript.getPartialText();
+    const target = this.sessionTargets.get(managed);
+    if (text.length > 0 && target !== undefined) this.partialRecovery = { target, text };
     if (this.activeSession === managed) this.activeSession = null;
     try {
       managed.transcript.disposeSession();

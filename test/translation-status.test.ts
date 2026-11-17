@@ -19,3 +19,20 @@ it('opens detached translation through a native button and announces changes sep
   status.update({ phase: 'completed', text: 'public', sourceUnitsKept: 0 }, reopen);
   expect(element.ownerDocument.activeElement).toBe(button);
 });
+
+it.each([false, true])(
+  'announces unconfirmed native cancellation (write failure: %s)',
+  (failed) => {
+    const element = new TestElement();
+    const status = new TranslationStatusController(element as unknown as HTMLElement);
+    status.update(
+      { phase: 'cancelled', backendCancellation: failed ? 'unconfirmed' : 'pending' },
+      vi.fn(),
+    );
+    expect(element.findByClass('local-stt-status-live')?.textContent).toBe(
+      failed ? 'Speech engine stop unconfirmed' : 'Speech engine still stopping',
+    );
+    status.update({ phase: 'cancelled' }, vi.fn());
+    expect(element.findByClass('local-stt-status-live')?.textContent).toBe('Translation canceled.');
+  },
+);

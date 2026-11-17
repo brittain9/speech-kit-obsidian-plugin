@@ -1424,6 +1424,24 @@
 .local-stt-translation-modal {
   width: 720px;
   max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+}
+
+.local-stt-translation-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.local-stt-translation-modal__body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.local-stt-translation-modal__footer {
+  flex-shrink: 0;
 }
 
 .local-stt-translation-modal h2 {

@@ -953,6 +953,63 @@ describe('AudioFileTranscriptionController', () => {
     expect(onMediaProgress).toHaveBeenLastCalledWith(null);
   });
 
+  it('retains the completed transcript for recovery when note insertion is rejected', async () => {
+    const harness = createHarness();
+    const operation = harness.controller.transcribe();
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+    const sessionId =
+      harness.sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    const session = harness.sessions[0];
+    if (sessionId === undefined || session === undefined) {
+      throw new Error('Expected an audio-file session.');
+    }
+    session.acceptTranscript.mockReturnValueOnce({ kind: 'rejected', reason: 'session-closed' });
+    harness.sidecarConnection.emit(transcriptReady(sessionId, 'Keep this completed transcript.'));
+    harness.sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await operation;
+
+    expect(harness.controller.getMediaError()).toBeInstanceOf(Error);
+    expect(harness.controller.getPartialTranscript()).toBe('Keep this completed transcript.');
+    expect(harness.controller.getState()).toBe('idle');
+    expect(session.dispose).toHaveBeenCalledOnce();
+    expect(harness.controller.insertPartialTranscript()).toBe(true);
+    expect(harness.sessions[1]?.accepted[0]?.text).toContain('Keep this completed transcript.');
+    expect(harness.controller.getPartialTranscript()).toBeNull();
+  });
+
+  it('keeps recovery available when the editor accepts it without inserting text', async () => {
+    const sessions: (FakeSession & { wasLastTranscriptInserted: () => boolean })[] = [];
+    let inserted = false;
+    const harness = createHarness({
+      createSession: () => {
+        const session = Object.assign(new FakeSession(), {
+          wasLastTranscriptInserted: () => inserted,
+        });
+        sessions.push(session);
+        return session;
+      },
+    });
+    const operation = harness.controller.transcribe();
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+    const sessionId =
+      harness.sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    if (sessionId === undefined) throw new Error('Expected an audio-file session.');
+    harness.sidecarConnection.emit(transcriptReady(sessionId, 'Keep this recovery text.'));
+    await harness.controller.cancel();
+    await operation;
+
+    expect(harness.controller.insertPartialTranscript()).toBe(false);
+    expect(harness.controller.getPartialTranscript()).toBe('Keep this recovery text.');
+    expect(sessions[1]?.dispose).toHaveBeenCalledOnce();
+    inserted = true;
+    expect(harness.controller.insertPartialTranscript()).toBe(true);
+    expect(harness.controller.getPartialTranscript()).toBeNull();
+  });
+
   it('keeps user cancellation silent when the sidecar exits during native cancellation', async () => {
     let resolveCancel:
       | ((value: { reason: 'user_cancel'; sessionId: string; type: 'session_stopped' }) => void)

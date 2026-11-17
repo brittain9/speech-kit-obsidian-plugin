@@ -85,6 +85,7 @@ Markdown to stdout:
    plain `git fetch`, no branch checkout needed.
 
 Flags:
+
 - `--snapshot` — after rendering, record one normalized JSON line in the
   history file (created if absent). Real snapshots are CI's job; a local
   `--snapshot` writes to a gitignored `stats/history.jsonl` in the working
@@ -93,6 +94,7 @@ Flags:
   report (for scripting/debugging).
 
 Env:
+
 - `STATS_HISTORY_PATH` — history file location, default `stats/history.jsonl`.
   The weekly workflow points this at its checkout of the `stats-history`
   branch.

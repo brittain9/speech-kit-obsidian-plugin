@@ -28,7 +28,7 @@ import { LlmModelSettingsModal } from '../ui/llm-model-settings-modal';
 import { LlmTimingSettingsModal } from '../ui/llm-timing-settings-modal';
 import { MediaToolInstallModal } from '../ui/media-tool-install-modal';
 import { PresetManagerModal } from '../ui/preset-manager-modal';
-import { diarizationSettingDescription } from './diarization-setting';
+import { renderDiarizationSetting } from './diarization-setting';
 import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
 import { changeHardwareAcceleration } from './hardware-acceleration-action';
@@ -94,6 +94,7 @@ interface SettingsTabDependencies {
   modelInstallManager: ModelInstallManager;
   openModelPicker: (options?: ModelPickerOptions) => Promise<void>;
   openSetupWizard: () => Promise<void>;
+  openSpeechKit?: () => Promise<void>;
   sidecarVersion: string;
   resolvePluginDirectory: () => Promise<string>;
   resetLlmTransformation: () => Promise<void>;
@@ -203,6 +204,18 @@ export class LocalSttSettingTab extends PluginSettingTab {
     const sidecarActionDeps = this.buildSidecarInstallActionDeps();
 
     containerEl.empty();
+
+    if (this.dependencies.openSpeechKit !== undefined) {
+      new Setting(containerEl)
+        .setName(t('sidebar.controls.title'))
+        .setDesc(t('sidebar.controls.description'))
+        .addButton((button) => {
+          button.setButtonText(t('commands.openSpeechKit')).onClick(() => {
+            (this.app as App & { setting?: { close: () => void } }).setting?.close();
+            void this.dependencies.openSpeechKit?.();
+          });
+        });
+    }
 
     // --- Model ---
     const modelGroup = containerEl.createDiv({
@@ -411,33 +424,27 @@ export class LocalSttSettingTab extends PluginSettingTab {
 
     this.renderTranscriptFormattingSetting(outputCard);
 
-    const diarizationSetting = addToggleSetting(outputCard, this.access, {
-      name: t('settings.speakerLabels.name'),
-      desc: '',
-      key: 'diarizationEnabled',
-    });
-    const updateDiarizationDesc = (): void => {
-      const caps = manager.getState().selectedModelCapabilities;
-      diarizationSetting.setDesc(
-        diarizationSettingDescription(
-          caps.status === 'ready' && caps.capabilities.family.supportsStreaming,
-        ),
-      );
-    };
-    updateDiarizationDesc();
-    this.disposeDiarizationDesc = manager.subscribe(updateDiarizationDesc);
-    diarizationSetting.addExtraButton((button) => {
-      button
-        .setIcon('sliders-horizontal')
-        .setTooltip(t('settings.speakerLabels.modal.title'))
-        .onClick(() => {
-          new DiarizationSettingsModal(this.app, {
-            getSettings: () => this.dependencies.getSettings(),
-            savePatch: (patch) =>
-              this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
-          }).open();
-        });
-      button.extraSettingsEl.setAttribute('aria-label', t('settings.speakerLabels.modal.title'));
+    this.disposeDiarizationDesc = renderDiarizationSetting(outputCard, {
+      getSettings: () => this.dependencies.getSettings(),
+      saveEnabled: (enabled) => this.access.persistOne('diarizationEnabled', enabled),
+      streamingModelSelected: () => {
+        const caps = manager.getState().selectedModelCapabilities;
+        return caps.status === 'ready' && caps.capabilities.family.supportsStreaming;
+      },
+      subscribe: (listener) => manager.subscribe(listener),
+      chooseModel: () => {
+        void this.openModelPickerFromSettings(
+          { initialTask: 'stt', requireBatchStt: true, onChanged: () => this.refreshSettingsTab() },
+          t('settings.speakerLabels.name'),
+        );
+      },
+      configure: () => {
+        new DiarizationSettingsModal(this.app, {
+          getSettings: () => this.dependencies.getSettings(),
+          savePatch: (patch) =>
+            this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
+        }).open();
+      },
     });
 
     this.renderTimestampSettings(outputCard, settings);

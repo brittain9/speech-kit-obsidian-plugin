@@ -208,13 +208,13 @@ sequenceDiagram
 ```
 
 The sidecar is spawned as a subprocess of Obsidian (`child_process.spawn`,
-`stdio: 'pipe'`). A custom 5-byte framing header (1 byte kind + 4-byte LE length
-- payload) multiplexes JSON and raw audio on one bidirectional stream — no HTTP,
-  no WebSocket, no IPC library. `FramedMessageParser` (TS) and `read_frame` (Rust)
-  reassemble frames across chunk boundaries.
+`stdio: 'pipe'`). A custom 5-byte header (1 byte kind and 4-byte LE payload length)
+multiplexes JSON and raw audio on one bidirectional stream — no HTTP,
+no WebSocket, no IPC library. `FramedMessageParser` (TS) and `read_frame` (Rust)
+reassemble frames across chunk boundaries.
 
-* `stdin` (TS → Rust): audio frames (`0x02`) and JSON command frames (`0x01`).
-* `stdout` (Rust → TS): JSON event frames (`0x01`) and read-aloud PCM16LE
+- `stdin` (TS → Rust): audio frames (`0x02`) and JSON command frames (`0x01`).
+- `stdout` (Rust → TS): JSON event frames (`0x01`) and read-aloud PCM16LE
   frames (`0x03`). A synthesis frame starts with little-endian
   `u32 synthesisId` + `u32 seq`, followed by mono PCM.
 
@@ -313,6 +313,7 @@ Universal-Streaming / Deepgram end-of-speech), and 2000 ms (near Azure dictation
 territory for long pauses).
 
 **Finalization paths:**
+
 1. **Natural end** — probability drops below the negative threshold; once the
    silence gap reaches `silence_end_frames`, the utterance is trimmed and
    finalized.
@@ -400,6 +401,7 @@ Cargo features: `engine-whisper`, `engine-cohere-transcribe`,
 than a silent failure.
 
 **Worker behavior:**
+
 - A dedicated thread holding `Arc<EngineRegistry>`, communicating over `mpsc`
   channels; all inference is synchronous and blocking on that thread.
 - Whisper runs greedy decoding in the selected language, with translation

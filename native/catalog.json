@@ -201,8 +201,8 @@
       "task": "stt",
       "modelId": "whisper_small_en_q5_1",
       "collectionId": "english_cpu_first",
-      "displayName": "Whisper Small",
-      "summary": "Balances transcription quality, download size, and CPU speed.",
+      "displayName": "Whisper Small English",
+      "summary": "English-only transcription balancing quality, download size, and CPU speed.",
       "languageTags": ["en"],
       "uxTags": ["balanced", "cpu"],
       "licenseLabel": "MIT",
@@ -210,6 +210,7 @@
       "sourceUrl": "https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1",
       "modelCardUrl": "https://github.com/ggml-org/whisper.cpp",
       "notes": [
+        "English only; automatic language detection is unavailable.",
         "A middle ground between the faster Base model and the more accurate Medium model.",
         "Uses the Q5_1 artifact listed below."
       ],
