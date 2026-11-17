@@ -2195,3 +2195,7 @@
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
 }
+
+.local-stt-timestamp-timing-details {
+  margin-bottom: var(--size-4-3);
+}

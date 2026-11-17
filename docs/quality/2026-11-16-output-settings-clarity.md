@@ -59,3 +59,24 @@ A public dictation-controller check also preserves the running session snapshot
 when advanced output preferences change: a second start does not create another
 capture, and the next session receives the new timestamp and speaker settings.
 The model-selection and capture implementations remain unchanged.
+
+## Native follow-up: speaker settings entry
+
+Native user feedback found that the disabled speaker-settings gear looked like
+an action that did nothing. The gear now opens its dialog for every model. With
+a streaming model, the dialog explains why labels are inactive, shows the saved
+speaker limit without enabling editing or Reset, and offers the same batch-only
+model picker as the main row. Choosing that action closes the explanatory dialog;
+it does not select or download a model. Stored preferences remain unchanged.
+
+The public row-to-modal regression failed before the fix because clicking the
+streaming gear never opened the dialog. It now checks the real dialog title,
+inactive explanation, saved limit, disabled controls, ignored stale input, and
+explicit model-picker action. Existing batch-mode configuration tests still pass.
+The full frontend gate passes 2,016 tests with 15 skipped, both TypeScript targets,
+formatting, lint, and production build. No new locale keys or algorithm changes
+were needed. Native geometry and interactions remain with the shared QA owner.
+
+The timestamp dialog's collapsed timing details also have a scoped bottom margin
+before the following divider. This spacing change has no rendering or persistence
+behavior; its visual acceptance belongs to native QA.
