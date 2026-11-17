@@ -1,6 +1,11 @@
 import type { TranslationCatalog } from '.';
 
 export const ja = {
+  'notice.dictationDestinationProcessing':
+    '処理中のテキストの外にカーソルを移動するか、処理が完了するまでお待ちください。',
+  'notice.dictationDestinationRejected':
+    '別の挿入位置を選ぶか、エディターで編集が許可されていることを確認してから、もう一度音声入力をお試しください。',
+
   'notice.dictationNotActive': 'ディクテーションは現在有効ではありません。',
   'commands.transcribeAudioFile': 'ローカルの音声ファイルを文字起こし',
   'commands.cancelAudioFile': 'ローカル音声ファイルの文字起こしをキャンセル',

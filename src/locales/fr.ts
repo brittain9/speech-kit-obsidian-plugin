@@ -1,6 +1,11 @@
 import type { TranslationCatalog } from '.';
 
 export const fr = {
+  'notice.dictationDestinationProcessing':
+    'Placez le curseur en dehors du texte encore en cours de traitement ou attendez la fin du traitement.',
+  'notice.dictationDestinationRejected':
+    'Choisissez un autre point d’insertion ou vérifiez si l’éditeur autorise les modifications, puis réessayez la dictée.',
+
   'notice.dictationNotActive': "La dictée n'est pas active actuellement.",
   'commands.transcribeAudioFile': 'Transcrire un fichier audio local',
   'commands.cancelAudioFile': 'Annuler la transcription du fichier audio local',

@@ -1,4 +1,9 @@
 export const en = {
+  'notice.dictationDestinationProcessing':
+    'Move the cursor outside the text still being processed, or wait for it to finish.',
+  'notice.dictationDestinationRejected':
+    'Choose another insertion point or check whether the editor allows changes, then try dictation again.',
+
   'desktop.ready': 'Ready',
   'desktop.starting': 'Starting',
   'desktop.recording': 'Listening',

@@ -1,6 +1,11 @@
 import type { TranslationCatalog } from '.';
 
 export const hr = {
+  'notice.dictationDestinationProcessing':
+    'Pomaknite pokazivač izvan teksta koji se još obrađuje ili pričekajte dovršetak obrade.',
+  'notice.dictationDestinationRejected':
+    'Odaberite drugo mjesto umetanja ili provjerite dopušta li uređivač izmjene pa ponovno pokušajte diktirati.',
+
   'media.modal.partialAvailable':
     'Dostupan je djelomičan transkript. Nije potpun. Kopirajte ga prije pokretanja novog zadatka.',
   'media.modal.partialCopied': 'Djelomični transkript je kopiran.',
