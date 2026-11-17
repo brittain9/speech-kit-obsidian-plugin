@@ -498,6 +498,7 @@ fn nemotron_and_whisper_transcribe_every_enabled_language_without_translation() 
     let mut failures = Vec::new();
 
     for fixture in fixtures() {
+        quality_report::verify_fixture(&fixture.path, &fixture.sha256);
         let samples = audio::decode_wav_16k_mono(&fixture.path).expect("decode fixture");
         let nemotron_covers = covers_language(NEMOTRON_MODEL_ID, &fixture.language);
         if nemotron_covers {

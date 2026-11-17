@@ -37,6 +37,7 @@ fn every_fixture_transcribes_within_quality_budget() {
     let mut failures = Vec::new();
 
     for fixture in &corpus.fixtures {
+        quality_report::verify_fixture(&fixture.audio_path(), &fixture.source.sha256);
         let samples = audio::decode_wav_16k_mono(&fixture.audio_path())
             .unwrap_or_else(|error| panic!("decoding fixture {}: {error}", fixture.id));
         let frames = audio::fixture_frames_with_trailing_silence(&samples);

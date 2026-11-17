@@ -65,6 +65,7 @@ fn nemotron_runs_through_vad_worker_and_revision_protocol() {
     let provenance = std::env::var_os(quality_report::REPORT_PATH_ENV)
         .map(|_| quality_report::model_evidence(common::model::NEMOTRON_MODEL_ID, &encoder));
     let fixture = libri_fixture();
+    quality_report::verify_fixture(&fixture.audio_path(), &fixture.source.sha256);
     let samples = audio::decode_wav_16k_mono(&fixture.audio_path()).unwrap();
     let frames = audio::fixture_frames_with_trailing_silence(&samples);
 

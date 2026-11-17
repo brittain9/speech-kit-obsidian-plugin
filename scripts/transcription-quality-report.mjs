@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, join, relative, resolve } from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 import { collectEvaluationEnvironment } from './lib/evaluation-environment.mjs';
 
 import {
@@ -174,7 +176,17 @@ export async function main(argv = process.argv.slice(2)) {
   await render(measurementDirectory, outputDirectory, environment);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+function isDirectInvocation() {
+  if (!process.argv[1]) return false;
+  try {
+    // Node canonicalizes the module URL, including macOS /tmp and /var aliases.
+    return import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectInvocation()) {
   main().catch((error) => {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;

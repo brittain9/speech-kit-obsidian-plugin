@@ -1,6 +1,6 @@
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -19,6 +19,26 @@ afterEach(async () => {
   for (const directory of directories.splice(0)) {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+it('executes the real CLI from a checkout path containing spaces', async () => {
+  const output = await mkdtemp(join(tmpdir(), 'speech kit quality command '));
+  directories.push(output);
+  await mkdir(join(output, 'lib'));
+  for (const name of [
+    'transcription-quality-report.mjs',
+    'lib/transcription-quality-report.mjs',
+    'lib/evaluation-environment.mjs',
+  ]) {
+    await copyFile(join('scripts', name), join(output, name));
+  }
+  const help = execFileSync(
+    process.execPath,
+    [join(output, 'transcription-quality-report.mjs'), '--help'],
+    { encoding: 'utf8' },
+  );
+  expect(help).toContain('Usage: node scripts/transcription-quality-report.mjs');
+  expect(help).toContain('--environment');
 });
 
 it('renders collected failed measurements without running further suites or hiding failure', async () => {

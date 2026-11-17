@@ -19,6 +19,9 @@ retains its original metric and budget, plus:
   Digits, spelled numbers and unit abbreviations are not silently equated.
 - A fixture manifest path and audio SHA-256. The referenced manifests retain
   dataset revisions, licensing and attribution; retain the source commit too.
+  Each producer verifies the actual audio bytes before decoding or inference,
+  including runs selecting only ignored model tests. A changed fixture fails
+  input verification instead of inheriting the nominal manifest identity.
 - Catalog source/license and required artifact pins alongside hashes and sizes
   actually read from the local model. Local overrides are not silently assigned
   the catalog's artifact identity. Artifact hashing happens once per model,
@@ -99,7 +102,9 @@ Retained [raw cases](2026-11-17-whisper-tiny-evaluation.jsonl) and
 [captured environment](2026-11-17-whisper-tiny-evaluation.environment.json)
 contain public-fixture text and artifact identities. The native producer was
 compiled from the reporting slice at `cb946326`; subsequent reporting fixes did
-not change those native sources. Re-render without inference:
+not change the scored outputs. The smoke preceded the new mandatory input-hash
+guard; a separate check confirmed all eight retained fixture hashes against the
+actual bytes, without rewriting the captured results. Re-render without inference:
 
 ```sh
 quality_input=$(mktemp -d)

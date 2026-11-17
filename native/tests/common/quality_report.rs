@@ -11,6 +11,17 @@ use serde::Serialize;
 
 pub const REPORT_PATH_ENV: &str = "STT_QUALITY_REPORT_PATH";
 
+/// A manifest hash is an identity claim, not proof of the bytes being decoded.
+/// Verify before inference, including explicitly selected ignored quality tests.
+pub fn verify_fixture(path: &std::path::Path, expected_sha256: &str) {
+    let actual =
+        super::model::file_sha256(path).expect("read evaluation fixture for integrity check");
+    assert!(
+        actual.eq_ignore_ascii_case(expected_sha256),
+        "evaluation fixture differs from pinned manifest: expected {expected_sha256}, got {actual}"
+    );
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelEvidence {
@@ -316,4 +327,19 @@ fn local_model_override_keeps_actual_identity_instead_of_catalog_identity() {
         Some(artifact.expected_sha256.as_str())
     );
     assert!(artifact.actual_sha256.is_some());
+}
+
+#[test]
+fn changed_fixture_cannot_be_attributed_to_a_pinned_manifest() {
+    let path = std::env::temp_dir().join(format!("quality-fixture-{}", uuid::Uuid::new_v4()));
+    std::fs::write(&path, b"original fixture").unwrap();
+    let pinned = super::model::file_sha256(&path).unwrap();
+    verify_fixture(&path, &pinned);
+    std::fs::write(&path, b"replaced fixture").unwrap();
+    let changed = std::panic::catch_unwind(|| verify_fixture(&path, &pinned));
+    std::fs::remove_file(path).unwrap();
+    assert!(
+        changed.is_err(),
+        "modified input must fail before inference or reporting"
+    );
 }
