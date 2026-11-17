@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: 24.22.2
+  NODE_VERSION: 24.22.3
   RUST_TOOLCHAIN: 1.94.1
 
 jobs:
@@ -56,13 +56,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # These native-only commands use Node's built-in process APIs to launch
-      # Cargo; no package dependency installation, npm cache, or npm upgrade is
-      # needed here. frontend-quality remains the JavaScript dependency gate.
+      # The production-client integration uses the same executable as the
+      # native quality lane, without a second engine build or model download.
       - name: Setup Node.js
         uses: ./.github/actions/setup-node-npm
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: "true"
+          upgrade-npm: "true"
+
+      - name: Install JavaScript dependencies
+        run: npm ci --engine-strict
 
       - name: Setup Rust
         uses: ./.github/actions/setup-sidecar-rust
@@ -79,6 +83,9 @@ jobs:
 
       - name: Run Rust quality gates
         run: node scripts/check-rust.mjs
+
+      - name: Exercise production client against the built sidecar
+        run: npm run test:sidecar:client
 
   sidecar-platform-quality:
     # Pull requests use sidecar-quality's Linux lane. main and explicit manual

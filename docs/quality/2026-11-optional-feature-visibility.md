@@ -6,10 +6,13 @@ explicit false survives settings normalization. The existing
 `llmFeaturesEnabled` preference is unchanged in storage and now governs new
 explicit media transformations as well as dictation transformations.
 
-A shared Features group owns the three reversible switches. Detailed settings
+A native **Customize tools** dialog, opened from a compact row in Advanced,
+owns the three reversible switches. Models remains the first settings section;
+the Open Speech Kit shortcut sits in Advanced beside Run setup. Detailed settings
 and task model summary subscriptions are mounted only for enabled tools.
 Manage models remains unfiltered so hidden-feature models can be inspected and
-removed. Unique switch labels preserve the existing settings focus mechanism.
+removed. The opening control regains focus when the dialog closes while Settings remains
+visible.
 
 Command availability reads current settings rather than unregistering command
 identifiers, preserving assigned hotkeys. Editor menus read the same settings
@@ -38,3 +41,8 @@ preview actions.
 Biome, Obsidian ESLint, and production build passed. Native Obsidian verification
 of the exact combined build remains assigned to the shared QA owner. No model
 was downloaded or removed by this change, and no release was created.
+
+The placement followup keeps tool customization out of the daily settings flow.
+Its public row-to-modal regression checks that switches appear only after opening
+the dialog, save reversibly, and preserve unrelated settings. Native visual review
+of the combined build remains required before merging the UI changes.

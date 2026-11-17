@@ -28,7 +28,8 @@ import { LlmModelSettingsModal } from '../ui/llm-model-settings-modal';
 import { LlmTimingSettingsModal } from '../ui/llm-timing-settings-modal';
 import { MediaToolInstallModal } from '../ui/media-tool-install-modal';
 import { PresetManagerModal } from '../ui/preset-manager-modal';
-import { diarizationSettingDescription } from './diarization-setting';
+import { renderCustomizeToolsSetting } from './customize-tools-modal';
+import { renderDiarizationSetting } from './diarization-setting';
 import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
 import { changeHardwareAcceleration } from './hardware-acceleration-action';
@@ -157,36 +158,6 @@ export function renderReadAloudHighlightSetting(
   });
 }
 
-export function renderFeatureSettings(
-  parent: HTMLElement,
-  access: SettingAccess,
-  onChanged: () => void,
-): void {
-  const group = createSettingGroup(parent, t('settings.groups.features'));
-  group.createEl('p', {
-    text: t('settings.features.description'),
-    cls: 'setting-item-description',
-  });
-  addToggleSetting(group, access, {
-    name: t('settings.features.translation'),
-    desc: t('settings.features.translationDesc'),
-    key: 'translationEnabled',
-    onChange: onChanged,
-  });
-  addToggleSetting(group, access, {
-    name: t('settings.features.readAloud'),
-    desc: t('settings.features.readAloudDesc'),
-    key: 'readAloudEnabled',
-    onChange: onChanged,
-  });
-  addToggleSetting(group, access, {
-    name: t('settings.features.llm'),
-    desc: t('settings.features.llmDesc'),
-    key: 'llmFeaturesEnabled',
-    onChange: onChanged,
-  });
-}
-
 export class LocalSttSettingTab extends PluginSettingTab {
   override readonly icon = 'mic';
 
@@ -234,18 +205,6 @@ export class LocalSttSettingTab extends PluginSettingTab {
     const sidecarActionDeps = this.buildSidecarInstallActionDeps();
 
     containerEl.empty();
-
-    if (this.dependencies.openSpeechKit !== undefined) {
-      new Setting(containerEl)
-        .setName(t('sidebar.controls.title'))
-        .setDesc(t('sidebar.controls.description'))
-        .addButton((button) => {
-          button.setButtonText(t('commands.openSpeechKit')).onClick(() => {
-            (this.app as App & { setting?: { close: () => void } }).setting?.close();
-            void this.dependencies.openSpeechKit?.();
-          });
-        });
-    }
 
     // --- Model ---
     const modelGroup = containerEl.createDiv({
@@ -306,8 +265,6 @@ export class LocalSttSettingTab extends PluginSettingTab {
     const translationModelContainer = settings.translationEnabled
       ? modelSection.createDiv({ cls: 'local-stt-model-summary-slot' })
       : null;
-
-    renderFeatureSettings(containerEl, this.access, () => this.refreshSettingsTab());
 
     const modelState = manager.getState();
     const selectedCapabilities = modelState.selectedModelCapabilities;
@@ -458,33 +415,27 @@ export class LocalSttSettingTab extends PluginSettingTab {
 
     this.renderTranscriptFormattingSetting(outputCard);
 
-    const diarizationSetting = addToggleSetting(outputCard, this.access, {
-      name: t('settings.speakerLabels.name'),
-      desc: '',
-      key: 'diarizationEnabled',
-    });
-    const updateDiarizationDesc = (): void => {
-      const caps = manager.getState().selectedModelCapabilities;
-      diarizationSetting.setDesc(
-        diarizationSettingDescription(
-          caps.status === 'ready' && caps.capabilities.family.supportsStreaming,
-        ),
-      );
-    };
-    updateDiarizationDesc();
-    this.disposeDiarizationDesc = manager.subscribe(updateDiarizationDesc);
-    diarizationSetting.addExtraButton((button) => {
-      button
-        .setIcon('sliders-horizontal')
-        .setTooltip(t('settings.speakerLabels.modal.title'))
-        .onClick(() => {
-          new DiarizationSettingsModal(this.app, {
-            getSettings: () => this.dependencies.getSettings(),
-            savePatch: (patch) =>
-              this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
-          }).open();
-        });
-      button.extraSettingsEl.setAttribute('aria-label', t('settings.speakerLabels.modal.title'));
+    this.disposeDiarizationDesc = renderDiarizationSetting(outputCard, {
+      getSettings: () => this.dependencies.getSettings(),
+      saveEnabled: (enabled) => this.access.persistOne('diarizationEnabled', enabled),
+      streamingModelSelected: () => {
+        const caps = manager.getState().selectedModelCapabilities;
+        return caps.status === 'ready' && caps.capabilities.family.supportsStreaming;
+      },
+      subscribe: (listener) => manager.subscribe(listener),
+      chooseModel: () => {
+        void this.openModelPickerFromSettings(
+          { initialTask: 'stt', requireBatchStt: true, onChanged: () => this.refreshSettingsTab() },
+          t('settings.speakerLabels.name'),
+        );
+      },
+      configure: () => {
+        new DiarizationSettingsModal(this.app, {
+          getSettings: () => this.dependencies.getSettings(),
+          savePatch: (patch) =>
+            this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
+        }).open();
+      },
     });
 
     this.renderTimestampSettings(outputCard, settings);
@@ -717,6 +668,28 @@ export class LocalSttSettingTab extends PluginSettingTab {
       changeModelStore: (path) => this.dependencies.modelInstallManager.changeModelStore(path),
       feedback: this.dependencies.feedback,
     });
+
+    renderCustomizeToolsSetting(advancedSection, this.app, {
+      access: this.access,
+      onChanged: () => this.refreshSettingsTab(),
+      onDialogOpened: () =>
+        this.lifecycle.focusAfterDialog({
+          settingName: t('settings.features.title'),
+          controlIndex: 0,
+        }),
+    });
+
+    if (this.dependencies.openSpeechKit !== undefined) {
+      new Setting(advancedSection)
+        .setName(t('sidebar.controls.title'))
+        .setDesc(t('sidebar.controls.description'))
+        .addButton((button) => {
+          button.setButtonText(t('commands.openSpeechKit')).onClick(() => {
+            (this.app as App & { setting?: { close: () => void } }).setting?.close();
+            void this.dependencies.openSpeechKit?.();
+          });
+        });
+    }
 
     new Setting(advancedSection)
       .setName(t('settings.runSetup.name'))
