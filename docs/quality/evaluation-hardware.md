@@ -60,9 +60,13 @@ Project [model validation](2026-11-16-qwen-asr-prototype.md) and
 real-model runs on an Apple M2 Pro with 16 GiB. A fresh collector invocation on
 17 November observed macOS/Darwin arm64, 12 logical CPUs, 12 available logical
 processors and 17,179,869,184 OS-visible memory bytes. It ran no inference and
-reported effective acceleration as unknown. Existing project documents/config
-identify no additional user-controlled machine that can be used autonomously
-for real-model testing; the CI runner labels are not a remote machine inventory.
+reported effective acceleration as unknown. The [current spec](../specs/application-reliability-and-model-expansion.md)
+identifies a Linux workstation in normal use, but does not establish its current
+CPU/GPU inventory or performance. Coordinate any check there; the spec excludes
+remote desktop takeover, audio changes, build installation and recording without
+coordination. No remote check was attempted for this metadata work. CI runner
+labels are separate from that user-controlled machine and do not supply its
+hardware inventory.
 
 For another authorized host, run the same collector and pinned fixture suite
 there, retaining the exact model/binary identities and run conditions. Compare
