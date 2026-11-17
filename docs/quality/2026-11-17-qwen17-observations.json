@@ -5,7 +5,7 @@
     "macOS": "27.2.1"
   },
   "runtime": "Existing pinned llama-cpp-2 0.1.160 / llama-cpp-sys-2 0.1.161, debug all-engine Metal helper",
-  "method": "One load and one request per fixture per model and acceleration setting. CPU used frozen 75459ec5 helper; Metal used same model/protocol source with temporary stderr diagnostics. No timing repetitions or isolated host benchmark.",
+  "method": "One load per model and acceleration setting, followed by two consecutive requests (one per fixture) in the same helper. CPU used frozen 75459ec5 helper; Metal used same model/protocol source with temporary stderr diagnostics. No timing repetitions or isolated host benchmark.",
   "fixtures": [
     {
       "path": "native/tests/fixtures/audio/de-fleurs-1577.wav",

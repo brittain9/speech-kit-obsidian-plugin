@@ -75,11 +75,22 @@ describe.skipIf(!binary)('production client with the real Rust sidecar', () => {
       },
     );
     const catalog = await connection.listModelCatalog();
-    const model = catalog.models.find((entry) => entry.modelId === 'qwen3_asr_0_6b_q8_0');
-    expect(model).toMatchObject({ runtimeId: 'llama_cpp', familyId: 'qwen3_asr', task: 'stt' });
-    expect(
-      model?.artifacts.filter((artifact) => artifact.required).map((artifact) => artifact.filename),
-    ).toEqual(['Qwen3-ASR-0.6B-Q8_0.gguf', 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf']);
+    for (const [modelId, filenames] of [
+      ['qwen3_asr_0_6b_q8_0', ['Qwen3-ASR-0.6B-Q8_0.gguf', 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf']],
+      ['qwen3_asr_1_7b_q8_0', ['Qwen3-ASR-1.7B-Q8_0.gguf', 'mmproj-Qwen3-ASR-1.7B-Q8_0.gguf']],
+    ] as const) {
+      const model = catalog.models.find((entry) => entry.modelId === modelId);
+      expect(model, `native catalog must embed ${modelId}`).toMatchObject({
+        runtimeId: 'llama_cpp',
+        familyId: 'qwen3_asr',
+        task: 'stt',
+      });
+      expect(
+        model?.artifacts
+          .filter((artifact) => artifact.required)
+          .map((artifact) => artifact.filename),
+      ).toEqual(filenames);
+    }
     const result = await connection.probeModelSelection({
       modelSelection: {
         kind: 'external_file',
