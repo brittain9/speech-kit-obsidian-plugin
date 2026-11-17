@@ -24,6 +24,14 @@ triggers, following commit `153be1d9` (manual certifications). Their successful 
 failed results are evidence for the models they actually invoke, not automatic
 catalog-wide eligibility decisions.
 
+The latest recorded [multilingual manual run](https://github.com/brittain9/speech-kit-obsidian-plugin/actions/runs/34839576111)
+was 2026-09-14: Nemotron automatic Croatian failed on its one clip (WER 77.8%
+against 45%, with spurious language tags). The latest recorded
+[sidecar manual run](https://github.com/brittain9/speech-kit-obsidian-plugin/actions/runs/35406236182)
+passed on 2026-09-18. Neither is current certification for Qwen or every model
+in today's catalog. These were existing-model observations, not evidence that
+optional new models blocked unrelated PRs.
+
 - English Whisper uses the checked-in corpus and fixture-specific WER budgets,
   with a real-time-factor ceiling of 1 on its CPU path.
 - The multilingual suite explicitly selects Nemotron 3.5 and Whisper Large V3
