@@ -1,9 +1,4 @@
-import {
-  type ButtonComponent,
-  type ExtraButtonComponent,
-  Setting,
-  type ToggleComponent,
-} from 'obsidian';
+import { type ButtonComponent, Setting, type ToggleComponent } from 'obsidian';
 import { t } from '../shared/i18n';
 import type { PluginSettings } from './plugin-settings';
 
@@ -27,7 +22,6 @@ export function renderDiarizationSetting(
   deps: DiarizationSettingDependencies,
 ): () => void {
   let toggle: ToggleComponent;
-  let options: ExtraButtonComponent;
   let chooseModel: ButtonComponent;
   const setting = new Setting(parent).setName(t('settings.speakerLabels.name'));
   setting.addToggle((control) => {
@@ -42,7 +36,6 @@ export function renderDiarizationSetting(
     button.buttonEl.toggle(deps.streamingModelSelected());
   });
   setting.addExtraButton((button) => {
-    options = button;
     button.setIcon('sliders-horizontal').setTooltip(t('settings.speakerLabels.modal.title'));
     button.extraSettingsEl.setAttribute('aria-label', t('settings.speakerLabels.modal.title'));
     button.onClick(deps.configure);
@@ -51,7 +44,6 @@ export function renderDiarizationSetting(
     const streaming = deps.streamingModelSelected();
     setting.setDesc(diarizationSettingDescription(streaming));
     toggle.setValue(!streaming && deps.getSettings().diarizationEnabled).setDisabled(streaming);
-    options.setDisabled(streaming);
     chooseModel.buttonEl.toggle(streaming);
   };
   refresh();

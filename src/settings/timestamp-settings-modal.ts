@@ -161,7 +161,9 @@ export class TimestampSettingsModal extends Modal {
         });
       });
 
-    const details = this.contentEl.createEl('details');
+    const details = this.contentEl.createEl('details', {
+      cls: 'local-stt-timestamp-timing-details',
+    });
     details.createEl('summary', { text: t('settings.timestamps.timingDetails') });
     details.createEl('p', {
       text: t('settings.timestamps.timingDetailsDesc'),

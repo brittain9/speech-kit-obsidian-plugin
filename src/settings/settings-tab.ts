@@ -415,22 +415,26 @@ export class LocalSttSettingTab extends PluginSettingTab {
 
     this.renderTranscriptFormattingSetting(outputCard);
 
+    const streamingModelSelected = (): boolean => {
+      const caps = manager.getState().selectedModelCapabilities;
+      return caps.status === 'ready' && caps.capabilities.family.supportsStreaming;
+    };
+    const chooseBatchModel = (): void => {
+      void this.openModelPickerFromSettings(
+        { initialTask: 'stt', requireBatchStt: true, onChanged: () => this.refreshSettingsTab() },
+        t('settings.speakerLabels.name'),
+      );
+    };
     this.disposeDiarizationDesc = renderDiarizationSetting(outputCard, {
       getSettings: () => this.dependencies.getSettings(),
       saveEnabled: (enabled) => this.access.persistOne('diarizationEnabled', enabled),
-      streamingModelSelected: () => {
-        const caps = manager.getState().selectedModelCapabilities;
-        return caps.status === 'ready' && caps.capabilities.family.supportsStreaming;
-      },
+      streamingModelSelected,
       subscribe: (listener) => manager.subscribe(listener),
-      chooseModel: () => {
-        void this.openModelPickerFromSettings(
-          { initialTask: 'stt', requireBatchStt: true, onChanged: () => this.refreshSettingsTab() },
-          t('settings.speakerLabels.name'),
-        );
-      },
+      chooseModel: chooseBatchModel,
       configure: () => {
         new DiarizationSettingsModal(this.app, {
+          streamingModelSelected,
+          chooseModel: chooseBatchModel,
           getSettings: () => this.dependencies.getSettings(),
           savePatch: (patch) =>
             this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
