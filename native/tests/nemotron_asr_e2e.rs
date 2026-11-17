@@ -62,7 +62,10 @@ fn pinned_oracle_text() -> String {
 #[ignore = "needs the 651 MiB pinned Nemotron 3.5 ASR export"]
 fn nemotron_runs_through_vad_worker_and_revision_protocol() {
     let encoder = require_nemotron_model();
+    let provenance = std::env::var_os(quality_report::REPORT_PATH_ENV)
+        .map(|_| quality_report::model_evidence(common::model::NEMOTRON_MODEL_ID, &encoder));
     let fixture = libri_fixture();
+    quality_report::verify_fixture(&fixture.audio_path(), &fixture.source.sha256);
     let samples = audio::decode_wav_16k_mono(&fixture.audio_path()).unwrap();
     let frames = audio::fixture_frames_with_trailing_silence(&samples);
 
@@ -134,29 +137,48 @@ fn nemotron_runs_through_vad_worker_and_revision_protocol() {
         real_time_factor <= WORKER_MAX_REAL_TIME_FACTOR,
         "worker RTF {real_time_factor:.3} exceeded {WORKER_MAX_REAL_TIME_FACTOR:.3}",
     );
-    quality_report::record(&QualityMeasurement {
-        suite: "nemotron-streaming-product-path",
-        model_id: common::model::NEMOTRON_MODEL_ID,
-        model_name: "NVIDIA Nemotron 3.5 ASR Streaming 0.6B Int8",
-        language: "en",
-        selection: "manual",
-        fixture_id: &fixture.id,
-        quality_metric: "wer",
-        quality_error_rate: wer,
-        quality_budget: WORKER_MAX_WER,
-        audio_duration_ms,
-        processing_duration_ms: outcome.processing_ms,
-        real_time_factor,
-        real_time_factor_budget: WORKER_MAX_REAL_TIME_FACTOR,
-        first_partial_audio_ms: outcome
-            .partials
-            .first()
-            .map(|partial| partial.utterance_duration_ms),
-        first_partial_audio_budget_ms: Some(WORKER_MAX_FIRST_PARTIAL_AUDIO_MS),
-        utterance_count: None,
-        partial_count: Some(outcome.partials.len()),
-        passed: true,
-    });
+    if let Some(provenance) = &provenance {
+        quality_report::record_evidence(
+            &QualityMeasurement {
+                suite: "nemotron-streaming-product-path",
+                model_id: common::model::NEMOTRON_MODEL_ID,
+                model_name: "NVIDIA Nemotron 3.5 ASR Streaming 0.6B Int8",
+                language: "en",
+                selection: "manual",
+                fixture_id: &fixture.id,
+                quality_metric: "wer",
+                quality_error_rate: wer,
+                quality_budget: WORKER_MAX_WER,
+                audio_duration_ms,
+                processing_duration_ms: outcome.processing_ms,
+                real_time_factor,
+                real_time_factor_budget: WORKER_MAX_REAL_TIME_FACTOR,
+                first_partial_audio_ms: outcome
+                    .partials
+                    .first()
+                    .map(|partial| partial.utterance_duration_ms),
+                first_partial_audio_budget_ms: Some(WORKER_MAX_FIRST_PARTIAL_AUDIO_MS),
+                utterance_count: None,
+                partial_count: Some(outcome.partials.len()),
+                passed: true,
+            },
+            &quality_report::CaseEvidence::new(
+                &fixture.reference,
+                &outcome.final_text,
+                "en",
+                "wer",
+                quality_report::FixtureEvidence {
+                    sha256: &fixture.source.sha256,
+                    manifest: "tests/fixtures/audio/manifest.json",
+                },
+                provenance,
+                quality_report::CorrectnessEvidence {
+                    stopped: outcome.stopped,
+                    errors: &outcome.errors,
+                },
+            ),
+        );
+    }
 }
 
 #[test]

@@ -1,4 +1,6 @@
 export interface QualityMeasurement {
+  evidence?: CaseEvidence;
+  environmentSource?: string;
   schemaVersion: number;
   suite: string;
   modelId: string;
@@ -20,7 +22,31 @@ export interface QualityMeasurement {
   passed: boolean;
 }
 
+export interface CaseEvidence {
+  reference: string;
+  hypothesis: string;
+  scoredReference: string;
+  scoredHypothesis: string;
+  normalization: string;
+  fixture: { sha256: string; manifest: string };
+  model: {
+    modelId: string;
+    sourceUrl: string;
+    license: string;
+    artifacts: Array<{
+      filename: string;
+      downloadUrl: string;
+      expectedSha256: string;
+      expectedSizeBytes: number;
+      actualSha256: string | null;
+      actualSizeBytes: number | null;
+    }>;
+  };
+  correctness: { stopped: boolean; errors: string[] };
+}
+
 export interface QualityReportRow {
+  environmentSource: string | null;
   audioDurationMs: number;
   firstPartialAudioMs: number | null;
   firstPartialAudioBudgetMs: number | null;
@@ -45,6 +71,9 @@ export interface QualityReport {
   generatedAt: string | null;
   commitSha: string | null;
   runner: string | null;
+  environment: unknown;
+  environments: Array<{ source: string; context: unknown }>;
+  missingMeasurementSources: string[];
   summary: {
     audioDurationMs: number;
     failedMeasurements: number;
@@ -64,6 +93,9 @@ export function buildQualityReport(
     commitSha?: string | null;
     generatedAt?: string | null;
     runner?: string | null;
+    environment?: unknown;
+    environments?: Array<{ source: string; context: unknown }>;
+    missingMeasurementSources?: string[];
   },
 ): QualityReport;
 export function renderQualityReportMarkdown(report: QualityReport): string;
