@@ -21,7 +21,9 @@ root ESLint is 10.15.0 and the complete lint run succeeds.
 The updated Biome schema and its Markdown formatting adjustments address the
 original CI failure. A malformed list in the wire-header description was also
 rewritten as its intended paragraph. No lint rules were disabled. TypeScript checks, Biome,
-Obsidian ESLint, 1,930 tests (10 skipped), and the production build passed. npm
+Obsidian ESLint, 1,930 tests (15 skipped with the real-sidecar suite disabled),
+and the production build passed. The five production-client/real-sidecar tests
+also passed separately under Vitest 5.1.0. npm
 audit reported zero known vulnerabilities in the installed lockfile. The new
 Obsidian lint reports two popout/window warnings; those behavior fixes are a
 separate compatibility change rather than part of the formatter migration.
