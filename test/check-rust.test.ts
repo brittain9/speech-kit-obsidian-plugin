@@ -10,6 +10,10 @@ describe('Rust quality commands', () => {
 
     expect(clippy?.args).toContain('--locked');
     expect(test?.args).toContain('--locked');
+    for (const command of [clippy, test]) {
+      const features = command?.args[(command?.args.indexOf('--features') ?? -1) + 1];
+      expect(features?.split(',')).toContain('engine-qwen-asr');
+    }
     expect(clippy?.env).toMatchObject({ DOCS_RS: '1', PATH: '/test/bin' });
   });
 });
