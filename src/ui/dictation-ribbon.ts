@@ -207,7 +207,7 @@ export class DictationRibbonController {
 
   private stopAnimation(): void {
     if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
+      window.cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
     this.resetBars();
