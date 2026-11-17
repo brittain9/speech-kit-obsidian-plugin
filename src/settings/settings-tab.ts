@@ -94,6 +94,7 @@ interface SettingsTabDependencies {
   modelInstallManager: ModelInstallManager;
   openModelPicker: (options?: ModelPickerOptions) => Promise<void>;
   openSetupWizard: () => Promise<void>;
+  openSpeechKit?: () => Promise<void>;
   sidecarVersion: string;
   resolvePluginDirectory: () => Promise<string>;
   resetLlmTransformation: () => Promise<void>;
@@ -203,6 +204,18 @@ export class LocalSttSettingTab extends PluginSettingTab {
     const sidecarActionDeps = this.buildSidecarInstallActionDeps();
 
     containerEl.empty();
+
+    if (this.dependencies.openSpeechKit !== undefined) {
+      new Setting(containerEl)
+        .setName(t('sidebar.controls.title'))
+        .setDesc(t('sidebar.controls.description'))
+        .addButton((button) => {
+          button.setButtonText(t('commands.openSpeechKit')).onClick(() => {
+            (this.app as App & { setting?: { close: () => void } }).setting?.close();
+            void this.dependencies.openSpeechKit?.();
+          });
+        });
+    }
 
     // --- Model ---
     const modelGroup = containerEl.createDiv({

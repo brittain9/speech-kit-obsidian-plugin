@@ -927,6 +927,13 @@ export const en = {
     'The base URL cannot contain a query string or fragment.',
   'llm.routing.settingsSaveFailed': 'Could not save the provider settings. Try again.',
   'llm.sidebar.openSettings': 'Open settings',
+  'commands.openSpeechKit': 'Open Speech Kit',
+  'sidebar.openFailed': 'Speech Kit could not open its controls. Try the command again.',
+  'sidebar.controls.title': 'Speech Kit controls',
+  'sidebar.controls.description':
+    'Start or stop dictation from the Speech Kit view, even when the ribbon is hidden.',
+  'sidebar.dictation.title': 'Dictation',
+  'sidebar.dictation.destination': 'Writes to the note active when you start.',
   'llm.sidebar.eyebrow': 'Transcript workflow',
   'llm.sidebar.title': 'Transform dictation',
   'llm.sidebar.description': 'Choose how spoken text is shaped before it reaches your note.',

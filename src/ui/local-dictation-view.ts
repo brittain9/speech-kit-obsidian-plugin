@@ -1,5 +1,6 @@
-import { ItemView, Setting, setIcon, type WorkspaceLeaf } from 'obsidian';
+import { type ButtonComponent, ItemView, Setting, setIcon, type WorkspaceLeaf } from 'obsidian';
 
+import type { DictationControllerState } from '../dictation/dictation-session-controller';
 import type { LlmCleanupFailure } from '../llm/provider';
 import type { LlmPresetStateMutation, PluginSettingsMutation } from '../settings/llm-preset-state';
 import type { PluginSettings } from '../settings/plugin-settings';
@@ -24,6 +25,8 @@ interface LocalDictationViewDependencies {
   feedback: Pick<UserFeedback, 'show'>;
   getSecret: (secretId: string) => string;
   getSettings: () => PluginSettings;
+  getDictationState: () => DictationControllerState;
+  toggleDictation: () => Promise<void>;
   getLlmCleanupFailure?: () => LlmCleanupFailure | null;
   logger?: PluginLogger | undefined;
   mutatePresetState: (mutation: LlmPresetStateMutation) => Promise<void>;
@@ -35,6 +38,7 @@ interface LocalDictationViewDependencies {
 
 export class LocalDictationView extends ItemView {
   private closed = false;
+  private dictationButton: ButtonComponent | null = null;
   private narrowObserver: ResizeObserver | null = null;
   private readonly focusRefreshController: FocusRefreshController;
   private unsubscribeLlmCleanupFailure: (() => void) | null = null;
@@ -78,6 +82,7 @@ export class LocalDictationView extends ItemView {
 
   override async onClose(): Promise<void> {
     this.closed = true;
+    this.dictationButton = null;
     this.narrowObserver?.disconnect();
     this.narrowObserver = null;
     this.unsubscribeLlmCleanupFailure?.();
@@ -109,18 +114,24 @@ export class LocalDictationView extends ItemView {
       contentEl.empty();
       contentEl.addClass('local-dictation-sidebar');
 
+      new Setting(contentEl)
+        .setName(t('sidebar.dictation.title'))
+        .setDesc(t('sidebar.dictation.destination'))
+        .addButton((button) => {
+          this.dictationButton = button;
+          this.updateDictationState(this.dependencies.getDictationState());
+          button.onClick(() => this.dependencies.toggleDictation());
+        });
+
       const presentation = resolveLlmSidebarPresentation(settings);
-      this.renderOverview(contentEl, presentation);
+      if (settings.llmFeaturesEnabled) this.renderOverview(contentEl, presentation);
       new Setting(contentEl).addButton((button) => {
         button
           .setButtonText(t('llm.sidebar.openSettings'))
           .onClick(() => this.dependencies.openSettings?.());
       });
 
-      if (!settings.llmFeaturesEnabled) {
-        this.renderEmptyState(contentEl, presentation);
-        return;
-      }
+      if (!settings.llmFeaturesEnabled) return;
 
       const dailyGroup = createSettingGroup(contentEl, t('llm.sidebar.group.preset'));
       renderLlmDailyControls(dailyGroup, {
@@ -137,6 +148,13 @@ export class LocalDictationView extends ItemView {
     } finally {
       contentEl.scrollTop = scrollTop;
     }
+  }
+
+  updateDictationState(state: DictationControllerState): void {
+    const active = state === 'starting' || state === 'listening' || state === 'speech_detected';
+    this.dictationButton?.setButtonText(
+      t(active ? 'commands.stopDictation' : 'commands.startDictation'),
+    );
   }
 
   requestRefresh(): void {

@@ -39,6 +39,7 @@ interface WizardDependencies {
   logger?: PluginLogger;
   modelInstallManager: ModelInstallManager;
   onCompleted: () => Promise<void>;
+  openSpeechKit?: () => Promise<void>;
   pluginDirectory: string;
   postSidecarInstalled: () => Promise<void>;
   prepareDictationTarget: () => Promise<boolean>;
@@ -77,6 +78,7 @@ export class SetupWizardModal extends Modal {
       hasDictationTarget: deps.hasDictationTarget,
       isDictationBusy: deps.isDictationBusy,
       onCompleted: deps.onCompleted,
+      ...(deps.openSpeechKit ? { openSpeechKit: deps.openSpeechKit } : {}),
       prepareDictationTarget: deps.prepareDictationTarget,
       startDictation: deps.startDictation,
     });
@@ -555,6 +557,16 @@ export class SetupWizardModal extends Modal {
     ribbonText.createEl('p', {
       text: t('setup.wizard.ribbonDesc'),
     });
+
+    if (this.deps.openSpeechKit !== undefined) {
+      const controls = body.createDiv({ cls: 'local-stt-wizard-card' });
+      controls.createEl('p', { text: t('sidebar.controls.description') });
+      controls
+        .createEl('button', { text: t('commands.openSpeechKit') })
+        .addEventListener('click', () => {
+          void this.readyActions.openSpeechKit();
+        });
+    }
 
     const cardHotkey = body.createDiv({ cls: 'local-stt-wizard-card' });
     const hotkeyIcon = cardHotkey.createSpan({ cls: 'local-stt-wizard-card__icon' });
