@@ -2,6 +2,13 @@
 
 Guided by [the run spec](../specs/autonomous-maintenance-2026-11.md). This log tracks discovery, decisions, implementation, and validation. It is not a release announcement.
 
+## Current pass: November 16
+
+The [reliability and model expansion spec](../specs/application-reliability-and-model-expansion.md)
+and [current findings/evidence](2026-11-16-reliability-run.md) govern the new pass.
+The release authorization below is historical: this pass explicitly prohibits
+releases, release tags, and release version bumps.
+
 ## Starting baseline
 
 - Baseline main: `db75b7e`, after the initial maintenance PRs #492, #493, #496, #497, #498, #452, #457, #499, #500, #501, and #502.
@@ -28,7 +35,6 @@ Guided by [the run spec](../specs/autonomous-maintenance-2026-11.md). This log t
 | U01 | Medium   | Model maintenance     | Refreshing the only selected speech model required installing a second model first.                                    | Merged #517 adds Reinstall for installed speech models. Failure or cancellation preserves the incumbent and selection; native sole-model replacement and partial-download cancellation passed.                                                                                                                    |
 | P01 | Medium   | Efficiency            | Establish stopped and active resource observations before optimization.                                                | Bounded stopped and read-aloud samples found no high-CPU idle loop in the tested configuration; the 396-word reading completed. Silence-triggered unloading is deferred. These observations do not establish a battery improvement or leak freedom. [Measurements](2026-11-extended-validation.md).               |
 | Q01 | High     | Native workflow QA    | Exercise daily use and interactions, then the final combined build.                                                    | Native dictation, typing/link paste, recording, German, translation, read-aloud, recovery, model management and normal/compact layout checks passed. Release metadata and final CI remain pending.                                                                                                                |
-
 
 ## Merged follow-up scope
 
