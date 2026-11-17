@@ -122,6 +122,7 @@ export class TranslationModal extends Modal {
   private modelSelectionPending = false;
   private restoreSwapFocus = false;
   private closed = false;
+  private runningAction: 'translation' | 'pack' | null = null;
 
   constructor(
     app: App,
@@ -157,9 +158,14 @@ export class TranslationModal extends Modal {
       }
     });
     this.releaseJob = this.dependencies.job.subscribe((state) => {
+      const wasRunning = this.state.phase === 'loading' || this.state.phase === 'translating';
       this.state = state;
       this.syncElapsedTimer();
-      this.renderState();
+      if (wasRunning && (state.phase === 'loading' || state.phase === 'translating')) {
+        this.renderStatus(this.statusText());
+      } else {
+        this.renderState();
+      }
     });
     this.dependencies.job.start();
   }
@@ -177,21 +183,23 @@ export class TranslationModal extends Modal {
   }
   private renderShell(): void {
     this.contentEl.empty();
-    this.headingEl = this.contentEl.createEl('h2');
-    this.contentEl.createEl('p', {
+    this.runningAction = null;
+    const body = this.contentEl.createDiv({ cls: 'local-stt-translation-modal__body' });
+    this.headingEl = body.createEl('h2');
+    body.createEl('p', {
       text: t('translation.modal.sourcePath', { path: this.dependencies.sourcePath }),
     });
-    this.contentEl.createEl('p', {
+    body.createEl('p', {
       cls: 'local-stt-translation-modal__privacy',
       text: t('translation.modal.privacy'),
     });
-    this.selectorsEl = this.contentEl.createDiv({ cls: 'local-stt-translation-modal__languages' });
+    this.selectorsEl = body.createDiv({ cls: 'local-stt-translation-modal__languages' });
     if (this.dependencies.snapshot.source.length > LARGE_SOURCE_CHARACTERS)
-      this.contentEl.createEl('p', {
+      body.createEl('p', {
         cls: 'local-stt-translation-modal__warning',
         text: t('translation.modal.largeNote'),
       });
-    const details = this.contentEl.createEl('details', {
+    const details = body.createEl('details', {
       cls: 'local-stt-translation-modal__source',
     });
     details.createEl('summary', {
@@ -204,11 +212,11 @@ export class TranslationModal extends Modal {
       cls: 'local-stt-translation-modal__preview',
       text: this.dependencies.snapshot.source,
     });
-    this.statusEl = this.contentEl.createDiv({
+    this.statusEl = body.createDiv({
       attr: { 'aria-live': 'polite', role: 'status' },
       cls: 'local-stt-translation-modal__status',
     });
-    this.outputSurfaceEl = this.contentEl.createDiv({
+    this.outputSurfaceEl = body.createDiv({
       cls: 'local-stt-translation-modal__output-surface',
     });
     this.outputHeaderEl = this.outputSurfaceEl.createDiv({
@@ -227,7 +235,7 @@ export class TranslationModal extends Modal {
         this.dependencies.reviewedOutput.text = this.outputEl.value;
       this.renderReadAloudAction();
     });
-    this.actionsEl = this.contentEl.createDiv();
+    this.actionsEl = this.contentEl.createDiv({ cls: 'local-stt-translation-modal__footer' });
     this.renderHeading();
     this.renderSelectors();
     this.renderState();
@@ -688,10 +696,17 @@ export class TranslationModal extends Modal {
   }
   private renderActions(): void {
     if (this.actionsEl === null) return;
+    const runningAction = this.installingPack
+      ? 'pack'
+      : this.state.phase === 'loading' || this.state.phase === 'translating'
+        ? 'translation'
+        : null;
+    if (this.installingPack) this.renderStatus(t('translation.modal.downloadingLanguagePack'));
+    if (runningAction !== null && this.runningAction === runningAction) return;
+    this.runningAction = runningAction;
     this.actionsEl.empty();
     const actions = new Setting(this.actionsEl).setClass('local-stt-translation-modal__actions');
     if (this.installingPack) {
-      this.renderStatus(t('translation.modal.downloadingLanguagePack'));
       actions.addButton((button) =>
         button
           .setButtonText(t('translation.modal.cancel'))
