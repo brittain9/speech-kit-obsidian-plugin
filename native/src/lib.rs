@@ -1,5 +1,7 @@
 pub mod adapters;
 pub mod app;
+#[cfg(feature = "engine-qwen-asr")]
+pub mod asr_helper_protocol;
 pub mod audio_metadata;
 pub mod audio_mixer;
 pub mod catalog;

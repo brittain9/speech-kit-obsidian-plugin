@@ -25,3 +25,6 @@ pub mod supertonic;
 pub(crate) mod nemo_rnnt;
 #[cfg(feature = "engine-parakeet-unified")]
 pub mod parakeet_unified;
+
+#[cfg(feature = "engine-qwen-asr")]
+pub mod qwen_asr;

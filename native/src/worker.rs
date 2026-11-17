@@ -547,8 +547,11 @@ fn worker_main(
                 let warnings = apply_capability_gates(&session.family_capabilities, &mut request);
 
                 let started_at = Instant::now();
+                let cancellation = session.metadata.cancel_rx.clone();
                 let result = panic::catch_unwind(AssertUnwindSafe(|| match &mut session.model {
-                    SessionModel::Batch(model) => model.transcribe(&request),
+                    SessionModel::Batch(model) => {
+                        model.transcribe_cancellable(&request, &|| *cancellation.borrow())
+                    }
                     SessionModel::Streaming { .. } => Err(TranscriptionError::unsupported_engine(
                         "streaming model received a batch transcription command".to_string(),
                     )),
