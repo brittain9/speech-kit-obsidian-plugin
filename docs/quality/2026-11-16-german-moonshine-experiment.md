@@ -48,7 +48,7 @@ observations on a shared computer, not a controlled accuracy or battery study.
 | Silence through production VAD          | No partial or final speech output                                                                                 |
 | Direct neural model on zeros            | Hallucinates `Vielen Dank.`; silence safety depends on the existing VAD path                                      |
 | Cancellation and silent restart         | Clean stop and restart, no stale speech output                                                                    |
-| Mutated unrecognized split tokenizer    | Invalid probe; English fallback start rejected before graph loading                                              |
+| Mutated unrecognized split tokenizer    | Invalid probe; English fallback start rejected before graph loading                                               |
 | Existing English monolithic Tiny        | Existing real-fixture streaming/finalization regression passed                                                    |
 
 The standalone long-stress process peaked around 1.21 GB for Moonshine and
