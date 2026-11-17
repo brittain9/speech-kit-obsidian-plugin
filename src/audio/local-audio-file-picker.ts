@@ -2,7 +2,7 @@ import { AudioFileError, createAudioFileCancellationError } from './audio-file-d
 
 export async function pickLocalAudioFile(
   signal: AbortSignal,
-  ownerDocument: Document = document,
+  ownerDocument: Document = activeDocument,
 ): Promise<File | null> {
   if (signal.aborted) {
     throw createAudioFileCancellationError();
