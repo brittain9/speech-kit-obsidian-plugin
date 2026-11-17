@@ -51,14 +51,14 @@ prototypes from verified behavior in the handoff.
 
 ## Priority and execution order
 
-| Order | Work | Completion evidence |
-| --- | --- | --- |
-| 1 | Fix #540 and explore fresh-vault dictation discovery | Reproduced user flow, alternatives, regression coverage, native QA; platform limits tracked |
-| 2 | Exercise the production TypeScript client against the real sidecar | Model-free integration test in normal CI, bounded failure and teardown cases |
-| 3 | Lock down the shared wire contract | Shared fixtures validated by both implementations |
-| 4 | Simplify lifecycle ownership where failures justify it | Adversarial event tests plus unchanged note/output guarantees |
-| 5 | Expand speech-to-text capabilities | Refreshed research, working adapters, measured product-path results |
-| Ongoing | Improve usability, visual quality, and resource use | Before/after evidence and successful real workflows |
+| Order   | Work                                                               | Completion evidence                                                                         |
+| ------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| 1       | Fix #540 and explore fresh-vault dictation discovery               | Reproduced user flow, alternatives, regression coverage, native QA; platform limits tracked |
+| 2       | Exercise the production TypeScript client against the real sidecar | Model-free integration test in normal CI, bounded failure and teardown cases                |
+| 3       | Lock down the shared wire contract                                 | Shared fixtures validated by both implementations                                           |
+| 4       | Simplify lifecycle ownership where failures justify it             | Adversarial event tests plus unchanged note/output guarantees                               |
+| 5       | Expand speech-to-text capabilities                                 | Refreshed research, working adapters, measured product-path results                         |
+| Ongoing | Improve usability, visual quality, and resource use                | Before/after evidence and successful real workflows                                         |
 
 Fix confirmed data loss, security problems, hangs, and leaks ahead of this order.
 Do not postpone a small, well-understood user fix behind an architectural rewrite.
