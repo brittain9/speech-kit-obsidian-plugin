@@ -24,7 +24,13 @@ it('opens Settings from the compact daily sidebar', async () => {
     openSettings,
   });
   view.refresh();
-  await Setting.buttonNamed('Open settings').click();
+  const dictation = Setting.named('Dictation');
+  const settingsButton = dictation.extraButtonComponents.find(
+    (button) => button.extraSettingsEl.getAttribute('aria-label') === 'Open settings',
+  );
+  expect(settingsButton).toBeDefined();
+  expect(Setting.instances.filter((row) => row.name === '')).toHaveLength(0);
+  await settingsButton?.click();
   expect(openSettings).toHaveBeenCalledOnce();
   expect(Setting.instances.map((setting) => setting.name)).not.toContain('Provider');
 });
@@ -60,7 +66,7 @@ it('preserves another setting changed while enabling transformation is waiting t
   expect(settings.llmNetworkTimeoutSec).toBe(42);
 });
 
-it('announces the changing sidebar workflow summary as one atomic status', () => {
+it('keeps output beside the active preset and timing in its own row', () => {
   const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
     feedback: { show: vi.fn() },
     getSecret: () => '',
@@ -78,12 +84,11 @@ it('announces the changing sidebar workflow summary as one atomic status', () =>
 
   view.refresh();
 
-  const status = (view.contentEl as unknown as TestElement).findByClass(
-    'local-dictation-sidebar__summary',
-  );
-  expect(status?.attributes.get('role')).toBe('status');
-  expect(status?.attributes.get('aria-live')).toBe('polite');
-  expect(status?.attributes.get('aria-atomic')).toBe('true');
+  expect(Setting.named('Active preset').descEl.textContent).not.toContain('When dictation stops');
+  expect(Setting.named('When to transform').descEl.textContent).toContain('When dictation stops');
+  expect(
+    (view.contentEl as unknown as TestElement).findByClass('local-dictation-sidebar__summary'),
+  ).toBeUndefined();
 });
 
 it('preserves the sidebar scroll position across a settings rerender', () => {

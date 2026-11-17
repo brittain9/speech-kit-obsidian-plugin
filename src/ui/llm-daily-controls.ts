@@ -60,7 +60,7 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
     .setDesc(
       entries.length === 0
         ? t('llm.preset.none')
-        : `${timingLabel} · ${describePresetOutput(active.preset.output)}.`,
+        : `${describePresetOutput(active.preset.output)}.`,
     )
     .addDropdown((dropdown) => {
       for (const entry of entries)

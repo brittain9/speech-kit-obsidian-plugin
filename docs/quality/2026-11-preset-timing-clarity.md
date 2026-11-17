@@ -44,8 +44,8 @@ Biome, Obsidian ESLint, and the production build. No release was created.
 The daily sidebar uses a native AI transformations heading instead of the
 oversized workflow title, eyebrow, and explanation. With transformation off,
 the native toggle description explains raw transcript insertion once; the
-separate Off badge/status and large raw-mode card are removed. Active
-transformation retains a small accessible status summary. The preset and timing
+separate Off badge/status and large raw-mode card are removed. Native toggle state communicates whether automatic transformation is enabled;
+runtime failure alerts remain available. The preset and timing
 controls keep their visible timing/output guidance and direct Edit preset action.
 No operation or saved preference semantics change.
 
@@ -53,3 +53,16 @@ The public view regression failed on the previous repeated raw-mode presentation
 and passes with the compact native section. Active status announcements, primary
 dictation controls, scroll retention, and active-preset editing regressions pass.
 The combined native visual review remains with the shared QA owner.
+
+
+## Native review followup
+
+Native review confirmed direct active-preset editing and found two remaining
+sources of clutter: a separate Open settings row and repeated timing text. The
+settings action now sits beside Start/Stop dictation as a labeled native icon.
+Preset descriptions show output behavior; When to transform owns timing guidance.
+The redundant active-preset status summary is removed. Sidebar descriptions wrap
+naturally, keeping core guidance visible at narrow widths instead of clipping it.
+
+Public regressions reproduced the separate row and duplicate timing before this
+followup. The shared owner will repeat the combined native visual check.

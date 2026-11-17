@@ -12,10 +12,6 @@ import type { UserFeedback } from '../shared/user-feedback';
 import { FocusRefreshController } from './focus-refresh-controller';
 import { renderLlmDailyControls } from './llm-daily-controls';
 import { formatCleanupFailureBanner } from './llm-provider-ui';
-import {
-  type LlmSidebarPresentation,
-  resolveLlmSidebarPresentation,
-} from './llm-sidebar-presentation';
 import { INLINE_STATUS_PRESENTATION } from './llm-status';
 
 export const LOCAL_DICTATION_VIEW_TYPE = 'local-dictation-sidebar';
@@ -123,19 +119,16 @@ export class LocalDictationView extends ItemView {
           this.dictationButton = button;
           this.updateDictationState(this.dependencies.getDictationState());
           button.onClick(() => this.dependencies.toggleDictation());
+        })
+        .addExtraButton((button) => {
+          button.setIcon('settings').setTooltip(t('llm.sidebar.openSettings'));
+          button.extraSettingsEl.setAttribute('aria-label', t('llm.sidebar.openSettings'));
+          button.onClick(() => this.dependencies.openSettings?.());
         });
-
-      const presentation = resolveLlmSidebarPresentation(settings);
-      new Setting(contentEl).addButton((button) => {
-        button
-          .setButtonText(t('llm.sidebar.openSettings'))
-          .onClick(() => this.dependencies.openSettings?.());
-      });
 
       if (!settings.llmFeaturesEnabled) return;
 
       const dailyGroup = createSettingGroup(contentEl, t('llm.sidebar.group.transforms'));
-      if (presentation.state === 'active') this.renderTransformStatus(dailyGroup, presentation);
       renderLlmDailyControls(dailyGroup, {
         getSettings: this.dependencies.getSettings,
         mutateSettings: this.dependencies.mutateSettings,
@@ -175,16 +168,6 @@ export class LocalDictationView extends ItemView {
 
   requestRefresh(): void {
     if (!this.closed) this.scheduleRender();
-  }
-
-  private renderTransformStatus(parent: HTMLElement, presentation: LlmSidebarPresentation): void {
-    const status = parent.createEl('p', {
-      cls: 'local-dictation-sidebar__summary setting-item-description',
-      text: presentation.summary,
-    });
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    status.setAttribute('aria-atomic', 'true');
   }
 
   private renderRuntimeFailureBanner(parent: HTMLElement): void {

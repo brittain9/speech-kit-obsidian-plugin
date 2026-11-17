@@ -855,14 +855,6 @@
   padding-bottom: var(--size-4-6);
 }
 
-.local-dictation-sidebar__summary {
-  margin: 0;
-  padding: var(--size-4-2) 0;
-  color: var(--text-muted);
-  font-size: var(--font-ui-small);
-  overflow-wrap: anywhere;
-}
-
 .local-dictation-sidebar .setting-item,
 .local-dictation-sidebar .setting-item-info,
 .local-dictation-sidebar .setting-item-control {
@@ -903,14 +895,6 @@
 .local-dictation-sidebar--narrow .setting-item-control {
   justify-content: flex-start;
   flex-wrap: wrap;
-}
-
-/* Truncate preset description to one line; full text in title attr on hover. */
-.local-dictation-sidebar .setting-item-description {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 /* --- LLM sidebar inline status row -------------------------------- */

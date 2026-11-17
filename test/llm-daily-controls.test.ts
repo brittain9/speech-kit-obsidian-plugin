@@ -36,6 +36,7 @@ it('shows preset-owned timing as a summary and edits that exact preset', async (
     'adds new content below the transcript',
   );
   expect(Setting.named('Active preset').descEl.textContent).not.toContain('min words');
+  expect(Setting.named('Active preset').descEl.textContent).not.toContain('When dictation stops');
   expect(
     Setting.named('Active preset').onlyDropdown().selectEl.getAttribute('aria-description'),
   ).toContain('min words');
