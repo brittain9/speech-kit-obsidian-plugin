@@ -134,6 +134,11 @@ fn validate_pair(path: &Path) -> Result<(), TranscriptionError> {
         path.to_path_buf(),
         path.with_file_name(format!("mmproj-{name}")),
     ] {
+        if !file.is_file() {
+            return Err(failure(
+                "Both Qwen model pair members must be existing regular files.",
+            ));
+        }
         let mut header = [0; 4];
         File::open(&file)
             .and_then(|mut f| f.read_exact(&mut header))

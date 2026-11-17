@@ -73,3 +73,8 @@ Their recording IDs, official references, conversion, sizes, and SHA-256 hashes
 are recorded there. These longer fixtures distinguish real speech from the
 separate repeated-identical-audio stress case, which can trigger Whisper's
 repetition suppression. CC BY 4.0 attribution applies to these clips too.
+
+`qwen-asr-quality.json` adds a natural 23.44 s English reading (en_us validation
+row 48, sentence 1527) from the same pinned FLEURS revision. The recording
+includes proper names; preserve its reference and quality floor rather than
+replacing difficult words. Metadata retains the recording ID and derived WAV hash.

@@ -35,3 +35,37 @@ A feature-gated Qwen ASR `ModelFamilyAdapter` supervises a version-matched nativ
 ADR 0005 requires process isolation from Whisper because of GGML symbol collisions. The new helper follows the existing translation-helper packaging and supervision patterns, with a separate protocol/lifetime; it does not import the main library. The initial pair transferred once (1,019,141,728 bytes), and both size/hash checks passed. No inference had run at this checkpoint.
 
 Initial native proof: the standalone isolated helper and the public Rust registry/adapter path both transcribed the pinned 5.4-second German fixture with zero normalized WER; manual selection and automatic `de` output passed, without control tokens or invented word timestamps. Public tests failed before family support and passed after implementation. Broader quality, managed-install, cancellation, and partial-transcription acceptance remain pending.
+
+
+## Wrap-up status
+
+The 0.6B pair is the only Qwen weight download (1,019,141,728 bytes). The public
+registry/adapter German manual and automatic tests passed. Eight short language
+cases passed their provisional screens; natural German WER was 18.5% and 7.7%.
+A new natural English recording scored 25.7% raw WER against the provisional
+20% screen, with proper-name errors and numeral-format differences. That screen
+is not a user requirement or a sole adoption veto; exact error alignment and a
+matched installed-Turbo comparison remain pending. No primary normalizer or
+threshold was changed.
+
+Peer review found a FIFO companion could block public probing before helper
+timeouts; the public AppState regression failed by timeout before the regular-file
+guard and passes after it. The helper now monitors owner stdin on a separate
+thread and exits on EOF even when the inference thread is occupied. Its busy
+subprocess fixture closes owner stdin and verifies successful bounded exit/reap.
+The reviewer inspected these fixes without reporting another source blocker;
+test execution was performed by the implementing worker.
+
+The user requested stopping at this point. No 1.7B weights or additional model
+inference were started. The authorized disk allowance was raised to 18 GB after
+shared MTMD build caches grew substantially; approximately 43 GiB remained free
+at that checkpoint. Unrelated/shared caches were preserved.
+
+This is a draft native prototype, not an adopted model. Actual in-flight
+cancellation/retry, a managed pair install/probe/remove run, matched baseline and
+1.7B comparisons, all-engine coexistence, full branch gates/platform checks,
+frontend family-ID/import/catalog wiring, native UI verification, and progressive
+partial/re-decoding remain incomplete. The post-EOF safety patch was not followed
+by another real-model run. Production build scripts include the helper, but the
+branch is not ready for daily-use deployment until the frontend/native contract
+and outstanding checks are completed. No catalog entry/default/release changed.

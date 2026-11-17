@@ -272,7 +272,8 @@ downloaded source-form JavaScript glue.
 This project redistributes FLEURS validation recordings for multilingual ASR
 integration testing. The parallel clips read sentence 1577 in Spanish, German,
 French, Portuguese, Italian, Dutch, Japanese, Croatian, and Serbian. Additional
-German readings of sentences 1617 and 1618 cover natural longer utterances.
+German readings of sentences 1617 and 1618 and an English reading of sentence
+1527 cover natural longer utterances.
 The fixtures use 16 kHz mono signed 16-bit PCM WAV; speech content was not
 intentionally modified. Exact dataset configuration, row, recording ID,
 conversion, and derived-file SHA-256 are recorded in

@@ -1,0 +1,87 @@
+{
+  "status": "draft-incomplete",
+  "model": "Qwen3-ASR-0.6B-Q8_0 plus matching Q8 projector",
+  "mode": "isolated native helper, CPU batch",
+  "hardware": "Apple M2 Pro, 16 GB",
+  "timingLimit": "Unmatched exploratory per-request wall time; first request includes helper/model loading. No acceleration/battery claim.",
+  "qualityScreen": "20% raw English WER and45% other WER/CER are provisional screens, not user requirements or sole adoption vetoes.",
+  "results": [
+    {
+      "audioSeconds": 11.125,
+      "case": "en-short",
+      "errorRate": 0.0,
+      "text": "To such persons, these indirect modes of training children in habits of subordination to their will, or rather of yielding to their influence, are specially useful.",
+      "wallMs": 2914.542292
+    },
+    {
+      "audioSeconds": 6.24,
+      "case": "es",
+      "errorRate": 0.0,
+      "text": "A mí me pareció que eso no tenía sentido, definitivamente no fue justo.",
+      "wallMs": 707.80225
+    },
+    {
+      "audioSeconds": 5.4,
+      "case": "de",
+      "errorRate": 0.0,
+      "text": "Das erschien mir nicht sinnvoll, es war ganz gewiss nicht fair.",
+      "wallMs": 521.7174580000001
+    },
+    {
+      "audioSeconds": 4.14,
+      "case": "fr",
+      "errorRate": 0.0,
+      "text": "Cela ne me semblait pas logique, ce n'était certainement pas juste.",
+      "wallMs": 407.022
+    },
+    {
+      "audioSeconds": 5.52,
+      "case": "pt",
+      "errorRate": 0.0,
+      "text": "Aquilo não pareceu fazer sentido para mim, certamente não foi justo.",
+      "wallMs": 474.60783299999997
+    },
+    {
+      "audioSeconds": 6.3,
+      "case": "it",
+      "errorRate": 0.0,
+      "text": "Tutto ciò non mi sembrava avesse senso, sicuramente non era giusto.",
+      "wallMs": 519.355541
+    },
+    {
+      "audioSeconds": 4.2,
+      "case": "nl",
+      "errorRate": 0.1111111111111111,
+      "text": "Dat vond ik erg raar. Het was ongetwijfeld onheillijk.",
+      "wallMs": 435.976833
+    },
+    {
+      "audioSeconds": 7.32,
+      "case": "ja",
+      "errorRate": 0.0,
+      "text": "意味があるように思えませんでしたし、確かに不公平でした。",
+      "wallMs": 474.166417
+    },
+    {
+      "audioSeconds": 26.58,
+      "case": "de-fleurs-1618",
+      "errorRate": 0.18518518518518517,
+      "text": "Der nördliche Teil oder die Sentinel Range hat die höchsten Berge der Antarktis. Das Winton Massiv, dessen höchste Gipfel mit 4.892 m Höhe der Mount Winton ist.",
+      "wallMs": 1692.340667
+    },
+    {
+      "audioSeconds": 23.1,
+      "case": "de-fleurs-1617",
+      "errorRate": 0.07692307692307693,
+      "text": "Der Kruger Nationalpark (KNP) liegt im Nordosten von Südafrika. Er grenzt im Osten an Mozambique, im Norden an Zimbabwe und im Süden an den Crocodile River.",
+      "wallMs": 1472.683
+    },
+    {
+      "audioSeconds": 23.44,
+      "case": "en-fleurs-1527",
+      "errorRate": 0.2571428571428571,
+      "text": "Poland's men's visually impaired skier Masie Jeff Creskel and guide Anna Olgarszynska finished 13th in the Super G. South Korea's Jung Sik Park finished 24th in the men's sitting Super G.",
+      "wallMs": 1647.7237499999999
+    }
+  ]
+}
