@@ -26,7 +26,7 @@ Wayland shortcuts use the desktop portal and Linux icons use StatusNotifierItem,
 so neither X11 key grabbing nor GTK is required for the Linux acceptance target.
 Tray availability and shortcut availability are independent capabilities.
 
-The master Desktop integration switch lives in Advanced → Customize tools and
+The master Desktop integration switch lives in Capture, alongside a native settings modal, and
 defaults off. It gates registrations and feedback while retaining saved preferences. Obsidian remains required, and a missing GNOME tray host
 does not prevent shortcut use. This keeps the integration useful without adding
 a standalone application lifecycle or arbitrary-application text injection.

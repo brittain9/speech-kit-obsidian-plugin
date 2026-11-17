@@ -89,3 +89,22 @@ without erasing them, destination identity when an editor is reused, and persist
 connection lifecycle observation across sidecar replacements. The last two cases
 failed before the fixes. Installed background/minimized and popover checks are
 recorded separately once observed.
+
+## Final settings polish
+
+Capture now has one Desktop integration toggle and a settings button. Shortcut,
+menu-bar/tray, recording-sound and registration controls live in the native
+Obsidian modal, with platform-specific copy and detailed syntax in tooltips.
+The native gear opens this same modal. The switch remains off by default and
+preserves saved preferences. A registered macOS shortcut appears in the popover;
+requested but rejected shortcuts do not.
+
+On November 17, the owner reported that Control–Option–J worked on macOS. This is
+owner runtime evidence, separate from automated registration/disabled-command
+checks. Background microphone capture and prefix preservation were observed in
+test-vault. The acoustic trial did not establish controlled fixture recognition;
+its room-audio text is not retained as validation evidence or committed.
+
+Regressions cover pending shortcut saves on blur/close, preserving untouched
+concurrent settings, failed-save retry, subscription cleanup and the direct
+native-gear route. Broader Windows/Linux interactive certification remains open.

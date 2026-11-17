@@ -56,6 +56,10 @@ import {
 import type { SessionTarget } from './session/session';
 import { Session } from './session/session';
 import { logAccelerationFallbacks } from './settings/acceleration-info';
+import {
+  type DesktopIntegrationSettingsDependencies,
+  DesktopIntegrationSettingsModal,
+} from './settings/desktop-integration-setting';
 import { LlmPresetStateStore } from './settings/llm-preset-state';
 import { restoreLlmTransformationDefaults } from './settings/llm-transformation-reset';
 import { handleMicrophoneDeviceFallback } from './settings/microphone-fallback';
@@ -65,6 +69,7 @@ import {
   type PluginSettings,
   resolvePluginSettings,
 } from './settings/plugin-settings';
+import { createSettingAccess } from './settings/setting-helpers';
 import { LocalSttSettingTab } from './settings/settings-tab';
 import {
   openSidecarUpdateModal,
@@ -217,6 +222,7 @@ export default class LocalSttPlugin extends Plugin {
       app.setting.open();
       app.setting.openTabById(this.manifest.id);
       window.focus();
+      new DesktopIntegrationSettingsModal(this.app, this.desktopSettingsDependencies()).open();
     },
     notify: (kind) => this.notifyDesktop(kind),
     sound: (kind) => this.playDesktopSound(kind),
@@ -651,20 +657,12 @@ export default class LocalSttPlugin extends Plugin {
       sidecarLifecycleGate: this.sidecarLifecycleGate,
     });
 
+    const desktopSettings = this.desktopSettingsDependencies();
     this.addSettingTab(
       new LocalSttSettingTab(this.app, this, {
-        getDesktopStatus: () => this.desktopStatusMessage,
-        subscribeDesktopStatus: (listener) => {
-          this.desktopStatusListeners.add(listener);
-          return () => {
-            this.desktopStatusListeners.delete(listener);
-          };
-        },
-        retryDesktopControls: async () => {
-          this.desktopConfiguration = '';
-          this.desktopRecoveryAttempted = false;
-          await this.configureDesktop();
-        },
+        getDesktopStatus: desktopSettings.getStatus,
+        subscribeDesktopStatus: desktopSettings.subscribeStatus,
+        retryDesktopControls: desktopSettings.retry,
 
         feedback: this.feedback,
         getSettings: () => this.settings,
@@ -1172,6 +1170,26 @@ export default class LocalSttPlugin extends Plugin {
     }
   }
 
+  private desktopSettingsDependencies(): DesktopIntegrationSettingsDependencies {
+    return {
+      access: createSettingAccess(() => this.settings, this.requirePresetStateStore()),
+      getStatus: () => this.desktopStatusMessage,
+      subscribeStatus: (listener) => {
+        this.desktopStatusListeners.add(listener);
+        return () => {
+          this.desktopStatusListeners.delete(listener);
+        };
+      },
+      retry: async () => {
+        this.desktopConfiguration = '';
+        this.desktopRecoveryAttempted = false;
+        await this.configureDesktop();
+      },
+      onError: (cause) =>
+        this.feedback.show({ cause, intent: 'error', message: t('desktop.modal.saveFailed') }),
+    };
+  }
+
   desktopStatusMessage = '';
 
   private desktopEnabled(): boolean {
@@ -1266,7 +1284,7 @@ export default class LocalSttPlugin extends Plugin {
           stop: t('desktop.stop'),
           cancelStart: t('desktop.cancelStart'),
           openTarget: t('desktop.openTarget'),
-          settings: t('desktop.settings'),
+          settings: t('desktop.modal.settings'),
         },
       });
       this.desktopNativeReady = acknowledgement.owner;

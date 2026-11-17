@@ -41,7 +41,6 @@ describe('Customize tools', () => {
       'Read aloud',
       'AI transformations',
       'Dictation control',
-      'Desktop integration',
     ]);
     for (const name of ['Translation', 'Read aloud', 'AI transformations']) {
       rows.named(name).onlyToggle().change(false);
@@ -51,9 +50,6 @@ describe('Customize tools', () => {
     expect(settings.readAloudEnabled).toBe(false);
     expect(settings.llmFeaturesEnabled).toBe(false);
     expect(settings.llmNetworkTimeoutSec).toBe(42);
-    expect(rows.named('Desktop integration').onlyToggle().value).toBe(false);
-    rows.named('Desktop integration').onlyToggle().change(true);
-    await vi.waitFor(() => expect(settings.desktopControlsEnabled).toBe(true));
     const control = rows.named('Dictation control').onlyDropdown();
     expect(control.selectEl.value).toBe('ribbon');
     control.change('status_bar');

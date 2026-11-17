@@ -1,3 +1,4 @@
+import { Modal } from 'obsidian';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
 
@@ -351,4 +352,37 @@ it('restores action generation after real settings off/on while native ACK is pe
   await configuring;
   await plugin.configureDesktop();
   expect(generation).toHaveBeenLastCalledWith(plugin.desktopGeneration);
+});
+
+it('opens the desktop settings modal directly from the native gear action', async () => {
+  const open = vi.fn();
+  const openTabById = vi.fn();
+  const focus = vi.fn();
+  vi.stubGlobal('window', { focus });
+  const plugin = new LocalSttPlugin(
+    { setting: { open, openTabById } } as unknown as import('obsidian').App,
+    { id: 'local-dictation' } as import('obsidian').PluginManifest,
+  );
+  Object.assign(plugin, {
+    desktopSettingsDependencies: () => ({
+      access: { getSettings: () => DEFAULT_PLUGIN_SETTINGS, persistOne: vi.fn(async () => {}) },
+      getStatus: () => '',
+      subscribeStatus: () => () => {},
+      retry: vi.fn(async () => {}),
+      onError: vi.fn(),
+    }),
+  });
+  const controls = (
+    plugin as unknown as {
+      desktopControls: import('../src/desktop/desktop-controls').DesktopControls;
+    }
+  ).desktopControls;
+  controls.setGeneration('current');
+  await controls.handleAction({ generation: 'current', actionId: 1, action: 'open_settings' });
+  const modals = Modal as unknown as typeof import('./__mocks__/obsidian').Modal;
+  expect(modals.instances.at(-1)?.titleEl.textContent).toBe('Desktop integration');
+  expect(open).toHaveBeenCalledOnce();
+  expect(openTabById).toHaveBeenCalledWith('local-dictation');
+  expect(focus).toHaveBeenCalledOnce();
+  modals.instances.at(-1)?.close();
 });

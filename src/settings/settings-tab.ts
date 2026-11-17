@@ -29,6 +29,7 @@ import { LlmTimingSettingsModal } from '../ui/llm-timing-settings-modal';
 import { MediaToolInstallModal } from '../ui/media-tool-install-modal';
 import { PresetManagerModal } from '../ui/preset-manager-modal';
 import { renderCustomizeToolsSetting } from './customize-tools-modal';
+import { renderDesktopIntegrationSetting } from './desktop-integration-setting';
 import { renderDiarizationSetting } from './diarization-setting';
 import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
@@ -167,7 +168,6 @@ export class LocalSttSettingTab extends PluginSettingTab {
   private readonly access: SettingAccess;
   private disposeDiarizationDesc: (() => void) | null = null;
   private disposeEngineSection: (() => void) | null = null;
-  private disposeDesktopStatus: (() => void) | null = null;
   private disposeMicrophoneSection: (() => void) | null = null;
   private disposeLlmSection: (() => void) | null = null;
   private llmSectionGeneration = 0;
@@ -295,44 +295,24 @@ export class LocalSttSettingTab extends PluginSettingTab {
     // --- Capture ---
     const captureCard = createSettingGroup(containerEl, t('settings.groups.capture'));
 
-    if (settings.desktopControlsEnabled) {
-      new Setting(captureCard)
-        .setName(t('desktop.shortcut'))
-        .setDesc(t('desktop.shortcutDesc'))
-        .addText((text) => {
-          text.setValue(settings.globalDictationShortcut);
-          text.inputEl.addEventListener('blur', () => {
-            const value = text.getValue().trim();
-            if (value !== this.access.getSettings().globalDictationShortcut) {
-              void this.access.persistOne('globalDictationShortcut', value);
-            }
-          });
-        });
-      addToggleSetting(captureCard, this.access, {
-        name: t('desktop.icon'),
-        desc: t('desktop.iconDesc'),
-        key: 'showDesktopStatusIcon',
-      });
-      addToggleSetting(captureCard, this.access, {
-        name: t('desktop.sounds'),
-        desc: t('desktop.soundsDesc'),
-        key: 'playRecordingSounds',
-      });
-      const desktopStatusSetting = new Setting(captureCard)
-        .setName(t('desktop.retry'))
-        .setDesc(this.dependencies.getDesktopStatus?.() ?? '')
-        .addButton((button) => {
-          button.setButtonText(t('desktop.retry')).onClick(async () => {
-            await this.dependencies.retryDesktopControls?.();
-            this.refreshSettingsTab();
-          });
-        });
-
-      this.disposeDesktopStatus =
-        this.dependencies.subscribeDesktopStatus?.(() => {
-          desktopStatusSetting.setDesc(this.dependencies.getDesktopStatus?.() ?? '');
-        }) ?? null;
-    }
+    renderDesktopIntegrationSetting(captureCard, this.app, {
+      access: this.access,
+      getStatus: () => this.dependencies.getDesktopStatus?.() ?? '',
+      subscribeStatus: (listener) =>
+        this.dependencies.subscribeDesktopStatus?.(listener) ?? (() => {}),
+      retry: async () => {
+        await this.dependencies.retryDesktopControls?.();
+      },
+      onError: (cause) =>
+        this.dependencies.feedback.show({
+          cause,
+          intent: 'error',
+          message: t('desktop.modal.saveFailed'),
+        }),
+      onChanged: () => this.refreshSettingsTab(),
+      onDialogOpened: () =>
+        this.lifecycle.focusAfterDialog({ settingName: t('desktop.enabled'), controlIndex: 1 }),
+    });
     const systemAudioSupported = isSystemAudioSupportedOnCurrentPlatform();
 
     this.disposeMicrophoneSection = renderMicrophonePicker(captureCard, {
@@ -764,8 +744,6 @@ export class LocalSttSettingTab extends PluginSettingTab {
   }
 
   private tearDown(): void {
-    this.disposeDesktopStatus?.();
-    this.disposeDesktopStatus = null;
     this.llmSectionGeneration += 1;
     this.disposeLlmSection?.();
     this.disposeLlmSection = null;
