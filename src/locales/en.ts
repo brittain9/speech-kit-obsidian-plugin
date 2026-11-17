@@ -585,9 +585,9 @@ export const en = {
   'settings.transcriptFormatting.newParagraph': 'New paragraph',
   'settings.transcriptFormatting.name': 'Transcript formatting',
   'settings.transcriptFormatting.desc': 'How phrases are joined together.',
-  'settings.phraseFinalization.responsiveOption': 'Responsive — short pauses',
-  'settings.phraseFinalization.balancedOption': 'Balanced — standard',
-  'settings.phraseFinalization.patientOption': 'Patient — long pauses',
+  'settings.phraseFinalization.responsiveOption': 'Responsive',
+  'settings.phraseFinalization.balancedOption': 'Balanced',
+  'settings.phraseFinalization.patientOption': 'Patient',
   'settings.phraseFinalization.name': 'Phrase finalization',
   'settings.phraseFinalization.responsive':
     'Finalizes after shorter pauses for faster completed text.',
