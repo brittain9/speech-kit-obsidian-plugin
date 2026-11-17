@@ -9,7 +9,7 @@
     {
       "runtimeId": "llama_cpp",
       "displayName": "llama.cpp",
-      "summary": "Local GGUF inference in the packaged HY-MT 2 translation helper."
+      "summary": "Local GGUF translation and speech recognition."
     },
     {
       "runtimeId": "whisper_cpp",
@@ -85,6 +85,13 @@
       "task": "tts",
       "displayName": "Supertonic 3",
       "summary": "Lightning-fast on-device multilingual TTS via ONNX Runtime."
+    },
+    {
+      "familyId": "qwen3_asr",
+      "task": "stt",
+      "runtimeId": "llama_cpp",
+      "displayName": "Qwen3 ASR",
+      "summary": "Multilingual speech recognition. Text appears after each phrase; live partial text is unavailable."
     }
   ],
   "collections": [
@@ -132,6 +139,11 @@
       "collectionId": "pocket_tts_read_aloud",
       "displayName": "Pocket TTS Read Aloud",
       "summary": "Local multilingual read-aloud models and curated voice embeddings."
+    },
+    {
+      "collectionId": "qwen3_asr",
+      "displayName": "Qwen3 ASR",
+      "summary": "Local multilingual batch speech recognition with paired decoder and audio encoder weights."
     }
   ],
   "models": [
@@ -5854,6 +5866,47 @@
           "downloadUrl": "https://huggingface.co/tencent/Hy-MT2-7B-GGUF/resolve/ab8472660ac61fac25f1af43fac2599d52a8a775/Hy-MT2-7B-Q4_K_M.gguf",
           "sha256": "9f96256500f3fc1ab4d64336b58f52a949a95ad7516b0c229476eef782f9f77b",
           "sizeBytes": 4624648896
+        }
+      ]
+    },
+    {
+      "runtimeId": "llama_cpp",
+      "familyId": "qwen3_asr",
+      "task": "stt",
+      "modelId": "qwen3_asr_0_6b_q8_0",
+      "collectionId": "qwen3_asr",
+      "displayName": "Qwen3 ASR 0.6B Q8",
+      "summary": "Compact multilingual speech recognition. 1.02 GB download.",
+      "languageTags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja"],
+      "supportsAutomaticLanguageDetection": true,
+      "uxTags": [],
+      "licenseLabel": "Apache-2.0",
+      "licenseUrl": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/blob/5eb144179a02acc5e5ba31e748d22b0cf3e303b0/LICENSE",
+      "sourceUrl": "https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF/tree/928ab958557df9aa2ef1c93e0e83c7ad0933fae2",
+      "modelCardUrl": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B",
+      "notes": [
+        "Batch transcription after voice-detected phrases; no live partial text or model timestamps.",
+        "Installs the speech model and audio encoder together.",
+        "Automatic language detection or explicit selection supports English, Spanish, German, French, Portuguese, Italian, Dutch and Japanese. Croatian and Serbian are not supported."
+      ],
+      "artifacts": [
+        {
+          "artifactId": "transcription",
+          "role": "transcription_model",
+          "required": true,
+          "filename": "Qwen3-ASR-0.6B-Q8_0.gguf",
+          "downloadUrl": "https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF/resolve/928ab958557df9aa2ef1c93e0e83c7ad0933fae2/Qwen3-ASR-0.6B-Q8_0.gguf?download=true",
+          "sha256": "bca259818b50ca7c4c05e9bdb35a5dc04fa039653a6d6f3f0f331f96f6aa1971",
+          "sizeBytes": 804749248
+        },
+        {
+          "artifactId": "audio_encoder",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "mmproj-Qwen3-ASR-0.6B-Q8_0.gguf",
+          "downloadUrl": "https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF/resolve/928ab958557df9aa2ef1c93e0e83c7ad0933fae2/mmproj-Qwen3-ASR-0.6B-Q8_0.gguf?download=true",
+          "sha256": "41a342b5e4c514e968cb756de6cd1b7be39eff43c44c57a2ef5fc6522e36603d",
+          "sizeBytes": 214392480
         }
       ]
     }

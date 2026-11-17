@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import process from 'node:process';
 
@@ -11,6 +11,12 @@ const SIDECAR_BASENAME = 'local-dictation-sidecar';
 const SIDECAR_SUFFIX = process.platform === 'win32' ? '.exe' : '';
 const SIDECAR_EXECUTABLE = `${SIDECAR_BASENAME}${SIDECAR_SUFFIX}`;
 const TRANSLATION_HELPER_EXECUTABLE = `local-dictation-translation-helper${SIDECAR_SUFFIX}`;
+const ASR_HELPER_EXECUTABLE = `local-dictation-asr-helper${SIDECAR_SUFFIX}`;
+const SIDECAR_EXECUTABLES = [
+  SIDECAR_EXECUTABLE,
+  TRANSLATION_HELPER_EXECUTABLE,
+  ASR_HELPER_EXECUTABLE,
+];
 
 const args = parseArgs(process.argv.slice(2));
 
@@ -35,7 +41,7 @@ async function main(options) {
 
   if (options.sidecars) {
     await installSidecarVariant({
-      artifacts: [SIDECAR_EXECUTABLE, TRANSLATION_HELPER_EXECUTABLE],
+      artifacts: SIDECAR_EXECUTABLES,
       destination: join(pluginDirectory, 'bin', 'cpu'),
       profile,
       sourceDirectory: join('native', 'target', profile),
@@ -44,7 +50,7 @@ async function main(options) {
 
     await installSidecarVariant({
       allowMissingArtifacts: true,
-      artifacts: [SIDECAR_EXECUTABLE, TRANSLATION_HELPER_EXECUTABLE, ...(await getCudaArtifacts())],
+      artifacts: [...SIDECAR_EXECUTABLES, ...(await getCudaArtifacts())],
       destination: join(pluginDirectory, 'bin', 'cuda'),
       optional: true,
       profile,
@@ -73,6 +79,16 @@ async function installSidecarVariant(options) {
     );
   }
 
+  // Check the complete executable set before replacing a working variant.
+  // Optional CUDA runtime files remain optional; its helper executables do not.
+  for (const artifact of SIDECAR_EXECUTABLES) {
+    const sourcePath = join(options.sourceDirectory, artifact);
+    if (!(await fileExists(sourcePath))) {
+      throw new Error(
+        `Missing or invalid ${options.variant} sidecar executable at ${sourcePath}. Build all helpers before using --sidecars.`,
+      );
+    }
+  }
   await rm(options.destination, { force: true, recursive: true });
   await mkdir(options.destination, { recursive: true });
 
@@ -157,8 +173,7 @@ async function getCudaArtifacts() {
 
 async function fileExists(path) {
   try {
-    await readFile(path);
-    return true;
+    return (await lstat(path)).isFile();
   } catch (error) {
     if (error.code === 'ENOENT') return false;
     throw error;

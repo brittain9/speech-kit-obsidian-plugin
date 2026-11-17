@@ -218,6 +218,7 @@ jobs:
         run: |
           codesign --force --sign - ${{ matrix.binary_path }}
           codesign --force --sign - native/target/release/local-dictation-translation-helper
+          codesign --force --sign - native/target/release/local-dictation-asr-helper
 
       - name: Package release archive
         env:
@@ -429,16 +430,6 @@ jobs:
           name: release-${{ needs.metadata.outputs.version }}
           path: dist/release/*
 
-      - name: Create draft release
-        if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v3
-        with:
-          files: dist/release/*
-          name: ${{ needs.metadata.outputs.version }}
-          tag_name: ${{ needs.metadata.outputs.version }}
-          body_path: ${{ needs.metadata.outputs.notes_path }}
-          draft: true
-
       - name: Stage exact release assets for attestation
         if: github.event_name == 'push'
         run: |
@@ -446,9 +437,7 @@ jobs:
           cp dist/release/manifest.json manifest.json
           cp dist/release/styles.css styles.css
 
-      # Sign the exact assembled plugin files after release upload and directly
-      # before publication. This keeps the short-lived signing certificate valid
-      # when Obsidian's release scanner first sees the assets.
+      # Attest the exact assembled plugin files before making the draft available.
       - name: Attest plugin release assets
         if: github.event_name == 'push'
         uses: actions/attest-build-provenance@v4
@@ -458,17 +447,24 @@ jobs:
             manifest.json
             styles.css
 
-      - name: Publish release
+      - name: Stage verified release assets
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.version }}
+          RELEASE_NOTES_PATH: ${{ needs.metadata.outputs.notes_path }}
+        run: node scripts/create-release-draft.mjs
+
+      # A human approves the release before pushing its tag. Agents must obtain
+      # explicit approval before triggering this workflow; see AGENTS.md.
+      - name: Publish approved release
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.metadata.outputs.version }}
         run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
 
-  # At-a-glance timing analytics for the run: who took how long, and which steps
-  # dominated. It runs after publish so the measured wall clock includes the
-  # actual publication path, but it does not gate publication. It also runs
-  # after a failed publish so slow/failed runs still leave useful evidence.
+  # Measure the approved automated release, including failed attempts.
   release-report:
     needs:
       - publish

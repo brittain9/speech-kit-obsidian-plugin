@@ -208,7 +208,7 @@ export class SetupWizardModal extends Modal {
       steps.createEl('li', { text: t('setup.wizard.pickModelStep') });
 
       body.createEl('p', {
-        text: t('setup.wizard.startTalking'),
+        text: t('setup.wizard.startWithControls'),
       });
 
       if (!Platform.isMacOS) {
@@ -476,7 +476,7 @@ export class SetupWizardModal extends Modal {
       text: t(ready ? 'setup.microphone.readyTitle' : 'setup.microphone.title'),
     });
     body.createEl('p', {
-      text: t(ready ? 'setup.microphone.readyDesc' : 'setup.microphone.intro'),
+      text: t(ready ? 'setup.microphone.readyControls' : 'setup.microphone.intro'),
     });
 
     if (!ready && this.microphoneResult.error !== undefined) {
@@ -546,16 +546,16 @@ export class SetupWizardModal extends Modal {
       text: t('setup.wizard.readyTitle'),
     });
     body.createEl('p', {
-      text: t('setup.wizard.readyDesc'),
+      text: t('setup.wizard.readyWithControls'),
     });
 
     const cardRibbon = body.createDiv({ cls: 'local-stt-wizard-card' });
     const ribbonIcon = cardRibbon.createSpan({ cls: 'local-stt-wizard-card__icon' });
     setIcon(ribbonIcon, 'mic');
     const ribbonText = cardRibbon.createDiv({ cls: 'local-stt-wizard-card__text' });
-    ribbonText.createEl('strong', { text: t('setup.wizard.ribbonTitle') });
+    ribbonText.createEl('strong', { text: t('setup.wizard.captureTitle') });
     ribbonText.createEl('p', {
-      text: t('setup.wizard.ribbonDesc'),
+      text: t('setup.wizard.captureDesc', { command: t('setup.wizard.toggleCommandName') }),
     });
 
     if (this.deps.openSpeechKit !== undefined) {

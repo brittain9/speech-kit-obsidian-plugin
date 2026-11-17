@@ -98,12 +98,23 @@ export async function main(argv = process.argv.slice(2)) {
   await rm(outputDirectory, { force: true, recursive: true });
   const measurementDirectory = join(outputDirectory, 'measurements');
   await mkdir(measurementDirectory, { recursive: true });
-  for (const [script, filename] of [
-    ['test:sidecar:e2e', 'whisper-english.jsonl'],
-    ['test:sidecar:nemotron:e2e', 'nemotron-english.jsonl'],
-    ['test:sidecar:multilingual:e2e', 'multilingual.jsonl'],
-  ]) {
-    runSuite(script, join(measurementDirectory, filename));
+  try {
+    for (const [script, filename] of [
+      ['test:sidecar:e2e', 'whisper-english.jsonl'],
+      ['test:sidecar:nemotron:e2e', 'nemotron-english.jsonl'],
+      ['test:sidecar:multilingual:e2e', 'multilingual.jsonl'],
+    ]) {
+      runSuite(script, join(measurementDirectory, filename));
+    }
+  } catch (suiteError) {
+    // Failed acceptance checks still produce useful measurements. A build or
+    // startup failure may produce none; keep the original failure authoritative.
+    try {
+      await render(measurementDirectory, outputDirectory);
+    } catch (reportError) {
+      console.error('Could not render partial transcription measurements:', reportError.message);
+    }
+    throw suiteError;
   }
   await render(measurementDirectory, outputDirectory);
 }

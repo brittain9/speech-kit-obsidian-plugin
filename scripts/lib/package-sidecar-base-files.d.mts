@@ -4,4 +4,6 @@ export function stageSidecarBaseFiles(options: {
   binaryPath: string;
   helperName: string;
   helperPath: string;
+  asrHelperName: string;
+  asrHelperPath: string;
 }): Promise<void>;

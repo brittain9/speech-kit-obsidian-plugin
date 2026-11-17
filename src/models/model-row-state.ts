@@ -359,6 +359,8 @@ function resolveFamilyDisplayName(
       return 'Firefox Translations';
     case 'tencent_hy_mt':
       return 'Tencent HY-MT 2';
+    case 'qwen3_asr':
+      return 'Qwen3 ASR';
     case 'moonshine':
       return 'Moonshine';
     case 'nemotron_asr':

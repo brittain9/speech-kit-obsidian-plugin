@@ -322,6 +322,14 @@ export const en = {
   'audio.systemAudio.notReady': 'System audio is not ready.',
   'audio.systemAudio.outdatedInstaller':
     '{message} Your Obsidian installer predates the macOS system-audio permission. Download a fresh installer from obsidian.md and reinstall, then try again.',
+  'dictation.control.idle.text': 'Dictate',
+  'dictation.control.idle.label': 'Speech Kit: Start dictation',
+  'dictation.control.starting.text': 'Cancel start',
+  'dictation.control.starting.label': 'Speech Kit: Cancel dictation start',
+  'dictation.control.active.text': 'Stop',
+  'dictation.control.active.label': 'Speech Kit: Stop dictation',
+  'dictation.control.error.text': 'Retry',
+  'dictation.control.error.label': 'Speech Kit: Retry dictation',
   'commands.toggleDictation': 'Toggle dictation',
   'commands.startDictation': 'Start dictation',
   'commands.stopDictation': 'Stop dictation',
@@ -472,6 +480,13 @@ export const en = {
   'settings.groups.model': 'Models',
   'settings.groups.readAloud': 'Read aloud',
   'settings.groups.translation': 'Translation',
+  'settings.dictationControl.name': 'Dictation control',
+  'settings.dictationControl.description':
+    'Choose where to show the quick control. Commands and hotkeys always work.',
+  'settings.dictationControl.ribbon': 'Ribbon',
+  'settings.dictationControl.statusBar': 'Status bar',
+  'settings.dictationControl.both': 'Both',
+  'settings.dictationControl.commandsOnly': 'Commands only',
   'settings.features.title': 'Customize tools',
   'settings.features.rowDescription': 'Choose which tools appear in Speech Kit.',
   'settings.features.customize': 'Customize',
@@ -609,9 +624,9 @@ export const en = {
   'settings.transcriptFormatting.newParagraph': 'New paragraph',
   'settings.transcriptFormatting.name': 'Transcript formatting',
   'settings.transcriptFormatting.desc': 'How phrases are joined together.',
-  'settings.phraseFinalization.responsiveOption': 'Responsive — short pauses',
-  'settings.phraseFinalization.balancedOption': 'Balanced — standard',
-  'settings.phraseFinalization.patientOption': 'Patient — long pauses',
+  'settings.phraseFinalization.responsiveOption': 'Responsive',
+  'settings.phraseFinalization.balancedOption': 'Balanced',
+  'settings.phraseFinalization.patientOption': 'Patient',
   'settings.phraseFinalization.name': 'Phrase finalization',
   'settings.phraseFinalization.responsive':
     'Finalizes after shorter pauses for faster completed text.',
@@ -921,7 +936,7 @@ export const en = {
   'llm.timing.timestamps.batch':
     'All at once may rewrite or remove timestamps, depending on the preset.',
   'llm.timing.option.perUtterance': 'After each phrase',
-  'llm.timing.option.batch': 'All at once on stop',
+  'llm.timing.option.batch': 'When dictation stops',
   'llm.routing.priceTierTooltip': 'Approximate price tier',
   'llm.routing.providerModel': '{provider} model',
   'llm.routing.ollamaModelDescription': 'Pick a local Ollama chat model.',
@@ -981,15 +996,19 @@ export const en = {
   'llm.sidebar.title': 'Transform dictation',
   'llm.sidebar.description': 'Choose how spoken text is shaped before it reaches your note.',
   'llm.sidebar.group.preset': 'Preset',
+  'llm.sidebar.group.transforms': 'AI transformations',
   'llm.sidebar.group.model': 'Model',
   'llm.sidebar.group.context': 'Context',
   'llm.sidebar.enabled.name': 'Transform new dictation',
-  'llm.sidebar.enabled.description': 'Apply the active preset to new dictated text.',
+  'llm.sidebar.enabled.description':
+    'Apply the active preset to new dictated text. Off inserts the raw transcript.',
   'llm.sidebar.showOriginal.name': 'Show original transcript',
   'llm.sidebar.showOriginal.description':
     'Keep it in a collapsible callout below each transformed result.',
-  'llm.sidebar.runTransform.name': 'Run transform',
+  'llm.sidebar.runTransform.name': 'When to transform',
   'llm.sidebar.runTransform.description': 'Run after each phrase, or all at once when you stop.',
+  'llm.sidebar.runTransform.fixed': '{timing}. Set by {preset}.',
+  'llm.timing.advancedTooltip': 'Minimum words and timestamps',
   'llm.sidebar.runTransform.setByPreset': 'Set by {preset} — {timing}.',
   'llm.sidebar.activePreset': 'Active preset',
   'llm.sidebar.unavailable.title': 'LLM features are unavailable',
@@ -1155,6 +1174,8 @@ export const en = {
   'llm.preset.manager.duplicateTooltip': 'Duplicate preset',
   'llm.preset.manager.deleteTooltip': 'Delete preset "{preset}"',
   'llm.preset.manager.back': '← All presets',
+  'llm.preset.editor.notFound':
+    'That preset is no longer available. Choose another preset from the list.',
   'llm.preset.editor.name': 'Name',
   'llm.preset.editor.namePlaceholder': 'e.g. Meeting notes',
   'llm.preset.editor.description': 'Description (optional)',
@@ -1163,8 +1184,10 @@ export const en = {
   'llm.preset.editor.promptDescription': 'Sent to the model as the system prompt.',
   'llm.preset.editor.promptSize': '~{tokens} tokens ({characters} chars) — sent with every request',
   'llm.preset.editor.timing': 'Timing',
+  'llm.preset.editor.timingAdd':
+    'Add above or below runs when dictation stops. Choose Replace text to enable phrase-by-phrase timing.',
   'llm.preset.editor.timingDescription': 'Choose when this preset runs.',
-  'llm.preset.editor.timingEither': 'Use Run transform setting',
+  'llm.preset.editor.timingEither': 'Use dictation timing setting',
   'llm.preset.editor.timingPerUtterance': 'After each phrase',
   'llm.preset.editor.timingBatch': 'Once on stop',
   'llm.preset.editor.output': 'Output',
@@ -1202,6 +1225,8 @@ export const en = {
   'setup.microphone.checkAgain': 'Check again',
   'setup.microphone.checking': 'Checking…',
   'setup.microphone.readyTitle': 'Microphone ready',
+  'setup.microphone.readyControls':
+    'Access is available. The next step starts one ordinary dictation session. Use your dictation control, command, or hotkey to finish.',
   'setup.microphone.readyDesc':
     'Access is available. The next step starts one ordinary dictation session; you can stop it from the ribbon or your hotkey.',
   'setup.microphone.recheck':
@@ -1219,6 +1244,8 @@ export const en = {
   'setup.wizard.quickSetup': 'A quick 2-minute setup:',
   'setup.wizard.downloadEngineStep': 'Download the speech engine',
   'setup.wizard.pickModelStep': 'Pick a transcription model',
+  'setup.wizard.startWithControls':
+    'Open a Markdown note, then start dictation from your quick control, the command palette, or a hotkey.',
   'setup.wizard.startTalking':
     'Then hit the mic in the ribbon (or your own hotkey) and start talking.',
   'setup.wizard.cpuBuildNote':
@@ -1285,6 +1312,11 @@ export const en = {
   'setup.wizard.recommendation.catalogLoading': 'Loading the model catalog…',
   'setup.wizard.openModelPicker': 'Customize models',
   'setup.wizard.readyTitle': "You're ready to dictate",
+  'setup.wizard.readyWithControls':
+    "Try it in the Markdown note that's open now. Speak a few words, then stop with your quick control, command, or hotkey.",
+  'setup.wizard.captureTitle': 'Start and stop dictation',
+  'setup.wizard.captureDesc':
+    'Run {command} from the command palette, or use your ribbon mic or hotkey. Prefer a status bar control? Choose it in Settings → Speech Kit → Advanced → Customize tools.',
   'setup.wizard.readyDesc':
     "Try it in the Markdown note that's open now. Speak a few words, then use the ribbon mic or your hotkey to stop.",
   'setup.wizard.ribbonTitle': 'Use the ribbon mic',
@@ -1488,6 +1520,16 @@ export const en = {
   'sidecarError.vad_error': 'Voice activity detection failed on an audio frame.',
   'sidecarError.vad_init_failed': 'Failed to initialize the bundled Silero VAD.',
   'sidecarError.worker_panic': 'The speech engine transcription worker stopped unexpectedly.',
+  'catalog.qwen3_asr_0_6b_q8_0.summary':
+    'Compact multilingual speech recognition. 1.02 GB download.',
+  'catalog.family.qwen3_asr.summary':
+    'Multilingual speech recognition. Text appears after each phrase; live partial text is unavailable.',
+  'models.external.requirements.qwen.entry':
+    'Select the Qwen3-ASR decoder GGUF, not the mmproj audio encoder.',
+  'models.external.requirements.qwen.siblings':
+    'Keep the matching mmproj- GGUF beside the decoder with its original filename.',
+  'models.external.requirements.qwen.compatibility':
+    'The packaged ASR helper validates the pair before selection. Batch transcription only; no live partials or model timestamps.',
   'catalog.whisper_tiny_en_q8_0.summary':
     'Fastest model with lowest resource cost. Good for testing or low-power machines.',
   'catalog.whisper_base_en_q8_0.summary':
@@ -1562,6 +1604,11 @@ export const en = {
   'sidecarError.helper_unavailable': 'The packaged translation helper could not be started.',
   'sidecarError.helper_write_failed': 'The translation helper stopped unexpectedly.',
   'sidecarError.inference_failed': 'Translation failed.',
+  'sidecarError.model_not_loaded':
+    'The speech model is not loaded. Select the model and try again.',
+  'sidecarError.model_pair_load_failed':
+    'The speech model and audio encoder could not be loaded. Check that both matching files are installed.',
+  'sidecarError.transcription_cancelled': 'Speech recognition was cancelled.',
   'sidecarError.model_load_failed': 'The translation model could not be loaded.',
   'sidecarError.invalid_translation_request': 'Translation could not be started.',
   'sidecarError.translation_busy': 'Another translation is already running.',

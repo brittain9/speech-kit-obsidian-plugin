@@ -339,9 +339,9 @@ export const hr = {
   'settings.transcriptFormatting.newParagraph': 'Novi odlomak',
   'settings.transcriptFormatting.name': 'Oblikovanje transkripta',
   'settings.transcriptFormatting.desc': 'Način spajanja fraza.',
-  'settings.phraseFinalization.responsiveOption': 'Brzo — kratke stanke',
-  'settings.phraseFinalization.balancedOption': 'Uravnoteženo — standardno',
-  'settings.phraseFinalization.patientOption': 'Strpljivo — duge stanke',
+  'settings.phraseFinalization.responsiveOption': 'Brzo',
+  'settings.phraseFinalization.balancedOption': 'Uravnoteženo',
+  'settings.phraseFinalization.patientOption': 'Strpljivo',
   'settings.phraseFinalization.name': 'Dovršavanje fraza',
   'settings.phraseFinalization.responsive':
     'Dovršava fraze nakon kraćih stanki pa gotov tekst dobivate brže.',

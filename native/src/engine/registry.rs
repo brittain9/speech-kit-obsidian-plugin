@@ -29,13 +29,16 @@ impl EngineRegistry {
             crate::adapters::firefox_translations::FirefoxTranslationsAdapter,
         ));
 
+        #[cfg(any(feature = "engine-hy-mt", feature = "engine-qwen-asr"))]
+        registry.register_runtime(Box::new(
+            crate::runtimes::llama_cpp::LlamaCppRuntime::probe(),
+        ));
         #[cfg(feature = "engine-hy-mt")]
-        {
-            registry.register_runtime(Box::new(
-                crate::runtimes::llama_cpp::LlamaCppRuntime::probe(),
-            ));
-            registry.register_adapter(Box::new(crate::adapters::tencent_hy_mt::TencentHyMtAdapter));
-        }
+        registry.register_adapter(Box::new(crate::adapters::tencent_hy_mt::TencentHyMtAdapter));
+        #[cfg(feature = "engine-qwen-asr")]
+        registry.register_adapter(Box::new(
+            crate::adapters::qwen_asr::QwenAsrAdapter::default(),
+        ));
 
         #[cfg(feature = "engine-whisper")]
         {

@@ -270,6 +270,33 @@ describe('desktop session boundary', () => {
 });
 
 describe('DictationSessionController', () => {
+  it('keeps active capture and accepted text owned when quick controls are hidden', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const captureStream = new FakeCaptureStream();
+    const sessions: FakeSession[] = [];
+    let settings = createSettings({ selectedModel: createExternalModelSelection() });
+    const controller = createController({
+      sidecarConnection,
+      captureStream,
+      getSettings: () => settings,
+      createSession: (session) => sessions.push(session),
+    });
+    await controller.toggleDictation();
+    const sessionId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId ?? '';
+    settings = { ...settings, dictationControlLocation: 'commands_only' };
+    expect(captureStream.isCapturing()).toBe(true);
+    // Commands and hotkeys use this same public toggle after the quick control hides.
+    await controller.toggleDictation();
+    expect(sidecarConnection.requestStopSession).toHaveBeenCalledWith(sessionId);
+    sidecarConnection.emit(transcriptReady(sessionId, 'speech accepted while finishing'));
+    sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await vi.waitFor(() => expect(sessions[0]?.acceptTranscript).toHaveBeenCalled());
+    await vi.waitFor(() => expect(controller.isBusy()).toBe(false));
+    expect(captureStream.isCapturing()).toBe(false);
+    expect(sessions[0]?.dispose).toHaveBeenCalledOnce();
+    await controller.dispose();
+  });
+
   it('releases microphone capture and session ownership when the sidecar exits', async () => {
     const sidecarConnection = new FakeSidecarConnection();
     const captureStream = new FakeCaptureStream();

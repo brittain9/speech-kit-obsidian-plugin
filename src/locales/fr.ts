@@ -198,9 +198,9 @@ export const fr = {
   'settings.transcriptFormatting.newParagraph': 'Nouveau paragraphe',
   'settings.transcriptFormatting.name': 'Formatage de la transcription',
   'settings.transcriptFormatting.desc': 'Comment les phrases sont réunies.',
-  'settings.phraseFinalization.responsiveOption': 'Réactif – courtes pauses',
-  'settings.phraseFinalization.balancedOption': 'Équilibré – standard',
-  'settings.phraseFinalization.patientOption': 'Patient – ​​longues pauses',
+  'settings.phraseFinalization.responsiveOption': 'Réactif',
+  'settings.phraseFinalization.balancedOption': 'Équilibré',
+  'settings.phraseFinalization.patientOption': 'Patient',
   'settings.phraseFinalization.name': 'Finalisation de la phrase',
   'settings.phraseFinalization.responsive':
     'Se finalise après des pauses plus courtes pour un texte complété plus rapidement.',

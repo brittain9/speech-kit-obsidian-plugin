@@ -68,7 +68,7 @@ import {
   type SettingAccess,
 } from './setting-helpers';
 import { mountSettingsSidecarSurfaces } from './settings-sidecar-surfaces';
-import { SettingsTabLifecycle } from './settings-tab-lifecycle';
+import { captureSettingsFocus, SettingsTabLifecycle } from './settings-tab-lifecycle';
 import {
   openCudaInstallModal,
   openSidecarUpdateModal,
@@ -455,22 +455,26 @@ export class LocalSttSettingTab extends PluginSettingTab {
 
     this.renderTranscriptFormattingSetting(outputCard);
 
+    const streamingModelSelected = (): boolean => {
+      const caps = manager.getState().selectedModelCapabilities;
+      return caps.status === 'ready' && caps.capabilities.family.supportsStreaming;
+    };
+    const chooseBatchModel = (): void => {
+      void this.openModelPickerFromSettings(
+        { initialTask: 'stt', requireBatchStt: true, onChanged: () => this.refreshSettingsTab() },
+        t('settings.speakerLabels.name'),
+      );
+    };
     this.disposeDiarizationDesc = renderDiarizationSetting(outputCard, {
       getSettings: () => this.dependencies.getSettings(),
       saveEnabled: (enabled) => this.access.persistOne('diarizationEnabled', enabled),
-      streamingModelSelected: () => {
-        const caps = manager.getState().selectedModelCapabilities;
-        return caps.status === 'ready' && caps.capabilities.family.supportsStreaming;
-      },
+      streamingModelSelected,
       subscribe: (listener) => manager.subscribe(listener),
-      chooseModel: () => {
-        void this.openModelPickerFromSettings(
-          { initialTask: 'stt', requireBatchStt: true, onChanged: () => this.refreshSettingsTab() },
-          t('settings.speakerLabels.name'),
-        );
-      },
+      chooseModel: chooseBatchModel,
       configure: () => {
         new DiarizationSettingsModal(this.app, {
+          streamingModelSelected,
+          chooseModel: chooseBatchModel,
           getSettings: () => this.dependencies.getSettings(),
           savePatch: (patch) =>
             this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
@@ -563,6 +567,24 @@ export class LocalSttSettingTab extends PluginSettingTab {
 
     if (settings.llmFeaturesEnabled) {
       const llmSectionGeneration = this.llmSectionGeneration;
+      const openPresetManager = (initialPresetRef?: string): void => {
+        const focus = captureSettingsFocus(containerEl);
+        const restoreFocus = focus === null ? () => {} : this.lifecycle.focusAfterDialog(focus);
+        void this.dependencies.synchronizePresets().then(() => {
+          if (this.llmSectionGeneration !== llmSectionGeneration) return;
+          new PresetManagerModal(this.app, {
+            ...(initialPresetRef === undefined ? {} : { initialPresetRef }),
+            feedback: this.dependencies.feedback,
+            getSettings: this.dependencies.getSettings,
+            mutatePresetState: this.dependencies.mutatePresetState,
+            onClose: () => {
+              this.refreshSettingsTab();
+              restoreFocus();
+            },
+          }).open();
+        });
+      };
+
       this.disposeLlmSection = renderLlmProviderSettings(containerEl, {
         app: this.app,
         feedback: this.dependencies.feedback,
@@ -571,17 +593,8 @@ export class LocalSttSettingTab extends PluginSettingTab {
         logger: this.dependencies.logger,
         persist: (mutation) => this.dependencies.mutateLlmSettings(mutation),
         mutatePresetState: this.dependencies.mutatePresetState,
-        managePresets: () => {
-          void this.dependencies.synchronizePresets().then(() => {
-            if (this.llmSectionGeneration !== llmSectionGeneration) return;
-            new PresetManagerModal(this.app, {
-              feedback: this.dependencies.feedback,
-              getSettings: this.dependencies.getSettings,
-              mutatePresetState: this.dependencies.mutatePresetState,
-              onClose: () => this.refreshSettingsTab(),
-            }).open();
-          });
-        },
+        managePresets: () => openPresetManager(),
+        editPreset: (ref) => openPresetManager(ref),
         openContextSettings: () => {
           new LlmContextSettingsModal(this.app, {
             getSettings: this.dependencies.getSettings,

@@ -64,6 +64,16 @@ pub trait LoadedModel: Send {
         &mut self,
         request: &TranscriptionRequest,
     ) -> Result<EngineTranscriptOutput, TranscriptionError>;
+
+    /// Engines with an isolated process can stop an in-flight decode promptly.
+    /// Existing adapters retain their current inference behavior by default.
+    fn transcribe_cancellable(
+        &mut self,
+        request: &TranscriptionRequest,
+        _should_cancel: &dyn Fn() -> bool,
+    ) -> Result<EngineTranscriptOutput, TranscriptionError> {
+        self.transcribe(request)
+    }
 }
 
 /// Per-utterance incremental inference state. Implementations accept 16 kHz

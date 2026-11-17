@@ -29,6 +29,8 @@ stats/
 .claude/
 .superpowers/
 AGENTS.md
+# Track the project release-approval rule; keep nested personal instructions local.
+!/AGENTS.md
 CLAUDE.md
 PLANS.md
 

@@ -191,7 +191,7 @@ args=(
   --locked
   --manifest-path "$MANIFEST"
   --target-dir "$target_dir"
-  --features engine-whisper,engine-cohere-transcribe,engine-hy-mt,engine-moonshine,engine-nemotron-asr,engine-parakeet-unified,engine-pocket-tts,engine-supertonic,gpu-cuda
+  --features engine-whisper,engine-cohere-transcribe,engine-hy-mt,engine-qwen-asr,engine-moonshine,engine-nemotron-asr,engine-parakeet-unified,engine-pocket-tts,engine-supertonic,gpu-cuda
   --bins
   -j "$jobs"
   --config "host.linker=\"${CC}\""
@@ -212,6 +212,8 @@ binary="$target_dir/$profile/local-dictation-sidecar"
 [[ -f "$binary" ]] || die "build completed but binary not found at $binary"
 helper="$target_dir/$profile/local-dictation-translation-helper"
 [[ -f "$helper" ]] || die "build completed but helper not found at $helper"
+asr_helper="$target_dir/$profile/local-dictation-asr-helper"
+[[ -f "$asr_helper" ]] || die "build completed but ASR helper not found at $asr_helper"
 
 while IFS= read -r runtime; do
   copy_resolved_artifact "$cuda_lib/$runtime" "$target_dir/$profile/$runtime"

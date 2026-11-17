@@ -104,6 +104,79 @@ fn get_system_info_round_trips_through_the_real_binary() {
     reader.join().expect("event reader should not panic");
 }
 
+/// A cold or busy Metal driver must not hold the model-free handshake hostage.
+/// Interpose only in this child: exercising the actual native call makes this
+/// deterministic without changing production timeouts or adding a mock adapter.
+#[cfg(all(target_os = "macos", feature = "gpu-metal", feature = "engine-whisper"))]
+#[test]
+fn system_info_does_not_initialize_a_slow_metal_device() {
+    struct Fixture(std::path::PathBuf);
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let dir = Fixture(std::env::temp_dir().join(format!("slow-metal-{}", uuid::Uuid::new_v4())));
+    std::fs::create_dir_all(&dir.0).unwrap();
+    let library = dir.0.join("slow-metal.dylib");
+    let marker = dir.0.join("device-requested");
+    let loaded = dir.0.join("interposer-loaded");
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/native/slow-metal-device.c");
+    assert!(
+        ProcessCommand::new("clang")
+            .args(["-dynamiclib", "-framework", "Metal"])
+            .arg(fixture)
+            .arg("-o")
+            .arg(&library)
+            .status()
+            .expect("the macOS native build toolchain must include clang")
+            .success()
+    );
+    let mut child = ChildGuard {
+        child: ProcessCommand::new(SIDECAR_BIN)
+            .env("DYLD_INSERT_LIBRARIES", &library)
+            .env("STT_TEST_METAL_MARKER", &marker)
+            .env("STT_TEST_METAL_LOADED", &loaded)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    };
+    let mut stdin = child.child.stdin.take().unwrap();
+    let mut stdout = child.child.stdout.take().unwrap();
+    let (tx, rx) = mpsc::channel();
+    let reader = thread::spawn(move || tx.send(driver::read_event_frame(&mut stdout)));
+    driver::write_command_frame(&mut stdin, &json!({ "type": "get_system_info" })).unwrap();
+    stdin.flush().unwrap();
+    let result = rx.recv_timeout(SMOKE_TIMEOUT);
+    assert!(
+        result.is_ok(),
+        "metadata waited on Metal device discovery (requested={}): {result:?}",
+        marker.exists()
+    );
+    let event = result.unwrap().unwrap();
+    assert_eq!(event["type"], "system_info");
+    assert!(
+        loaded.exists(),
+        "dyld must load the test interposition library"
+    );
+    assert!(
+        !marker.exists(),
+        "routine metadata must not initialize Metal"
+    );
+    driver::write_command_frame(&mut stdin, &json!({ "type": "shutdown" })).unwrap();
+    stdin.flush().unwrap();
+    drop(stdin);
+    assert!(
+        driver::wait_with_timeout(&mut child.child, SMOKE_TIMEOUT)
+            .unwrap()
+            .success()
+    );
+    reader.join().unwrap().unwrap();
+}
+
 #[test]
 #[ignore = "spawns the built binary + real inference; run with --ignored"]
 fn jfk_transcribes_through_the_wire_protocol() {

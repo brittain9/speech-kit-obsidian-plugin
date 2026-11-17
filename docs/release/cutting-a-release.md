@@ -1,3 +1,7 @@
+> Agents: obtain Alex's explicit approval for the prepared release before pushing
+> its tag or running a publishing/deployment action. Coding/CI/PR autonomy is separate
+> from release approval; see [AGENTS.md](../../AGENTS.md).
+
 # Cutting a Release
 
 Operational runbook for shipping a new plugin release.
@@ -74,7 +78,7 @@ npm run release:prepare -- --version <version> --sidecar
 ```
 
 That advances the sidecar metadata and Cargo mirrors to the plugin tag. The
-tagged workflow then builds and publishes the complete archive matrix. The
+approved tag then builds and publishes the complete archive matrix. The
 command validates the current release state before changing anything and creates
 a comments-only notes scaffold. It refuses to overwrite existing notes. To
 change the Obsidian floor, also pass `--min-app-version <version>`; otherwise
@@ -159,8 +163,9 @@ lead time. When benchmarking a release, record when the release was requested
 alongside the published timestamp.
 
 The operating target is 30 minutes end to end when release notes are ready for
-review. Its machine-measurable service target is publication within 25 minutes
-of the tag-triggered workflow starting. Release preparation, PR checks, review,
+review. Its machine-measurable service target is published assets within 25 minutes
+of the tag-triggered workflow starting. Agent release approval is required before triggering publication and is recorded
+separately from automated preparation. Release preparation, PR checks, review,
 and the merge-to-tag interval still count toward the primary metric; do not hide
 them by reporting only the tagged workflow.
 
@@ -196,7 +201,8 @@ the plugin and required sidecar versions match, it also builds the native matrix
 (macOS arm64, Linux x86_64 cpu+cuda, Linux arm64, Windows x86_64 cpu+cuda, Windows arm64), packages the archives,
 and generates checksums. When they differ, every native job is skipped. Both
 paths attest the plugin assets, create a **draft** release with the notes file
-as the body, publish it, and produce the timing report.
+as the body, publish the approved release, and produce the timing report. `workflow_dispatch` remains a dry run that uploads an artifact bundle
+without creating a GitHub Release.
 Unit, lint, and static-analysis gates run on pull requests and `main` in
 `ci.yml`; real-model certification runs only in manually dispatchable E2E
 workflows and does not delay publication.
@@ -205,8 +211,14 @@ workflows and does not delay publication.
 
 ```bash
 gh run watch <run-id> --exit-status   # do NOT pipe through `tail`/`head` — that masks the run's exit code
-gh release view <version>             # confirm the expected asset set was published
+gh release view <version>             # inspect the draft notes and expected asset set
 ```
+
+Approval happens before an agent triggers the release. Once the approved tag is
+pushed, the workflow stages verified assets and publishes automatically. After
+success, inspect the published notes, asset set, checksums and provenance. There
+is no additional manual Publish step. An interrupted upload can still leave an
+incomplete draft; use the recovery procedure below.
 
 ## What ships, and where it lands
 
@@ -255,19 +267,21 @@ does not prompt users to reinstall an unchanged sidecar.
 
 ## Recovery
 
-**Failed before publish** (metadata gate, build leg) — land the fix on main (via
-PR), then move the tag onto the corrected commit:
+**Failed before draft creation** (metadata gate, build leg) — fix the cause through
+a PR. Retry the workflow only when its tagged source remains the intended release.
+Changing a release tag or version requires an explicit release decision.
 
-```bash
-git push origin :refs/tags/<version>   # delete the remote tag
-git tag -d <version>                    # delete the local tag
-git tag <version> origin/main           # re-tag the fixed HEAD
-git push origin <version>               # re-fires the release
-```
+**Draft already exists or an upload failed** — the workflow fails closed whenever
+any draft or published release already uses the tag. It never edits, replaces
+assets on, or deletes that release. Inspect the existing draft and workflow logs.
+If it is incomplete, Alex can manually delete only that unpublished draft, keep
+the validated tag, and rerun the tagged workflow. This deliberately trades
+one-click retry for preserving existing release contents. Never publish an
+incomplete draft just to unblock a retry.
 
-**Already published but wrong** — `gh release delete <version> --cleanup-tag`,
-fix, re-tag. When replacing a live release, delete the old one only **after** the
-new one publishes so "Latest" is never broken.
+**Already published but wrong** — stop and plan a corrective release. Retrying the
+workflow cannot mutate the published release. Do not delete a live release or a
+referenced sidecar release as routine recovery.
 
 ## Gotchas (learned the hard way)
 

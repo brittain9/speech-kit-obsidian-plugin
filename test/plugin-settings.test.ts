@@ -1053,3 +1053,17 @@ describe('resetLlmPostprocessDefaults', () => {
     expect(reset.llmPostprocessTemperature).toBe(DEFAULT_PLUGIN_SETTINGS.llmPostprocessTemperature);
   });
 });
+
+it('preserves the existing ribbon default and normalizes quick-control locations', () => {
+  expect(DEFAULT_PLUGIN_SETTINGS.dictationControlLocation).toBe('ribbon');
+  for (const value of [undefined, null, false, 'overlay']) {
+    expect(
+      resolvePluginSettings({ dictationControlLocation: value }).dictationControlLocation,
+    ).toBe('ribbon');
+  }
+  for (const value of ['ribbon', 'status_bar', 'both', 'commands_only']) {
+    expect(
+      resolvePluginSettings({ dictationControlLocation: value }).dictationControlLocation,
+    ).toBe(value);
+  }
+});

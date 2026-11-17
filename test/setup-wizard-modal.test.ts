@@ -242,6 +242,8 @@ async function openReadyWizard(modal: SetupWizardModal): Promise<void> {
   await vi.waitFor(() => expect(button(modal, 'Continue')).toBeDefined());
   await button(modal, 'Continue').click();
   await vi.waitFor(() => expect(button(modal, 'Try dictation now')).toBeDefined());
+  expect(textContent(modal.contentEl as unknown as TestElement)).toContain('status bar');
+  expect(textContent(modal.contentEl as unknown as TestElement)).toContain('command palette');
 }
 
 interface Deferred<T> {

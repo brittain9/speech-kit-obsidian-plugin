@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -218,6 +218,119 @@ describe('installSidecar', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform });
     Object.defineProperty(process, 'arch', { value: originalArch });
+  });
+
+  it.each(['linux', 'win32'] as const)(
+    'installs legacy archives and a checked optional ASR helper on %s',
+    async (platform) => {
+      Object.defineProperty(process, 'platform', { value: platform });
+      const suffix = platform === 'win32' ? '.exe' : '';
+      for (const withAsr of [false, true]) {
+        const pluginDirectory = await createTempDirectory();
+        const entries = [
+          'local-dictation-sidecar',
+          'local-dictation-translation-helper',
+          ...(withAsr ? ['local-dictation-asr-helper'] : []),
+        ].map((name) => ({ name: `${name}${suffix}`, content: Buffer.from(`verified:${name}`) }));
+        const archive = buildTarGz(entries);
+        const asset = detectPlatformAsset(platform, 'x64', 'cpu');
+        const sha256 = sha256Hex(archive);
+        stubHttps({
+          [`https://releases.test/2026.11.1/${asset}`]: archive,
+          'https://releases.test/2026.11.1/checksums.txt': Buffer.from(`${sha256}  ${asset}\n`),
+        });
+        const result = await installSidecar({
+          pluginDirectory,
+          variant: 'cpu',
+          version: '2026.11.1',
+          releaseBaseUrl: 'https://releases.test',
+        });
+        expect(result.manifest.sha256).toBe(sha256);
+        if (withAsr) {
+          const path = join(result.variantDirectory, `local-dictation-asr-helper${suffix}`);
+          await expect(readFile(path, 'utf8')).resolves.toBe('verified:local-dictation-asr-helper');
+          if (platform !== 'win32') expect((await stat(path)).mode & 0o111).not.toBe(0);
+        }
+      }
+    },
+  );
+
+  it.each([
+    ['linux', 'local-dictation-translation-helper'],
+    ['linux', 'local-dictation-asr-helper'],
+    ['win32', 'local-dictation-translation-helper'],
+    ['win32', 'local-dictation-asr-helper'],
+  ] as const)(
+    'rejects a directory instead of %s/%s before replacing an installed set',
+    async (platform, invalidHelper) => {
+      Object.defineProperty(process, 'platform', { value: platform });
+      const suffix = platform === 'win32' ? '.exe' : '';
+      const pluginDirectory = await createTempDirectory();
+      const destination = variantDirectoryPath(pluginDirectory, 'cpu');
+      await mkdir(destination, { recursive: true });
+      await writeFile(join(destination, 'previous'), 'working-install');
+      const beforeReplace = vi.fn(async () => {});
+      const archive = buildTarGz(
+        [
+          'local-dictation-sidecar',
+          'local-dictation-translation-helper',
+          'local-dictation-asr-helper',
+        ].map((name) => ({
+          name: `${name}${suffix}`,
+          content: name === invalidHelper ? Buffer.alloc(0) : Buffer.from(name),
+          typeflag: name === invalidHelper ? '5' : '0',
+        })),
+      );
+      const asset = detectPlatformAsset(platform, 'x64', 'cpu');
+      stubHttps({
+        [`https://releases.test/2026.11.1/${asset}`]: archive,
+        'https://releases.test/2026.11.1/checksums.txt': Buffer.from(
+          `${sha256Hex(archive)}  ${asset}\n`,
+        ),
+      });
+      await expect(
+        installSidecar({
+          beforeReplace,
+          pluginDirectory,
+          variant: 'cpu',
+          version: '2026.11.1',
+          releaseBaseUrl: 'https://releases.test',
+        }),
+      ).rejects.toThrow(/regular file/);
+      expect(beforeReplace).not.toHaveBeenCalled();
+      await expect(readFile(join(destination, 'previous'), 'utf8')).resolves.toBe(
+        'working-install',
+      );
+      await expect(
+        readInstallManifest(join(pluginDirectory, 'bin', '.cpu-staging')),
+      ).resolves.toBeNull();
+    },
+  );
+
+  it('rejects a Windows archive missing its required translation helper', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const pluginDirectory = await createTempDirectory();
+    const asset = 'sidecar-windows-x86_64-cpu.tar.gz';
+    const archive = buildTarGz([
+      { name: 'local-dictation-sidecar.exe', content: Buffer.from('binary') },
+    ]);
+    stubHttps({
+      [`https://releases.test/2026.11.1/${asset}`]: archive,
+      'https://releases.test/2026.11.1/checksums.txt': Buffer.from(
+        `${sha256Hex(archive)}  ${asset}\n`,
+      ),
+    });
+    await expect(
+      installSidecar({
+        pluginDirectory,
+        variant: 'cpu',
+        version: '2026.11.1',
+        releaseBaseUrl: 'https://releases.test',
+      }),
+    ).rejects.toThrow(/local-dictation-translation-helper/);
+    await expect(
+      readInstallManifest(variantDirectoryPath(pluginDirectory, 'cpu')),
+    ).resolves.toBeNull();
   });
 
   it('downloads, verifies, extracts, and writes install.json last', async () => {

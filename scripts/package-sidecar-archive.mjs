@@ -33,6 +33,8 @@ const helperName = isWindows
   ? 'local-dictation-translation-helper.exe'
   : 'local-dictation-translation-helper';
 const helperPath = join(dirname(binaryPath), helperName);
+const asrHelperName = isWindows ? 'local-dictation-asr-helper.exe' : 'local-dictation-asr-helper';
+const asrHelperPath = join(dirname(binaryPath), asrHelperName);
 const distDir = 'dist';
 const artifactDir = join(distDir, assetName);
 
@@ -42,6 +44,8 @@ await stageSidecarBaseFiles({
   binaryPath,
   helperName,
   helperPath,
+  asrHelperName,
+  asrHelperPath,
 });
 
 if (isCuda) {
@@ -99,6 +103,7 @@ if (isLinux) {
   // and `strip` semantics differ).
   runStrip(join(artifactDir, binaryName));
   runStrip(join(artifactDir, helperName));
+  runStrip(join(artifactDir, asrHelperName));
 }
 
 await createArchive(artifactDir, join(distDir, archiveName));

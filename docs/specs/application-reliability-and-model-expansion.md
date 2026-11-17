@@ -40,10 +40,9 @@ prototypes from verified behavior in the handoff.
   Involve the owner for consequential product choices, material security/data
   risks, paid resources, or difficult recovery. Do not create a release, release
   tag, or release version bump during this pass.
-- Keep issue #476 and correction-rules PR #459 outside this pass. The earlier
-  explicit exclusion of Qwen3-ASR implementation remains; it may be revisited
-  in research, but implementation needs a new explicit decision. Willingness to
-  do backend work applies to other justified model integrations too.
+- Keep issue #476 and correction-rules PR #459 outside this pass. The owner
+  subsequently authorized Qwen3-ASR implementation, including necessary backend
+  work and exploration of streaming. This supersedes the earlier Qwen exclusion.
 - The Linux workstation remains in normal use. Do not take over its desktop,
   change audio routing, install a build there, or start recording remotely as
   part of the Mac run without coordinating that check. A Mac result cannot close
@@ -215,9 +214,9 @@ The owner wants additional useful speech-to-text options and accepts necessary
 backend work. Do not restrict the shortlist to catalog-only additions. Compare
 compact multilingual batch models, additional streaming languages/profiles,
 and models requiring a new adapter/runtime when they provide a distinct benefit.
-Implement candidates that pass the evidence gates; research alone is not the
-desired endpoint. A justified native adapter/helper is in scope. Record material
-runtime choices in an ADR before they become the foundation.
+Use the evidence to decide which candidates provide useful tradeoffs; research
+alone is not the desired endpoint. A justified native adapter/helper is in scope.
+Record material runtime choices in an ADR before they become the foundation.
 
 For each serious candidate record the user need, supported languages, true
 streaming/batch behavior, exact assets/tokenizer/frontend, compatible runtime,
@@ -234,6 +233,17 @@ an existing suitable model under matched conditions. Measure accuracy (WER/CER
 as appropriate), first useful output, finalization delay, throughput, and peak
 memory. Preserve earlier benchmark waivers only for the explicitly named prior
 additions. New additions need their own evidence.
+
+Owner clarification during this pass: accuracy and speed thresholds are evaluation
+aids, not universal adoption vetoes. Older tests, normalization rules, specifications,
+and GitHub Actions may be outdated or poorly designed. Review their purpose and
+provenance before applying them to a new model. Preserve raw measurements and
+compare candidates under matched conditions; distinguish formatting differences
+from missing or incorrect speech. Useful language coverage, resource needs, and
+workflow tradeoffs can justify an optional model with documented limitations.
+Build failures, process leaks, hangs, or unsafe note handling remain concrete
+integration defects to resolve. Review GitHub Actions policy in the next pass;
+do not silently remove checks merely to get a green result.
 
 Acceptance: managed install/probe/selection/removal and real transcription work;
 capabilities and language choices match actual behavior; native Obsidian QA

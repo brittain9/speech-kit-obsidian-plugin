@@ -198,9 +198,9 @@ export const es = {
   'settings.transcriptFormatting.newParagraph': 'Punto y aparte',
   'settings.transcriptFormatting.name': 'Formato de transcripción',
   'settings.transcriptFormatting.desc': 'Cómo se unen las frases.',
-  'settings.phraseFinalization.responsiveOption': 'Responsivo: pausas breves',
-  'settings.phraseFinalization.balancedOption': 'Equilibrado - estándar',
-  'settings.phraseFinalization.patientOption': 'Paciente: pausas largas',
+  'settings.phraseFinalization.responsiveOption': 'Responsivo',
+  'settings.phraseFinalization.balancedOption': 'Equilibrado',
+  'settings.phraseFinalization.patientOption': 'Paciente',
   'settings.phraseFinalization.name': 'Finalización de frase',
   'settings.phraseFinalization.responsive':
     'Finaliza después de pausas más cortas para completar el texto más rápido.',

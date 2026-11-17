@@ -14,6 +14,11 @@ name = "local-dictation-sidecar"
 path = "src/main.rs"
 
 [[bin]]
+name = "local-dictation-asr-helper"
+path = "src/bin/asr_helper.rs"
+required-features = ["engine-qwen-asr"]
+
+[[bin]]
 name = "local-dictation-translation-helper"
 path = "src/bin/translation_helper.rs"
 required-features = ["engine-hy-mt"]
@@ -49,6 +54,7 @@ engine-nemotron-asr = []
 engine-parakeet-unified = []
 engine-pocket-tts = ["dep:safetensors", "dep:sentencepiece-rs"]
 engine-supertonic = ["dep:regex", "dep:unicode-normalization"]
+engine-qwen-asr = ["dep:llama-cpp-2", "dep:llama-cpp-sys-2", "llama-cpp-2/mtmd"]
 engine-hy-mt = ["dep:llama-cpp-2", "dep:llama-cpp-sys-2"]
 gpu-metal = ["whisper-rs/metal", "llama-cpp-2/metal"]
 gpu-cuda = ["whisper-rs/cuda", "llama-cpp-2/cuda"]
@@ -63,6 +69,10 @@ gpu-cuda = ["whisper-rs/cuda", "llama-cpp-2/cuda"]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 hound = "3.5"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+
+[[test]]
+name = "qwen_asr_e2e"
+required-features = ["engine-qwen-asr"]
 
 [[test]]
 name = "parakeet_unified_e2e"
