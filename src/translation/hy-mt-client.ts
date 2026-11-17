@@ -20,6 +20,8 @@ interface HyMtTranslationOptions {
   accelerationPreference: 'auto' | 'cpu_only';
   modelSelection: SelectedModel;
   modelStorePathOverride?: string;
+  onCancellationPending?: (failed: boolean) => void;
+  onCancellationComplete?: () => void;
   onProgress: (completed: number, total: number) => void;
   onReady: () => void;
   sidecarConnection: Pick<
@@ -45,6 +47,7 @@ export async function translateWithHyMt(options: HyMtTranslationOptions): Promis
       release();
       releaseProcessStop();
       options.signal.removeEventListener('abort', onAbort);
+      if (options.signal.aborted) options.onCancellationComplete?.();
     };
     const finish = (callback: () => void) => {
       cleanup();
@@ -56,10 +59,12 @@ export async function translateWithHyMt(options: HyMtTranslationOptions): Promis
       if (settled) return;
       settled = true;
       options.signal.removeEventListener('abort', onAbort);
+      options.onCancellationPending?.(false);
       try {
         options.sidecarConnection.cancelTranslation(options.translationId);
         reject(new DOMException('Translation canceled.', 'AbortError'));
       } catch (error) {
+        options.onCancellationPending?.(true);
         reject(asError(error, 'Translation cancellation could not be sent.'));
       }
     };

@@ -587,6 +587,12 @@ export class TranslationModal extends Modal {
       case 'missing_model':
         return t('translation.modal.missingModel');
       case 'cancelled':
+        if (this.state.backendCancellation !== undefined)
+          return t(
+            this.state.backendCancellation === 'unconfirmed'
+              ? 'translation.modal.cancelUnconfirmed'
+              : 'translation.modal.cancelPending',
+          );
         return t('translation.modal.canceled');
       case 'failed':
         return translationFailureMessage(this.state.error);
@@ -698,6 +704,12 @@ export class TranslationModal extends Modal {
         button
           .setButtonText(t('translation.modal.cancel'))
           .onClick(() => this.dependencies.job.cancel()),
+      );
+      return;
+    }
+    if (this.state.phase === 'cancelled' && this.state.backendCancellation !== undefined) {
+      actions.addButton((button) =>
+        button.setButtonText(t('common.close')).onClick(() => this.close()),
       );
       return;
     }
@@ -934,7 +946,8 @@ export class TranslationModal extends Modal {
       this.installingPack ||
       this.modelInstallIsActive() ||
       this.state.phase === 'loading' ||
-      this.state.phase === 'translating'
+      this.state.phase === 'translating' ||
+      (this.state.phase === 'cancelled' && this.state.backendCancellation !== undefined)
     );
   }
   private retryStatusText(): string {
