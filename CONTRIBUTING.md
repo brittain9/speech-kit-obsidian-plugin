@@ -65,6 +65,7 @@ For macOS testing, `npm run build:sidecar` builds the Metal-capable sidecar auto
 ## Scripts
 
 **Build:**
+
 ```sh
 npm run build            # bundle plugin (main.js); the sidecar builds separately
 npm run build:sidecar    # build sidecar only
@@ -76,6 +77,7 @@ npm run install:dev:cuda -- --vault <vault> # build CPU+CUDA and force-install
 ```
 
 **Test and check:**
+
 ```sh
 npm run test             # TypeScript unit tests
 npm run test:system-audio # Manual hardware smoke for native system audio
@@ -86,6 +88,7 @@ npm run check            # full quality gate (TS + Rust)
 ```
 
 **Format:**
+
 ```sh
 npm run format           # auto-format with Biome
 ```
