@@ -42,11 +42,13 @@ it.each([true, false])('refuses an existing release (draft=%s) without a write',
   ]);
 });
 
-it.each(['unavailable', 'invalid metadata', 'malformed JSON'])(
+it.each(['unavailable', 'invalid metadata', 'malformed JSON', 'empty pagination', 'null metadata'])(
   'fails closed on %s',
   async (reason) => {
     const run = vi.fn(() => {
       if (reason === 'unavailable') throw new Error('API unavailable');
+      if (reason === 'empty pagination') return '[]';
+      if (reason === 'null metadata') return 'null';
       return reason === 'malformed JSON' ? '{' : '[{}]';
     });
     await expect(createReleaseDraft({ ...(await fixture()), run })).rejects.toThrow();

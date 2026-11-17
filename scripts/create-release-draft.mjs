@@ -21,6 +21,7 @@ export async function createReleaseDraft({
   );
   if (
     !Array.isArray(pages) ||
+    pages.length === 0 ||
     !pages.every(
       (page) =>
         Array.isArray(page) &&
