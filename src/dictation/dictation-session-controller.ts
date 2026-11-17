@@ -371,7 +371,6 @@ export class DictationSessionController {
   async toggleDictation(): Promise<void> {
     if (this.state === 'error' && this.activeSessionId === null) {
       this.applyUiState('idle');
-      return;
     }
 
     if (this.isCaptureActive()) {

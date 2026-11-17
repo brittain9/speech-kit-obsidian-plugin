@@ -23,7 +23,15 @@ The public-controller test failed before the change and passed afterward.
 All 104 dictation-controller tests passed, including two-session drain and delayed
 recording-save regressions. Both TypeScript typechecks passed.
 
-Native Obsidian verification is pending: start dictation in the authorized test
-vault, terminate its sidecar, and verify capture stops, existing text stays,
-recording placement completes when enabled, and a new session can start.
+Native Obsidian 1.15.1 verification in `~/Documents/test-vault` passed for
+capture termination, preservation of the existing note prefix, temporary pin
+release, and replacement-session Listening followed by a clean stop. The exact
+reviewed frontend was hash-matched to the installed build; only the verified
+test-vault sidecar received SIGTERM. Recording was disabled for this check;
+delayed recording-save ordering is covered by the controller regression.
+
+The native check exposed a second UX defect: the first toggle after an error
+only cleared it, requiring another click to start. A public-controller regression
+failed with one native start instead of two. Toggle now clears the stale error
+and starts the replacement session in the same action.
 No inference-engine or wire-contract behavior changed.
