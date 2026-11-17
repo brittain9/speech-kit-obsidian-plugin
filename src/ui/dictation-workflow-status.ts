@@ -27,7 +27,11 @@ export function mountDictationStatusControl(
   element: HTMLElement,
   toggleDictation: () => Promise<void>,
 ): {
-  render: (state: DictationControllerState, status: DictationWorkflowStatus) => void;
+  render: (
+    state: DictationControllerState,
+    status: DictationWorkflowStatus,
+    visible?: boolean,
+  ) => void;
   dispose: () => void;
 } {
   element.empty();
@@ -43,7 +47,7 @@ export function mountDictationStatusControl(
   button.addEventListener('click', onClick);
   let disposed = false;
   return {
-    render: (state, status) => {
+    render: (state, status, visible = true) => {
       if (disposed) return;
       const active = state === 'listening' || state === 'speech_detected';
       const action =
@@ -61,7 +65,8 @@ export function mountDictationStatusControl(
       button.setAttribute('title', label);
       button.setAttribute('aria-pressed', String(active || state === 'starting'));
       renderDictationWorkflowStatus(statusEl, status);
-      element.toggle(true);
+      button.toggle(visible);
+      element.toggle(visible || (statusEl.textContent?.length ?? 0) > 0);
     },
     dispose: () => {
       if (disposed) return;

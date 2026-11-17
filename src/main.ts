@@ -335,7 +335,12 @@ export default class LocalSttPlugin extends Plugin {
         void this.openModelPicker();
       },
       onWorkflowStatus: (status) => {
-        this.dictationStatusControl?.render(this.dictationController?.getState() ?? 'idle', status);
+        this.dictationStatusControl?.render(
+          this.dictationController?.getState() ?? 'idle',
+          status,
+          this.settings.dictationControlLocation === 'status_bar' ||
+            this.settings.dictationControlLocation === 'both',
+        );
       },
       onSidecarMissing: () => {
         void this.openSetupWizard();
@@ -355,10 +360,7 @@ export default class LocalSttPlugin extends Plugin {
         this.readAloudController?.stop();
       },
     });
-    this.dictationStatusControl.render(
-      this.dictationController.getState(),
-      this.dictationController.getWorkflowStatus(),
-    );
+    this.refreshDictationControls();
     this.readAloudStatus = this.addStatusBarItem();
     this.translationStatus = new TranslationStatusController(this.addStatusBarItem());
     this.mediaTranscriptionStatus = this.addStatusBarItem();
@@ -1066,12 +1068,25 @@ export default class LocalSttPlugin extends Plugin {
     return this.app.secretStorage.getSecret(secretId)?.trim() ?? '';
   }
 
+  private refreshDictationControls(): void {
+    const location = this.settings.dictationControlLocation;
+    this.ribbonController?.setVisible(location === 'ribbon' || location === 'both');
+    if (this.dictationController !== null) {
+      this.dictationStatusControl?.render(
+        this.dictationController.getState(),
+        this.dictationController.getWorkflowStatus(),
+        location === 'status_bar' || location === 'both',
+      );
+    }
+  }
+
   private async applySettings(
     nextSettings: PluginSettings,
     options: { persist: boolean },
   ): Promise<void> {
     const previousSettings = this.settings;
     this.settings = resolvePluginSettings(nextSettings);
+    this.refreshDictationControls();
     const llmWasDisabled = previousSettings.llmFeaturesEnabled && !this.settings.llmFeaturesEnabled;
     if (llmWasDisabled) {
       this.dictationController?.disableLlmForActiveSessions();

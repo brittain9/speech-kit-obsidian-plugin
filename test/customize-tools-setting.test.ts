@@ -40,6 +40,7 @@ describe('Customize tools', () => {
       'Translation',
       'Read aloud',
       'AI transformations',
+      'Dictation control',
     ]);
     for (const name of ['Translation', 'Read aloud', 'AI transformations']) {
       rows.named(name).onlyToggle().change(false);
@@ -49,6 +50,13 @@ describe('Customize tools', () => {
     expect(settings.readAloudEnabled).toBe(false);
     expect(settings.llmFeaturesEnabled).toBe(false);
     expect(settings.llmNetworkTimeoutSec).toBe(42);
+    const control = rows.named('Dictation control').onlyDropdown();
+    expect(control.selectEl.value).toBe('ribbon');
+    control.change('status_bar');
+    await vi.waitFor(() => expect(settings.dictationControlLocation).toBe('status_bar'));
+    control.change('overlay');
+    await Promise.resolve();
+    expect(settings.dictationControlLocation).toBe('status_bar');
     rows.named('Translation').onlyToggle().change(true);
     await vi.waitFor(() => expect(settings.translationEnabled).toBe(true));
     modal?.close();
@@ -64,5 +72,6 @@ describe('Customize tools', () => {
     expect(rows.named('Translation').onlyToggle().value).toBe(true);
     expect(rows.named('Read aloud').onlyToggle().value).toBe(false);
     expect(rows.named('AI transformations').onlyToggle().value).toBe(false);
+    expect(rows.named('Dictation control').onlyDropdown().selectEl.value).toBe('status_bar');
   });
 });

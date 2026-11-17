@@ -64,3 +64,25 @@ it('keeps older finishing work separate from capture and preserves the focused b
   control.render('idle', idle);
   expect(element.children).toHaveLength(0);
 });
+
+it('can hide and restore the control without duplicating its listener or changing capture action', async () => {
+  const element = new TestElement();
+  const toggle = vi.fn(async () => {});
+  const control = mountDictationStatusControl(element as unknown as HTMLElement, toggle);
+  control.render('listening', { ...idle, capture: 'listening' }, false);
+  const button = element.querySelector('button');
+  expect(button?.style.display).toBe('none');
+  expect(element.style.display).not.toBe('none');
+  for (let i = 0; i < 3; i++) {
+    control.render('listening', { ...idle, capture: 'listening' }, true);
+    expect(element.querySelector('button')).toBe(button);
+    control.render('listening', { ...idle, capture: 'listening' }, false);
+  }
+  control.render('listening', { ...idle, capture: 'listening' }, true);
+  expect(button?.textContent).toBe('Stop');
+  await button?.click();
+  expect(toggle).toHaveBeenCalledOnce();
+  control.render('idle', idle, false);
+  expect(element.style.display).toBe('none');
+  control.dispose();
+});

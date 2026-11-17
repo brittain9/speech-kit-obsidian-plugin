@@ -37,6 +37,8 @@ export class DictationRibbonController {
   private rafId: number | null = null;
   private readonly reducedMotion: MediaQueryList;
   private readonly reducedMotionListener: () => void;
+  private visible = true;
+  private disposed = false;
   private state: DictationControllerState = 'idle';
   private visualState: DictationControllerState = 'idle';
   private holdTimer: number | null = null;
@@ -50,6 +52,22 @@ export class DictationRibbonController {
     this.render();
   }
 
+  setVisible(visible: boolean): void {
+    if (this.disposed || visible === this.visible) return;
+    this.visible = visible;
+    this.element.toggle(visible);
+    if (!visible) {
+      this.cancelHold();
+      this.stopAnimation();
+      this.reducedMotion.removeEventListener('change', this.reducedMotionListener);
+      return;
+    }
+    this.reducedMotion.addEventListener('change', this.reducedMotionListener);
+    this.visualState = this.state;
+    this.render();
+    this.syncAnimation();
+  }
+
   getElement(): HTMLElement {
     return this.element;
   }
@@ -60,6 +78,10 @@ export class DictationRibbonController {
     }
     const previousState = this.state;
     this.state = state;
+    if (!this.visible) {
+      this.visualState = state;
+      return;
+    }
     if (this.shouldStartHold(previousState, state)) {
       // visualState lags behind during the tail-hold, but the announced state
       // (aria-label, title) must reflect reality immediately.
@@ -87,6 +109,7 @@ export class DictationRibbonController {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.cancelHold();
     this.stopAnimation();
     this.reducedMotion.removeEventListener('change', this.reducedMotionListener);
@@ -147,6 +170,7 @@ export class DictationRibbonController {
 
   private syncAnimation(): void {
     const shouldRun =
+      this.visible &&
       this.visualState === 'speech_detected' &&
       this.bandReader !== null &&
       !this.reducedMotion.matches;
