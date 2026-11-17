@@ -403,7 +403,9 @@ describe('Settings attention composition', () => {
     });
 
     await vi.waitFor(() => {
-      expect(TestSetting.instances.some((setting) => setting.name === 'CPU sidecar')).toBe(true);
+      expect(TestSetting.instances.some((setting) => setting.name === 'Local engine (CPU)')).toBe(
+        true,
+      );
     });
 
     expect(progressCardMock.render).toHaveBeenCalledOnce();
@@ -427,7 +429,9 @@ describe('Settings attention composition', () => {
     });
 
     await vi.waitFor(() => {
-      expect(TestSetting.instances.some((setting) => setting.name === 'GPU sidecar')).toBe(true);
+      expect(TestSetting.instances.some((setting) => setting.name === 'Local engine (CUDA)')).toBe(
+        true,
+      );
     });
 
     expect(detect).toHaveBeenCalledOnce();

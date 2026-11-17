@@ -347,13 +347,13 @@ export const it = {
   'settings.missingSidecar.name': 'Configura Speech Kit',
   'settings.missingSidecar.desc':
     'Speech Kit non è ancora pronto. Esegui la procedura di configurazione per installare il motore di riconoscimento vocale e un modello.',
-  'settings.sidecar.name': 'Sidecar',
+  'settings.sidecar.name': 'Motore locale',
   'settings.sidecar.genericName': 'sidecar',
   'settings.sidecar.variantName': 'sidecar {variant}',
-  'settings.sidecar.desc': 'Motore di conversione da voce a testo.',
-  'settings.sidecar.cpuName': 'Sidecar CPU',
-  'settings.sidecar.cpuDesc': 'Motore di conversione da voce a testo. Obbligatorio.',
-  'settings.sidecar.gpuName': 'Sidecar GPU',
+  'settings.sidecar.desc': 'Esegue modelli locali per voce e traduzione.',
+  'settings.sidecar.cpuName': 'Motore locale (CPU)',
+  'settings.sidecar.cpuDesc': 'Esegue modelli locali per voce e traduzione. Obbligatorio.',
+  'settings.sidecar.gpuName': 'Motore locale (CUDA)',
   'settings.sidecar.cudaLibraryPath.name': 'Percorso delle librerie CUDA',
   'settings.sidecar.cudaLibraryPath.desc':
     'Percorso facoltativo di ricerca delle librerie per il sidecar (Flatpak, installazioni CUDA personalizzate).',

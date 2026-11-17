@@ -510,13 +510,13 @@ export const hr = {
   'settings.missingSidecar.name': 'Postavljanje Speech Kita',
   'settings.missingSidecar.desc':
     'Speech Kit još nije spreman. Pokrenite čarobnjak za postavljanje kako biste instalirali govorni modul i model.',
-  'settings.sidecar.name': 'Sidecar',
+  'settings.sidecar.name': 'Lokalni pogon',
   'settings.sidecar.genericName': 'sidecar',
   'settings.sidecar.variantName': '{variant} sidecar',
-  'settings.sidecar.desc': 'Modul za pretvorbu govora u tekst.',
-  'settings.sidecar.cpuName': 'CPU sidecar',
-  'settings.sidecar.cpuDesc': 'Modul za pretvorbu govora u tekst. Obavezan.',
-  'settings.sidecar.gpuName': 'GPU sidecar',
+  'settings.sidecar.desc': 'Pokreće lokalne modele za govor i prevođenje.',
+  'settings.sidecar.cpuName': 'Lokalni pogon (CPU)',
+  'settings.sidecar.cpuDesc': 'Pokreće lokalne modele za govor i prevođenje. Obavezno.',
+  'settings.sidecar.gpuName': 'Lokalni pogon (CUDA)',
   'settings.sidecar.cudaLibraryPath.name': 'Putanja do CUDA biblioteka',
   'settings.sidecar.cudaLibraryPath.desc':
     'Neobavezna putanja u kojoj sidecar traži biblioteke (Flatpak, prilagođene CUDA instalacije).',
