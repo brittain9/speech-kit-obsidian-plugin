@@ -215,8 +215,8 @@ backend work. Do not restrict the shortlist to catalog-only additions. Compare
 compact multilingual batch models, additional streaming languages/profiles,
 and models requiring a new adapter/runtime when they provide a distinct benefit.
 Use the evidence to decide which candidates provide useful tradeoffs; research
-alone is not the desired endpoint. A justified native adapter/helper is in scope. Record material
-runtime choices in an ADR before they become the foundation.
+alone is not the desired endpoint. A justified native adapter/helper is in scope.
+Record material runtime choices in an ADR before they become the foundation.
 
 For each serious candidate record the user need, supported languages, true
 streaming/batch behavior, exact assets/tokenizer/frontend, compatible runtime,

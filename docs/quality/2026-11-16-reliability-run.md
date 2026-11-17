@@ -127,7 +127,7 @@ slices and current main. It is a local QA branch, not a release artifact.
   release animation and observer resources.
 - #565 merged: short phrase-finalization choices (Responsive, Balanced, Patient)
   with explanations in the tooltip. Native labels and tooltip were checked.
-- #566: speaker settings open even with a streaming model. The inactive dialog
+- #566 merged: speaker settings open even with a streaming model. The inactive dialog
   explains compatibility, preserves disabled saved options, and opens the existing
   batch-only picker. Native navigation and collapsed timestamp-help spacing passed.
   This changes guidance, not speaker identification quality.
@@ -140,7 +140,11 @@ slices and current main. It is a local QA branch, not a release artifact.
 - Qwen ASR is now explicitly authorized by the owner, superseding the earlier spec
   exclusion. Native helper and packaging work is in progress. Neither a catalog
   adoption nor streaming performance is claimed before completing integration review. Accuracy thresholds are provisional
-  evaluation aids, not a universal adoption veto.
+  evaluation aids, not a universal adoption veto. Draft #568 preserves the native
+  helper, adapter, packaging, public fixtures and bounded observations. The FIFO
+  probe and busy-helper owner-loss regressions passed. Managed frontend support,
+  actual cancel/retry, matched baseline and 1.7B comparisons, and partial streaming
+  remain unfinished. No new experiments were started after the wrap-up request.
 
 Computer use temporarily lost a reliable target/focus across desktops. Actions
 stopped when the personal vault appeared. After the owner closed that vault,
@@ -162,3 +166,10 @@ GitHub Actions and historical model criteria for relevance and design. A worse
 accuracy score alone does not mean a model should not be supported. Preserve raw
 results and reconsider exclusions through matched comparisons and useful user
 tradeoffs. This clarification supersedes any earlier universal-gate wording.
+
+The main Windows ARM job initially failed while extracting an ONNX Runtime download
+with a peer disconnect. A retry passed. #566's frontend, native and CodeQL PR checks
+passed before merge. Subsequent main checks and draft #568 checks are not claimed
+complete by this handoff. Twenty-four PRs were merged during this pass, including
+specification, tooling, dependency, test, and product changes; this is not a count
+of twenty-four new features or models.
