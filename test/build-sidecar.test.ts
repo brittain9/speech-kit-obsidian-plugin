@@ -1,6 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { afterEach, expect, it, vi } from 'vitest';
 
+import { buildRustQualityCommands } from '../scripts/check-rust.mjs';
+
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }));
 const originalPlatform = process.platform;
 const originalArgv = process.argv;
@@ -27,5 +29,9 @@ it.each(['darwin', 'linux', 'win32'])(
     const features = String(args[args.indexOf('--features') + 1]).split(',');
     expect(features).toContain('engine-qwen-asr');
     expect(features.includes('gpu-metal')).toBe(platform === 'darwin');
+    for (const command of buildRustQualityCommands()) {
+      if (!command.args.includes('--features')) continue;
+      expect(command.args[command.args.indexOf('--features') + 1]).toBe(features.join(','));
+    }
   },
 );

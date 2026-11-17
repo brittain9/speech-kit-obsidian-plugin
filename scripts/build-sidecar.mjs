@@ -1,12 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import process from 'node:process';
 
+import { sidecarFeatures } from './lib/sidecar-features.mjs';
+
 const args = new Set(process.argv.slice(2));
 
-const features =
-  process.platform === 'darwin'
-    ? 'engine-whisper,engine-cohere-transcribe,engine-hy-mt,engine-qwen-asr,engine-moonshine,engine-nemotron-asr,engine-parakeet-unified,engine-pocket-tts,engine-supertonic,gpu-metal'
-    : 'engine-whisper,engine-cohere-transcribe,engine-hy-mt,engine-qwen-asr,engine-moonshine,engine-nemotron-asr,engine-parakeet-unified,engine-pocket-tts,engine-supertonic';
+const features = sidecarFeatures();
 
 const cargoArgs = [
   'build',

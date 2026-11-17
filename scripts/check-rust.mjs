@@ -2,8 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ALL_ENGINE_FEATURES =
-  'engine-cohere-transcribe,engine-hy-mt,engine-qwen-asr,engine-moonshine,engine-nemotron-asr,engine-parakeet-unified,engine-pocket-tts,engine-supertonic,engine-whisper';
+import { sidecarFeatures } from './lib/sidecar-features.mjs';
 
 export function buildRustQualityCommands(environment = process.env) {
   return [
@@ -20,7 +19,7 @@ export function buildRustQualityCommands(environment = process.env) {
         'native/Cargo.toml',
         '--all-targets',
         '--features',
-        ALL_ENGINE_FEATURES,
+        sidecarFeatures(),
         '--',
         '-D',
         'warnings',
@@ -35,7 +34,7 @@ export function buildRustQualityCommands(environment = process.env) {
         '--manifest-path',
         'native/Cargo.toml',
         '--features',
-        ALL_ENGINE_FEATURES,
+        sidecarFeatures(),
       ],
       command: 'cargo',
       env: environment,
