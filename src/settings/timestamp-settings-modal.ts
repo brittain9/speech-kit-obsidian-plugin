@@ -1,6 +1,7 @@
 import type { App, TextComponent } from 'obsidian';
 import { Modal, Setting } from 'obsidian';
 import { t } from '../shared/i18n';
+import { formatLandmark, formatSessionHeader } from '../transcript/renderer';
 import { ModalSettingsAutoSaver, type ModalSettingsPersistence } from './modal-settings-auto-saver';
 import {
   DEFAULT_PLUGIN_SETTINGS,
@@ -25,8 +26,8 @@ interface TimestampSettingsDraft {
 }
 
 const TIMESTAMP_CLOCK_OPTIONS: ReadonlyArray<DropdownOption<TimestampClock>> = [
-  { label: t('settings.timestamps.clock.elapsed'), value: 'elapsed' },
-  { label: t('settings.timestamps.clock.wallClock'), value: 'wallclock' },
+  { label: t('settings.timestamps.clock.sinceStart'), value: 'elapsed' },
+  { label: t('settings.timestamps.clock.localTime'), value: 'wallclock' },
 ];
 
 const TIMESTAMP_DENSITY_OPTIONS: ReadonlyArray<DropdownOption<TimestampDensity>> = [
@@ -48,6 +49,7 @@ export class TimestampSettingsModal extends Modal {
   private draft: TimestampSettingsDraft;
   private readonly intervalDescriptionId =
     `local-dictation-timestamp-interval-description-${++nextIntervalDescriptionId}`;
+  private preview: HTMLPreElement | null = null;
   private intervalInput: TextComponent | null = null;
   private intervalSetting: Setting | null = null;
   private frequencySetting: Setting | null = null;
@@ -71,6 +73,7 @@ export class TimestampSettingsModal extends Modal {
     this.intervalInput = null;
     this.intervalSetting = null;
     this.frequencySetting = null;
+    this.preview = null;
   }
 
   private render(): void {
@@ -84,16 +87,11 @@ export class TimestampSettingsModal extends Modal {
       text: t('settings.timestamps.modal.intro'),
     });
 
-    new Setting(this.contentEl)
-      .setName(t('settings.timestamps.sessionHeader.name'))
-      .setDesc(t('settings.timestamps.sessionHeader.desc'))
-      .addToggle((toggle) => {
-        toggle.setValue(this.draft.sessionHeader);
-        toggle.onChange((value) => {
-          this.draft = { ...this.draft, sessionHeader: value };
-          void this.autoSaver.persist({ timestampSessionHeader: value });
-        });
-      });
+    this.contentEl.createEl('p', {
+      text: t('settings.timestamps.example'),
+      cls: 'setting-item-name',
+    });
+    this.preview = this.contentEl.createEl('pre', { attr: { 'aria-live': 'polite' } });
 
     new Setting(this.contentEl)
       .setName(t('settings.timestamps.referenceClock.name'))
@@ -106,6 +104,7 @@ export class TimestampSettingsModal extends Modal {
         dropdown.onChange((value) => {
           if (!isTimestampClock(value)) return;
           this.draft = { ...this.draft, clock: value };
+          this.refreshPreview();
           void this.autoSaver.persist({ timestampClock: value });
         });
       });
@@ -150,6 +149,25 @@ export class TimestampSettingsModal extends Modal {
     this.intervalSetting.descEl.id = this.intervalDescriptionId;
     this.intervalSetting.descEl.setAttribute('aria-live', 'polite');
 
+    new Setting(this.contentEl)
+      .setName(t('settings.timestamps.sessionHeader.name'))
+      .setDesc(t('settings.timestamps.sessionHeader.desc'))
+      .addToggle((toggle) => {
+        toggle.setValue(this.draft.sessionHeader);
+        toggle.onChange((value) => {
+          this.draft = { ...this.draft, sessionHeader: value };
+          this.refreshPreview();
+          void this.autoSaver.persist({ timestampSessionHeader: value });
+        });
+      });
+
+    const details = this.contentEl.createEl('details');
+    details.createEl('summary', { text: t('settings.timestamps.timingDetails') });
+    details.createEl('p', {
+      text: t('settings.timestamps.timingDetailsDesc'),
+      cls: 'setting-item-description',
+    });
+
     new Setting(this.contentEl).addButton((button) => {
       button.setButtonText(t('common.reset')).onClick(async () => {
         this.draft = draftFromSettings(DEFAULT_PLUGIN_SETTINGS);
@@ -164,6 +182,13 @@ export class TimestampSettingsModal extends Modal {
     });
 
     this.refreshIntervalState();
+  }
+
+  private refreshPreview(): void {
+    const sessionStart = new Date(2026, 0, 1, 14, 0, 0).getTime();
+    this.preview?.setText(
+      `${this.draft.sessionHeader ? `${formatSessionHeader(sessionStart)}\n` : ''}${formatLandmark(30_000, sessionStart, this.draft.clock)} …`,
+    );
   }
 
   private refreshIntervalState(): void {
@@ -187,6 +212,8 @@ export class TimestampSettingsModal extends Modal {
       paragraphFormattingUnavailable,
     );
 
+    this.refreshPreview();
+    this.intervalSetting?.settingEl.toggle(intervalIsActive);
     this.intervalInput?.setDisabled(!intervalIsActive);
     this.intervalInput?.inputEl.setCustomValidity(
       intervalIsActive && !validation.valid ? validation.message : '',

@@ -371,7 +371,6 @@ export class DictationSessionController {
   async toggleDictation(): Promise<void> {
     if (this.state === 'error' && this.activeSessionId === null) {
       this.applyUiState('idle');
-      return;
     }
 
     if (this.isCaptureActive()) {
@@ -1629,6 +1628,18 @@ export class DictationSessionController {
     this.dependencies.logger?.warn('sidecar', rawDetail, event.code);
 
     if (event.sessionId === undefined) {
+      if (event.code === 'sidecar_exited') {
+        this.cancelPendingStart();
+        // A dead process cannot send session_stopped. Finish locally without
+        // an RPC, preserving recordings and transcript work already admitted.
+        for (const sessionId of this.sessions.keys()) {
+          this.handleSessionStopped({
+            type: 'session_stopped',
+            sessionId,
+            reason: 'session_error',
+          });
+        }
+      }
       this.handleError(FEEDBACK_FAILURES.sidecar, detail);
       return;
     }
