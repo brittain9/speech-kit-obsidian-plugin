@@ -88,11 +88,12 @@ function visibilityHarness() {
   const { controller, element } = makeController();
   const readBands = vi.fn(() => new Float32Array(BAND_COUNT).fill(0.5));
   controller.setVisualizer({ readBands });
-  const visibility = (visible: boolean, area = visible ? 1 : 0) => {
+  const visibility = (visible: boolean, area = visible ? 1 : 0, ratio = area) => {
     const observer = observers[0];
     observer?.callback(
       [
         {
+          intersectionRatio: ratio,
           intersectionRect: { width: area, height: area },
           isIntersecting: visible,
           target: element,
@@ -158,6 +159,21 @@ describe('DictationRibbonController visibility', () => {
     harness.controller.dispose();
   });
 
+  it('stops below the observed visibility threshold before a zero-area edge can go unreported', () => {
+    const harness = visibilityHarness();
+    harness.controller.setState('speech_detected');
+    harness.visibility(true);
+    harness.advanceFrames(10);
+    harness.readBands.mockClear();
+    harness.visibility(true, 1, 0.005);
+    harness.advanceFrames(120);
+    expect(harness.readBands).not.toHaveBeenCalled();
+    harness.visibility(true, 1, 0.01);
+    harness.advanceFrames(10);
+    expect(harness.readBands).toHaveBeenCalledTimes(10);
+    harness.controller.dispose();
+  });
+
   it('preserves the speech tail deadline across hiding and revealing', () => {
     const harness = visibilityHarness();
     harness.visibility(true);
@@ -207,6 +223,8 @@ describe('DictationRibbonController visibility', () => {
     harness.visibility(false);
     harness.visibility(true);
     harness.controller.setState('speech_detected');
+    harness.controller.setState('listening');
+    expect(vi.getTimerCount()).toBe(0);
     harness.advanceFrames(120);
     expect(harness.frames.size).toBe(0);
     expect(harness.readBands.mock.calls.length).toBe(0);

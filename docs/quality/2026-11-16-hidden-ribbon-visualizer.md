@@ -20,8 +20,9 @@ wakeups, or battery life; this change makes no battery-life claim.
 
 The [Intersection Observer specification](https://www.w3.org/TR/intersection-observer/)
 allows an edge intersection with zero area. Animation therefore requires a
-positive intersection rectangle; a small positive threshold reports transitions
-when clipping removes that area. This observes viewport geometry rather than
+positive intersection rectangle and at least 1% intersection, matching the
+observer threshold. Pausing below that threshold also handles zero-area edge
+transitions for which no additional browser notification is required. This observes viewport geometry rather than
 OS window occlusion or every possible CSS visibility effect.
 
 Native QA should hide and reveal Obsidian's ribbon during dictation and during
@@ -29,3 +30,10 @@ the speech tail. Confirm the icon resumes when visible, listening labels remain
 accurate, reduced motion stays static, and unloading/reloading the plugin leaves
 no animation behind. Browser intersection notifications are simulated in the
 automated tests, so native layout behavior remains a separate check.
+
+Fresh review added a regression for a 0.5% intersection followed by a zero-area
+edge without another observation, plus post-disposal state changes. Both failed
+before the follow-up: hidden animation still read 120 times and a late listening
+state recreated a tail timer. Visibility eligibility now matches the notification
+threshold, and disposed controllers ignore later setters. All 22 ribbon tests
+pass.

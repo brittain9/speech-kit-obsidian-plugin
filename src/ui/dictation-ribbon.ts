@@ -22,6 +22,7 @@ const BAR_CEILINGS: readonly number[] = [1.6, 1.3, 1.4, 1.8, 1.7, 2.8];
 if (BAR_CEILINGS.length !== BAND_COUNT) {
   throw new Error('BAR_CEILINGS length must match BAND_COUNT.');
 }
+const MIN_VISIBLE_RATIO = 0.01;
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
 /**
@@ -60,6 +61,7 @@ export class DictationRibbonController {
                 if (entry.target !== this.element) continue;
                 const visible =
                   entry.isIntersecting &&
+                  entry.intersectionRatio >= MIN_VISIBLE_RATIO &&
                   entry.intersectionRect.width > 0 &&
                   entry.intersectionRect.height > 0;
                 if (this.hasVisibleArea === visible) continue;
@@ -67,8 +69,8 @@ export class DictationRibbonController {
                 this.syncAnimation();
               }
             },
-            // Report clipping to zero area even if edges still intersect.
-            { threshold: 0.01 },
+            // Pause below the same threshold that produces visibility updates.
+            { threshold: MIN_VISIBLE_RATIO },
           );
     if (this.visibilityObserver !== null) {
       this.hasVisibleArea = false;
@@ -82,7 +84,7 @@ export class DictationRibbonController {
   }
 
   setState(state: DictationControllerState): void {
-    if (this.state === state) {
+    if (this.disposed || this.state === state) {
       return;
     }
     const previousState = this.state;
@@ -101,7 +103,7 @@ export class DictationRibbonController {
   }
 
   setQueueTier(tier: QueueBackpressureTier): void {
-    if (this.queueTier === tier) {
+    if (this.disposed || this.queueTier === tier) {
       return;
     }
     this.queueTier = tier;
@@ -109,6 +111,7 @@ export class DictationRibbonController {
   }
 
   setVisualizer(bandReader: AudioBandReader | null): void {
+    if (this.disposed) return;
     this.bandReader = bandReader;
     this.syncAnimation();
   }
