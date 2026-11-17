@@ -5,6 +5,7 @@ on:
     branches:
       - main
   pull_request:
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -21,8 +22,26 @@ env:
   RUST_TOOLCHAIN: 1.94.1
 
 jobs:
-  frontend-quality:
+  changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      native: ${{ steps.plan.outputs.native }}
+      platform: ${{ steps.plan.outputs.platform }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-node-npm
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - id: plan
+        name: Select checks from the complete commit diff
+        run: node scripts/ci-plan.mjs
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -48,9 +67,11 @@ jobs:
         run: npm run verify:frontend-output
 
   sidecar-quality:
-    # Every PR gets one portable native correctness lane. The full platform
-    # matrix below runs only after merge or when explicitly dispatched.
-    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    # Match the Linux release compiler/glibc floor rather than a moving image.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -88,9 +109,10 @@ jobs:
         run: npm run test:sidecar:client
 
   sidecar-platform-quality:
-    # Pull requests use sidecar-quality's Linux lane. main and explicit manual
-    # runs expand coverage to the macOS Metal and Windows builds.
-    if: github.event_name != 'pull_request'
+    # Native/build changes get platform coverage before merge as well as on main.
+    needs: changes
+    if: needs.changes.outputs.platform == 'true'
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -124,9 +146,26 @@ jobs:
           cache-shared-key: ${{ matrix.rust_cache_key }}
 
       # build:sidecar selects gpu-metal on darwin automatically, so this
-      # matrix covers the macOS Metal build exactly once after merge.
+      # matrix validates the same Metal feature graph on macOS.
       - name: Build sidecar
         run: node scripts/build-sidecar.mjs
 
       - name: Run Rust quality gates
         run: node scripts/check-rust.mjs
+
+  # Preserve the existing required check name without changing repository rules.
+  # It now fails unless every job selected by the plan succeeded.
+  frontend-quality:
+    needs: [changes, frontend-checks, sidecar-quality, sidecar-platform-quality]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node-npm
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Require all planned checks
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci-plan.mjs --result

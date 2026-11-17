@@ -812,13 +812,30 @@ pub fn write_json_frame<W: Write, T: Serialize>(writer: &mut W, value: &T) -> Re
     write_frame(writer, JSON_FRAME_KIND, &payload)
 }
 
-/// Collect system info from all compiled engines into a single string.
+/// Describe compiled engines without initializing their inference backends.
 pub fn system_info_string() -> String {
     #[allow(unused_mut)]
     let mut parts: Vec<String> = Vec::new();
 
     #[cfg(feature = "engine-whisper")]
-    parts.push(format!("whisper.cpp: {}", whisper_rs::print_system_info()));
+    {
+        // whisper_print_system_info enumerates GGML backends, which initializes
+        // Metal devices and compiles their libraries. The routine handshake
+        // must remain independent of GPU discovery or model/context creation.
+        // These CPU flags and the version getter only read build constants.
+        let cpu = whisper_rs::SystemInfo::default();
+        parts.push(format!(
+            "whisper.cpp {}: compiled CPU={} Metal={} CUDA={} AVX={} AVX2={} FMA={} F16C={}",
+            whisper_rs::get_whisper_version(),
+            std::env::consts::ARCH,
+            cfg!(feature = "gpu-metal"),
+            cfg!(feature = "gpu-cuda"),
+            cpu.avx,
+            cpu.avx2,
+            cpu.fma,
+            cpu.f16c,
+        ));
+    }
 
     #[cfg(feature = "engine-cohere-transcribe")]
     parts.push("cohere-transcribe: enabled".to_string());

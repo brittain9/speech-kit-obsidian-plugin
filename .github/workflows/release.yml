@@ -430,16 +430,6 @@ jobs:
           name: release-${{ needs.metadata.outputs.version }}
           path: dist/release/*
 
-      - name: Create draft release
-        if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v3
-        with:
-          files: dist/release/*
-          name: ${{ needs.metadata.outputs.version }}
-          tag_name: ${{ needs.metadata.outputs.version }}
-          body_path: ${{ needs.metadata.outputs.notes_path }}
-          draft: true
-
       - name: Stage exact release assets for attestation
         if: github.event_name == 'push'
         run: |
@@ -447,9 +437,7 @@ jobs:
           cp dist/release/manifest.json manifest.json
           cp dist/release/styles.css styles.css
 
-      # Sign the exact assembled plugin files after release upload and directly
-      # before publication. This keeps the short-lived signing certificate valid
-      # when Obsidian's release scanner first sees the assets.
+      # Attest the exact assembled plugin files before making the draft available.
       - name: Attest plugin release assets
         if: github.event_name == 'push'
         uses: actions/attest-build-provenance@v4
@@ -459,17 +447,16 @@ jobs:
             manifest.json
             styles.css
 
-      - name: Publish release
+      - name: Create release draft for manual approval
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.metadata.outputs.version }}
-        run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
+          RELEASE_TAG: ${{ needs.metadata.outputs.version }}
+          RELEASE_NOTES_PATH: ${{ needs.metadata.outputs.notes_path }}
+        run: node scripts/create-release-draft.mjs
 
-  # At-a-glance timing analytics for the run: who took how long, and which steps
-  # dominated. It runs after publish so the measured wall clock includes the
-  # actual publication path, but it does not gate publication. It also runs
-  # after a failed publish so slow/failed runs still leave useful evidence.
+  # Measure automated draft preparation, including failed attempts. Manual
+  # inspection and publication happen after the workflow and are not timed here.
   release-report:
     needs:
       - publish
