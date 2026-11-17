@@ -493,3 +493,23 @@ it('pauses hidden ribbon animation and observers and restores current state with
   controller.setVisible(true);
   expect(mediaQuery.listenerCount()).toBe(0);
 });
+
+it('releases viewport tracking while the quick control is hidden and observes once on restore', () => {
+  const harness = visibilityHarness();
+  harness.visibility(true);
+  harness.controller.setState('speech_detected');
+  harness.advanceFrames(2);
+  harness.controller.setVisible(false);
+  expect(harness.observers[0]?.disconnect).toHaveBeenCalledOnce();
+  harness.advanceFrames(2);
+  expect(harness.readBands).toHaveBeenCalledTimes(2);
+  harness.controller.setVisible(true);
+  harness.controller.setVisible(true);
+  expect(harness.observers[0]?.observe).toHaveBeenCalledTimes(2);
+  harness.advanceFrames(2);
+  expect(harness.readBands).toHaveBeenCalledTimes(2);
+  harness.visibility(true);
+  harness.advanceFrames(2);
+  expect(harness.readBands).toHaveBeenCalledTimes(4);
+  harness.controller.dispose();
+});

@@ -88,9 +88,14 @@ export class DictationRibbonController {
       this.cancelHold();
       this.stopAnimation();
       this.reducedMotion.removeEventListener('change', this.reducedMotionListener);
+      this.visibilityObserver?.disconnect();
       return;
     }
     this.reducedMotion.addEventListener('change', this.reducedMotionListener);
+    if (this.visibilityObserver !== null) {
+      this.hasVisibleArea = false;
+      this.visibilityObserver.observe(this.element);
+    }
     this.visualState = this.state;
     this.render();
     this.syncAnimation();
