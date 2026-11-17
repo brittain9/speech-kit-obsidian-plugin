@@ -199,12 +199,10 @@ export default class LocalSttPlugin extends Plugin {
     openTarget: () => {
       const target = this.desktopSessionTarget ?? this.desktopTarget;
       if (target === null) return;
-      const leaf = this.app.workspace
-        .getLeavesOfType('markdown')
-        .find(
-          (leaf) =>
-            (leaf.view as unknown as { editor?: { cm?: unknown } }).editor?.cm === target.view,
-        );
+      const leaf = this.app.workspace.getLeavesOfType('markdown').find((leaf) => {
+        const view = leaf.view as unknown as { file?: unknown; editor?: { cm?: unknown } };
+        return view.file === target.file && view.editor?.cm === target.view;
+      });
       if (leaf) {
         void this.app.workspace.revealLeaf(leaf);
         window.focus();
@@ -866,9 +864,10 @@ export default class LocalSttPlugin extends Plugin {
       }),
     );
     this.register(
-      this.requireSidecarConnection().subscribeProcessStop((unexpected) =>
-        this.handleDesktopProcessStop(unexpected),
-      ),
+      this.requireSidecarConnection().subscribeProcessLifecycle((event) => {
+        if (event.type === 'stopped') this.handleDesktopProcessStop(event.unexpected);
+        else if (!this.desktopDisposed && this.desktopEnabled()) void this.configureDesktop();
+      }),
     );
     this.registerEvent(this.app.workspace.on('layout-change', () => this.publishDesktopStatus()));
     this.registerEvent(this.app.vault.on('delete', () => this.publishDesktopStatus()));
@@ -1174,7 +1173,10 @@ export default class LocalSttPlugin extends Plugin {
   desktopStatusMessage = '';
 
   private desktopEnabled(): boolean {
-    return this.settings.showDesktopStatusIcon || this.settings.globalDictationShortcut.length > 0;
+    return (
+      this.settings.desktopControlsEnabled &&
+      (this.settings.showDesktopStatusIcon || this.settings.globalDictationShortcut.length > 0)
+    );
   }
 
   private isDesktopTargetOpen(target: SessionTarget): boolean {
@@ -1186,6 +1188,9 @@ export default class LocalSttPlugin extends Plugin {
 
   private handleDesktopProcessStop(unexpected: boolean): void {
     this.desktopControls.setGeneration('disconnected');
+    this.desktopGeneration = '';
+    this.desktopIconAvailable = false;
+    this.desktopConfiguration = '';
     this.desktopActionRevision += 1;
     if (
       this.desktopDisposed ||
@@ -1209,6 +1214,7 @@ export default class LocalSttPlugin extends Plugin {
   private async configureDesktopNow(): Promise<void> {
     if (this.desktopDisposed || this.sidecarConnection === null) return;
     const configuration = JSON.stringify([
+      this.settings.desktopControlsEnabled,
       this.settings.globalDictationShortcut,
       this.settings.showDesktopStatusIcon,
     ]);
@@ -1225,7 +1231,11 @@ export default class LocalSttPlugin extends Plugin {
     if (
       this.desktopDisposed ||
       configuration !==
-        JSON.stringify([this.settings.globalDictationShortcut, this.settings.showDesktopStatusIcon])
+        JSON.stringify([
+          this.settings.desktopControlsEnabled,
+          this.settings.globalDictationShortcut,
+          this.settings.showDesktopStatusIcon,
+        ])
     )
       return;
     this.desktopGeneration = randomUUID();
@@ -1236,8 +1246,10 @@ export default class LocalSttPlugin extends Plugin {
         type: 'configure_desktop',
         requestId: randomUUID(),
         generation: this.desktopGeneration,
-        shortcut: this.settings.globalDictationShortcut || null,
-        showIcon: this.settings.showDesktopStatusIcon,
+        shortcut: this.settings.desktopControlsEnabled
+          ? this.settings.globalDictationShortcut || null
+          : null,
+        showIcon: this.settings.desktopControlsEnabled && this.settings.showDesktopStatusIcon,
         vaultName: this.app.vault.getName(),
         labels: {
           ready: t('desktop.ready'),
@@ -1245,8 +1257,8 @@ export default class LocalSttPlugin extends Plugin {
           recording: t('desktop.recording'),
           finishing: t('desktop.finishing'),
           unavailable: t('desktop.unavailable'),
-          start: t('commands.startDictation'),
-          stop: t('commands.stopDictation'),
+          start: t('desktop.start'),
+          stop: t('desktop.stop'),
           cancelStart: t('desktop.cancelStart'),
           openTarget: t('desktop.openTarget'),
           settings: t('desktop.settings'),
@@ -1277,7 +1289,7 @@ export default class LocalSttPlugin extends Plugin {
             : 'unavailable';
     this.desktopControls.update(
       status,
-      this.settings.playRecordingSounds,
+      this.settings.desktopControlsEnabled && this.settings.playRecordingSounds,
       this.desktopIconAvailable,
     );
     if (!this.desktopEnabled() || this.desktopGeneration === '') return;

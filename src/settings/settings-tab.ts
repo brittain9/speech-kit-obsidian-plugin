@@ -295,44 +295,46 @@ export class LocalSttSettingTab extends PluginSettingTab {
     // --- Capture ---
     const captureCard = createSettingGroup(containerEl, t('settings.groups.capture'));
 
-    new Setting(captureCard)
-      .setName(t('desktop.shortcut'))
-      .setDesc(t('desktop.shortcutDesc'))
-      .addText((text) => {
-        text.setValue(settings.globalDictationShortcut);
-        text.inputEl.addEventListener('blur', () => {
-          const value = text.getValue().trim();
-          if (value !== this.access.getSettings().globalDictationShortcut) {
-            void this.access.persistOne('globalDictationShortcut', value);
-          }
+    if (settings.desktopControlsEnabled) {
+      new Setting(captureCard)
+        .setName(t('desktop.shortcut'))
+        .setDesc(t('desktop.shortcutDesc'))
+        .addText((text) => {
+          text.setValue(settings.globalDictationShortcut);
+          text.inputEl.addEventListener('blur', () => {
+            const value = text.getValue().trim();
+            if (value !== this.access.getSettings().globalDictationShortcut) {
+              void this.access.persistOne('globalDictationShortcut', value);
+            }
+          });
         });
+      addToggleSetting(captureCard, this.access, {
+        name: t('desktop.icon'),
+        desc: t('desktop.iconDesc'),
+        key: 'showDesktopStatusIcon',
       });
-    addToggleSetting(captureCard, this.access, {
-      name: t('desktop.icon'),
-      desc: t('desktop.iconDesc'),
-      key: 'showDesktopStatusIcon',
-    });
-    addToggleSetting(captureCard, this.access, {
-      name: t('desktop.sounds'),
-      desc: t('desktop.soundsDesc'),
-      key: 'playRecordingSounds',
-    });
-    const desktopStatusSetting = new Setting(captureCard)
-      .setName(t('desktop.retry'))
-      .setDesc(this.dependencies.getDesktopStatus?.() ?? '')
-      .addButton((button) => {
-        button.setButtonText(t('desktop.retry')).onClick(async () => {
-          await this.dependencies.retryDesktopControls?.();
-          this.refreshSettingsTab();
+      addToggleSetting(captureCard, this.access, {
+        name: t('desktop.sounds'),
+        desc: t('desktop.soundsDesc'),
+        key: 'playRecordingSounds',
+      });
+      const desktopStatusSetting = new Setting(captureCard)
+        .setName(t('desktop.retry'))
+        .setDesc(this.dependencies.getDesktopStatus?.() ?? '')
+        .addButton((button) => {
+          button.setButtonText(t('desktop.retry')).onClick(async () => {
+            await this.dependencies.retryDesktopControls?.();
+            this.refreshSettingsTab();
+          });
         });
-      });
 
+      this.disposeDesktopStatus =
+        this.dependencies.subscribeDesktopStatus?.(() => {
+          desktopStatusSetting.setDesc(this.dependencies.getDesktopStatus?.() ?? '');
+        }) ?? null;
+    }
     const systemAudioSupported = isSystemAudioSupportedOnCurrentPlatform();
 
-    this.disposeDesktopStatus =
-      this.dependencies.subscribeDesktopStatus?.(() => {
-        desktopStatusSetting.setDesc(this.dependencies.getDesktopStatus?.() ?? '');
-      }) ?? null;
     this.disposeMicrophoneSection = renderMicrophonePicker(captureCard, {
       access: this.access,
       feedback: this.dependencies.feedback,

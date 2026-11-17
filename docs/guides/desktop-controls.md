@@ -8,9 +8,10 @@ requires the compatible native sidecar shipped with the plugin.
 
 1. Install a dictation model and complete microphone setup inside Obsidian.
 2. Open the Markdown note that should receive dictation.
-3. In Speech Kit settings, configure **Global dictation shortcut**, enable
-   **Show desktop status icon**, or use both. These features start disabled and
-   no shortcut is assigned automatically. **Play recording sounds** is optional.
+3. In Speech Kit settings, open **Advanced → Customize tools** and turn on
+   **Desktop integration**. Its Capture settings then let you configure a
+   **Global dictation shortcut**, enable **Show desktop status icon**, or use both.
+   No shortcut is assigned automatically. **Play recording sounds** is optional.
 4. Confirm that shortcut registration succeeded. A saved shortcut is not proof
    that the OS accepted it; another app may already own that combination.
 5. Switch to another application and use the shortcut or desktop menu to start
@@ -28,9 +29,14 @@ macOS places the status icon in the menu bar. Windows places it in the system
 tray, possibly inside the overflow area. Linux exposes a StatusNotifierItem to
 the desktop's tray host.
 
-In this draft, left-clicking the macOS icon opens a native control popover;
-right-clicking opens its native menu. The custom visual design is still under
-review. Windows and Linux use native menus.
+Left-clicking the macOS icon opens a compact native popover with the destination
+note first, its vault and folder below, and a single Start/Stop action. The gear
+opens settings; the arrow opens the destination note. Right-clicking opens the
+native menu. Windows and Linux use native menus.
+
+The menu-bar mark changes shape with session state: a quiet horizontal mark when
+ready, a speech-shaped mark while listening, dots while starting, and equal bars
+while finishing. It does not animate or claim to show input amplitude.
 
 The menu shows the destination and recording state, Start/Stop dictation, Open
 target note, and Settings. Starting can be cancelled. Finishing means the
@@ -61,6 +67,11 @@ Linux build alone does not verify either desktop environment.
 One enabled vault owns desktop controls at a time. Another vault reports the
 conflict and continues to offer ordinary Obsidian commands. Disable controls in
 the owner before explicitly retrying from another vault.
+
+Turning off **Desktop integration** removes native registrations and disables
+recording feedback. Its configuration rows disappear; saved shortcut, icon and
+sound preferences remain available when it is re-enabled. Ordinary in-app
+recording can continue and remains controllable in Obsidian.
 
 Disabling desktop controls removes their native registrations. Closing Obsidian
 or unloading Speech Kit stops capture and releases native controls. A sidecar

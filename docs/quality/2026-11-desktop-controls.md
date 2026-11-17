@@ -74,3 +74,18 @@ certification is claimed. Both smoke sessions were closed and exited with code 0
 Vorssaint has no external activity API in the source reviewed. Optional ordinary
 notification mirroring is an inferred coexistence path, not a verified custom
 Dynamic Island integration.
+
+## November 17 integration pass
+
+Main was merged into the desktop-controls branch. Alex selected the destination-first
+popover: prominent note, secondary vault/folder, compact Start/Stop, and icon-only
+Open note/Settings actions. A static shape-changing speech mark replaces the menu-bar
+microphone. The Dynamic Bar image remains a future concept; no external activity
+integration is implemented.
+
+Desktop integration now has an off-by-default master switch in Advanced → Customize
+tools. Regressions cover saved preferences remaining inert while off, explicit disable
+without erasing them, destination identity when an editor is reused, and persistent
+connection lifecycle observation across sidecar replacements. The last two cases
+failed before the fixes. Installed background/minimized and popover checks are
+recorded separately once observed.

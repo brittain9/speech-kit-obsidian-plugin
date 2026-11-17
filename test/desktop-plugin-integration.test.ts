@@ -35,7 +35,7 @@ interface PluginHarness {
 }
 function harness(): PluginHarness {
   return Object.assign(Object.create(LocalSttPlugin.prototype), {
-    settings: { ...DEFAULT_PLUGIN_SETTINGS },
+    settings: { ...DEFAULT_PLUGIN_SETTINGS, desktopControlsEnabled: true },
     desktopDisposed: false,
     desktopConfiguration: '',
     desktopGeneration: '',
@@ -100,6 +100,34 @@ describe('installed plugin desktop orchestration', () => {
     await plugin.configureDesktop();
     expect(permission).not.toHaveBeenCalled();
     expect(plugin.sidecarConnection.configureDesktop).not.toHaveBeenCalled();
+  });
+  it('keeps saved OS preferences inert when desktop integration is disabled', async () => {
+    const plugin = harness();
+    Object.assign(plugin.settings, {
+      desktopControlsEnabled: false,
+      showDesktopStatusIcon: true,
+      globalDictationShortcut: 'Control+Shift+D',
+      playRecordingSounds: true,
+    });
+    const permission = vi.fn();
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: permission });
+    await plugin.configureDesktop();
+    expect(permission).not.toHaveBeenCalled();
+    expect(plugin.sidecarConnection.configureDesktop).not.toHaveBeenCalled();
+  });
+  it('sends disable without deleting saved shortcut and icon choices', async () => {
+    const plugin = harness();
+    plugin.settings.showDesktopStatusIcon = true;
+    plugin.settings.globalDictationShortcut = 'Control+Shift+D';
+    vi.stubGlobal('Notification', { permission: 'denied' });
+    await plugin.configureDesktop();
+    Object.assign(plugin.settings, { desktopControlsEnabled: false });
+    await plugin.configureDesktop();
+    expect(plugin.sidecarConnection.configureDesktop).toHaveBeenLastCalledWith(
+      expect.objectContaining({ showIcon: false, shortcut: null }),
+    );
+    expect(plugin.settings.globalDictationShortcut).toBe('Control+Shift+D');
+    expect(plugin.settings.showDesktopStatusIcon).toBe(true);
   });
   it('invalidates actions immediately and performs one recovery after repeated exits', async () => {
     const plugin = harness();
@@ -175,4 +203,48 @@ describe('installed plugin desktop orchestration', () => {
       expect.objectContaining({ showIcon: false }),
     );
   });
+});
+
+it('does not open a different file when the original destination editor is reused', async () => {
+  const sharedEditor = {};
+  const originalFile = { path: 'A.md' };
+  const replacementFile = { path: 'B.md' };
+  const leaf = { view: { file: replacementFile, editor: { cm: sharedEditor } } };
+  const revealLeaf = vi.fn();
+  const focus = vi.fn();
+  vi.stubGlobal('window', { focus });
+  const plugin = new LocalSttPlugin(
+    {
+      workspace: { getLeavesOfType: () => [leaf], revealLeaf },
+    } as unknown as import('obsidian').App,
+    { id: 'local-dictation' } as import('obsidian').PluginManifest,
+  );
+  Object.assign(plugin, {
+    desktopSessionTarget: { file: originalFile, view: sharedEditor },
+    desktopTarget: { file: replacementFile, view: sharedEditor },
+  });
+  const controls = (
+    plugin as unknown as {
+      desktopControls: import('../src/desktop/desktop-controls').DesktopControls;
+    }
+  ).desktopControls;
+  controls.setGeneration('current');
+  await controls.handleAction({ generation: 'current', actionId: 1, action: 'open_target' });
+  expect(revealLeaf).not.toHaveBeenCalled();
+  expect(focus).not.toHaveBeenCalled();
+});
+
+it('does not cache native registrations across an intentional process replacement', async () => {
+  const plugin = harness();
+  plugin.settings.showDesktopStatusIcon = true;
+  vi.stubGlobal('Notification', { permission: 'denied' });
+  await plugin.configureDesktop();
+  const generation = plugin.desktopGeneration;
+  plugin.handleDesktopProcessStop(false);
+  expect(plugin.desktopControls.setGeneration).toHaveBeenCalledWith('disconnected');
+  // A replacement-install cancellation stops then refreshes the sidecar outside
+  // main's restartSidecarConnection wrapper. The new process has no OS resources.
+  await plugin.configureDesktop();
+  expect(plugin.sidecarConnection.configureDesktop).toHaveBeenCalledTimes(2);
+  expect(plugin.desktopGeneration).not.toBe(generation);
 });

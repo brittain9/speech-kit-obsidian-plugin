@@ -183,6 +183,7 @@ export interface PluginSettings {
   pinNoteDuringTranscription: boolean;
   dictationLanguage: DictationLanguage;
   autoCopyFinalizedUtterances: boolean;
+  desktopControlsEnabled: boolean;
   globalDictationShortcut: string;
   showDesktopStatusIcon: boolean;
   playRecordingSounds: boolean;
@@ -259,6 +260,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   pinNoteDuringTranscription: true,
   dictationLanguage: DEFAULT_DICTATION_LANGUAGE,
   autoCopyFinalizedUtterances: false,
+  desktopControlsEnabled: false,
   globalDictationShortcut: '',
   showDesktopStatusIcon: false,
   playRecordingSounds: false,
@@ -376,6 +378,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.autoCopyFinalizedUtterances,
       DEFAULT_PLUGIN_SETTINGS.autoCopyFinalizedUtterances,
     ),
+    desktopControlsEnabled: readBoolean(raw.desktopControlsEnabled, false),
     globalDictationShortcut: readString(raw.globalDictationShortcut, '').trim().slice(0, 128),
     showDesktopStatusIcon: readBoolean(raw.showDesktopStatusIcon, false),
     playRecordingSounds: readBoolean(raw.playRecordingSounds, false),

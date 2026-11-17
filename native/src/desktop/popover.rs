@@ -43,8 +43,8 @@ fn label(
 pub(super) struct Popover {
     view: Retained<NSPopover>,
     state_label: Retained<NSTextField>,
-    pill: Retained<NSBox>,
     destination: Retained<NSTextField>,
+    location: Retained<NSTextField>,
     primary: Retained<NSButton>,
     open: Retained<NSButton>,
     // Last: target must outlive all retained controls with unretained target/action links.
@@ -56,121 +56,119 @@ impl Popover {
         let popover = NSPopover::new(mtm);
         popover.setBehavior(NSPopoverBehavior::Transient);
         popover.setAnimates(false);
-        popover.setContentSize(NSSize::new(340.0, 252.0));
+        popover.setContentSize(NSSize::new(336.0, 194.0));
         let target = ControlTarget::alloc(mtm).set_ivars(TargetState {
             actions,
             popover: popover.clone(),
         });
-        // SAFETY: NSObject initialization and target/action selectors are defined above; retained target outlives every button.
+        // SAFETY: NSObject initialization and selectors are defined above; the retained target outlives the controls.
         let target: Retained<ControlTarget> = unsafe { msg_send![super(target), init] };
         let content = NSVisualEffectView::initWithFrame(
             NSVisualEffectView::alloc(mtm),
-            rect(0.0, 0.0, 340.0, 252.0),
+            rect(0.0, 0.0, 336.0, 194.0),
         );
         content.setMaterial(NSVisualEffectMaterial::Popover);
         content.setBlendingMode(NSVisualEffectBlendingMode::WithinWindow);
         content.setState(NSVisualEffectState::Active);
         let title = label(
             "Speech Kit",
-            rect(48.0, 210.0, 270.0, 24.0),
-            17.0,
+            rect(18.0, 151.0, 260.0, 24.0),
+            15.0,
             &NSColor::labelColor(),
             mtm,
         );
-        title.setFont(Some(&NSFont::boldSystemFontOfSize(17.0)));
+        title.setFont(Some(&NSFont::boldSystemFontOfSize(15.0)));
         content.addSubview(&title);
-        if let Some(image) = NSImage::imageWithSystemSymbolName_accessibilityDescription(
-            &NSString::from_str("mic.fill"),
-            Some(&NSString::from_str("Speech Kit")),
-        ) {
-            let icon = NSImageView::imageViewWithImage(&image, mtm);
-            icon.setFrame(rect(20.0, 210.0, 20.0, 23.0));
-            content.addSubview(&icon);
-        }
-        let state_title = status.status.title(&config.labels);
-        let pill = NSBox::initWithFrame(NSBox::alloc(mtm), rect(20.0, 173.0, 300.0, 26.0));
-        pill.setBoxType(NSBoxType::Custom);
-        pill.setTitlePosition(NSTitlePosition::NoTitle);
-        pill.setCornerRadius(8.0);
-        pill.setBorderWidth(0.0);
-        let color = match status.status {
-            DesktopState::Recording => NSColor::systemRedColor(),
-            DesktopState::Unavailable => NSColor::systemOrangeColor(),
-            _ => NSColor::controlAccentColor(),
-        };
-        pill.setFillColor(&color.colorWithAlphaComponent(0.10));
-        content.addSubview(&pill);
-        let state_label = label(
-            &format!("●  {state_title}"),
-            rect(30.0, 178.0, 280.0, 16.0),
-            11.0,
-            &color,
+        let settings = symbol_button(
+            "gearshape",
+            &config.labels.settings,
+            sel!(openSettings:),
+            &target,
             mtm,
         );
-        state_label.setFont(Some(&NSFont::boldSystemFontOfSize(11.0)));
-        content.addSubview(&state_label);
+        settings.setFrame(rect(290.0, 148.0, 28.0, 28.0));
+        content.addSubview(&settings);
+
+        if let Some(image) = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+            &NSString::from_str("doc.text"),
+            None,
+        ) {
+            let icon = NSImageView::imageViewWithImage(&image, mtm);
+            icon.setFrame(rect(18.0, 99.0, 24.0, 30.0));
+            content.addSubview(&icon);
+        }
+        let (note, folder) = destination_text(config, status);
         let destination = label(
-            &destination_text(config, status),
-            rect(20.0, 115.0, 300.0, 44.0),
-            12.0,
+            &note,
+            rect(54.0, 113.0, 224.0, 21.0),
+            14.0,
+            &NSColor::labelColor(),
+            mtm,
+        );
+        destination.setFont(Some(&NSFont::boldSystemFontOfSize(14.0)));
+        destination.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
+        destination.setToolTip(Some(&NSString::from_str(&status.destination)));
+        content.addSubview(&destination);
+        let location = label(
+            &folder,
+            rect(54.0, 95.0, 224.0, 17.0),
+            11.0,
             &NSColor::secondaryLabelColor(),
             mtm,
         );
-        destination.setMaximumNumberOfLines(2);
-        destination.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
-        content.addSubview(&destination);
-        let action_title = status.status.action_label(&config.labels);
+        location.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
+        location.setToolTip(Some(&NSString::from_str(&status.destination)));
+        content.addSubview(&location);
+        let open = symbol_button(
+            "arrow.up.forward.square",
+            &config.labels.open_target,
+            sel!(openTarget:),
+            &target,
+            mtm,
+        );
+        open.setFrame(rect(290.0, 101.0, 28.0, 28.0));
+        open.setEnabled(!status.destination.is_empty());
+        content.addSubview(&open);
+
+        let divider = NSBox::initWithFrame(NSBox::alloc(mtm), rect(18.0, 78.0, 300.0, 1.0));
+        divider.setBoxType(NSBoxType::Separator);
+        content.addSubview(&divider);
+        let state_label = label(
+            "",
+            rect(18.0, 31.0, 141.0, 22.0),
+            13.0,
+            &NSColor::labelColor(),
+            mtm,
+        );
+        state_label.setFont(Some(&NSFont::systemFontOfSize(13.0)));
+        content.addSubview(&state_label);
         let primary = unsafe {
             NSButton::buttonWithTitle_target_action(
-                &NSString::from_str(action_title),
+                &NSString::new(),
                 Some(&target),
                 Some(sel!(toggle:)),
                 mtm,
             )
         };
-        primary.setFrame(rect(20.0, 62.0, 300.0, 36.0));
+        primary.setFrame(rect(166.0, 25.0, 152.0, 32.0));
         primary.setBezelStyle(NSBezelStyle::Push);
-        primary.setFont(Some(&NSFont::boldSystemFontOfSize(13.0)));
-        primary.setBezelColor(Some(&NSColor::controlAccentColor()));
-        primary.setContentTintColor(Some(&NSColor::whiteColor()));
+        primary.setFont(Some(&NSFont::systemFontOfSize(12.0)));
         primary.setKeyEquivalent(&NSString::from_str("\r"));
-        primary.setEnabled(status.can_toggle());
         content.addSubview(&primary);
-        let open = unsafe {
-            NSButton::buttonWithTitle_target_action(
-                &NSString::from_str(&config.labels.open_target),
-                Some(&target),
-                Some(sel!(openTarget:)),
-                mtm,
-            )
-        };
-        open.setFrame(rect(20.0, 18.0, 190.0, 28.0));
-        open.setBezelStyle(NSBezelStyle::AccessoryBar);
-        open.setEnabled(!status.destination.is_empty());
-        content.addSubview(&open);
-        let settings = unsafe {
-            NSButton::buttonWithTitle_target_action(
-                &NSString::from_str(&config.labels.settings),
-                Some(&target),
-                Some(sel!(openSettings:)),
-                mtm,
-            )
-        };
-        settings.setFrame(rect(220.0, 18.0, 100.0, 28.0));
-        settings.setBezelStyle(NSBezelStyle::AccessoryBar);
-        content.addSubview(&settings);
         let controller = NSViewController::new(mtm);
         controller.setView(&content);
         popover.setContentViewController(Some(&controller));
-        Self {
+        let result = Self {
             view: popover,
             _target: target,
             state_label,
-            pill,
             destination,
+            location,
             primary,
             open,
-        }
+        };
+        result.update(config, status);
+        result
     }
     pub fn update(&self, config: &Configuration, status: &Status) {
         let color = match status.status {
@@ -178,15 +176,19 @@ impl Popover {
             DesktopState::Unavailable => NSColor::systemOrangeColor(),
             _ => NSColor::controlAccentColor(),
         };
-        self.pill.setFillColor(&color.colorWithAlphaComponent(0.10));
         self.state_label
             .setStringValue(&NSString::from_str(&format!(
                 "●  {}",
                 status.status.title(&config.labels)
             )));
         self.state_label.setTextColor(Some(&color));
+        let (note, folder) = destination_text(config, status);
+        self.destination.setStringValue(&NSString::from_str(&note));
+        self.location.setStringValue(&NSString::from_str(&folder));
         self.destination
-            .setStringValue(&NSString::from_str(&destination_text(config, status)));
+            .setToolTip(Some(&NSString::from_str(&status.destination)));
+        self.location
+            .setToolTip(Some(&NSString::from_str(&status.destination)));
         let title = status.status.action_label(&config.labels);
         self.primary.setTitle(&NSString::from_str(title));
         self.primary.setEnabled(status.can_toggle());
@@ -212,13 +214,52 @@ impl Popover {
     }
 }
 
-fn destination_text(config: &Configuration, status: &Status) -> String {
+fn symbol_button(
+    symbol: &str,
+    title: &str,
+    action: objc2::runtime::Sel,
+    target: &ControlTarget,
+    mtm: MainThreadMarker,
+) -> Retained<NSButton> {
+    let button = unsafe {
+        NSButton::buttonWithTitle_target_action(
+            &NSString::from_str(title),
+            Some(target),
+            Some(action),
+            mtm,
+        )
+    };
+    if let Some(image) = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+        &NSString::from_str(symbol),
+        Some(&NSString::from_str(title)),
+    ) {
+        button.setImage(Some(&image));
+        button.setImagePosition(NSCellImagePosition::ImageOnly);
+    }
+    button.setBordered(false);
+    button.setToolTip(Some(&NSString::from_str(title)));
+    button.setAccessibilityLabel(Some(&NSString::from_str(title)));
+    button
+}
+
+fn destination_text(config: &Configuration, status: &Status) -> (String, String) {
     let prefix = format!("{} / ", config.vault_name);
     let path = status
         .destination
         .strip_prefix(&prefix)
         .unwrap_or(&status.destination);
-    format!("{}\n{}", config.vault_name, path)
+    let (folder, name) = path.rsplit_once('/').unwrap_or(("", path));
+    let note = if name.is_empty() {
+        "—"
+    } else {
+        name.strip_suffix(".md").unwrap_or(name)
+    };
+    let location = if folder.is_empty() {
+        config.vault_name.clone()
+    } else {
+        format!("{} · {}", config.vault_name, folder)
+    };
+    (note.to_owned(), location)
 }
 
 #[cfg(test)]
@@ -250,12 +291,12 @@ mod tests {
         let status = Status {
             generation: "generation".into(),
             status: DesktopState::Ready,
-            destination: "Work / Daily / Monday.md".into(),
+            destination: "Work / Daily/Monday.md".into(),
             can_start: true,
         };
         assert_eq!(
             destination_text(&config(), &status),
-            "Work\nDaily / Monday.md"
+            ("Monday".into(), "Work · Daily".into())
         );
     }
     #[test]

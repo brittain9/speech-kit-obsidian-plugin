@@ -1,7 +1,12 @@
 export const en = {
   'desktop.ready': 'Ready',
   'desktop.starting': 'Starting',
-  'desktop.recording': 'Recording',
+  'desktop.recording': 'Listening',
+  'desktop.start': 'Start',
+  'desktop.stop': 'Stop',
+  'desktop.enabled': 'Desktop integration',
+  'desktop.enabledDesc':
+    'Use optional global shortcuts, desktop controls and recording sounds while Obsidian is open.',
   'desktop.finishing': 'Finishing',
   'desktop.unavailable': 'Unavailable',
   'desktop.stopped': 'Microphone stopped. Finishing transcript.',

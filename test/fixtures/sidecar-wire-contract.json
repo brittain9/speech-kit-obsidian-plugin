@@ -347,6 +347,7 @@
     },
     {
       "id": "desktop-status",
+      "rustAccepted": true,
       "wire": {
         "type": "desktop_status",
         "generation": "desktop-1",
@@ -359,6 +360,7 @@
     },
     {
       "id": "desktop-action",
+      "rustAccepted": true,
       "wire": {
         "type": "desktop_action",
         "generation": "desktop-1",

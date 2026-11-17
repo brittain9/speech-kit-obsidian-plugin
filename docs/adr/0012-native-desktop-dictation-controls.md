@@ -1,6 +1,6 @@
 ---
-status: accepted
----
+
+## status: accepted
 
 # Native desktop controls for Obsidian dictation
 
@@ -26,8 +26,15 @@ Wayland shortcuts use the desktop portal and Linux icons use StatusNotifierItem,
 so neither X11 key grabbing nor GTK is required for the Linux acceptance target.
 Tray availability and shortcut availability are independent capabilities.
 
-Features default off. Obsidian remains required, and a missing GNOME tray host
+The master Desktop integration switch lives in Advanced → Customize tools and
+defaults off. It gates registrations and feedback while retaining saved preferences. Obsidian remains required, and a missing GNOME tray host
 does not prevent shortcut use. This keeps the integration useful without adding
 a standalone application lifecycle or arbitrary-application text injection.
 
 Native and protocol changes require a sidecar-bearing release under ADR 0007.
+
+Connection-scoped controls observe persistent process lifecycle events, while
+session-scoped stop listeners remain one-shot. Every process loss invalidates
+native configuration and action generations. Intentional maintenance does not
+immediately respawn the process; a later successful startup restores enabled
+controls without restarting microphone capture.

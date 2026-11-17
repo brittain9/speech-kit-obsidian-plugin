@@ -1070,3 +1070,22 @@ describe('SidecarConnection', () => {
     );
   });
 });
+
+it('observes each process generation across concurrent starts and intentional replacement', async () => {
+  const { connection, process } = createHarness();
+  const events: unknown[] = [];
+  const unsubscribe = connection.subscribeProcessLifecycle((event) => events.push(event));
+  await Promise.all([connection.ensureStarted(), connection.ensureStarted()]);
+  await connection.shutdown();
+  await connection.ensureStarted();
+  process.exit();
+  expect(events).toEqual([
+    { type: 'started' },
+    { type: 'stopped', unexpected: false },
+    { type: 'started' },
+    { type: 'stopped', unexpected: true },
+  ]);
+  unsubscribe();
+  await connection.ensureStarted();
+  expect(events).toHaveLength(4);
+});

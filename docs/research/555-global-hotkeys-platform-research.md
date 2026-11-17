@@ -11,12 +11,12 @@ focus. It does not require a standalone application. Recommend an opt-in global
 keeps the destination inside Obsidian. Sending text into arbitrary applications
 is a separate feature with different permissions and failure modes.
 
-| Platform | Native path | Relevant constraint |
-| --- | --- | --- |
-| Windows | `RegisterHotKey`; available through Rust `global-hotkey` | Own a message loop on the registering thread. Handle occupied/reserved shortcuts explicitly. |
-| macOS | Regular chords through `RegisterEventHotKey`; available through `global-hotkey` | Hotkey manager and event loop must run on the main thread. This requires integrating a native run loop with this sidecar's existing stdio dispatch. |
-| Linux X11 | Rust `global-hotkey` | Supported by the crate; requires real X11 validation. |
-| Linux Wayland | XDG `GlobalShortcuts` portal; Rust binding candidate `ashpd` | Separate implementation, desktop backend support, session lifecycle, and application identity need validation. Do not infer Wayland coverage from an X11 build. |
+| Platform      | Native path                                                                     | Relevant constraint                                                                                                                                             |
+| ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Windows       | `RegisterHotKey`; available through Rust `global-hotkey`                        | Own a message loop on the registering thread. Handle occupied/reserved shortcuts explicitly.                                                                    |
+| macOS         | Regular chords through `RegisterEventHotKey`; available through `global-hotkey` | Hotkey manager and event loop must run on the main thread. This requires integrating a native run loop with this sidecar's existing stdio dispatch.             |
+| Linux X11     | Rust `global-hotkey`                                                            | Supported by the crate; requires real X11 validation.                                                                                                           |
+| Linux Wayland | XDG `GlobalShortcuts` portal; Rust binding candidate `ashpd`                    | Separate implementation, desktop backend support, session lifecycle, and application identity need validation. Do not infer Wayland coverage from an X11 build. |
 
 Sources: [`global-hotkey` platform requirements](https://github.com/tauri-apps/global-hotkey#platform-specific-notes),
 [Microsoft `RegisterHotKey`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey),

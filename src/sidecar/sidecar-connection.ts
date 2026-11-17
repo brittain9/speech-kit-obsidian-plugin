@@ -53,6 +53,8 @@ import { localizeSidecarEvent, rawSidecarEventDetail } from './sidecar-event-loc
 import { createSidecarStderrLogEntry } from './sidecar-logging';
 import { type ResolveSidecarLaunchSpec, SidecarProcess } from './sidecar-process';
 
+type ProcessLifecycleEvent = { type: 'started' } | { type: 'stopped'; unexpected: boolean };
+
 type SidecarEventListener = (event: SidecarEvent) => void;
 type SynthesisAudioListener = (frame: SynthesisAudioFrame) => void;
 
@@ -122,6 +124,8 @@ interface SidecarConnectionOptions {
 export class SidecarConnection {
   private readonly eventListeners = new Set<SidecarEventListener>();
   private readonly processStopListeners = new Set<(unexpected: boolean) => void>();
+  private readonly processLifecycleListeners = new Set<(event: ProcessLifecycleEvent) => void>();
+  private processObservedRunning = false;
   private readonly synthesisAudioListeners = new Set<SynthesisAudioListener>();
   private readonly frameParser = new FramedMessageParser(parseEventFrame);
   private readonly pendingWaiters = new Set<PendingEventWaiter>();
@@ -194,6 +198,10 @@ export class SidecarConnection {
 
   async ensureStarted(): Promise<void> {
     await this.process.start();
+    if (this.process.isRunning() && !this.processObservedRunning) {
+      this.processObservedRunning = true;
+      for (const listener of this.processLifecycleListeners) listener({ type: 'started' });
+    }
   }
 
   async healthCheck(timeoutMs = this.options.getRequestTimeoutMs()): Promise<HealthOkEvent> {
@@ -467,6 +475,7 @@ export class SidecarConnection {
     }
     this.eventListeners.clear();
     this.synthesisAudioListeners.clear();
+    this.processLifecycleListeners.clear();
     this.rejectPendingWaiters(new Error('SidecarConnection disposed'));
   }
 
@@ -483,7 +492,18 @@ export class SidecarConnection {
     return () => this.processStopListeners.delete(listener);
   }
 
+  /** Persistent observer for connection-owned resources across process replacements. */
+  subscribeProcessLifecycle(listener: (event: ProcessLifecycleEvent) => void): () => void {
+    this.processLifecycleListeners.add(listener);
+    return () => this.processLifecycleListeners.delete(listener);
+  }
+
   private notifyProcessStopped(unexpected: boolean): void {
+    if (this.processObservedRunning) {
+      this.processObservedRunning = false;
+      for (const listener of this.processLifecycleListeners)
+        listener({ type: 'stopped', unexpected });
+    }
     const listeners = [...this.processStopListeners];
     this.processStopListeners.clear();
     for (const listener of listeners) listener(unexpected);

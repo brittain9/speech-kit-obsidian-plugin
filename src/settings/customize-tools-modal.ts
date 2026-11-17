@@ -80,6 +80,12 @@ class CustomizeToolsModal extends Modal {
         { value: 'commands_only', label: t('settings.dictationControl.commandsOnly') },
       ],
     });
+    addToggleSetting(this.contentEl, access, {
+      name: t('desktop.enabled'),
+      desc: t('desktop.enabledDesc'),
+      key: 'desktopControlsEnabled',
+      onChange: onChanged,
+    });
   }
 
   override onClose(): void {

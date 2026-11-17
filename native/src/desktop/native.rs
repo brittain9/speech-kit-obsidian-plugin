@@ -204,38 +204,36 @@ fn status_pixels(state: &DesktopState) -> Vec<u8> {
                 for sx in 0..4 {
                     let px = (x as f64 + (sx as f64 + 0.5) / 4.0) * 24.0 / 64.0 - 12.0;
                     let py = (y as f64 + (sy as f64 + 0.5) / 4.0) * 24.0 / 64.0 - 12.0;
-                    let capsule = px.abs() <= 2.65 && (-7.0..=0.5).contains(&py)
-                        || px * px + (py + 7.0).powi(2) <= 2.65f64.powi(2) && py < -7.0
-                        || px * px + (py - 0.5).powi(2) <= 2.65f64.powi(2) && py > 0.5;
-                    let radius = (px * px + (py - 0.5).powi(2)).sqrt();
-                    let cradle = (4.35..=5.7).contains(&radius) && py >= 0.5
-                        || (4.35..=5.7).contains(&px.abs()) && (-0.6..0.5).contains(&py);
-                    let stand = px.abs() < 0.75 && (5.5..=8.6).contains(&py)
-                        || px.abs() < 3.1 && (8.0..=9.35).contains(&py);
-                    let bx = px - 6.5;
-                    let by = py - 6.5;
-                    let badge_disk = bx * bx + by * by < 3.5 * 3.5;
-                    let badge = match state {
-                        DesktopState::Ready => false,
-                        DesktopState::Recording => bx * bx + by * by < 2.55 * 2.55,
-                        DesktopState::Starting => {
-                            (bx.abs() < 0.45 || (bx.abs() - 1.7).abs() < 0.45) && by.abs() < 0.65
+                    // Shapes encode state even in monochrome, without animation or a tiny badge.
+                    let dot =
+                        |cx: f64, radius: f64| (px - cx).powi(2) + py.powi(2) <= radius.powi(2);
+                    let bar = |cx: f64, half_height: f64| {
+                        (px - cx).powi(2) + (py.abs() - (half_height - 1.0)).max(0.0).powi(2) <= 1.0
+                    };
+                    let ink = match state {
+                        DesktopState::Ready => {
+                            (px.abs() <= 3.5 && py.abs() <= 1.0)
+                                || dot(-3.5, 1.0)
+                                || dot(3.5, 1.0)
+                                || dot(-7.5, 0.85)
+                                || dot(7.5, 0.85)
                         }
-                        DesktopState::Finishing => {
-                            (bx.abs() < 1.8 && by.abs() > 1.6 && by.abs() < 2.2)
-                                || ((bx.abs() - by.abs()).abs() < 0.65 && by.abs() < 1.8)
+                        DesktopState::Starting => dot(-5.0, 1.0) || dot(0.0, 1.65) || dot(5.0, 1.0),
+                        DesktopState::Recording => {
+                            bar(-6.0, 3.0)
+                                || bar(-3.0, 5.5)
+                                || bar(0.0, 8.0)
+                                || bar(3.0, 5.5)
+                                || bar(6.0, 3.0)
                         }
+                        DesktopState::Finishing => bar(-4.0, 3.0) || bar(0.0, 3.0) || bar(4.0, 3.0),
                         DesktopState::Unavailable => {
-                            (bx - by).abs() < 0.65 && bx.abs() < 1.9 && by.abs() < 1.9
-                                || (bx + by).abs() < 0.65 && bx.abs() < 1.9 && by.abs() < 1.9
+                            ((px - py).abs() < 0.8 || (px + py).abs() < 0.8)
+                                && px.abs() < 4.0
+                                && py.abs() < 4.0
                         }
                     };
-                    let glyph = capsule || cradle || stand;
-                    if if matches!(state, DesktopState::Ready) {
-                        glyph
-                    } else {
-                        glyph && !badge_disk || badge
-                    } {
+                    if ink {
                         coverage += 1;
                     }
                 }
@@ -249,31 +247,7 @@ fn status_pixels(state: &DesktopState) -> Vec<u8> {
 fn status_icon(state: &DesktopState) -> anyhow::Result<Icon> {
     Ok(Icon::from_rgba(status_pixels(state), 64, 64)?)
 }
-#[cfg(test)]
-mod icon_tests {
-    use super::*;
-    #[test]
-    fn microphone_states_are_distinct_and_antialiased() {
-        let ready = status_pixels(&DesktopState::Ready);
-        assert!(
-            ready
-                .chunks_exact(4)
-                .any(|pixel| pixel[3] > 0 && pixel[3] < 255)
-        );
-        let states = [
-            DesktopState::Ready,
-            DesktopState::Starting,
-            DesktopState::Recording,
-            DesktopState::Finishing,
-            DesktopState::Unavailable,
-        ];
-        for (index, state) in states.iter().enumerate() {
-            for other in &states[index + 1..] {
-                assert_ne!(status_pixels(state), status_pixels(other));
-            }
-        }
-    }
-}
+
 impl ApplicationHandler<UiEvent> for Ui {
     fn resumed(&mut self, _: &ActiveEventLoop) {}
     fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, _: WindowEvent) {}
@@ -461,4 +435,52 @@ pub fn run(receiver: std::sync::mpsc::Receiver<Message>, sink: EventSink) -> any
         routing,
     })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod icon_tests {
+    use super::*;
+    #[test]
+    fn idle_mark_is_quiet_and_listening_uses_the_whole_glyph() {
+        let extent = |state| {
+            let pixels = status_pixels(&state);
+            let rows: Vec<_> = (0..64)
+                .filter(|y| {
+                    pixels[y * 64 * 4..(y + 1) * 64 * 4]
+                        .chunks_exact(4)
+                        .any(|p| p[3] > 0)
+                })
+                .collect();
+            rows.last().unwrap() - rows.first().unwrap()
+        };
+        assert!(
+            extent(DesktopState::Ready) < 12,
+            "idle has a quiet horizontal silhouette"
+        );
+        assert!(
+            extent(DesktopState::Recording) > 32,
+            "listening changes the glyph, not a small badge"
+        );
+    }
+    #[test]
+    fn state_marks_are_distinct_and_antialiased() {
+        let ready = status_pixels(&DesktopState::Ready);
+        assert!(
+            ready
+                .chunks_exact(4)
+                .any(|pixel| pixel[3] > 0 && pixel[3] < 255)
+        );
+        let states = [
+            DesktopState::Ready,
+            DesktopState::Starting,
+            DesktopState::Recording,
+            DesktopState::Finishing,
+            DesktopState::Unavailable,
+        ];
+        for (index, state) in states.iter().enumerate() {
+            for other in &states[index + 1..] {
+                assert_ne!(status_pixels(state), status_pixels(other));
+            }
+        }
+    }
 }

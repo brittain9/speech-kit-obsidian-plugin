@@ -107,6 +107,27 @@ pub use linux::run;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub use native::run;
 
+#[cfg(target_os = "macos")]
+mod popover;
+
+impl Status {
+    fn can_toggle(&self) -> bool {
+        matches!(
+            self.status,
+            DesktopState::Starting | DesktopState::Recording
+        ) || matches!(self.status, DesktopState::Ready) && self.can_start
+    }
+}
+impl DesktopState {
+    fn action_label<'a>(&self, labels: &'a DesktopLabels) -> &'a str {
+        match self {
+            Self::Starting => &labels.cancel_start,
+            Self::Recording => &labels.stop,
+            _ => &labels.start,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,26 +160,5 @@ mod tests {
         drop(first);
         assert!(lock_file(&path).is_ok());
         std::fs::remove_file(path).unwrap();
-    }
-}
-
-#[cfg(target_os = "macos")]
-mod popover;
-
-impl Status {
-    fn can_toggle(&self) -> bool {
-        matches!(
-            self.status,
-            DesktopState::Starting | DesktopState::Recording
-        ) || matches!(self.status, DesktopState::Ready) && self.can_start
-    }
-}
-impl DesktopState {
-    fn action_label<'a>(&self, labels: &'a DesktopLabels) -> &'a str {
-        match self {
-            Self::Starting => &labels.cancel_start,
-            Self::Recording => &labels.stop,
-            _ => &labels.start,
-        }
     }
 }
