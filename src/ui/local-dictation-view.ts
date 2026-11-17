@@ -130,6 +130,7 @@ export class LocalDictationView extends ItemView {
 
       const dailyGroup = createSettingGroup(contentEl, t('llm.sidebar.group.transforms'));
       renderLlmDailyControls(dailyGroup, {
+        compactWhenOff: true,
         getSettings: this.dependencies.getSettings,
         mutateSettings: this.dependencies.mutateSettings,
         mutatePresetState: this.dependencies.mutatePresetState,

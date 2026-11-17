@@ -137,7 +137,7 @@ it('keeps dictation controls available when AI transformations are disabled', as
   expect(start.text).toBe('Start dictation');
 });
 
-it('opens the active preset from its timing summary and ignores close callbacks after the view closes', async () => {
+it('opens the active preset while transformation is off and ignores close callbacks after the view closes', async () => {
   Setting.reset();
   let onClosed: (() => void) | undefined;
   const editPreset = vi.fn((_ref: string, closed: () => void) => {
@@ -186,4 +186,30 @@ it('keeps raw dictation controls in one native section without repeated mode ban
   expect(Setting.named('Transform new dictation').onlyToggle().value).toBe(false);
   expect(Setting.named('Transform new dictation').descEl.textContent).toContain('raw transcript');
   expect(Setting.buttonNamed('Start dictation')).toBeDefined();
+});
+
+it('keeps off-state preset controls stable during unrelated capture status updates', () => {
+  Setting.reset();
+  const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
+    feedback: { show: vi.fn() },
+    getSecret: () => '',
+    getDictationState: () => 'idle',
+    toggleDictation: vi.fn(async () => {}),
+    getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+    mutatePresetState: vi.fn(async () => {}),
+    mutateSettings: vi.fn(async () => {}),
+    synchronizePresets: vi.fn(async () => {}),
+    editPreset: vi.fn(),
+  });
+  view.refresh();
+  const toggle = Setting.named('Transform new dictation').onlyToggle();
+  const preset = Setting.named('Active preset').onlyDropdown();
+  const edit = Setting.buttonNamed('Edit preset');
+  preset.selectEl.focus();
+  view.updateDictationState('listening');
+  expect(Setting.named('Transform new dictation').onlyToggle()).toBe(toggle);
+  expect(Setting.named('Active preset').onlyDropdown()).toBe(preset);
+  expect(Setting.buttonNamed('Edit preset')).toBe(edit);
+  expect(preset.selectEl.ownerDocument.activeElement).toBe(preset.selectEl);
+  expect(Setting.instances.some((row) => row.name === 'When to transform')).toBe(false);
 });

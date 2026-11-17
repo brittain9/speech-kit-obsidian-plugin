@@ -18,6 +18,7 @@ interface DailyControlDependencies {
   rerender: () => void;
   managePresets?: () => void;
   editPreset?: (ref: string) => void;
+  compactWhenOff?: boolean;
   openTimingSettings?: () => void;
   openContextSettings?: () => void;
 }
@@ -90,6 +91,27 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
       button.extraSettingsEl.setAttribute('aria-label', label);
     });
   }
+  const editActivePreset = (): void => {
+    const current = deps.getSettings();
+    if (
+      !current.llmFeaturesEnabled ||
+      listPresetEntries(current.llmPostprocessUserPresets).length === 0
+    )
+      return;
+    const entry = resolveActivePresetEntry(
+      current.llmPostprocessActivePresetRef,
+      current.llmPostprocessUserPresets,
+    );
+    deps.editPreset?.(entry.ref);
+  };
+  if (deps.compactWhenOff === true && settings.llmPostprocessMode === 'off') {
+    if (entries.length > 0 && deps.editPreset !== undefined) {
+      presetSetting.addButton((button) => {
+        button.setButtonText(t('llm.preset.manager.editTooltip')).onClick(editActivePreset);
+      });
+    }
+    return;
+  }
   const timingSetting = new Setting(parent).setName(t('llm.sidebar.runTransform.name'));
   if (entries.length === 0) {
     timingSetting.setDesc(t('llm.preset.none'));
@@ -99,15 +121,7 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
     );
     if (deps.editPreset !== undefined) {
       timingSetting.addButton((button) => {
-        button.setButtonText(t('llm.preset.manager.editTooltip')).onClick(() => {
-          const current = deps.getSettings();
-          if (!current.llmFeaturesEnabled) return;
-          const entry = resolveActivePresetEntry(
-            current.llmPostprocessActivePresetRef,
-            current.llmPostprocessUserPresets,
-          );
-          deps.editPreset?.(entry.ref);
-        });
+        button.setButtonText(t('llm.preset.manager.editTooltip')).onClick(editActivePreset);
       });
     }
   } else {

@@ -64,3 +64,16 @@ naturally, keeping core guidance visible at narrow widths instead of clipping it
 
 Public regressions reproduced the separate row and duplicate timing before this
 followup. The shared owner will repeat the combined native visual check.
+
+## Compact sidebar while transformation is off
+
+The off-state sidebar keeps the raw-transcript toggle explanation, Active preset
+selector, and direct Edit preset action. Timing, original-transcript, and context
+controls appear when transformation is enabled. Settings keeps the full controls
+in either mode. Saved timing, output, and provider preferences are unchanged;
+selecting or editing a preset while off does not enable transformation.
+
+Public render tests cover compact off, full on, and full Settings off states.
+A view regression keeps the preset selector, edit button, and toggle identities
+and focused control unchanged during unrelated capture-status updates. Native
+review of the combined off/on flow remains assigned to the shared QA owner.

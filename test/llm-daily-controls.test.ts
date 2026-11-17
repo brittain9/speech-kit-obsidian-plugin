@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+import { readLlmPresetState, withLlmPresetState } from '../src/settings/llm-preset-state';
 import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
 import { t } from '../src/shared/i18n';
 import { renderLlmDailyControls } from '../src/ui/llm-daily-controls';
@@ -106,3 +107,45 @@ it('keeps timing inert when every preset has been deleted', () => {
   expect(Setting.named('Active preset').descEl.textContent).toBe(t('llm.preset.none'));
   expect(mutateSettings).not.toHaveBeenCalled();
 });
+
+it.each([
+  { mode: 'off' as const, compact: true, full: false },
+  { mode: 'batch' as const, compact: true, full: true },
+  { mode: 'off' as const, compact: false, full: true },
+])(
+  'keeps off-state sidebar preset editing available while full configuration remains in Settings: $mode/$compact',
+  async ({ mode, compact, full }) => {
+    const preset = createUserPreset({ id: 'recap', timing: 'batch' });
+    let settings: PluginSettings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      llmPostprocessMode: mode,
+      llmPostprocessActivePresetRef: 'user:recap',
+      llmPostprocessUserPresets: [preset, createUserPreset({ id: 'other', timing: 'batch' })],
+    };
+    const editPreset = vi.fn();
+    const mutateSettings = vi.fn(async () => {});
+    renderLlmDailyControls(new TestElement() as unknown as HTMLElement, {
+      getSettings: () => settings,
+      mutateSettings,
+      mutatePresetState: async (mutation) => {
+        settings = withLlmPresetState(settings, mutation(readLlmPresetState(settings)));
+      },
+      rerender: vi.fn(),
+      editPreset,
+      compactWhenOff: compact,
+    });
+    expect(Setting.named('Transform new dictation').onlyToggle().value).toBe(mode !== 'off');
+    expect(Setting.named('Active preset').onlyDropdown().selectEl.value).toBe('user:recap');
+    expect(Setting.instances.some((row) => row.name === 'When to transform')).toBe(full);
+    expect(Setting.instances.some((row) => row.name === 'Show original transcript')).toBe(full);
+    expect(Setting.instances.some((row) => row.name === t('llm.context.useCurrentNote.name'))).toBe(
+      full,
+    );
+    Setting.named('Active preset').onlyDropdown().change('user:other');
+    await vi.waitFor(() => expect(settings.llmPostprocessActivePresetRef).toBe('user:other'));
+    expect(settings.llmPostprocessMode).toBe(mode);
+    await Setting.buttonNamed('Edit preset').click();
+    expect(editPreset).toHaveBeenCalledExactlyOnceWith('user:other');
+    expect(mutateSettings).not.toHaveBeenCalled();
+  },
+);
