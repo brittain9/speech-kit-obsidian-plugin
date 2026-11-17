@@ -581,6 +581,8 @@ export const en = {
   'settings.systemAudio.ready': 'System audio is ready.',
   'settings.systemAudio.testFailed':
     'Could not test system audio. Check that the speech engine is installed and try again.',
+  'settings.speakerLabels.batchPickerGuidance':
+    'Showing batch speech models for speaker labels. Install and select a model to use it; your current model stays selected until you choose another.',
   'settings.speakerLabels.inactiveStreaming':
     'Not active with this streaming model. Choose a batch model to use speaker labels; your preference is kept.',
   'settings.speakerLabels.numberedVoices':

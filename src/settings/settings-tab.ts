@@ -421,7 +421,7 @@ export class LocalSttSettingTab extends PluginSettingTab {
       subscribe: (listener) => manager.subscribe(listener),
       chooseModel: () => {
         void this.openModelPickerFromSettings(
-          { initialTask: 'stt', onChanged: () => this.refreshSettingsTab() },
+          { initialTask: 'stt', requireBatchStt: true, onChanged: () => this.refreshSettingsTab() },
           t('settings.speakerLabels.name'),
         );
       },
