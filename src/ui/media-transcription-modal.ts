@@ -362,6 +362,7 @@ class MediaTranscriptionModal extends Modal {
 
   private renderAiPreset(parent: HTMLElement): void {
     const settings = this.dependencies.getSettings();
+    if (!settings.llmFeaturesEnabled) return;
     const presets = listPresetEntries(settings.llmPostprocessUserPresets);
     const container = parent.createDiv({ cls: 'local-stt-media-preset' });
     if (
@@ -442,7 +443,11 @@ class MediaTranscriptionModal extends Modal {
     if (this.dependencies.getModels(this.language).length === 0)
       return t('media.modal.noBatchModel');
     if (this.file === null) return t('media.modal.selectFile');
-    if (this.mediaPresetRef !== null && this.dependencies.getSettings().llmRoutingPolicy === null) {
+    if (
+      this.dependencies.getSettings().llmFeaturesEnabled &&
+      this.mediaPresetRef !== null &&
+      this.dependencies.getSettings().llmRoutingPolicy === null
+    ) {
       return t('media.modal.aiProviderRequired');
     }
     if (this.timestampEnabled && this.timestampDensity === 'sparse') {
@@ -503,8 +508,9 @@ class MediaTranscriptionModal extends Modal {
     const file = this.file;
     if (model === undefined || file === null || file === this.completedFile) return;
     const settings = this.dependencies.getSettings();
-    const preset = resolvePresetEntry(this.mediaPresetRef, settings.llmPostprocessUserPresets);
-    if (this.mediaPresetRef !== null && preset === null) {
+    const presetRef = settings.llmFeaturesEnabled ? this.mediaPresetRef : null;
+    const preset = resolvePresetEntry(presetRef, settings.llmPostprocessUserPresets);
+    if (presetRef !== null && preset === null) {
       this.errorEl?.setText(t('media.modal.aiPresetMissing'));
       return;
     }

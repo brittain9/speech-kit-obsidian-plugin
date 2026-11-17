@@ -1,4 +1,12 @@
-import { type Editor, type MarkdownFileInfo, Platform, type Plugin } from 'obsidian';
+import {
+  type Editor,
+  type EventRef,
+  type MarkdownFileInfo,
+  Platform,
+  type Plugin,
+  type Workspace,
+} from 'obsidian';
+import type { PluginSettings } from '../settings/plugin-settings';
 import { t } from '../shared/i18n';
 
 const START_DICTATION_COMMAND_ID = 'start-dictation-session';
@@ -12,6 +20,7 @@ const COPY_RAW_TRANSCRIPT_COMMAND_ID = 'copy-raw-transcript';
 const CLEAR_RAW_RECOVERY_COMMAND_ID = 'clear-raw-transcript-recovery';
 
 interface CommandDependencies {
+  getSettings: () => Pick<PluginSettings, 'translationEnabled' | 'readAloudEnabled'>;
   cancelAudioFile: () => Promise<void>;
   cancelDictation: () => Promise<void>;
   clearLastUtterance: () => void;
@@ -23,6 +32,7 @@ interface CommandDependencies {
   isAudioFileTranscriptionActive: () => boolean;
   isReadAloudActive: () => boolean;
   plugin: Plugin;
+  openSpeechKit: () => Promise<void>;
   hasLastUtterance: () => boolean;
   reinsertLastUtterance: (editor: Editor) => void;
   restoreRawTranscript: () => void;
@@ -42,10 +52,16 @@ interface CommandDependencies {
 
 export function registerCommands(dependencies: CommandDependencies): void {
   dependencies.plugin.addCommand({
+    id: 'open-speech-kit',
+    name: t('commands.openSpeechKit'),
+    callback: () => dependencies.openSpeechKit(),
+  });
+  dependencies.plugin.addCommand({
     id: 'translate-selection',
     name: t('commands.translateSelection'),
     editorCheckCallback: (checking, editor, view) => {
-      if (!editor.somethingSelected()) return false;
+      if (!dependencies.getSettings().translationEnabled || !editor.somethingSelected())
+        return false;
       if (!checking) dependencies.translateSelection(editor, view);
       return true;
     },
@@ -54,19 +70,31 @@ export function registerCommands(dependencies: CommandDependencies): void {
   dependencies.plugin.addCommand({
     id: 'translate-note',
     name: t('commands.translateNote'),
-    editorCallback: (editor, view) => dependencies.translateNote(editor, view),
+    editorCheckCallback: (checking, editor, view) => {
+      if (!dependencies.getSettings().translationEnabled) return false;
+      if (!checking) dependencies.translateNote(editor, view);
+      return true;
+    },
   });
 
   dependencies.plugin.addCommand({
     id: 'read-aloud',
     name: t('commands.readAloud'),
-    editorCallback: async (editor) => dependencies.readAloud(editor),
+    editorCheckCallback: (checking, editor) => {
+      if (!dependencies.getSettings().readAloudEnabled) return false;
+      if (!checking) void dependencies.readAloud(editor);
+      return true;
+    },
   });
 
   dependencies.plugin.addCommand({
     id: 'read-aloud-from-cursor',
     name: t('commands.readAloudFromCursor'),
-    editorCallback: async (editor) => dependencies.readAloudFromCursor(editor),
+    editorCheckCallback: (checking, editor) => {
+      if (!dependencies.getSettings().readAloudEnabled) return false;
+      if (!checking) void dependencies.readAloudFromCursor(editor);
+      return true;
+    },
   });
 
   dependencies.plugin.addCommand({
@@ -233,6 +261,36 @@ export function registerCommands(dependencies: CommandDependencies): void {
     callback: async () => {
       await dependencies.restartSidecar();
     },
+  });
+}
+
+export function registerEditorMenu(
+  workspace: Pick<Workspace, 'on'>,
+  dependencies: Pick<CommandDependencies, 'getSettings' | 'translateSelection' | 'readAloud'>,
+): EventRef {
+  return workspace.on('editor-menu', (menu, editor, view) => {
+    if (!editor.somethingSelected()) return;
+    if (dependencies.getSettings().translationEnabled) {
+      menu.addItem((item) => {
+        item
+          .setTitle(t('commands.translateSelection'))
+          .setIcon('languages')
+          .onClick(() => {
+            if (dependencies.getSettings().translationEnabled)
+              dependencies.translateSelection(editor, view);
+          });
+      });
+    }
+    if (dependencies.getSettings().readAloudEnabled) {
+      menu.addItem((item) => {
+        item
+          .setTitle(t('commands.readAloud'))
+          .setIcon('audio-lines')
+          .onClick(() => {
+            if (dependencies.getSettings().readAloudEnabled) void dependencies.readAloud(editor);
+          });
+      });
+    }
   });
 }
 

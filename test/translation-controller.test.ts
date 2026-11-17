@@ -16,6 +16,32 @@ import { Modal, Setting, TestElement } from './__mocks__/obsidian';
 const testView = { file: { path: 'Notes/source.md' } };
 
 describe('TranslationController', () => {
+  it('blocks new translation UI and model work when the feature is hidden', () => {
+    Modal.instances.length = 0;
+    const getState = vi.fn(() => ({ catalog: { models: [] }, installedModels: [] }));
+    const controller = new TranslationController({
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
+      app: {} as never,
+      canReadAloud: () => false,
+      feedback: { show: vi.fn() },
+      getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, translationEnabled: false }),
+      logger: { error: vi.fn() } as never,
+      modelManager: { getState, subscribe: () => () => {} } as never,
+      onReadAloud: vi.fn(),
+      saveSettings: vi.fn(async () => {}),
+    });
+    const editor = {
+      getValue: () => 'Public example.',
+      getRange: () => 'Public',
+      getCursor: () => ({ line: 0, ch: 0 }),
+      somethingSelected: () => true,
+    };
+    controller.translateNote(editor as never, testView as never);
+    controller.translateSelection(editor as never, testView as never);
+    expect(Modal.instances).toHaveLength(0);
+    expect(getState).not.toHaveBeenCalled();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -225,6 +251,108 @@ describe('TranslationController', () => {
     });
     await vi.waitFor(() => expect(Setting.buttonNamed('Replace')).toBeDefined());
   });
+
+  it.each([false, true])(
+    'keeps native cancellation visible until termination is confirmed (write failure: %s)',
+    async (cancelWriteFails) => {
+      Modal.instances.length = 0;
+      Setting.reset();
+      const listeners = new Set<(event: SidecarEvent) => void>();
+      const gate = new SidecarLifecycleGate();
+      const setDetachedStatus = vi.fn();
+      const selection = {
+        kind: 'catalog_model' as const,
+        familyId: 'tencent_hy_mt',
+        modelId: 'hy-mt',
+        runtimeId: 'llama_cpp',
+      } as const;
+      const startTranslation = vi.fn(async (_payload: { translationId: string }) => {});
+      const controller = new TranslationController({
+        sidecarLifecycleGate: gate,
+        app: {} as never,
+        canReadAloud: () => false,
+        feedback: { show: vi.fn() },
+        getSettings: () => ({
+          ...DEFAULT_PLUGIN_SETTINGS,
+          selectedTranslationModel: selection,
+        }),
+        logger: { error: vi.fn(), warn: vi.fn() } as never,
+        modelManager: {
+          subscribe: () => () => {},
+          getState: () => ({
+            activeInstall: null,
+            installRequestPending: false,
+            selectedTranslationModel: selection,
+            installedModels: [selection],
+            catalog: {
+              models: [
+                {
+                  ...selection,
+                  task: 'translation',
+                  translationSupport: { kind: 'all_to_all', languages: ['en', 'es'] },
+                },
+              ],
+            },
+          }),
+        } as never,
+        onReadAloud: vi.fn(),
+        saveSettings: vi.fn(async () => {}),
+        setDetachedStatus,
+        sidecarConnection: {
+          cancelTranslation: () => {
+            if (cancelWriteFails) throw new Error('stdin closed');
+          },
+          startTranslation,
+          subscribe: (listener: (event: SidecarEvent) => void) => {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+          },
+          subscribeProcessStop: () => () => {},
+        } as never,
+      });
+      const editor = { getValue: () => 'Public test text.', replaceRange: vi.fn() };
+      controller.translateNote(editor as never, testView as never);
+      await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledOnce());
+      await Setting.buttonNamed('Cancel').click();
+
+      expect(() => gate.acquireMutation()).toThrow();
+      const modal = Modal.instances.at(-1);
+      expect(Setting.instances.at(-1)?.buttonComponents.map((button) => button.text)).toEqual([
+        'Close',
+      ]);
+      expect(
+        modal?.contentEl.findByText(
+          cancelWriteFails
+            ? 'Translation canceled, but the speech engine may still be running. Stop other speech work, then quit and reopen Obsidian before engine maintenance.'
+            : 'Translation canceled. The speech engine is still stopping. If it stays busy, stop other speech work, then quit and reopen Obsidian.',
+        ),
+      ).toBeDefined();
+      await Setting.buttonNamed('Close').click();
+      expect(setDetachedStatus).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          phase: 'cancelled',
+          backendCancellation: cancelWriteFails ? 'unconfirmed' : 'pending',
+        }),
+        expect.any(Function),
+      );
+      controller.translateNote(editor as never, testView as never);
+      expect(startTranslation).toHaveBeenCalledOnce();
+      expect(Setting.instances.at(-1)?.buttonComponents.map((button) => button.text)).toEqual([
+        'Close',
+      ]);
+      Modal.instances.at(-1)?.close();
+      const translationId = startTranslation.mock.calls[0]?.[0].translationId;
+      if (!translationId) throw new Error('Missing translation request');
+      for (const listener of listeners) listener({ type: 'translation_cancelled', translationId });
+      expect(setDetachedStatus).toHaveBeenLastCalledWith(
+        { phase: 'cancelled' },
+        expect.any(Function),
+      );
+      gate.acquireMutation().release();
+      expect(editor.replaceRange).not.toHaveBeenCalled();
+      controller.dispose();
+    },
+  );
 
   it('starts a fresh translation from the current note after it changed', async () => {
     Modal.instances.length = 0;
@@ -450,6 +578,35 @@ describe('TranslationController', () => {
     expect(race.startTranslation.mock.calls[1]?.[0].modelSelection).toEqual(
       selectionFor(race.modelB),
     );
+  });
+
+  it('keeps accepted translation output applicable after hiding the feature', async () => {
+    const race = createControllerSelectionRace();
+    await race.openCompletedPreview();
+    race.settings.translationEnabled = false;
+    Modal.instances.at(-1)?.close();
+    race.reopen();
+    expect(race.modelDropdownDisabled()).toBe(true);
+    expect(race.latestAction('Replace').disabled).toBe(false);
+    await race.latestAction('Replace').click();
+    expect(race.replaceRange).toHaveBeenCalledWith(
+      'Translated with Model A.',
+      { line: 0, ch: 0 },
+      { line: 0, ch: 20 },
+    );
+    expect(race.startTranslation).toHaveBeenCalledOnce();
+  });
+
+  it('offers retained output without a new translation action when hidden after the source changes', async () => {
+    const race = createControllerSelectionRace();
+    await race.openCompletedPreview();
+    race.settings.translationEnabled = false;
+    race.changeText('Changed public source.');
+    Modal.instances.at(-1)?.close();
+    race.reopen();
+    expect(race.actionNames()).toContain('Copy');
+    expect(race.actionNames()).not.toContain('Translate again');
+    expect(race.startTranslation).toHaveBeenCalledOnce();
   });
 
   it('reopens a completed selection without starting duplicate inference', async () => {
@@ -860,9 +1017,10 @@ function createControllerSelectionRace() {
   });
 
   let sourceText = 'Translate this note.';
-  const editor = { getValue: () => sourceText, replaceRange: vi.fn() };
+  const editor = { getValue: () => sourceText, replaceRange: vi.fn(), focus: vi.fn() };
   const sourceView = { file: { path: 'Notes/original.md' } };
   return {
+    replaceRange: editor.replaceRange,
     modelB,
     modelC,
     get settings() {

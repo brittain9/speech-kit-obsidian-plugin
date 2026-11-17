@@ -22,6 +22,7 @@ const BAR_CEILINGS: readonly number[] = [1.6, 1.3, 1.4, 1.8, 1.7, 2.8];
 if (BAR_CEILINGS.length !== BAND_COUNT) {
   throw new Error('BAR_CEILINGS length must match BAND_COUNT.');
 }
+const MIN_VISIBLE_RATIO = 0.01;
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
 /**
@@ -37,6 +38,9 @@ export class DictationRibbonController {
   private rafId: number | null = null;
   private readonly reducedMotion: MediaQueryList;
   private readonly reducedMotionListener: () => void;
+  private readonly visibilityObserver: IntersectionObserver | null;
+  private hasVisibleArea = true;
+  private disposed = false;
   private state: DictationControllerState = 'idle';
   private visualState: DictationControllerState = 'idle';
   private holdTimer: number | null = null;
@@ -47,6 +51,31 @@ export class DictationRibbonController {
     this.reducedMotion = matchMedia(REDUCED_MOTION_QUERY);
     this.reducedMotionListener = (): void => this.onReducedMotionChange();
     this.reducedMotion.addEventListener('change', this.reducedMotionListener);
+    this.visibilityObserver =
+      typeof IntersectionObserver === 'undefined'
+        ? null
+        : new IntersectionObserver(
+            (entries) => {
+              if (this.disposed) return;
+              for (const entry of entries) {
+                if (entry.target !== this.element) continue;
+                const visible =
+                  entry.isIntersecting &&
+                  entry.intersectionRatio >= MIN_VISIBLE_RATIO &&
+                  entry.intersectionRect.width > 0 &&
+                  entry.intersectionRect.height > 0;
+                if (this.hasVisibleArea === visible) continue;
+                this.hasVisibleArea = visible;
+                this.syncAnimation();
+              }
+            },
+            // Pause below the same threshold that produces visibility updates.
+            { threshold: MIN_VISIBLE_RATIO },
+          );
+    if (this.visibilityObserver !== null) {
+      this.hasVisibleArea = false;
+      this.visibilityObserver.observe(this.element);
+    }
     this.render();
   }
 
@@ -55,7 +84,7 @@ export class DictationRibbonController {
   }
 
   setState(state: DictationControllerState): void {
-    if (this.state === state) {
+    if (this.disposed || this.state === state) {
       return;
     }
     const previousState = this.state;
@@ -74,7 +103,7 @@ export class DictationRibbonController {
   }
 
   setQueueTier(tier: QueueBackpressureTier): void {
-    if (this.queueTier === tier) {
+    if (this.disposed || this.queueTier === tier) {
       return;
     }
     this.queueTier = tier;
@@ -82,13 +111,16 @@ export class DictationRibbonController {
   }
 
   setVisualizer(bandReader: AudioBandReader | null): void {
+    if (this.disposed) return;
     this.bandReader = bandReader;
     this.syncAnimation();
   }
 
   dispose(): void {
+    this.disposed = true;
     this.cancelHold();
     this.stopAnimation();
+    this.visibilityObserver?.disconnect();
     this.reducedMotion.removeEventListener('change', this.reducedMotionListener);
     this.element.remove();
   }
@@ -147,6 +179,8 @@ export class DictationRibbonController {
 
   private syncAnimation(): void {
     const shouldRun =
+      !this.disposed &&
+      this.hasVisibleArea &&
       this.visualState === 'speech_detected' &&
       this.bandReader !== null &&
       !this.reducedMotion.matches;
@@ -207,7 +241,7 @@ export class DictationRibbonController {
 
   private stopAnimation(): void {
     if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
+      window.cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
     this.resetBars();

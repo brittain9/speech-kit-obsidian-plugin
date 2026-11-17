@@ -23,6 +23,7 @@ export function renderLlmProviderSettings(
   parent: HTMLElement,
   dependencies: LlmProviderSettingsDependencies,
 ): () => void {
+  if (!dependencies.getSettings().llmFeaturesEnabled) return () => {};
   const dailyHost = createSettingGroup(parent, t('settings.groups.llmTransformation'));
   const routingHost = createSettingGroup(parent, t('settings.groups.llmProviders'));
   let disposed = false;
@@ -31,16 +32,6 @@ export function renderLlmProviderSettings(
     const dailyFocus = captureSettingsFocus(dailyHost);
     const routingFocus = captureSettingsFocus(routingHost);
     dailyHost.empty();
-    new Setting(dailyHost)
-      .setName(t('settings.llm.enableFeatures.name'))
-      .setDesc(t('settings.llm.enableFeatures.desc'))
-      .addToggle((toggle) => {
-        toggle.setValue(dependencies.getSettings().llmFeaturesEnabled);
-        toggle.onChange(async (value) => {
-          await dependencies.persist((current) => ({ ...current, llmFeaturesEnabled: value }));
-          render();
-        });
-      });
     renderLlmDailyControls(dailyHost, {
       getSettings: dependencies.getSettings,
       mutateSettings: dependencies.persist,

@@ -36,6 +36,7 @@ export interface TranslationSnapshot {
   to: EditorPosition;
 }
 interface TranslationModalDependencies {
+  isFeatureEnabled: () => boolean;
   canReadAloud: (text: string, language: TranslationLanguage) => boolean;
   configuration: {
     model: CatalogModelRecord | null;
@@ -122,6 +123,7 @@ export class TranslationModal extends Modal {
   private modelSelectionPending = false;
   private restoreSwapFocus = false;
   private closed = false;
+  private runningAction: 'translation' | 'pack' | null = null;
 
   constructor(
     app: App,
@@ -157,9 +159,14 @@ export class TranslationModal extends Modal {
       }
     });
     this.releaseJob = this.dependencies.job.subscribe((state) => {
+      const wasRunning = this.state.phase === 'loading' || this.state.phase === 'translating';
       this.state = state;
       this.syncElapsedTimer();
-      this.renderState();
+      if (wasRunning && (state.phase === 'loading' || state.phase === 'translating')) {
+        this.renderStatus(this.statusText());
+      } else {
+        this.renderState();
+      }
     });
     this.dependencies.job.start();
   }
@@ -177,21 +184,23 @@ export class TranslationModal extends Modal {
   }
   private renderShell(): void {
     this.contentEl.empty();
-    this.headingEl = this.contentEl.createEl('h2');
-    this.contentEl.createEl('p', {
+    this.runningAction = null;
+    const body = this.contentEl.createDiv({ cls: 'local-stt-translation-modal__body' });
+    this.headingEl = body.createEl('h2');
+    body.createEl('p', {
       text: t('translation.modal.sourcePath', { path: this.dependencies.sourcePath }),
     });
-    this.contentEl.createEl('p', {
+    body.createEl('p', {
       cls: 'local-stt-translation-modal__privacy',
       text: t('translation.modal.privacy'),
     });
-    this.selectorsEl = this.contentEl.createDiv({ cls: 'local-stt-translation-modal__languages' });
+    this.selectorsEl = body.createDiv({ cls: 'local-stt-translation-modal__languages' });
     if (this.dependencies.snapshot.source.length > LARGE_SOURCE_CHARACTERS)
-      this.contentEl.createEl('p', {
+      body.createEl('p', {
         cls: 'local-stt-translation-modal__warning',
         text: t('translation.modal.largeNote'),
       });
-    const details = this.contentEl.createEl('details', {
+    const details = body.createEl('details', {
       cls: 'local-stt-translation-modal__source',
     });
     details.createEl('summary', {
@@ -204,11 +213,11 @@ export class TranslationModal extends Modal {
       cls: 'local-stt-translation-modal__preview',
       text: this.dependencies.snapshot.source,
     });
-    this.statusEl = this.contentEl.createDiv({
+    this.statusEl = body.createDiv({
       attr: { 'aria-live': 'polite', role: 'status' },
       cls: 'local-stt-translation-modal__status',
     });
-    this.outputSurfaceEl = this.contentEl.createDiv({
+    this.outputSurfaceEl = body.createDiv({
       cls: 'local-stt-translation-modal__output-surface',
     });
     this.outputHeaderEl = this.outputSurfaceEl.createDiv({
@@ -227,7 +236,7 @@ export class TranslationModal extends Modal {
         this.dependencies.reviewedOutput.text = this.outputEl.value;
       this.renderReadAloudAction();
     });
-    this.actionsEl = this.contentEl.createDiv();
+    this.actionsEl = this.contentEl.createDiv({ cls: 'local-stt-translation-modal__footer' });
     this.renderHeading();
     this.renderSelectors();
     this.renderState();
@@ -269,7 +278,8 @@ export class TranslationModal extends Modal {
     const operationActive = this.operationIsActive();
     const selectionPending =
       this.modelSelectionPending || this.dependencies.isModelSelectionPending();
-    const controlsActive = operationActive || selectionPending;
+    const controlsActive =
+      !this.dependencies.isFeatureEnabled() || operationActive || selectionPending;
     const modelSetting = new Setting(this.selectorsEl).setName(
       t('settings.translation.model.name'),
     );
@@ -281,7 +291,8 @@ export class TranslationModal extends Modal {
       dropdown.addOption('', t('translation.modal.chooseModel'));
       dropdown.setValue(this.draftModel === null ? '' : translationModelKey(this.draftModel));
       dropdown.setDisabled(
-        operationActive ||
+        !this.dependencies.isFeatureEnabled() ||
+          operationActive ||
           (selectionPending && !this.modelSelectionPending) ||
           options.length === 0,
       );
@@ -400,6 +411,7 @@ export class TranslationModal extends Modal {
   }
 
   private async changeDraftModel(value: string): Promise<void> {
+    if (!this.dependencies.isFeatureEnabled()) return;
     if (
       this.operationIsActive() ||
       (this.dependencies.isModelSelectionPending() && !this.modelSelectionPending)
@@ -554,6 +566,10 @@ export class TranslationModal extends Modal {
     this.renderReadAloudAction();
     this.renderActions();
   }
+  refreshFeatureAvailability(): void {
+    if (!this.closed) this.renderState();
+  }
+
   private renderState(): void {
     if (this.outputEl !== null) {
       if (this.state.phase === 'completed') {
@@ -587,6 +603,12 @@ export class TranslationModal extends Modal {
       case 'missing_model':
         return t('translation.modal.missingModel');
       case 'cancelled':
+        if (this.state.backendCancellation !== undefined)
+          return t(
+            this.state.backendCancellation === 'unconfirmed'
+              ? 'translation.modal.cancelUnconfirmed'
+              : 'translation.modal.cancelPending',
+          );
         return t('translation.modal.canceled');
       case 'failed':
         return translationFailureMessage(this.state.error);
@@ -682,10 +704,17 @@ export class TranslationModal extends Modal {
   }
   private renderActions(): void {
     if (this.actionsEl === null) return;
+    const runningAction = this.installingPack
+      ? 'pack'
+      : this.state.phase === 'loading' || this.state.phase === 'translating'
+        ? 'translation'
+        : null;
+    if (this.installingPack) this.renderStatus(t('translation.modal.downloadingLanguagePack'));
+    if (runningAction !== null && this.runningAction === runningAction) return;
+    this.runningAction = runningAction;
     this.actionsEl.empty();
     const actions = new Setting(this.actionsEl).setClass('local-stt-translation-modal__actions');
     if (this.installingPack) {
-      this.renderStatus(t('translation.modal.downloadingLanguagePack'));
       actions.addButton((button) =>
         button
           .setButtonText(t('translation.modal.cancel'))
@@ -701,6 +730,12 @@ export class TranslationModal extends Modal {
       );
       return;
     }
+    if (this.state.phase === 'cancelled' && this.state.backendCancellation !== undefined) {
+      actions.addButton((button) =>
+        button.setButtonText(t('common.close')).onClick(() => this.close()),
+      );
+      return;
+    }
     if (!this.dependencies.sourceIsAvailable()) {
       this.renderStatus(t('translation.modal.otherNote'));
       if (this.state.phase === 'completed') {
@@ -708,6 +743,16 @@ export class TranslationModal extends Modal {
           button.setButtonText(t('translation.modal.copy')).onClick(() => void this.copy()),
         );
       }
+      actions.addButton((button) =>
+        button.setButtonText(t('translation.modal.dismiss')).onClick(() => {
+          this.dependencies.onDismissed();
+          this.close();
+        }),
+      );
+      return;
+    }
+    if (!this.dependencies.isFeatureEnabled() && this.state.phase !== 'completed') {
+      this.renderStatus(t('translation.notice.disabled'));
       actions.addButton((button) =>
         button.setButtonText(t('translation.modal.dismiss')).onClick(() => {
           this.dependencies.onDismissed();
@@ -787,13 +832,15 @@ export class TranslationModal extends Modal {
     if (this.state.phase !== 'completed') return;
     const current = this.resultIsCurrent();
     if (!current) {
-      actions.addButton((button) =>
-        button
-          .setButtonText(t('translation.modal.translateAgain'))
-          .setCta()
-          .setDisabled(this.modelSelectionPending || this.dependencies.isModelSelectionPending())
-          .onClick(() => this.requestFreshTranslation()),
-      );
+      if (this.dependencies.isFeatureEnabled()) {
+        actions.addButton((button) =>
+          button
+            .setButtonText(t('translation.modal.translateAgain'))
+            .setCta()
+            .setDisabled(this.modelSelectionPending || this.dependencies.isModelSelectionPending())
+            .onClick(() => this.requestFreshTranslation()),
+        );
+      }
       actions.addButton((button) =>
         button.setButtonText(t('translation.modal.copy')).onClick(() => void this.copy()),
       );
@@ -803,7 +850,11 @@ export class TranslationModal extends Modal {
           this.close();
         }),
       );
-      this.renderStatus(this.retryStatusText());
+      this.renderStatus(
+        this.dependencies.isFeatureEnabled()
+          ? this.retryStatusText()
+          : t('translation.notice.disabled'),
+      );
       return;
     }
     const canApply = this.state.sourceUnitsKept === 0;
@@ -831,6 +882,7 @@ export class TranslationModal extends Modal {
     );
   }
   private requestFreshTranslation(): void {
+    if (!this.dependencies.isFeatureEnabled()) return;
     if (!this.dependencies.sourceIsAvailable()) {
       this.renderActions();
       return;
@@ -844,6 +896,7 @@ export class TranslationModal extends Modal {
     );
   }
   private restart(source: TranslationLanguage, target: TranslationLanguage): void {
+    if (!this.dependencies.isFeatureEnabled()) return;
     if (!this.dependencies.sourceIsAvailable()) {
       this.renderActions();
       return;
@@ -859,6 +912,7 @@ export class TranslationModal extends Modal {
     this.dependencies.onRestart(source, target, this.currentStyleInstruction());
   }
   private async installPack(): Promise<void> {
+    if (!this.dependencies.isFeatureEnabled()) return;
     if (
       this.draftModel === null ||
       this.installingPack ||
@@ -934,7 +988,8 @@ export class TranslationModal extends Modal {
       this.installingPack ||
       this.modelInstallIsActive() ||
       this.state.phase === 'loading' ||
-      this.state.phase === 'translating'
+      this.state.phase === 'translating' ||
+      (this.state.phase === 'cancelled' && this.state.backendCancellation !== undefined)
     );
   }
   private retryStatusText(): string {

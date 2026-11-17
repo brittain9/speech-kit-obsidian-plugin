@@ -1,10 +1,82 @@
 import { type Command, type Editor, Platform, type Plugin } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
 
-import { registerCommands } from '../src/commands/register-commands';
+import { registerCommands, registerEditorMenu } from '../src/commands/register-commands';
+import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
+import { t } from '../src/shared/i18n';
 
 describe('registerCommands', () => {
-  it('exposes recovery commands only while a retained utterance is available', () => {
+  it('hides disabled feature commands dynamically while preserving active playback controls', () => {
+    const commands: Command[] = [];
+    let settings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      readAloudEnabled: false,
+      translationEnabled: false,
+    };
+    const readAloud = vi.fn(async () => {});
+    const translateNote = vi.fn();
+    registerCommands({
+      getSettings: () => settings,
+      plugin: { addCommand: (command: Command) => commands.push(command) } as unknown as Plugin,
+      openSpeechKit: vi.fn(async () => {}),
+      cancelAudioFile: vi.fn(async () => {}),
+      cancelDictation: vi.fn(async () => {}),
+      clearLastUtterance: vi.fn(),
+      clearRawTranscriptRecovery: vi.fn(),
+      checkSidecarHealth: vi.fn(async () => {}),
+      copyLastUtterance: vi.fn(),
+      copyRawTranscript: vi.fn(),
+      hasLastUtterance: () => false,
+      hasRawTranscriptRecovery: () => false,
+      isAudioFileTranscriptionActive: () => false,
+      isReadAloudActive: () => true,
+      readAloud,
+      readAloudFromCursor: vi.fn(async () => {}),
+      reinsertLastUtterance: vi.fn(),
+      restoreRawTranscript: vi.fn(),
+      restartSidecar: vi.fn(async () => {}),
+      startDictation: vi.fn(async () => {}),
+      stopReadAloud: vi.fn(),
+      stopDictation: vi.fn(async () => {}),
+      transcribeAudioFile: vi.fn(async () => {}),
+      translateNote,
+      translateSelection: vi.fn(),
+      toggleDictation: vi.fn(async () => {}),
+      toggleReadAloudPaused: vi.fn(async () => {}),
+    });
+    const editor = { somethingSelected: () => true } as Editor;
+    for (const id of [
+      'translate-note',
+      'translate-selection',
+      'read-aloud',
+      'read-aloud-from-cursor',
+    ]) {
+      const command = commands.find((command) => command.id === id);
+      expect(command?.editorCheckCallback?.(true, editor, {} as never)).toBe(false);
+      expect(command?.editorCheckCallback?.(false, editor, {} as never)).toBe(false);
+    }
+    expect(readAloud).not.toHaveBeenCalled();
+    expect(translateNote).not.toHaveBeenCalled();
+    expect(commands.find(({ id }) => id === 'stop-read-aloud')?.checkCallback?.(true)).toBe(true);
+    expect(commands.find(({ id }) => id === 'pause-resume-read-aloud')?.checkCallback?.(true)).toBe(
+      true,
+    );
+    settings = { ...settings, readAloudEnabled: true, translationEnabled: true };
+    expect(
+      commands
+        .find(({ id }) => id === 'read-aloud')
+        ?.editorCheckCallback?.(false, editor, {} as never),
+    ).toBe(true);
+    expect(
+      commands
+        .find(({ id }) => id === 'translate-note')
+        ?.editorCheckCallback?.(false, editor, {} as never),
+    ).toBe(true);
+    expect(readAloud).toHaveBeenCalledOnce();
+    expect(translateNote).toHaveBeenCalledOnce();
+  });
+
+  it('exposes recovery commands only while a retained utterance is available', async () => {
     const commands: Command[] = [];
     const plugin = {
       addCommand: vi.fn((command: Command) => {
@@ -17,9 +89,11 @@ describe('registerCommands', () => {
     });
     const reinsertLastUtterance = vi.fn((_editor: Editor) => {});
     const copyLastUtterance = vi.fn();
+    const openSpeechKit = vi.fn(async () => {});
     const translateNote = vi.fn();
     const translateSelection = vi.fn();
     registerCommands({
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       cancelAudioFile: vi.fn(async () => {}),
       cancelDictation: vi.fn(async () => {}),
       clearLastUtterance,
@@ -31,6 +105,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => false,
       isAudioFileTranscriptionActive: () => false,
       isReadAloudActive: () => false,
+      openSpeechKit,
       plugin,
       readAloud: vi.fn(async () => {}),
       readAloudFromCursor: vi.fn(async () => {}),
@@ -53,13 +128,17 @@ describe('registerCommands', () => {
 
     const translationEditor = { somethingSelected: () => true } as Editor;
     const view = { file: { path: 'Notes/source.md' } } as never;
-    commands.find(({ id }) => id === 'translate-note')?.editorCallback?.(translationEditor, view);
+    commands
+      .find(({ id }) => id === 'translate-note')
+      ?.editorCheckCallback?.(false, translationEditor, view);
     commands
       .find(({ id }) => id === 'translate-selection')
       ?.editorCheckCallback?.(false, translationEditor, view);
     expect(translateNote).toHaveBeenCalledWith(translationEditor, view);
     expect(translateSelection).toHaveBeenCalledWith(translationEditor, view);
 
+    await commands.find(({ id }) => id === 'open-speech-kit')?.callback?.();
+    expect(openSpeechKit).toHaveBeenCalledOnce();
     expect(reinsertCommand?.name).toBe('Reinsert last utterance');
     expect(copyCommand?.name).toBe('Copy last utterance');
     expect(clearCommand?.name).toBe('Clear last utterance');
@@ -103,6 +182,7 @@ describe('registerCommands', () => {
     const copyRawTranscript = vi.fn();
     const restoreRawTranscript = vi.fn();
     registerCommands({
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       cancelAudioFile: vi.fn(async () => {}),
       cancelDictation: vi.fn(async () => {}),
       clearLastUtterance: vi.fn(),
@@ -114,6 +194,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => available,
       isAudioFileTranscriptionActive: () => false,
       isReadAloudActive: () => false,
+      openSpeechKit: vi.fn(async () => {}),
       plugin,
       readAloud: vi.fn(async () => {}),
       readAloudFromCursor: vi.fn(async () => {}),
@@ -167,6 +248,7 @@ describe('registerCommands', () => {
     const transcribeAudioFile = vi.fn(async () => {});
 
     registerCommands({
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       cancelAudioFile: vi.fn(async () => {}),
       cancelDictation: vi.fn(async () => {}),
       clearLastUtterance: vi.fn(),
@@ -178,6 +260,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => false,
       isAudioFileTranscriptionActive: () => false,
       isReadAloudActive: () => false,
+      openSpeechKit: vi.fn(async () => {}),
       plugin,
       readAloud: vi.fn(async () => {}),
       readAloudFromCursor: vi.fn(async () => {}),
@@ -214,6 +297,7 @@ describe('registerCommands', () => {
     } as unknown as Plugin;
     const transcribeYouTube = vi.fn(async () => {});
     registerCommands({
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       cancelAudioFile: vi.fn(async () => {}),
       cancelDictation: vi.fn(async () => {}),
       clearLastUtterance: vi.fn(),
@@ -225,6 +309,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => false,
       isAudioFileTranscriptionActive: () => false,
       isReadAloudActive: () => false,
+      openSpeechKit: vi.fn(async () => {}),
       plugin,
       readAloud: vi.fn(async () => {}),
       readAloudFromCursor: vi.fn(async () => {}),
@@ -267,6 +352,7 @@ describe('registerCommands', () => {
     let active = false;
 
     registerCommands({
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       cancelAudioFile,
       cancelDictation: vi.fn(async () => {}),
       clearLastUtterance: vi.fn(),
@@ -278,6 +364,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => false,
       isAudioFileTranscriptionActive: () => active,
       isReadAloudActive: () => false,
+      openSpeechKit: vi.fn(async () => {}),
       plugin,
       readAloud: vi.fn(async () => {}),
       readAloudFromCursor: vi.fn(async () => {}),
@@ -313,6 +400,7 @@ describe('registerCommands', () => {
     const readAloud = vi.fn(async () => {});
     const readAloudFromCursor = vi.fn(async () => {});
     registerCommands({
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
       cancelAudioFile: vi.fn(async () => {}),
       cancelDictation: vi.fn(async () => {}),
       clearLastUtterance: vi.fn(),
@@ -324,6 +412,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => false,
       isAudioFileTranscriptionActive: () => false,
       isReadAloudActive: () => false,
+      openSpeechKit: vi.fn(async () => {}),
       plugin,
       readAloud,
       readAloudFromCursor,
@@ -350,10 +439,59 @@ describe('registerCommands', () => {
     expect(readFromCursorCommand?.name).toBe('Read aloud from cursor');
     expect(commands.some(({ id }) => id === 'read-entire-note')).toBe(false);
 
-    await readAloudCommand?.editorCallback?.(editor, {} as never);
-    await readFromCursorCommand?.editorCallback?.(editor, {} as never);
+    await readAloudCommand?.editorCheckCallback?.(false, editor, {} as never);
+    await readFromCursorCommand?.editorCheckCallback?.(false, editor, {} as never);
 
     expect(readAloud).toHaveBeenCalledWith(editor);
     expect(readAloudFromCursor).toHaveBeenCalledWith(editor);
   });
+});
+
+it('hides disabled editor menu tools and ignores a stale menu action after disabling', () => {
+  let settings = { ...DEFAULT_PLUGIN_SETTINGS };
+  let onMenu: (...args: unknown[]) => void = () => {};
+  const workspace = {
+    on: (_name: string, listener: typeof onMenu) => {
+      onMenu = listener;
+      return {};
+    },
+  };
+  const actions: Array<{ title: string; run: () => void }> = [];
+  const menu = {
+    addItem: (configure: (item: unknown) => void) => {
+      let title = '';
+      const item = {
+        setTitle: (value: string) => {
+          title = value;
+          return item;
+        },
+        setIcon: () => item,
+        onClick: (run: () => void) => {
+          actions.push({ title, run });
+          return item;
+        },
+      };
+      configure(item);
+    },
+  };
+  const readAloud = vi.fn(async () => {});
+  const translateSelection = vi.fn();
+  registerEditorMenu(workspace as never, {
+    getSettings: () => settings,
+    readAloud,
+    translateSelection,
+  });
+  const editor = { somethingSelected: () => true };
+  onMenu(menu, editor, {});
+  expect(actions.map(({ title }) => title)).toEqual([
+    t('commands.translateSelection'),
+    t('commands.readAloud'),
+  ]);
+  settings = { ...settings, readAloudEnabled: false, translationEnabled: false };
+  for (const action of actions) action.run();
+  expect(readAloud).not.toHaveBeenCalled();
+  expect(translateSelection).not.toHaveBeenCalled();
+  actions.length = 0;
+  onMenu(menu, editor, {});
+  expect(actions).toHaveLength(0);
 });

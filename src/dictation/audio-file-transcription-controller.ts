@@ -321,7 +321,9 @@ export class AudioFileTranscriptionController {
         utteranceIndex: 0,
         utteranceStartMsInSession: 0,
       });
-      if (result.kind !== 'accepted') return false;
+      if (result.kind !== 'accepted' || session.wasLastTranscriptInserted?.() === false) {
+        return false;
+      }
       this.partialRecovery = null;
       this.dependencies.onMediaProgress?.(this.mediaProgress);
       return true;
@@ -343,7 +345,8 @@ export class AudioFileTranscriptionController {
   }
 
   isCaptureActive(): boolean {
-    return this.isBusy();
+    // Caption imports share media UI ownership, but never own speech inference.
+    return this.isBusy() && this.activeMediaProvider?.id !== 'youtube_captions';
   }
 
   async transcribe(): Promise<void> {
@@ -672,7 +675,7 @@ export class AudioFileTranscriptionController {
     mediaLlmJob: MediaLlmJob | null | undefined,
     signal: AbortSignal,
   ): Promise<void> {
-    this.revalidateTarget(target, signal);
+    this.revalidateTarget(target, signal, 'captions');
     const settings = this.dependencies.getSettings();
     const sessionId = randomUUID();
     const baseRendererOptions = createRendererOptions(settings, Date.now(), options);
@@ -691,7 +694,11 @@ export class AudioFileTranscriptionController {
         onLockedNoteDeleted: () => {},
         onSurfaceDesynchronized: () => {},
       },
-      placement: { anchor: settings.dictationAnchor },
+      // Keep captions out of a live or draining dictation range, even if the
+      // user moved the caret into the middle of that range while captions loaded.
+      placement: {
+        anchor: this.dependencies.isDictationBusy() ? 'end_of_note' : settings.dictationAnchor,
+      },
       rendererOptions,
       sessionId,
       target,
@@ -740,7 +747,7 @@ export class AudioFileTranscriptionController {
         warnings: [],
       };
       transcript.handleTranscript(event);
-      this.revalidateTarget(target, signal);
+      this.revalidateTarget(target, signal, 'captions');
       await transcript.commitStaged();
       transcriptCommitted = true;
       this.lastMediaResultSource = captions.source;
@@ -785,9 +792,8 @@ export class AudioFileTranscriptionController {
     this.activeMediaProvider = { abortController, id: 'youtube_captions' };
 
     try {
-      if (this.dependencies.isDictationBusy()) throw new Error(t('media.modal.alreadyRunning'));
       const target = this.dependencies.getTarget();
-      if (target === null) throw new AudioFileWorkflowError('audio-file-target-required');
+      if (target === null) throw new Error(t('youtube.modal.targetRequired'));
       const settings = this.dependencies.getSettings();
       const mediaLlmJob =
         options.mediaLlmSnapshot === undefined
@@ -1030,10 +1036,15 @@ export class AudioFileTranscriptionController {
     };
   }
 
-  private revalidateTarget(target: SessionTarget, signal: AbortSignal): void {
+  private revalidateTarget(
+    target: SessionTarget,
+    signal: AbortSignal,
+    workflow: 'audio' | 'captions' = 'audio',
+  ): void {
     this.throwIfCancelled(signal);
     const currentTarget = this.dependencies.getTarget();
     if (currentTarget === null || !Session.targetsEqual(target, currentTarget)) {
+      if (workflow === 'captions') throw new Error(t('youtube.modal.targetChanged'));
       throw new AudioFileWorkflowError('audio-file-target-changed');
     }
   }
@@ -1260,11 +1271,6 @@ export class AudioFileTranscriptionController {
     }
     await managed.transcript.drainPendingProjections();
     await managed.releaseMediaLease();
-    if (!runPostCompletion || !this.completedFeeds.has(managed)) {
-      const text = managed.transcript.getPartialText();
-      const target = this.sessionTargets.get(managed);
-      if (text.length > 0 && target !== undefined) this.partialRecovery = { target, text };
-    }
     if (runPostCompletion && !quarantined) {
       try {
         await managed.runPostCompletion();
@@ -1273,6 +1279,11 @@ export class AudioFileTranscriptionController {
         this.dependencies.logger?.warn('llm', 'media transcript post-completion failed', error);
       }
     }
+    // A successful commit clears staged text. Anything still staged, including
+    // a complete transcript whose insertion failed, belongs to recovery.
+    const text = managed.transcript.getPartialText();
+    const target = this.sessionTargets.get(managed);
+    if (text.length > 0 && target !== undefined) this.partialRecovery = { target, text };
     if (this.activeSession === managed) this.activeSession = null;
     try {
       managed.transcript.disposeSession();

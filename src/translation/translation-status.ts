@@ -91,6 +91,12 @@ function translationStatusText(state: TranslationJobState): string {
     case 'missing_model':
       return t('translation.modal.missingModel');
     case 'cancelled':
+      if (state.backendCancellation !== undefined)
+        return t(
+          state.backendCancellation === 'unconfirmed'
+            ? 'translation.status.cancelUnconfirmed'
+            : 'translation.status.cancelPending',
+        );
       return t('translation.modal.canceled');
     case 'failed':
       return t('translation.modal.failed');

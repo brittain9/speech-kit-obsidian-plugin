@@ -1,6 +1,7 @@
 import type { App } from 'obsidian';
 import { Setting, type SettingDefinitionRender, type SettingGroup } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
+import { renderCustomizeToolsSetting } from '../src/settings/customize-tools-modal';
 import { DiarizationSettingsModal } from '../src/settings/diarization-settings-modal';
 import { LlmPresetStateStore } from '../src/settings/llm-preset-state';
 import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
@@ -14,6 +15,58 @@ import {
 import { type Setting as MockSetting, TestElement } from './__mocks__/obsidian';
 
 describe('LocalSttSettingTab Obsidian 1.13 compatibility', () => {
+  it('keeps feature preferences reversible without changing models or transform choices', async () => {
+    const rows = Setting as unknown as typeof import('./__mocks__/obsidian').Setting;
+    rows.reset();
+    const selectedTtsModel = {
+      kind: 'catalog_model',
+      runtimeId: 'onnx_runtime',
+      familyId: 'pocket_tts',
+      modelId: 'english',
+    } as const;
+    const selectedTranslationModel = {
+      kind: 'catalog_model',
+      runtimeId: 'llama_cpp',
+      familyId: 'tencent_hy_mt',
+      modelId: 'hy-mt2',
+    } as const;
+    let settings: PluginSettings = {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      llmPostprocessMode: 'batch',
+      llmNetworkTimeoutSec: 42,
+      selectedTtsModel,
+      selectedTranslationModel,
+    };
+    const onChanged = vi.fn();
+    renderCustomizeToolsSetting(new TestElement() as unknown as HTMLElement, {} as App, {
+      access: {
+        getSettings: () => settings,
+        persistOne: async (key, value) => {
+          settings = { ...settings, [key]: value };
+        },
+      },
+      onChanged,
+      onClosed: vi.fn(),
+    });
+    await rows.buttonNamed('Customize').click();
+    for (const name of ['Translation', 'Read aloud', 'AI transformations']) {
+      rows.named(name).onlyToggle().change(false);
+    }
+    await vi.waitFor(() => {
+      expect(settings.translationEnabled).toBe(false);
+      expect(settings.readAloudEnabled).toBe(false);
+      expect(settings.llmFeaturesEnabled).toBe(false);
+      expect(onChanged).toHaveBeenCalledTimes(3);
+    });
+    expect(settings.llmPostprocessMode).toBe('batch');
+    expect(settings.selectedTranslationModel).toEqual(selectedTranslationModel);
+    expect(settings.selectedTtsModel).toEqual(selectedTtsModel);
+    expect(settings.llmNetworkTimeoutSec).toBe(42);
+    rows.named('Translation').onlyToggle().change(true);
+    await vi.waitFor(() => expect(settings.translationEnabled).toBe(true));
+    expect(settings.readAloudEnabled).toBe(false);
+  });
+
   it('provides a microphone icon when registered in Settings', () => {
     const tab = new LocalSttSettingTab({} as never, {} as never, {} as never);
     expect(tab.icon).toBe('mic');

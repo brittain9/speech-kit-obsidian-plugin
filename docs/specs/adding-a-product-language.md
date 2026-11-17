@@ -131,7 +131,7 @@ per direction because Mozilla releases directions independently.
 Notes on the two most recent rows:
 
 - Croatian is Full tier and earned its UI catalog under [the localization
-  rule](#the-localization-rule). `src/locales/hr.ts` ships complete; it has not
+rule](#the-localization-rule). `src/locales/hr.ts` ships complete; it has not
   yet been signed off by a native reviewer.
 - Serbian has no live or read-aloud model upstream — `sr` is absent from
   Nemotron's prompt dictionary and Supertonic's language list entirely. It

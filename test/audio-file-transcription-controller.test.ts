@@ -32,6 +32,7 @@ import type {
 } from '../src/session/session';
 import type { TranscriptRevision } from '../src/session/session-journal';
 import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
+import { t } from '../src/shared/i18n';
 import type {
   SidecarEvent,
   StartSessionCommand,
@@ -378,43 +379,156 @@ function createSettings(overrides: Partial<PluginSettings> = {}): PluginSettings
   };
 }
 
+const captionRef = parseYouTubeVideoUrl('https://www.youtube.com/watch?v=8MxG6tOkdNY');
+const captionOptions = {
+  diarizationEnabled: false,
+  language: 'en' as const,
+  timestampDensity: 'sparse' as const,
+  timestampsEnabled: false,
+  transcriptFormatting: 'space' as const,
+  mediaLlmSnapshot: null,
+};
+function captionResult() {
+  return {
+    cues: [{ startMs: 0, endMs: 1000, text: 'Public caption text.', speaker: null }],
+    language: 'en' as const,
+    source: 'creator_captions' as const,
+    videoUrl: captionRef.canonicalUrl,
+  };
+}
+
 describe('AudioFileTranscriptionController', () => {
-  it('inserts complete YouTube captions without starting a speech model or sidecar', async () => {
-    const fetchYouTubeCaptions = vi.fn(async () => ({
-      cues: [
-        { startMs: 0, endMs: 1000, text: 'Beginning', speaker: null },
-        { startMs: 9000000, endMs: 9001000, text: 'Ending', speaker: null },
-      ],
-      language: 'en',
-      source: 'creator_captions' as const,
-      videoUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
-    }));
-    const harness = createHarness({ fetchYouTubeCaptions });
-    harness.setCapabilities({ status: 'none' });
-    await harness.controller.transcribeYouTubeCaptions(
-      {
-        canonicalUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
-        host: 'www.youtube.com',
-        inputUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
-        kind: 'youtube_video_id',
-        videoId: '8MxG6tOkdNY',
-      },
-      {
-        diarizationEnabled: false,
+  it.each(['idle', 'dictation', 'maintenance'] as const)(
+    'imports YouTube captions while %s without taking speech-engine ownership',
+    async (activity) => {
+      const fetchYouTubeCaptions = vi.fn(async () => ({
+        cues: [
+          { startMs: 0, endMs: 1000, text: 'Beginning', speaker: null },
+          { startMs: 9000000, endMs: 9001000, text: 'Ending', speaker: null },
+        ],
         language: 'en',
-        timestampDensity: 'sparse',
-        timestampsEnabled: true,
-        transcriptFormatting: 'smart',
-        mediaLlmSnapshot: null,
-      },
-    );
+        source: 'creator_captions' as const,
+        videoUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
+      }));
+      const harness = createHarness({
+        fetchYouTubeCaptions,
+        isDictationBusy: () => activity === 'dictation',
+      });
+      const maintenance =
+        activity === 'maintenance' ? harness.sidecarLifecycleGate.acquireMutation() : null;
+      harness.setCapabilities({ status: 'none' });
+      await harness.controller.transcribeYouTubeCaptions(
+        {
+          canonicalUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
+          host: 'www.youtube.com',
+          inputUrl: 'https://www.youtube.com/watch?v=8MxG6tOkdNY',
+          kind: 'youtube_video_id',
+          videoId: '8MxG6tOkdNY',
+        },
+        {
+          diarizationEnabled: false,
+          language: 'en',
+          timestampDensity: 'sparse',
+          timestampsEnabled: true,
+          transcriptFormatting: 'smart',
+          mediaLlmSnapshot: null,
+        },
+      );
+      expect(fetchYouTubeCaptions).toHaveBeenCalledOnce();
+      expect(harness.sidecarConnection.startSessionWithControl).not.toHaveBeenCalled();
+      expect(harness.sessions[0]?.accepted).toHaveLength(1);
+      expect(harness.createSessionOptions[0]?.placement.anchor).toBe(
+        activity === 'dictation' ? 'end_of_note' : harness.getSettings().dictationAnchor,
+      );
+      expect(harness.sessions[0]?.accepted[0]?.text).toContain('Ending');
+      expect(harness.sessions[0]?.accepted[0]?.text).toContain(
+        '[2:30:00](https://www.youtube.com/watch?v=8MxG6tOkdNY&t=9000s) Ending',
+      );
+      expect(harness.sidecarConnection.cancelSession).not.toHaveBeenCalled();
+      maintenance?.release();
+    },
+  );
+
+  it('reports unavailable captions during dictation without starting audio fallback', async () => {
+    const fetchYouTubeCaptions = vi.fn(async () => null);
+    const harness = createHarness({ fetchYouTubeCaptions, isDictationBusy: () => true });
+    await expect(
+      harness.controller.transcribeYouTubeCaptions(captionRef, captionOptions),
+    ).rejects.toThrow(t('youtube.modal.noCaptions'));
     expect(fetchYouTubeCaptions).toHaveBeenCalledOnce();
+    expect(harness.decoder.decode).not.toHaveBeenCalled();
     expect(harness.sidecarConnection.startSessionWithControl).not.toHaveBeenCalled();
+    expect(harness.sessions).toHaveLength(0);
+    expect(harness.controller.getState()).toBe('idle');
+  });
+
+  it('rejects a repeated caption submission while keeping the first job independent of dictation', async () => {
+    let finish = () => {};
+    const held = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const fetchYouTubeCaptions = vi.fn(async () => {
+      await held;
+      return captionResult();
+    });
+    const harness = createHarness({ fetchYouTubeCaptions, isDictationBusy: () => true });
+    const operation = harness.controller.transcribeYouTubeCaptions(captionRef, captionOptions);
+    expect(harness.controller.isBusy()).toBe(true);
+    expect(harness.controller.isCaptureActive()).toBe(false);
+    await expect(
+      harness.controller.transcribeYouTubeCaptions(captionRef, captionOptions),
+    ).rejects.toThrow(t('media.modal.alreadyRunning'));
+    finish();
+    await operation;
+    expect(fetchYouTubeCaptions).toHaveBeenCalledOnce();
     expect(harness.sessions[0]?.accepted).toHaveLength(1);
-    expect(harness.sessions[0]?.accepted[0]?.text).toContain('Ending');
-    expect(harness.sessions[0]?.accepted[0]?.text).toContain(
-      '[2:30:00](https://www.youtube.com/watch?v=8MxG6tOkdNY&t=9000s) Ending',
+    expect(harness.sidecarConnection.cancelSession).not.toHaveBeenCalled();
+  });
+
+  it('ignores late captions after cancellation without stopping microphone dictation', async () => {
+    let finish = () => {};
+    const held = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const harness = createHarness({
+      fetchYouTubeCaptions: async () => {
+        await held;
+        return captionResult();
+      },
+      isDictationBusy: () => true,
+    });
+    const operation = harness.controller.transcribeYouTubeCaptions(captionRef, captionOptions);
+    const rejected = expect(operation).rejects.toMatchObject({ code: 'cancelled' });
+    const cancelling = harness.controller.cancelProvider('youtube_captions');
+    finish();
+    await rejected;
+    await cancelling;
+    expect(harness.sessions).toHaveLength(0);
+    expect(harness.sidecarConnection.cancelSession).not.toHaveBeenCalled();
+    expect(harness.controller.getState()).toBe('idle');
+  });
+
+  it('does not insert captions into a replacement note after navigation while dictating', async () => {
+    let finish = () => {};
+    const held = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const harness = createHarness({
+      fetchYouTubeCaptions: async () => {
+        await held;
+        return captionResult();
+      },
+      isDictationBusy: () => true,
+    });
+    const operation = harness.controller.transcribeYouTubeCaptions(captionRef, captionOptions);
+    harness.setTarget(createTarget());
+    const rejected = expect(operation).rejects.toThrow(
+      'The note changed while captions were loading. Return to the original note and try again.',
     );
+    finish();
+    await rejected;
+    expect(harness.sessions).toHaveLength(0);
+    expect(harness.sidecarConnection.cancelSession).not.toHaveBeenCalled();
   });
 
   it('sends plain YouTube caption text to the selected AI preset after insertion', async () => {
@@ -951,6 +1065,63 @@ describe('AudioFileTranscriptionController', () => {
     expect(harness.controller.insertPartialTranscript()).toBe(true);
     expect(harness.controller.getPartialTranscript()).toBeNull();
     expect(onMediaProgress).toHaveBeenLastCalledWith(null);
+  });
+
+  it('retains the completed transcript for recovery when note insertion is rejected', async () => {
+    const harness = createHarness();
+    const operation = harness.controller.transcribe();
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+    const sessionId =
+      harness.sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    const session = harness.sessions[0];
+    if (sessionId === undefined || session === undefined) {
+      throw new Error('Expected an audio-file session.');
+    }
+    session.acceptTranscript.mockReturnValueOnce({ kind: 'rejected', reason: 'session-closed' });
+    harness.sidecarConnection.emit(transcriptReady(sessionId, 'Keep this completed transcript.'));
+    harness.sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await operation;
+
+    expect(harness.controller.getMediaError()).toBeInstanceOf(Error);
+    expect(harness.controller.getPartialTranscript()).toBe('Keep this completed transcript.');
+    expect(harness.controller.getState()).toBe('idle');
+    expect(session.dispose).toHaveBeenCalledOnce();
+    expect(harness.controller.insertPartialTranscript()).toBe(true);
+    expect(harness.sessions[1]?.accepted[0]?.text).toContain('Keep this completed transcript.');
+    expect(harness.controller.getPartialTranscript()).toBeNull();
+  });
+
+  it('keeps recovery available when the editor accepts it without inserting text', async () => {
+    const sessions: (FakeSession & { wasLastTranscriptInserted: () => boolean })[] = [];
+    let inserted = false;
+    const harness = createHarness({
+      createSession: () => {
+        const session = Object.assign(new FakeSession(), {
+          wasLastTranscriptInserted: () => inserted,
+        });
+        sessions.push(session);
+        return session;
+      },
+    });
+    const operation = harness.controller.transcribe();
+    await vi.waitFor(() =>
+      expect(harness.sidecarConnection.requestStopSession).toHaveBeenCalledOnce(),
+    );
+    const sessionId =
+      harness.sidecarConnection.startSessionWithControl.mock.calls[0]?.[0].sessionId;
+    if (sessionId === undefined) throw new Error('Expected an audio-file session.');
+    harness.sidecarConnection.emit(transcriptReady(sessionId, 'Keep this recovery text.'));
+    await harness.controller.cancel();
+    await operation;
+
+    expect(harness.controller.insertPartialTranscript()).toBe(false);
+    expect(harness.controller.getPartialTranscript()).toBe('Keep this recovery text.');
+    expect(sessions[1]?.dispose).toHaveBeenCalledOnce();
+    inserted = true;
+    expect(harness.controller.insertPartialTranscript()).toBe(true);
+    expect(harness.controller.getPartialTranscript()).toBeNull();
   });
 
   it('keeps user cancellation silent when the sidecar exits during native cancellation', async () => {
