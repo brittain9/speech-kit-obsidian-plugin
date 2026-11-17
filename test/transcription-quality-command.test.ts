@@ -159,12 +159,21 @@ it('keeps separate runner contexts attached to their own input measurements', as
       })}\n`,
     );
   }
+  await writeFile(
+    join(output, 'failed.environment.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      host: { cpuModels: ['failed CPU'] },
+      execution: { effectiveAcceleration: 'unknown' },
+    }),
+  );
   await main(['--render-only', output, '--output-dir', join(output, 'rendered')]);
   const report = JSON.parse(
     await readFile(join(output, 'rendered', 'transcription-quality.json'), 'utf8'),
   );
   expect(report.environment).toBeNull();
-  expect(report.environments).toHaveLength(2);
+  expect(report.environments).toHaveLength(3);
+  expect(report.missingMeasurementSources).toEqual(['failed.jsonl']);
   expect(
     report.measurements.map((record: { environmentSource: string }) => record.environmentSource),
   ).toEqual(['nemotron.environment.json', 'whisper.environment.json']);
@@ -172,6 +181,6 @@ it('keeps separate runner contexts attached to their own input measurements', as
     report.environments.map(
       (record: { context: { host: { cpuModels: string[] } } }) => record.context.host.cpuModels,
     ),
-  ).toEqual([['nemotron CPU'], ['whisper CPU']]);
+  ).toEqual([['failed CPU'], ['nemotron CPU'], ['whisper CPU']]);
   expect(spawnSync).not.toHaveBeenCalled();
 });

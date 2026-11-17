@@ -50,24 +50,22 @@ export function parseArgs(argv) {
   return args;
 }
 
-async function jsonlFiles(directory) {
+async function qualityInputFiles(directory) {
   const files = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...(await jsonlFiles(path)));
-    if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(path);
+    if (entry.isDirectory()) files.push(...(await qualityInputFiles(path)));
+    if (
+      entry.isFile() &&
+      (entry.name.endsWith('.jsonl') || entry.name.endsWith('.environment.json'))
+    )
+      files.push(path);
   }
   return files.sort();
 }
 
-async function readEnvironment(path, optional = false) {
-  let value;
-  try {
-    value = JSON.parse(await readFile(path, 'utf8'));
-  } catch (error) {
-    if (optional && error.code === 'ENOENT') return null;
-    throw error;
-  }
+async function readEnvironment(path) {
+  const value = JSON.parse(await readFile(path, 'utf8'));
   if (value?.schemaVersion !== 1 || !value.host || !value.execution) {
     throw new Error(`Invalid evaluation environment: ${path}`);
   }
@@ -75,18 +73,26 @@ async function readEnvironment(path, optional = false) {
 }
 
 async function render(inputDirectory, outputDirectory, environment = null) {
-  const files = await jsonlFiles(inputDirectory);
+  const inputs = await qualityInputFiles(inputDirectory);
+  const files = inputs.filter((file) => file.endsWith('.jsonl'));
   const measurements = [];
   const environments = [];
+  const missingMeasurementSources = [];
+  const contextSources = new Map();
+  for (const contextFile of inputs.filter((file) => file.endsWith('.environment.json'))) {
+    const source = relative(inputDirectory, contextFile).replaceAll('\\', '/');
+    environments.push({ source, context: await readEnvironment(contextFile) });
+    const measurementFile = contextFile.replace(/\.environment\.json$/u, '.jsonl');
+    contextSources.set(measurementFile, source);
+    if (!files.includes(measurementFile))
+      missingMeasurementSources.push(
+        relative(inputDirectory, measurementFile).replaceAll('\\', '/'),
+      );
+  }
   for (const file of files) {
     const cases = parseQualityMeasurements(await readFile(file, 'utf8'), basename(file));
-    const contextFile = file.replace(/\.jsonl$/u, '.environment.json');
-    const context = await readEnvironment(contextFile, true);
-    if (context) {
-      const source = relative(inputDirectory, contextFile).replaceAll('\\', '/');
-      environments.push({ source, context });
-      for (const measurement of cases) measurement.environmentSource = source;
-    }
+    if (contextSources.has(file))
+      for (const measurement of cases) measurement.environmentSource = contextSources.get(file);
     measurements.push(...cases);
   }
   const report = buildQualityReport(measurements, {
@@ -95,6 +101,7 @@ async function render(inputDirectory, outputDirectory, environment = null) {
     runner: process.env.RUNNER_DESCRIPTION ?? null,
     environment,
     environments,
+    missingMeasurementSources,
   });
   await mkdir(outputDirectory, { recursive: true });
   await writeFile(

@@ -56,6 +56,9 @@ rendering machine. For combined CI results, each `name.jsonl` can carry a siblin
 `name.environment.json`; measurements remain linked to their own job's context.
 The manually dispatched ASR workflows capture and upload those sidecars. Their
 triggers, model matrix, thresholds and required CI checks are unchanged.
+If a job captures context but fails before writing measurements, the combined
+report retains that context and explicitly lists the missing measurement file.
+It does not fill the gap with a passing result or a fabricated score.
 
 See [hardware context](evaluation-hardware.md) for measured host fields and the
 limits of declared execution settings. Requested CPU/GPU, effective device use,

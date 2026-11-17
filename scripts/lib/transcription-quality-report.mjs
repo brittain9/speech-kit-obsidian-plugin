@@ -311,6 +311,7 @@ export function buildQualityReport(measurements, metadata = {}) {
     runner: metadata.runner ?? null,
     environment: metadata.environment ?? null,
     environments: metadata.environments ?? [],
+    missingMeasurementSources: metadata.missingMeasurementSources ?? [],
     summary: {
       audioDurationMs: measurements.reduce(
         (sum, measurement) => sum + measurement.audioDurationMs,
@@ -361,6 +362,8 @@ function firstPartialLabel(row) {
 }
 
 export function renderQualityReportMarkdown(report) {
+  const environments = report.environments ?? [];
+  const missingMeasurementSources = report.missingMeasurementSources ?? [];
   const lines = [
     '# Transcription quality report',
     '',
@@ -369,6 +372,11 @@ export function renderQualityReportMarkdown(report) {
     `- Measurements: ${report.summary.measurementCount} across ${report.summary.models.length} models and ${report.summary.languages.length} languages`,
     `- Fixture audio exercised: ${formatDuration(report.summary.audioDurationMs)}`,
     `- Result: ${report.summary.failedMeasurements === 0 ? 'all measured acceptance budgets passed' : `${report.summary.failedMeasurements} measurements failed`}`,
+    ...(missingMeasurementSources.length
+      ? [
+          `- Incomplete evidence: environment captured but no measurements for ${missingMeasurementSources.join(', ')}`,
+        ]
+      : []),
     '',
     '| Model | Scenario | Selection | Language | Fixtures | Quality mean / max | Quality budget | RTF / budget | Audio | Processing | First partial / budget | Result |',
     '| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
@@ -408,13 +416,13 @@ export function renderQualityReportMarkdown(report) {
       ...fencedText(JSON.stringify(report.environment, null, 2)),
       '',
     );
-  } else if (report.environments.length === 0) {
+  } else if (environments.length === 0) {
     lines.push(
       'Run environment was not recorded; hardware, effective acceleration and cache state are unknown.',
       '',
     );
   }
-  for (const { source, context } of report.environments) {
+  for (const { source, context } of environments) {
     lines.push(
       `## Recorded environment: ${source}`,
       '',

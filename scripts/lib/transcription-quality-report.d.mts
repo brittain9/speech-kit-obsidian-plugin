@@ -72,6 +72,7 @@ export interface QualityReport {
   runner: string | null;
   environment: unknown;
   environments: Array<{ source: string; context: unknown }>;
+  missingMeasurementSources: string[];
   summary: {
     audioDurationMs: number;
     failedMeasurements: number;
@@ -93,6 +94,7 @@ export function buildQualityReport(
     runner?: string | null;
     environment?: unknown;
     environments?: Array<{ source: string; context: unknown }>;
+    missingMeasurementSources?: string[];
   },
 ): QualityReport;
 export function renderQualityReportMarkdown(report: QualityReport): string;
