@@ -568,7 +568,10 @@ export class NoteSurface {
       .find((value) => value !== undefined);
     const startBias = insertOrder !== undefined && insertOrder < this.createdAt ? 1 : -1;
     const endBias =
-      insertedAfter?.order === this.createdAt && insertedAfter.position === span.end ? -1 : 1;
+      (insertOrder !== undefined && insertOrder > this.createdAt) ||
+      (insertedAfter?.order === this.createdAt && insertedAfter.position === span.end)
+        ? -1
+        : 1;
     span.start = update.changes.mapPos(span.start, startBias);
     span.textStart = update.changes.mapPos(span.textStart, startBias);
     span.textEnd = update.changes.mapPos(span.textEnd, -1);
@@ -622,7 +625,7 @@ export class NoteSurface {
     if (desynchronization !== null) {
       return desynchronization;
     }
-    this.view.dispatch({ effects: setSessionProcessingEffect.of(range) });
+    this.view.dispatch({ effects: setSessionProcessingEffect.of({ owner: this, range }) });
     return null;
   }
 
@@ -693,11 +696,10 @@ export class NoteSurface {
     unregisterNoteSurface(this);
     // The anchor is a single shared widget. Only clear it when no other live
     // session is still using it — otherwise a draining older session would wipe
-    // the newer session's cursor. The processing range is a single shared field
-    // too, but only the session currently draining ever shows the flash, so the
-    // disposing session always clears it.
-    const effects = [
-      setSessionProcessingEffect.of(null),
+    // the newer session's cursor. Processing regions are owned independently,
+    // so disposal only removes this surface's processing mark.
+    const effects: StateEffect<unknown>[] = [
+      setSessionProcessingEffect.of({ owner: this, range: null }),
       clearProvisionalTranscriptEffect.of(provisionalUtteranceIds),
     ];
     if (!this.hasOtherLiveSibling()) {
@@ -801,7 +803,10 @@ export class NoteSurface {
     }
 
     const from = this.initialAnchorPos;
-    this.view.dispatch({ changes: { from, insert: prefix } });
+    this.view.dispatch({
+      annotations: noteSurfaceInsertOrder.of(this.createdAt),
+      changes: { from, insert: prefix },
+    });
     this.initialAnchorPos += prefix.length;
     this.pendingInitialPrefix = prefix;
   }
@@ -918,8 +923,13 @@ export class NoteSurface {
       // Text bias: insertions at textEnd land outside the span, so a sibling
       // append at writingRegionTail() doesn't swallow the next utterance.
       span.textEnd = update.changes.mapPos(span.textEnd, -1);
+      // Newer sibling sessions own their insertion at our boundary. Keep our
+      // next utterance and any whole-session rewrite before that sibling text.
       const endBias =
-        insertedAfter?.order === this.createdAt && insertedAfter.position === span.end ? -1 : 1;
+        (insertOrder !== undefined && insertOrder > this.createdAt) ||
+        (insertedAfter?.order === this.createdAt && insertedAfter.position === span.end)
+          ? -1
+          : 1;
       span.end = update.changes.mapPos(span.end, endBias);
     }
 

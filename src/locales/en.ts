@@ -56,6 +56,8 @@ export const en = {
     'Audio-file transcription stopped because the note changed in a way Speech Kit could not safely track. Restore the intended note and run the command again.',
   'youtube.modal.title': 'Get YouTube transcript',
   'youtube.modal.captionDescription': 'Import the video’s available captions into this note.',
+  'youtube.modal.dictationPlacement':
+    'You can keep dictating. While dictation is active or finishing, captions are added at the end of the note.',
   'youtube.modal.captionLanguage': 'Language',
   'youtube.modal.originalLanguage': 'Original language',
   'youtube.modal.timestamps': 'Linked timestamps',
@@ -69,6 +71,10 @@ export const en = {
   'youtube.modal.urlName': 'YouTube link',
   'youtube.modal.urlPlaceholder': 'https://www.youtube.com/watch?v=…',
   'youtube.modal.enterUrl': 'Paste a YouTube video link to continue.',
+  'youtube.modal.targetChanged':
+    'The note changed while captions were loading. Return to the original note and try again.',
+  'youtube.modal.targetRequired':
+    'Open the note that should receive the captions in editing mode, then try again.',
   'youtube.modal.noCaptions': 'This video has no usable captions. The note was not changed.',
   'youtube.modal.captionServiceUnavailable':
     'The YouTube caption service is unavailable. Restart Speech Kit and try again.',
