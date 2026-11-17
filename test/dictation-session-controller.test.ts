@@ -178,6 +178,131 @@ class FakeAudioLevelMeter {
 }
 
 describe('DictationSessionController', () => {
+  it('releases microphone capture and session ownership when the sidecar exits', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const captureStream = new FakeCaptureStream();
+    const sessions: FakeSession[] = [];
+    const sidecarLifecycleGate = new SidecarLifecycleGate();
+    const controller = createController({
+      sidecarConnection,
+      captureStream,
+      sidecarLifecycleGate,
+      createSession: (session) => sessions.push(session),
+    });
+    await controller.startDictation();
+
+    sidecarConnection.emit({
+      type: 'error',
+      code: 'sidecar_exited',
+      message: 'The sidecar process exited unexpectedly.',
+    });
+
+    await vi.waitFor(() => expect(captureStream.isCapturing()).toBe(false));
+    await vi.waitFor(() => expect(controller.isBusy()).toBe(false));
+    expect(sessions[0]?.dispose).toHaveBeenCalledOnce();
+    expect(sidecarConnection.cancelSession).not.toHaveBeenCalled();
+    const maintenance = sidecarLifecycleGate.acquireMutation();
+    maintenance.release();
+    await controller.dispose();
+  });
+
+  it('preserves admitted transcripts from every session when the sidecar exits', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const sessions: FakeSession[] = [];
+    const completions: Array<(result: LlmRouterCleanupResult) => void> = [];
+    const cleanup = vi.fn(
+      () => new Promise<LlmRouterCleanupResult>((resolve) => completions.push(resolve)),
+    );
+    const sidecarLifecycleGate = new SidecarLifecycleGate();
+    const controller = createController({
+      sidecarConnection,
+      sidecarLifecycleGate,
+      createSession: (session) => sessions.push(session),
+      llmRouter: createFakeLlmRouter({ cleanup }),
+      getSettings: () =>
+        createSettings({
+          llmFeaturesEnabled: true,
+          llmPostprocessMode: 'per_utterance',
+          llmPostprocessSkipMinWords: 0,
+          selectedModel: createExternalModelSelection(),
+        }),
+    });
+    await controller.startDictation();
+    const firstId = sidecarConnection.startSession.mock.calls[0]?.[0].sessionId ?? '';
+    sidecarConnection.emit(transcriptReady(firstId, 'first accepted utterance'));
+    await controller.stopDictation();
+    await controller.startDictation();
+    const secondId = sidecarConnection.startSession.mock.calls[1]?.[0].sessionId ?? '';
+    sidecarConnection.emit(transcriptReady(secondId, 'second accepted utterance'));
+    expect(cleanup).toHaveBeenCalledTimes(2);
+
+    sidecarConnection.emit({
+      type: 'error',
+      code: 'sidecar_exited',
+      message: 'The sidecar process exited unexpectedly.',
+    });
+    sidecarConnection.emit(transcriptReady(secondId, 'late utterance after exit'));
+    const maintenance = sidecarLifecycleGate.acquireMutation();
+    maintenance.release();
+    expect(controller.getWorkflowStatus().finishing).toBe(true);
+
+    completions[0]?.({ model: 'm', providerId: 'ollama', text: 'First accepted utterance.' });
+    completions[1]?.({ model: 'm', providerId: 'ollama', text: 'Second accepted utterance.' });
+    await vi.waitFor(() => expect(controller.isBusy()).toBe(false));
+
+    expect(sessions[0]?.acceptedTexts).toEqual(['First accepted utterance.']);
+    expect(sessions[1]?.acceptedTexts).toEqual(['Second accepted utterance.']);
+    expect(sessions[0]?.dispose).toHaveBeenCalledOnce();
+    expect(sessions[1]?.dispose).toHaveBeenCalledOnce();
+    expect(sidecarConnection.cancelSession).not.toHaveBeenCalled();
+    await controller.dispose();
+  });
+
+  it('saves the recording before disposing after the sidecar exits', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const sessions: FakeSession[] = [];
+    let saveLink = (_link: string) => {};
+    let finish!: () => void;
+    const recording = {
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async (save: boolean) => {
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        if (save) saveLink('![[Voice recording.webm]]');
+      }),
+    };
+    const controller = createController({
+      sidecarConnection,
+      createMicrophoneRecording: (_path, onSaved) => {
+        saveLink = onSaved;
+        return recording;
+      },
+      createSession: (session) => sessions.push(session),
+      getSettings: () =>
+        createSettings({
+          saveMicrophoneRecording: true,
+          selectedModel: createExternalModelSelection(),
+        }),
+    });
+    await controller.startDictation();
+    sidecarConnection.emit({
+      type: 'error',
+      code: 'sidecar_exited',
+      message: 'The sidecar process exited unexpectedly.',
+    });
+
+    expect(recording.stop).toHaveBeenCalledWith(true);
+    expect(sessions[0]?.dispose).not.toHaveBeenCalled();
+    finish();
+    await vi.waitFor(() => expect(controller.isBusy()).toBe(false));
+    expect(sessions[0]?.insertMicrophoneRecording).toHaveBeenCalledWith(
+      '![[Voice recording.webm]]',
+    );
+    expect(sessions[0]?.dispose).toHaveBeenCalledOnce();
+    await controller.dispose();
+  });
+
   it.each(['sentence_complete', 'timeout'] as const)(
     'releases microphone capture when the sidecar stops the session for %s',
     async (reason) => {
