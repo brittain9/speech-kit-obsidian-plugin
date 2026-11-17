@@ -36,7 +36,7 @@ The initial draft was preserved when work stopped on 16 November. Work resumed
 on 17 November: the frontend now recognizes and persists `qwen3_asr`, and the
 catalog offers an optional 0.6B pair with both artifacts required. Existing
 defaults remain unchanged. The focused frontend/catalog suite and full frontend
-gate passed (2,056 passed, 16 skipped). This model supports bounded batch input;
+gate passed (2,060 passed, 16 skipped) after integration with current main. This model supports bounded batch input;
 streaming capability remains false, with no cached encoder-state or progressive
 partial-output claim. The 1.7B candidate and matched-Turbo comparison remain
 unexecuted. No release was made. See
@@ -53,8 +53,7 @@ through the same loaded-model interface, verifies a fresh helper PID and no
 canceled German text, and requires model disposal to reap that replacement too.
 The complete test passed in 3.90 s; cancellation itself has a three-second bound.
 These are lifecycle observations, not a matched inference-speed benchmark.
-The full sidecar command cancellation and managed-install/UI checks remain
-separate integration steps. The rebuilt production-client metadata/catalog/probe
+Full sidecar command cancellation remains a separate integration step. The rebuilt production-client metadata/catalog/probe
 suite subsequently passed all six cases, as reported by the integrating reviewer.
 
 The combined all-engine Metal debug build passed from `75459ec5`. Three selected
@@ -64,6 +63,31 @@ keeps Qwen's actual helper resident while the parent loads Whisper Base.en and
 transcribes the same English recording, then transcribes again through Qwen.
 This verifies the process-isolation boundary with both native GGML builds; it is
 not a concurrent throughput benchmark. Inference in these tests requested CPU,
-even though the binaries also contain Metal support. Native managed-install/UI,
-full branch gates and platform checks are tracked separately while the draft is
-reviewed.
+even though the binaries also contain Metal support. The full all-engine Metal Rust gate also passed: formatting, all-target Clippy
+with warnings denied, and 434 tests passed / 40 ignored. Platform checks and
+independent integration review remain separate merge checks.
+
+## Native app verification reported by the integrating reviewer
+
+Using the frozen three-binary build from `75459ec5` and the combined frontend in
+TestVault, the reviewer installed both managed artifacts through the normal Hugging
+Face download flow, selected Qwen, observed ready state, and confirmed automatic
+plus eight manual language choices. The German 1577 file inserted the exact
+expected sentence into an existing note with its prefix preserved. The natural
+English 1527 recording also completed and inserted meaningful text; proper names
+remained imperfect. These app observations do not change the recorded raw WER or
+claim a matched speed/accuracy result. Recording and AI remained off, and the
+translation selection was unchanged.
+
+The reviewer restored Moonshine Tiny English, removed Qwen through Models, and
+observed Downloadable state. A second normal pair download completed and showed
+Installed (971.9 MiB) with Use available; Tiny remained selected. Capture,
+recording and AI were off afterward, with the summary preset unchanged and the
+test note retaining its original prefix and both public transcripts. These two
+managed transfers total about 2.038 GB, plus 1.019 GB for the initial research
+pair: approximately 3.057 GB against the 4 GB transfer allowance.
+
+Manual full-sidecar file-command cancellation was not exercised in the UI.
+Existing worker cancellation routing tests and the real loaded-model
+cancel/reap/retry test cover the automated boundaries described above; they are
+not a claim of that additional manual check.

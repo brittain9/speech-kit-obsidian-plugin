@@ -63,9 +63,9 @@ at that checkpoint. Unrelated/shared caches were preserved.
 ## Resumed integration, 17 November
 
 The native prototype is now integrated with frontend family parsing/persistence
-and an optional managed 0.6B pair entry. Both pinned artifacts are required;
-existing defaults are unchanged. The full frontend gate passed (2,056 passed,
-16 skipped). All-engine Metal debug binaries built successfully from `75459ec5`.
+and an optional managed 0.6B pair entry. Both pinned artifacts are required.
+Existing defaults are unchanged. The integrated full frontend gate passed
+(2,060 passed, 16 skipped). All-engine Metal debug binaries built successfully from `75459ec5`.
 
 The public loaded-model test passed real in-flight cancellation, bounded helper
 termination/reaping, a different-language retry using a fresh helper PID, and
@@ -75,9 +75,16 @@ tests passed serially in 9.53 s. CPU was requested for inference; these results
 make no Metal speed or quality claim. The independent busy-owner-EOF fixture
 remains a process-lifecycle test, distinct from actual request cancellation.
 
-Native managed-install/UI, full integration gates and platform checks remain
-pending at this checkpoint. Exact alignment/matched baseline and the 1.7B model
-were not run. The raw English screen remains an informational observation,
+The full all-engine Metal Rust gate passed: formatting, all-target Clippy with
+warnings denied, and 434 tests passed / 40 ignored. The integrating reviewer
+reported normal managed pair download, selection/readiness, and real German and
+English file transcription in TestVault, preserving the existing note prefix.
+Managed removal/reinstallation also passed, leaving Qwen installed and Moonshine
+Tiny English selected. The two normal managed pair downloads plus the original
+research download total approximately 3.057 GB against the 4 GB allowance.
+Platform checks and integration review remain separate merge checks; manual
+full-sidecar file-command cancellation was not exercised in the UI.
+Exact alignment/matched baseline and the 1.7B model were not run. The raw English screen remains an informational observation,
 not a user acceptance threshold. Streaming and model-derived word timestamps
 remain unsupported. See the current
 [integration evidence](../quality/2026-11-16-qwen-asr-prototype.md).
