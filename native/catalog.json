@@ -5909,6 +5909,47 @@
           "sizeBytes": 214392480
         }
       ]
+    },
+    {
+      "runtimeId": "llama_cpp",
+      "familyId": "qwen3_asr",
+      "task": "stt",
+      "modelId": "qwen3_asr_1_7b_q8_0",
+      "collectionId": "qwen3_asr",
+      "displayName": "Qwen3 ASR 1.7B Q8",
+      "summary": "Larger multilingual speech recognition model. 2.52 GB download.",
+      "languageTags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja"],
+      "supportsAutomaticLanguageDetection": true,
+      "uxTags": [],
+      "licenseLabel": "Apache-2.0",
+      "licenseUrl": "https://huggingface.co/Qwen/Qwen3-ASR-1.7B/blob/7278e1e70fe206f11671096ffdd38061171dd6e5/LICENSE",
+      "sourceUrl": "https://huggingface.co/ggml-org/Qwen3-ASR-1.7B-GGUF/tree/36a678687ba7d07a74ca70ccb0e36902e005fb80",
+      "modelCardUrl": "https://huggingface.co/Qwen/Qwen3-ASR-1.7B",
+      "notes": [
+        "Batch transcription after voice-detected phrases; no live partial text or model timestamps.",
+        "Installs the speech model and audio encoder together.",
+        "Automatic language detection or explicit selection supports English, Spanish, German, French, Portuguese, Italian, Dutch and Japanese. Croatian and Serbian are not supported."
+      ],
+      "artifacts": [
+        {
+          "artifactId": "transcription",
+          "role": "transcription_model",
+          "required": true,
+          "filename": "Qwen3-ASR-1.7B-Q8_0.gguf",
+          "downloadUrl": "https://huggingface.co/ggml-org/Qwen3-ASR-1.7B-GGUF/resolve/36a678687ba7d07a74ca70ccb0e36902e005fb80/Qwen3-ASR-1.7B-Q8_0.gguf?download=true",
+          "sha256": "58e22d0532d4eacaf034cfac17a6fed159f37c41390c710186783be439d1fc57",
+          "sizeBytes": 2165034944
+        },
+        {
+          "artifactId": "audio_encoder",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "mmproj-Qwen3-ASR-1.7B-Q8_0.gguf",
+          "downloadUrl": "https://huggingface.co/ggml-org/Qwen3-ASR-1.7B-GGUF/resolve/36a678687ba7d07a74ca70ccb0e36902e005fb80/mmproj-Qwen3-ASR-1.7B-Q8_0.gguf?download=true",
+          "sha256": "46c1d533af3f354ceb37ce855dbceff7da7fa7cf1e6a523df3b13440bd164c0d",
+          "sizeBytes": 355709344
+        }
+      ]
     }
   ]
 }

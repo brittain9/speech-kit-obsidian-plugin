@@ -167,6 +167,7 @@ fn quality_assessment_accumulates_session_and_performance_failures() {
     let failures = assess_quality(
         ModelRun {
             engine: "Whisper",
+            model_evidence: None,
             model_id: MULTILINGUAL_WHISPER_MODEL_ID,
             model_name: "Whisper Large V3 Turbo Q8",
             selection: "manual",
@@ -220,6 +221,7 @@ fn manually_selected_serbian_requires_predominantly_cyrillic_output() {
         assess_quality(
             ModelRun {
                 engine: "Whisper",
+                model_evidence: None,
                 model_id: MULTILINGUAL_WHISPER_MODEL_ID,
                 model_name: "Whisper Large V3 Turbo Q8",
                 selection: "manual",
@@ -245,6 +247,7 @@ fn manually_selected_serbian_requires_predominantly_cyrillic_output() {
 
 struct ModelRun<'a> {
     engine: &'a str,
+    model_evidence: Option<&'a quality_report::ModelEvidence>,
     model_id: &'a str,
     model_name: &'a str,
     selection: &'a str,
@@ -392,26 +395,49 @@ fn assess_quality(run: ModelRun<'_>, fixture: &Fixture, samples: usize) -> Vec<S
         ));
     }
 
-    quality_report::record(&QualityMeasurement {
-        suite: "multilingual-product-path",
-        model_id: run.model_id,
-        model_name: run.model_name,
-        language: &fixture.language,
-        selection: run.selection,
-        fixture_id: &fixture.id,
-        quality_metric,
-        quality_error_rate,
-        quality_budget,
-        audio_duration_ms: audio_ms,
-        processing_duration_ms: run.result.processing_ms,
-        real_time_factor: rtf,
-        real_time_factor_budget: rtf_budget,
-        first_partial_audio_ms: run.result.first_partial_audio_ms,
-        first_partial_audio_budget_ms: None,
-        utterance_count: run.result.utterance_count,
-        partial_count: run.result.partial_count,
-        passed: failures.is_empty(),
-    });
+    if let Some(provenance) = run.model_evidence {
+        quality_report::record_evidence(
+            &QualityMeasurement {
+                suite: "multilingual-product-path",
+                model_id: run.model_id,
+                model_name: run.model_name,
+                language: &fixture.language,
+                selection: run.selection,
+                fixture_id: &fixture.id,
+                quality_metric,
+                quality_error_rate,
+                quality_budget,
+                audio_duration_ms: audio_ms,
+                processing_duration_ms: run.result.processing_ms,
+                real_time_factor: rtf,
+                real_time_factor_budget: rtf_budget,
+                first_partial_audio_ms: run.result.first_partial_audio_ms,
+                first_partial_audio_budget_ms: None,
+                utterance_count: run.result.utterance_count,
+                partial_count: run.result.partial_count,
+                passed: failures.is_empty(),
+            },
+            &quality_report::CaseEvidence::new(
+                &fixture.reference,
+                &run.result.text,
+                &fixture.language,
+                quality_metric,
+                quality_report::FixtureEvidence {
+                    sha256: &fixture.sha256,
+                    manifest: if fixture.language == "en" {
+                        "tests/fixtures/audio/manifest.json"
+                    } else {
+                        "tests/fixtures/multilingual.json"
+                    },
+                },
+                provenance,
+                quality_report::CorrectnessEvidence {
+                    stopped: run.result.stopped,
+                    errors: &run.result.errors,
+                },
+            ),
+        );
+    }
 
     failures
 }
@@ -465,9 +491,14 @@ fn nemotron_transcribe(model_path: &Path, language: &str, samples: &[i16]) -> Tr
 fn nemotron_and_whisper_transcribe_every_enabled_language_without_translation() {
     let nemotron = require_nemotron_model();
     let whisper = require_multilingual_whisper_model();
+    let nemotron_evidence = std::env::var_os(quality_report::REPORT_PATH_ENV)
+        .map(|_| quality_report::model_evidence(NEMOTRON_MODEL_ID, &nemotron));
+    let whisper_evidence = std::env::var_os(quality_report::REPORT_PATH_ENV)
+        .map(|_| quality_report::model_evidence(MULTILINGUAL_WHISPER_MODEL_ID, &whisper));
     let mut failures = Vec::new();
 
     for fixture in fixtures() {
+        quality_report::verify_fixture(&fixture.path, &fixture.sha256);
         let samples = audio::decode_wav_16k_mono(&fixture.path).expect("decode fixture");
         let nemotron_covers = covers_language(NEMOTRON_MODEL_ID, &fixture.language);
         if nemotron_covers {
@@ -475,6 +506,7 @@ fn nemotron_and_whisper_transcribe_every_enabled_language_without_translation() 
             failures.extend(assess_quality(
                 ModelRun {
                     engine: "Nemotron",
+                    model_evidence: nemotron_evidence.as_ref(),
                     model_id: NEMOTRON_MODEL_ID,
                     model_name: "NVIDIA Nemotron 3.5 ASR Streaming 0.6B Int8",
                     selection: "manual",
@@ -491,6 +523,7 @@ fn nemotron_and_whisper_transcribe_every_enabled_language_without_translation() 
         failures.extend(assess_quality(
             ModelRun {
                 engine: "Whisper",
+                model_evidence: whisper_evidence.as_ref(),
                 model_id: MULTILINGUAL_WHISPER_MODEL_ID,
                 model_name: "Whisper Large V3 Turbo Q8",
                 selection: "manual",
@@ -510,6 +543,7 @@ fn nemotron_and_whisper_transcribe_every_enabled_language_without_translation() 
             failures.extend(assess_quality(
                 ModelRun {
                     engine: "Nemotron auto",
+                    model_evidence: nemotron_evidence.as_ref(),
                     model_id: NEMOTRON_MODEL_ID,
                     model_name: "NVIDIA Nemotron 3.5 ASR Streaming 0.6B Int8",
                     selection: "auto",
@@ -526,6 +560,7 @@ fn nemotron_and_whisper_transcribe_every_enabled_language_without_translation() 
         failures.extend(assess_quality(
             ModelRun {
                 engine: "Whisper auto",
+                model_evidence: whisper_evidence.as_ref(),
                 model_id: MULTILINGUAL_WHISPER_MODEL_ID,
                 model_name: "Whisper Large V3 Turbo Q8",
                 selection: "auto",

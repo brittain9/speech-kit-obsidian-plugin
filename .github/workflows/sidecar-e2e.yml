@@ -56,6 +56,12 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci --engine-strict
 
+      - name: Capture evaluation environment
+        run: >-
+          node scripts/evaluation-environment.mjs
+          --requested-acceleration cpu --model-state mixed
+          --output "${{ runner.temp }}/quality/whisper-english.environment.json"
+
       - name: Run sidecar e2e quality suite
         env:
           STT_QUALITY_REPORT_PATH: ${{ runner.temp }}/quality/whisper-english.jsonl
@@ -67,7 +73,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: quality-measurements-whisper-english
-          path: ${{ runner.temp }}/quality/whisper-english.jsonl
+          path: |
+            ${{ runner.temp }}/quality/whisper-english.jsonl
+            ${{ runner.temp }}/quality/whisper-english.environment.json
           if-no-files-found: error
 
   nemotron-e2e:
@@ -98,6 +106,12 @@ jobs:
           path: ${{ env.MODEL_CACHE_DIR }}
           key: nemotron-asr-${{ hashFiles('native/catalog.json') }}
 
+      - name: Capture evaluation environment
+        run: >-
+          node scripts/evaluation-environment.mjs
+          --requested-acceleration cpu --model-state mixed
+          --output "${{ runner.temp }}/quality/nemotron-english.environment.json"
+
       - name: Run Nemotron real-model quality suite
         env:
           STT_QUALITY_REPORT_PATH: ${{ runner.temp }}/quality/nemotron-english.jsonl
@@ -109,7 +123,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: quality-measurements-nemotron-english
-          path: ${{ runner.temp }}/quality/nemotron-english.jsonl
+          path: |
+            ${{ runner.temp }}/quality/nemotron-english.jsonl
+            ${{ runner.temp }}/quality/nemotron-english.environment.json
           if-no-files-found: error
 
   pocket-tts-smoke:

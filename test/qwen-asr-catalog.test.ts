@@ -65,3 +65,46 @@ describe('managed Qwen3 ASR choice', () => {
     expect(resolvePluginSettings({}).selectedModel).toBeNull();
   });
 });
+
+it('offers the larger Qwen pair without replacing the existing selection or defaults', () => {
+  const largerSelection = { ...selection, modelId: 'qwen3_asr_1_7b_q8_0' };
+  const model = catalog.models.find((entry) => entry.modelId === largerSelection.modelId);
+  expect(model).toMatchObject({
+    displayName: 'Qwen3 ASR 1.7B Q8',
+    runtimeId: 'llama_cpp',
+    familyId: 'qwen3_asr',
+    task: 'stt',
+    supportsAutomaticLanguageDetection: true,
+    languageTags: ['en', 'es', 'de', 'fr', 'pt', 'it', 'nl', 'ja'],
+  });
+  expect(model?.artifacts).toEqual([
+    expect.objectContaining({
+      artifactId: 'transcription',
+      role: 'transcription_model',
+      required: true,
+      filename: 'Qwen3-ASR-1.7B-Q8_0.gguf',
+      sizeBytes: 2165034944,
+      sha256: '58e22d0532d4eacaf034cfac17a6fed159f37c41390c710186783be439d1fc57',
+    }),
+    expect.objectContaining({
+      artifactId: 'audio_encoder',
+      role: 'supporting_file',
+      required: true,
+      filename: 'mmproj-Qwen3-ASR-1.7B-Q8_0.gguf',
+      sizeBytes: 355709344,
+      sha256: '46c1d533af3f354ceb37ce855dbceff7da7fa7cf1e6a523df3b13440bd164c0d',
+    }),
+  ]);
+  expect(model?.artifacts.reduce((sum, artifact) => sum + artifact.sizeBytes, 0)).toBe(2520744288);
+  expect(
+    model?.artifacts.every((artifact) =>
+      artifact.downloadUrl.includes('/resolve/36a678687ba7d07a74ca70ccb0e36902e005fb80/'),
+    ),
+  ).toBe(true);
+  expect(model?.notes.join(' ')).toContain('no live partial text or model timestamps');
+  expect(resolvePluginSettings({ selectedModel: selection }).selectedModel).toEqual(selection);
+  expect(resolvePluginSettings({ selectedModel: largerSelection }).selectedModel).toEqual(
+    largerSelection,
+  );
+  expect(resolvePluginSettings({}).selectedModel).toBeNull();
+});

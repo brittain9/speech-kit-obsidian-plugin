@@ -105,6 +105,12 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci --engine-strict
 
+      - name: Capture evaluation environment
+        run: >-
+          node scripts/evaluation-environment.mjs
+          --requested-acceleration cpu --model-state mixed
+          --output "${{ runner.temp }}/quality/multilingual.environment.json"
+
       - name: Run multilingual product-path quality suite
         env:
           STT_QUALITY_REPORT_PATH: ${{ runner.temp }}/quality/multilingual.jsonl
@@ -132,5 +138,6 @@ jobs:
           name: multilingual-quality
           path: |
             ${{ runner.temp }}/quality/multilingual.jsonl
+            ${{ runner.temp }}/quality/multilingual.environment.json
             ${{ runner.temp }}/transcription-quality
           if-no-files-found: error

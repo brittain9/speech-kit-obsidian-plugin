@@ -1498,6 +1498,8 @@ export const en = {
   'sidecarError.worker_panic': 'The speech engine transcription worker stopped unexpectedly.',
   'catalog.qwen3_asr_0_6b_q8_0.summary':
     'Compact multilingual speech recognition. 1.02 GB download.',
+  'catalog.qwen3_asr_1_7b_q8_0.summary':
+    'Larger multilingual speech recognition model. 2.52 GB download.',
   'catalog.family.qwen3_asr.summary':
     'Multilingual speech recognition. Text appears after each phrase; live partial text is unavailable.',
   'models.external.requirements.qwen.entry':
