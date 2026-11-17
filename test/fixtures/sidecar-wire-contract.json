@@ -1,0 +1,389 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "id": "health",
+      "accepted": true,
+      "clientFactory": true,
+      "wire": {
+        "type": "health"
+      },
+      "canonical": {
+        "type": "health"
+      }
+    },
+    {
+      "id": "health-unknown-field",
+      "accepted": true,
+      "wire": {
+        "type": "health",
+        "futureField": true
+      },
+      "canonical": {
+        "type": "health"
+      }
+    },
+    {
+      "id": "session",
+      "accepted": true,
+      "clientFactory": true,
+      "wire": {
+        "type": "start_session",
+        "accelerationPreference": "auto",
+        "detailedTimestampsEnabled": false,
+        "diarizationEnabled": false,
+        "diarizationMaxSpeakers": null,
+        "includeSystemAudio": false,
+        "language": "en",
+        "mode": "always_on",
+        "modelSelection": {
+          "kind": "catalog_model",
+          "runtimeId": "whisper_cpp",
+          "familyId": "whisper",
+          "modelId": "fixture-model"
+        },
+        "sessionStartUnixMs": 0,
+        "sessionId": "12345678-1234-4234-9234-123456789abc",
+        "speakingStyle": "balanced"
+      },
+      "canonical": {
+        "type": "start_session",
+        "accelerationPreference": "auto",
+        "detailedTimestampsEnabled": false,
+        "diarizationEnabled": false,
+        "diarizationMaxSpeakers": null,
+        "includeSystemAudio": false,
+        "language": "en",
+        "mode": "always_on",
+        "modelSelection": {
+          "kind": "catalog_model",
+          "runtimeId": "whisper_cpp",
+          "familyId": "whisper",
+          "modelId": "fixture-model"
+        },
+        "sessionStartUnixMs": 0,
+        "sessionId": "12345678-1234-4234-9234-123456789abc",
+        "speakingStyle": "balanced",
+        "fileAudioFlowControl": false,
+        "modelStorePathOverride": null
+      }
+    },
+    {
+      "id": "session-legacy-defaults",
+      "accepted": true,
+      "wire": {
+        "type": "start_session",
+        "language": "en",
+        "mode": "always_on",
+        "modelSelection": {
+          "kind": "catalog_model",
+          "runtimeId": "whisper_cpp",
+          "familyId": "whisper",
+          "modelId": "fixture-model"
+        },
+        "sessionStartUnixMs": 0,
+        "sessionId": "12345678-1234-4234-9234-123456789abc"
+      },
+      "canonical": {
+        "type": "start_session",
+        "accelerationPreference": "auto",
+        "detailedTimestampsEnabled": false,
+        "diarizationEnabled": false,
+        "diarizationMaxSpeakers": null,
+        "includeSystemAudio": false,
+        "language": "en",
+        "mode": "always_on",
+        "modelSelection": {
+          "kind": "catalog_model",
+          "runtimeId": "whisper_cpp",
+          "familyId": "whisper",
+          "modelId": "fixture-model"
+        },
+        "sessionStartUnixMs": 0,
+        "sessionId": "12345678-1234-4234-9234-123456789abc",
+        "speakingStyle": "balanced",
+        "fileAudioFlowControl": false,
+        "modelStorePathOverride": null
+      }
+    },
+    {
+      "id": "translation",
+      "accepted": true,
+      "clientFactory": true,
+      "wire": {
+        "type": "start_translation",
+        "accelerationPreference": "cpu_only",
+        "modelSelection": {
+          "kind": "catalog_model",
+          "runtimeId": "llama_cpp",
+          "familyId": "tencent_hy_mt",
+          "modelId": "fixture-translation"
+        },
+        "sourceLanguage": "en",
+        "targetLanguage": "es",
+        "texts": ["Public fixture."],
+        "translationId": "translation-fixture"
+      },
+      "canonical": {
+        "type": "start_translation",
+        "accelerationPreference": "cpu_only",
+        "modelSelection": {
+          "kind": "catalog_model",
+          "runtimeId": "llama_cpp",
+          "familyId": "tencent_hy_mt",
+          "modelId": "fixture-translation"
+        },
+        "sourceLanguage": "en",
+        "targetLanguage": "es",
+        "texts": ["Public fixture."],
+        "translationId": "translation-fixture",
+        "modelStorePathOverride": null,
+        "styleInstruction": null
+      }
+    },
+    {
+      "id": "unknown-command",
+      "accepted": false,
+      "wire": {
+        "type": "future_command"
+      }
+    },
+    {
+      "id": "session-missing-language",
+      "accepted": false,
+      "wire": {
+        "type": "start_session",
+        "mode": "always_on",
+        "modelSelection": {
+          "kind": "catalog_model",
+          "runtimeId": "whisper_cpp",
+          "familyId": "whisper",
+          "modelId": "fixture-model"
+        },
+        "sessionStartUnixMs": 0,
+        "sessionId": "12345678-1234-4234-9234-123456789abc"
+      }
+    },
+    {
+      "id": "translation-invalid-texts",
+      "accepted": false,
+      "wire": {
+        "type": "start_translation",
+        "accelerationPreference": "cpu_only",
+        "modelSelection": {
+          "kind": "catalog_model",
+          "runtimeId": "llama_cpp",
+          "familyId": "tencent_hy_mt",
+          "modelId": "fixture-translation"
+        },
+        "sourceLanguage": "en",
+        "targetLanguage": "es",
+        "texts": [7],
+        "translationId": "translation-fixture"
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": "health",
+      "tsAccepted": true,
+      "rustAccepted": true,
+      "wire": {
+        "type": "health_ok",
+        "sidecarVersion": "2026.11.1",
+        "status": "ready"
+      }
+    },
+    {
+      "id": "session-stopped",
+      "tsAccepted": true,
+      "rustAccepted": true,
+      "wire": {
+        "type": "session_stopped",
+        "sessionId": "12345678-1234-4234-9234-123456789abc",
+        "reason": "user_stop"
+      }
+    },
+    {
+      "id": "translation-complete",
+      "tsAccepted": true,
+      "rustAccepted": true,
+      "wire": {
+        "type": "translation_complete",
+        "translationId": "translation-fixture",
+        "translations": ["Texto público."]
+      }
+    },
+    {
+      "id": "translation-progress-unknown-field",
+      "tsAccepted": true,
+      "rustAccepted": true,
+      "wire": {
+        "type": "translation_progress",
+        "translationId": "translation-fixture",
+        "completed": 1,
+        "total": 2,
+        "futureField": true
+      },
+      "canonical": {
+        "type": "translation_progress",
+        "translationId": "translation-fixture",
+        "completed": 1,
+        "total": 2
+      }
+    },
+    {
+      "id": "unknown-event",
+      "tsAccepted": false,
+      "rustAccepted": false,
+      "wire": {
+        "type": "future_event"
+      }
+    },
+    {
+      "id": "translation-empty-id",
+      "tsAccepted": false,
+      "rustAccepted": true,
+      "wire": {
+        "type": "translation_cancelled",
+        "translationId": ""
+      },
+      "asymmetry": "Rust serde accepts the event shape; the client additionally rejects empty translation IDs."
+    },
+    {
+      "id": "translation-progress-out-of-range",
+      "tsAccepted": false,
+      "rustAccepted": true,
+      "wire": {
+        "type": "translation_progress",
+        "translationId": "translation-fixture",
+        "completed": 3,
+        "total": 2
+      },
+      "asymmetry": "Rust serde checks numeric types; the client additionally rejects progress beyond total."
+    },
+    {
+      "id": "translation-invalid-result",
+      "tsAccepted": false,
+      "rustAccepted": false,
+      "wire": {
+        "type": "translation_complete",
+        "translationId": "translation-fixture",
+        "translations": [7]
+      }
+    },
+    {
+      "id": "translation-error-optional-details",
+      "tsAccepted": true,
+      "rustAccepted": true,
+      "wire": {
+        "type": "translation_error",
+        "translationId": "translation-fixture",
+        "code": "cancelled",
+        "message": "Public failure."
+      }
+    }
+  ],
+  "frames": [
+    {
+      "id": "health",
+      "hex": "01110000007b2274797065223a226865616c7468227d",
+      "ts": "accepted",
+      "rust": "accepted",
+      "json": {
+        "type": "health"
+      }
+    },
+    {
+      "id": "microphone-audio",
+      "hex": "029002000012345678123442349234123456789abc07070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707",
+      "ts": "accepted",
+      "rust": "accepted",
+      "sessionId": "12345678-1234-4234-9234-123456789abc",
+      "pcmByte": 7,
+      "pcmLength": 640
+    },
+    {
+      "id": "synthesis-audio",
+      "hex": "030c0000002a000000030000000000ff7f",
+      "ts": "accepted",
+      "rust": "rejected",
+      "synthesisId": 42,
+      "sequence": 3,
+      "pcmHex": "0000ff7f",
+      "asymmetry": "Synthesis PCM is server-to-client only; the Rust command reader rejects frame kind 3."
+    },
+    {
+      "id": "truncated-header",
+      "hex": "010200",
+      "ts": "incomplete",
+      "rust": "rejected",
+      "asymmetry": "The streaming client buffers partial input; the blocking Rust reader rejects EOF mid-frame."
+    },
+    {
+      "id": "truncated-payload",
+      "hex": "01110000007b2274797065223a226865616c746822",
+      "ts": "incomplete",
+      "rust": "rejected",
+      "asymmetry": "The streaming client buffers partial input; the blocking Rust reader rejects EOF mid-frame."
+    },
+    {
+      "id": "maximum-length-header",
+      "hex": "0100000001",
+      "ts": "incomplete",
+      "rust": "rejected",
+      "fatal": false,
+      "asymmetry": "The payload cap accepts exactly 16 MiB, but this fixture ends before the payload."
+    },
+    {
+      "id": "oversized-length-header",
+      "hex": "0101000001",
+      "ts": "fatal",
+      "rust": "rejected",
+      "fatal": true
+    },
+    {
+      "id": "unknown-frame-kind",
+      "hex": "7f00000000",
+      "ts": "fatal",
+      "rust": "rejected",
+      "fatal": false
+    },
+    {
+      "id": "wrong-audio-length",
+      "hex": "020100000000",
+      "ts": "fatal",
+      "rust": "rejected",
+      "fatal": false
+    },
+    {
+      "id": "invalid-json",
+      "hex": "01010000007b",
+      "ts": "fatal",
+      "rust": "rejected",
+      "fatal": false
+    },
+    {
+      "id": "wrong-audio-uuid-version",
+      "hex": "029002000012345678123412349234123456789abc07070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707",
+      "ts": "accepted",
+      "rust": "rejected",
+      "fatal": false,
+      "sessionId": "12345678-1234-1234-9234-123456789abc",
+      "pcmByte": 7,
+      "pcmLength": 640,
+      "asymmetry": "Rust rejects a non-v4 microphone UUID. The client decoder accepts raw16-byte IDs, while its outgoing microphone encoder enforces UUIDv4; inbound microphone frames are not consumed by the connection."
+    },
+    {
+      "id": "odd-synthesis-pcm",
+      "hex": "03090000002a0000000300000000",
+      "ts": "fatal",
+      "rust": "rejected",
+      "fatal": false,
+      "synthesisId": 42,
+      "sequence": 3,
+      "pcmHex": "00",
+      "asymmetry": "The client rejects odd PCM; the Rust command reader rejects this server-only kind and its synthesis writer rejects odd PCM."
+    }
+  ]
+}
