@@ -28,6 +28,58 @@ function measurement(overrides: Record<string, unknown> = {}) {
 }
 
 describe('transcription quality report', () => {
+  it('retains auditable case evidence without imposing language or hardware claims', () => {
+    const record = measurement({
+      schemaVersion: 2,
+      qualityErrorRate: 0.75,
+      qualityBudget: 0.8,
+      evidence: {
+        reference: 'At 4,892 m.',
+        hypothesis: 'At 4892 meters.',
+        scoredReference: 'at 4 892 m',
+        scoredHypothesis: 'at 4892 meters',
+        normalization: 'unicode-alphanumeric-lowercase-v1',
+        fixture: { sha256: 'a'.repeat(64), manifest: 'tests/fixtures/long-german.json' },
+        model: {
+          modelId: 'model',
+          sourceUrl: 'https://example.com/pinned',
+          license: 'Apache-2.0',
+          artifacts: [
+            {
+              filename: 'model.bin',
+              downloadUrl: 'https://example.com/model.bin',
+              expectedSha256: 'b'.repeat(64),
+              expectedSizeBytes: 10,
+              actualSha256: 'c'.repeat(64),
+              actualSizeBytes: 11,
+            },
+          ],
+        },
+        correctness: { stopped: true, errors: [] },
+      },
+    });
+    const parsed = parseQualityMeasurements(`${JSON.stringify(record)}\n`);
+    const report = buildQualityReport(parsed);
+    expect(report.measurements[0]?.evidence).toMatchObject({
+      reference: 'At 4,892 m.',
+      hypothesis: 'At 4892 meters.',
+      scoredReference: 'at 4 892 m',
+      scoredHypothesis: 'at 4892 meters',
+      normalization: 'unicode-alphanumeric-lowercase-v1',
+    });
+    const markdown = renderQualityReportMarkdown(report);
+    expect(markdown).toContain('At 4,892 m.');
+    expect(markdown).toContain('At 4892 meters.');
+    expect(markdown).toContain('unicode-alphanumeric-lowercase-v1');
+    expect(markdown).toContain('not a universal model adoption threshold');
+    expect(markdown).toContain('artifacts that differ from the nominal catalog model');
+    expect(markdown).not.toContain('Measurements are CPU-only');
+    expect(markdown).not.toContain('seven non-English');
+    expect(() =>
+      parseQualityMeasurements(JSON.stringify({ ...record, qualityErrorRate: 0.1 })),
+    ).toThrow('score does not match');
+  });
+
   it('aggregates processing-weighted RTF and renders release-readable definitions', () => {
     const report = buildQualityReport([
       measurement(),

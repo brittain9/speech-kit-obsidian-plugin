@@ -1,17 +1,21 @@
 import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { main } from '../scripts/transcription-quality-report.mjs';
 
-vi.mock('node:child_process', () => ({ spawnSync: vi.fn() }));
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:child_process')>()),
+  spawnSync: vi.fn(),
+}));
 
 const directories: string[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.clearAllMocks();
   for (const directory of directories.splice(0)) {
     await rm(directory, { recursive: true, force: true });
   }
@@ -72,4 +76,102 @@ it('preserves a suite startup failure when there are no measurements to render',
     'Could not render partial transcription measurements:',
     'No transcription quality measurements were found.',
   );
+});
+
+it('renders recorded environment context without pretending a render machine ran inference', async () => {
+  const output = await mkdtemp(join(tmpdir(), 'speech-quality-context-'));
+  directories.push(output);
+  const contextPath = join(output, 'environment.json');
+  await writeFile(
+    contextPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      host: { cpuModels: ['Recorded CPU'] },
+      execution: { requestedAcceleration: 'cpu', effectiveAcceleration: 'unknown' },
+    }),
+  );
+  await writeFile(
+    join(output, 'case.jsonl'),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      suite: 'english-product-path',
+      modelId: 'model',
+      modelName: 'Model',
+      language: 'en',
+      selection: 'manual',
+      fixtureId: 'fixture',
+      qualityMetric: 'wer',
+      qualityErrorRate: 0.1,
+      qualityBudget: 0.2,
+      audioDurationMs: 2000,
+      processingDurationMs: 500,
+      realTimeFactor: 0.25,
+      realTimeFactorBudget: 1,
+      passed: true,
+    })}\n`,
+  );
+  await main([
+    '--render-only',
+    output,
+    '--output-dir',
+    join(output, 'rendered'),
+    '--environment',
+    contextPath,
+  ]);
+  const report = JSON.parse(
+    await readFile(join(output, 'rendered', 'transcription-quality.json'), 'utf8'),
+  );
+  expect(report.environment.host.cpuModels).toEqual(['Recorded CPU']);
+  expect(report.environment.execution.effectiveAcceleration).toBe('unknown');
+  expect(spawnSync).not.toHaveBeenCalled();
+});
+
+it('keeps separate runner contexts attached to their own input measurements', async () => {
+  const output = await mkdtemp(join(tmpdir(), 'speech-quality-runners-'));
+  directories.push(output);
+  for (const name of ['whisper', 'nemotron']) {
+    await writeFile(
+      join(output, `${name}.environment.json`),
+      JSON.stringify({
+        schemaVersion: 1,
+        host: { cpuModels: [`${name} CPU`] },
+        execution: { effectiveAcceleration: 'unknown' },
+      }),
+    );
+    await writeFile(
+      join(output, `${name}.jsonl`),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        suite: 'english-product-path',
+        modelId: name,
+        modelName: name,
+        language: 'en',
+        selection: 'manual',
+        fixtureId: 'fixture',
+        qualityMetric: 'wer',
+        qualityErrorRate: 0.1,
+        qualityBudget: 0.2,
+        audioDurationMs: 2000,
+        processingDurationMs: 500,
+        realTimeFactor: 0.25,
+        realTimeFactorBudget: 1,
+        passed: true,
+      })}\n`,
+    );
+  }
+  await main(['--render-only', output, '--output-dir', join(output, 'rendered')]);
+  const report = JSON.parse(
+    await readFile(join(output, 'rendered', 'transcription-quality.json'), 'utf8'),
+  );
+  expect(report.environment).toBeNull();
+  expect(report.environments).toHaveLength(2);
+  expect(
+    report.measurements.map((record: { environmentSource: string }) => record.environmentSource),
+  ).toEqual(['nemotron.environment.json', 'whisper.environment.json']);
+  expect(
+    report.environments.map(
+      (record: { context: { host: { cpuModels: string[] } } }) => record.context.host.cpuModels,
+    ),
+  ).toEqual([['nemotron CPU'], ['whisper CPU']]);
+  expect(spawnSync).not.toHaveBeenCalled();
 });

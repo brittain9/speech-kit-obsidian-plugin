@@ -63,11 +63,12 @@ export function parseQualityMeasurements(text, source = 'measurements.jsonl') {
           throw new Error(`${source}:${index + 1}: missing ${field}`);
         }
       }
-      if (measurement.schemaVersion !== 1) {
+      if (![1, 2].includes(measurement.schemaVersion)) {
         throw new Error(
           `${source}:${index + 1}: unsupported schemaVersion ${measurement.schemaVersion}`,
         );
       }
+      if (measurement.schemaVersion === 2) validateEvidence(measurement, `${source}:${index + 1}`);
       for (const field of STRING_FIELDS) {
         if (typeof measurement[field] !== 'string' || measurement[field].trim().length === 0) {
           throw new Error(`${source}:${index + 1}: ${field} must be a non-empty string`);
@@ -123,6 +124,95 @@ export function parseQualityMeasurements(text, source = 'measurements.jsonl') {
       }
       return measurement;
     });
+}
+
+function validateEvidence(measurement, source) {
+  const evidence = measurement.evidence;
+  if (
+    !evidence ||
+    ['reference', 'hypothesis', 'scoredReference', 'scoredHypothesis', 'normalization'].some(
+      (field) => typeof evidence[field] !== 'string',
+    ) ||
+    !evidence.normalization
+  ) {
+    throw new Error(`${source}: version 2 requires exact text and scoring evidence`);
+  }
+  if (
+    !/^[a-f0-9]{64}$/iu.test(evidence.fixture?.sha256 ?? '') ||
+    typeof evidence.fixture?.manifest !== 'string' ||
+    !evidence.fixture.manifest
+  ) {
+    throw new Error(`${source}: version 2 requires fixture provenance`);
+  }
+  const model = evidence.model;
+  if (
+    !model ||
+    model.modelId !== measurement.modelId ||
+    !model.sourceUrl ||
+    !model.license ||
+    !Array.isArray(model.artifacts) ||
+    model.artifacts.length === 0 ||
+    model.artifacts.some(
+      (artifact) =>
+        !artifact.filename ||
+        !artifact.downloadUrl ||
+        !/^[a-f0-9]{64}$/iu.test(artifact.expectedSha256 ?? '') ||
+        !Number.isSafeInteger(artifact.expectedSizeBytes) ||
+        artifact.expectedSizeBytes < 1 ||
+        (artifact.actualSha256 !== null && !/^[a-f0-9]{64}$/iu.test(artifact.actualSha256 ?? '')) ||
+        (artifact.actualSizeBytes !== null &&
+          (!Number.isSafeInteger(artifact.actualSizeBytes) || artifact.actualSizeBytes < 0)),
+    )
+  ) {
+    throw new Error(`${source}: version 2 requires model artifact identity`);
+  }
+  if (
+    typeof evidence.correctness?.stopped !== 'boolean' ||
+    !Array.isArray(evidence.correctness.errors) ||
+    evidence.correctness.errors.some((error) => typeof error !== 'string')
+  ) {
+    throw new Error(`${source}: version 2 requires session correctness evidence`);
+  }
+  if (measurement.passed && (!evidence.correctness.stopped || evidence.correctness.errors.length)) {
+    throw new Error(`${source}: passed measurement contradicts session correctness evidence`);
+  }
+  if (
+    !['wer', 'cer'].includes(measurement.qualityMetric) ||
+    Math.abs(
+      scoredErrorRate(
+        evidence.scoredReference,
+        evidence.scoredHypothesis,
+        measurement.qualityMetric,
+      ) - measurement.qualityErrorRate,
+    ) > 1e-9
+  ) {
+    throw new Error(`${source}: quality score does not match retained scoring text`);
+  }
+}
+
+// Recompute only from the recorded scoring inputs. Never silently introduce a
+// new normalization policy when rendering historical measurements.
+function scoredErrorRate(reference, hypothesis, metric) {
+  const tokens = (text) =>
+    metric === 'cer' ? Array.from(text) : text.split(/\s+/u).filter(Boolean);
+  const expected = tokens(reference);
+  const actual = tokens(hypothesis);
+  if (!expected.length) return actual.length ? 1 : 0;
+  let previous = Array.from({ length: actual.length + 1 }, (_, index) => index);
+  for (let i = 0; i < expected.length; i += 1) {
+    const current = [i + 1];
+    for (let j = 0; j < actual.length; j += 1) {
+      current.push(
+        Math.min(
+          current[j] + 1,
+          previous[j + 1] + 1,
+          previous[j] + (expected[i] === actual[j] ? 0 : 1),
+        ),
+      );
+    }
+    previous = current;
+  }
+  return previous[actual.length] / expected.length;
 }
 
 function groupMeasurements(measurements) {
@@ -219,6 +309,8 @@ export function buildQualityReport(measurements, metadata = {}) {
     generatedAt: metadata.generatedAt ?? null,
     commitSha: metadata.commitSha ?? null,
     runner: metadata.runner ?? null,
+    environment: metadata.environment ?? null,
+    environments: metadata.environments ?? [],
     summary: {
       audioDurationMs: measurements.reduce(
         (sum, measurement) => sum + measurement.audioDurationMs,
@@ -273,7 +365,7 @@ export function renderQualityReportMarkdown(report) {
     '# Transcription quality report',
     '',
     `- Commit: ${report.commitSha ?? 'local working tree'}`,
-    `- Runner: ${report.runner ?? 'local machine'}`,
+    `- Runner label: ${report.runner ?? 'not recorded; see run environment'}`,
     `- Measurements: ${report.summary.measurementCount} across ${report.summary.models.length} models and ${report.summary.languages.length} languages`,
     `- Fixture audio exercised: ${formatDuration(report.summary.audioDurationMs)}`,
     `- Result: ${report.summary.failedMeasurements === 0 ? 'all measured acceptance budgets passed' : `${report.summary.failedMeasurements} measurements failed`}`,
@@ -296,15 +388,92 @@ export function renderQualityReportMarkdown(report) {
     '- WER is word error rate; CER is character error rate for Japanese. Lower is better.',
     '- RTF is model processing time divided by fixture audio duration. Below 1.0× is faster than real time.',
     '- First partial is the amount of utterance audio received before a useful streaming revision, not model download or startup time.',
-    '- Manual and automatic language selection are measured independently for every enabled language.',
+    '- Manual and automatic language selection are separate cases; coverage is limited to the rows actually present.',
     '',
     '## Evidence boundary',
     '',
-    '- All fixtures are public human speech: LibriSpeech for English and pinned Google FLEURS validation recordings for the seven non-English languages. One read-speech fixture per non-English language is a reproducible product-path gate, not a substitute for broader native-speaker review.',
-    '- Measurements are CPU-only and include the app state, VAD, worker, adapter, and transcript event path. Hardware changes affect absolute timing.',
+    '- The standard suites use public human speech from LibriSpeech, JFK and pinned Google FLEURS validation recordings. Their small read-speech corpus is not a substitute for broader native-speaker review.',
+    '- Model quality and timing budgets are scoped fixture regression checks, not a universal model adoption threshold. Loading, cancellation, recovery and output preservation remain separate correctness requirements.',
+    '- Standard product-path suites include app state, VAD, worker, adapter and transcript events. First-partial audio position is not wall-clock latency. Downloads and installation are excluded; do not assume model loading, warm state or accelerator use from a platform label.',
     '- Whisper Large V3 Turbo is a GPU-oriented catalog model. Its hosted-CPU timing budget is a portable regression ceiling, not a claim about accelerated desktop latency.',
     '- Model downloads and one-time installation are excluded. Full per-fixture measurements are retained in the adjacent JSON artifact.',
     '',
   );
+  if (report.environment) {
+    lines.push(
+      '## Run environment',
+      '',
+      'Measured host and declared execution context are distinct. Effective acceleration may be unobserved.',
+      '',
+      ...fencedText(JSON.stringify(report.environment, null, 2)),
+      '',
+    );
+  } else if (report.environments.length === 0) {
+    lines.push(
+      'Run environment was not recorded; hardware, effective acceleration and cache state are unknown.',
+      '',
+    );
+  }
+  for (const { source, context } of report.environments) {
+    lines.push(
+      `## Recorded environment: ${source}`,
+      '',
+      ...fencedText(JSON.stringify(context, null, 2)),
+      '',
+    );
+  }
+  const cases = report.measurements.filter((measurement) => measurement.evidence);
+  if (cases.length) {
+    const mismatched = cases.filter(({ evidence }) =>
+      evidence.model.artifacts.some(
+        (artifact) =>
+          (artifact.actualSha256 !== null && artifact.actualSha256 !== artifact.expectedSha256) ||
+          (artifact.actualSizeBytes !== null &&
+            artifact.actualSizeBytes !== artifact.expectedSizeBytes),
+      ),
+    );
+    const unverified = cases.filter(({ evidence }) =>
+      evidence.model.artifacts.some(
+        (artifact) => artifact.actualSha256 === null || artifact.actualSizeBytes === null,
+      ),
+    );
+    lines.push(
+      '## Per-case evidence',
+      '',
+      'Verbatim reference and recognition output are retained separately from the scoring text. Normalization does not equate digits, number words or unit abbreviations. Scores above remain unchanged.',
+      '',
+    );
+    if (mismatched.length)
+      lines.push(
+        `${mismatched.length} cases used artifacts that differ from the nominal catalog model. Compare the actual hashes, not the catalog label.`,
+        '',
+      );
+    if (unverified.length)
+      lines.push(
+        `${unverified.length} cases have incomplete actual artifact identity; matching catalog pins are not established.`,
+        '',
+      );
+    for (const measurement of cases) {
+      lines.push(
+        `### ${measurement.modelId} / ${measurement.fixtureId} / ${measurement.selection}`,
+        '',
+        ...fencedText(JSON.stringify(measurement.evidence, null, 2)),
+        '',
+      );
+    }
+  }
+  if (cases.length !== report.measurements.length) {
+    lines.push(
+      `${report.measurements.length - cases.length} legacy measurements have no per-case text/provenance evidence; it cannot be reconstructed from aggregate scores.`,
+      '',
+    );
+  }
   return `${lines.join('\n')}\n`;
+}
+
+function fencedText(text) {
+  const fence = '`'.repeat(
+    Math.max(3, ...[...text.matchAll(/`+/gu)].map((match) => match[0].length + 1)),
+  );
+  return [`${fence}json`, text, fence];
 }
