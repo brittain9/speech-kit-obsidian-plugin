@@ -10,8 +10,8 @@ package version bump was made; only the catalog revision advances.
 
 The pinned Small download is 684,102,588 bytes (78.3%) smaller than the installed
 Turbo Q8_0 artifact. The existing Whisper runtime supplies CPU and platform
-acceleration paths. This pass directly validated CPU execution on the Mac;
-native Obsidian and Metal/CUDA/other-platform checks are listed separately below.
+acceleration paths. This pass directly validated CPU execution on the Mac; the reported native
+Obsidian smoke result and remaining platform limits are listed separately below.
 
 ## Evidence
 
@@ -84,11 +84,39 @@ The second command downloads the catalog's 190 MB model unless
 hash-pinned bytes. The repeated-audio diagnostic is named
 `compact_whisper_repeated_audio_stress` and currently fails on both snapshots.
 
-Native Obsidian QA remains pending: in the authorized test vault, open Speech
-Kit's model manager, install/select Small Multilingual, transcribe the public
-German short and long WAV fixtures into a synthetic note, retry automatic
-language detection, cancel a job, and confirm the original note and previous
-model choices remain available. Verify the narrow model-picker label too.
-Metal, CUDA, Linux, Windows, and hours-long sustained use were not tested here.
+## Native QA and remaining limits
 
-Native chooser QA found the existing English Small and new multilingual Small have nearly equal download sizes. The existing model now displays as **Whisper Small English**, with an English-only summary and detail note; its model ID, artifact, and defaults are unchanged. This keeps the two choices clear before opening model details.
+Root reported that the combined QA build from `675da6c5` passed managed Small
+download and selection, followed by manual German transcription of a natural
+recording in the authorized test vault. The original note prefix was preserved.
+This was root's interactive observation, not independently repeated here. The
+all-engine debug build had Metal enabled; this smoke result does not establish
+which accelerator executed recognition or provide Metal performance measurements.
+
+Native chooser QA found the existing English Small and new multilingual Small
+have nearly equal download sizes. The existing model now displays as **Whisper
+Small English**, with an English-only summary and detail note; its model ID,
+artifact, and defaults are unchanged. The frontend follow-up was integrated into
+QA, but the embedded native catalog still needs rebuilding before the final
+name check. Native automatic detection/cancellation were not reported in this
+smoke pass; their real-worker integration checks above passed separately. CUDA,
+Linux, Windows, and hours-long sustained use remain unverified.
+
+## Architecture and model research outcome
+
+Graphify queries for `EngineRegistry` and `LoadedModel` oriented the investigation;
+source inspection confirmed that the existing adapter boundary and local runtime
+support model expansion without another execution framework. The investigation
+also exposed a real boundary error: model utterance context was applied to whole
+media duration. [PR #560](https://github.com/brittain9/speech-kit-obsidian-plugin/pull/560)
+separates those limits while preserving global media budgets and native VAD's
+30-second utterance bound.
+
+Small is a compact multilingual option with the measured accuracy tradeoffs
+above. A distinct leaderboard-backed Parakeet TDT backend was also implemented
+and tested in an isolated experiment. Its pinned int8 export failed natural
+German speech both directly and through native VAD; an independent decoder
+reproduced the raw failures. [Draft #562](https://github.com/brittain9/speech-kit-obsidian-plugin/pull/562)
+preserves the code, pinned artifacts, and negative evidence without catalog,
+default, or production-build adoption. Benchmark rank and short-clip speed did
+not override the long-speech acceptance gate. No further candidate was queued.
