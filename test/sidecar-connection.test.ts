@@ -1070,3 +1070,129 @@ describe('SidecarConnection', () => {
     );
   });
 });
+
+it('observes each process generation across concurrent starts and intentional replacement', async () => {
+  const { connection, process } = createHarness();
+  const events: unknown[] = [];
+  const unsubscribe = connection.subscribeProcessLifecycle((event) => events.push(event));
+  await Promise.all([connection.ensureStarted(), connection.ensureStarted()]);
+  await connection.shutdown();
+  await connection.ensureStarted();
+  process.exit();
+  expect(events).toEqual([
+    { type: 'started' },
+    { type: 'stopped', unexpected: false },
+    { type: 'started' },
+    { type: 'stopped', unexpected: true },
+  ]);
+  unsubscribe();
+  await connection.ensureStarted();
+  expect(events).toHaveLength(4);
+});
+
+it('keeps lifecycle observer failures out of command delivery and lease cleanup', async () => {
+  const { connection, process } = createHarness();
+  connection.subscribeProcessLifecycle(() => {
+    throw new Error('optional desktop observer');
+  });
+  const stopped = vi.fn();
+  connection.subscribeProcessStop(stopped);
+  const pending = connection.healthCheck();
+  const rejected = expect(pending).rejects.toThrow('Sidecar exited');
+  await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+  expect(() => process.exit()).not.toThrow();
+  await rejected;
+  expect(stopped).toHaveBeenCalledWith(true);
+});
+
+it('waits for the matching native desktop acknowledgement and rejects unsupported commands', async () => {
+  const { connection, process } = createHarness();
+  const command: import('../src/sidecar/protocol').ConfigureDesktopCommand = {
+    type: 'configure_desktop',
+    requestId: 'desktop-config',
+    generation: 'current',
+    shortcut: null,
+    showIcon: true,
+    vaultName: 'Test',
+    labels: {
+      ready: 'Ready',
+      starting: 'Starting',
+      recording: 'Listening',
+      finishing: 'Finishing',
+      unavailable: 'Unavailable',
+      start: 'Start',
+      stop: 'Stop',
+      cancelStart: 'Cancel start',
+      openTarget: 'Open note',
+      settings: 'Settings',
+    },
+  };
+  let acknowledged = false;
+  const configuring = connection.configureDesktop(command).then(() => {
+    acknowledged = true;
+  });
+  await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+  expect(acknowledged).toBe(false);
+  process.deliver({
+    type: 'desktop_status',
+    requestId: 'older',
+    generation: 'current',
+    shortcutStatus: 'disabled',
+    iconAvailable: true,
+    owner: true,
+  });
+  await Promise.resolve();
+  expect(acknowledged).toBe(false);
+  process.deliver({
+    type: 'desktop_status',
+    requestId: 'desktop-config',
+    generation: 'current',
+    shortcutStatus: 'disabled',
+    iconAvailable: true,
+    owner: true,
+  });
+  await configuring;
+  expect(acknowledged).toBe(true);
+  const unsupported = connection.configureDesktop({ ...command, requestId: 'unsupported' });
+  const rejection = expect(unsupported).rejects.toMatchObject({
+    code: 'invalid_frame',
+    rawDetail: expect.stringContaining('Unknown command'),
+  });
+  await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(2));
+  process.deliver({ type: 'error', code: 'invalid_frame', message: 'Unknown command' });
+  await rejection;
+});
+
+it('rejects a correlated desktop configuration error immediately', async () => {
+  const { connection, process } = createHarness(100);
+  const command: import('../src/sidecar/protocol').ConfigureDesktopCommand = {
+    type: 'configure_desktop',
+    requestId: 'desktop-denied',
+    generation: 'current',
+    shortcut: null,
+    showIcon: true,
+    vaultName: 'Test',
+    labels: {
+      ready: 'Ready',
+      starting: 'Starting',
+      recording: 'Listening',
+      finishing: 'Finishing',
+      unavailable: 'Unavailable',
+      start: 'Start',
+      stop: 'Stop',
+      cancelStart: 'Cancel start',
+      openTarget: 'Open note',
+      settings: 'Settings',
+    },
+  };
+  const pending = connection.configureDesktop(command);
+  const rejected = expect(pending).rejects.toMatchObject({ code: 'desktop_unavailable' });
+  await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+  process.deliver({
+    type: 'error',
+    requestId: command.requestId,
+    code: 'desktop_unavailable',
+    message: 'Desktop unavailable',
+  });
+  await rejected;
+});

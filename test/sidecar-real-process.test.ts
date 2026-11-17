@@ -10,6 +10,7 @@ import {
 } from '../src/sidecar/protocol';
 import { SidecarConnection } from '../src/sidecar/sidecar-connection';
 import { SidecarProcess } from '../src/sidecar/sidecar-process';
+import wireCorpus from './fixtures/sidecar-wire-contract.json';
 
 // Frontend-only checks do not build Rust. The dedicated command requires a
 // binary and enables this suite after CI's existing native build.
@@ -103,6 +104,27 @@ describe.skipIf(!binary)('production client with the real Rust sidecar', () => {
       available: false,
       selection: { runtimeId: 'llama_cpp', familyId: 'qwen3_asr' },
     });
+    await expect(connection.healthCheck()).resolves.toMatchObject({ type: 'health_ok' });
+  }, 10_000);
+
+  it('acknowledges disabled desktop configuration without OS registration and remains usable', async () => {
+    const { connection } = connect();
+    const fixture = wireCorpus.commands.find((entry) => entry.id === 'desktop-configure');
+    if (!fixture) throw new Error('Desktop command fixture missing');
+    const command = fixture.wire as import('../src/sidecar/protocol').ConfigureDesktopCommand;
+    const events: SidecarEvent[] = [];
+    connection.subscribe((event) => events.push(event));
+    await connection.configureDesktop({ ...command, shortcut: null, showIcon: false });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'desktop_status',
+        requestId: command.requestId,
+        generation: command.generation,
+        shortcutStatus: 'disabled',
+        iconAvailable: false,
+        owner: true,
+      }),
+    );
     await expect(connection.healthCheck()).resolves.toMatchObject({ type: 'health_ok' });
   }, 10_000);
 

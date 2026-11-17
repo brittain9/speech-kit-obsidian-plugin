@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { IS_PRODUCTION_BUILD } from 'virtual:build-mode';
 import { shell } from 'electron';
@@ -10,7 +11,6 @@ import {
   requestUrl,
   setIcon,
 } from 'obsidian';
-
 import { AudioCaptureStream } from './audio/audio-capture-stream';
 import { AudioFileError, FfmpegAudioFileDecoder } from './audio/audio-file-decoder';
 import { pickLocalAudioFile } from './audio/local-audio-file-picker';
@@ -18,6 +18,7 @@ import { isMediaToolInstalled } from './audio/media-tool-installer';
 import { MicrophoneRecording, MicrophoneRecordingWriter } from './audio/microphone-recording';
 import { SidecarAudioLevelMeter } from './audio/sidecar-audio-level-meter';
 import { registerCommands, registerEditorMenu } from './commands/register-commands';
+import { DesktopControls } from './desktop/desktop-controls';
 import { AudioFileTranscriptionController } from './dictation/audio-file-transcription-controller';
 import { DictationSessionController } from './dictation/dictation-session-controller';
 import { FinalizedUtteranceAutoCopy } from './dictation/finalized-utterance-auto-copy';
@@ -52,8 +53,13 @@ import {
   openModelPickerWithSetup,
   READ_ALOUD_MODEL_PICKER_OPTIONS,
 } from './models/model-picker-routing';
+import type { SessionTarget } from './session/session';
 import { Session } from './session/session';
 import { logAccelerationFallbacks } from './settings/acceleration-info';
+import {
+  type DesktopIntegrationSettingsDependencies,
+  DesktopIntegrationSettingsModal,
+} from './settings/desktop-integration-setting';
 import { LlmPresetStateStore } from './settings/llm-preset-state';
 import { restoreLlmTransformationDefaults } from './settings/llm-transformation-reset';
 import { handleMicrophoneDeviceFallback } from './settings/microphone-fallback';
@@ -63,6 +69,7 @@ import {
   type PluginSettings,
   resolvePluginSettings,
 } from './settings/plugin-settings';
+import { createSettingAccess } from './settings/setting-helpers';
 import { LocalSttSettingTab } from './settings/settings-tab';
 import {
   openSidecarUpdateModal,
@@ -81,6 +88,7 @@ import {
   resolveCudaSidecarLaunchPolicy,
 } from './sidecar/cuda-compatibility';
 import { isCudaReleaseTarget } from './sidecar/gpu-precheck';
+import type { DesktopState } from './sidecar/protocol';
 import { assertSidecarExecutableIsFresh } from './sidecar/sidecar-build-state';
 import { SidecarConnection } from './sidecar/sidecar-connection';
 import { formatSidecarExecutableName } from './sidecar/sidecar-executable';
@@ -161,6 +169,65 @@ export default class LocalSttPlugin extends Plugin {
   private readAloudStatus: HTMLElement | null = null;
   private mediaTranscriptionStatus: HTMLElement | null = null;
   override settings: PluginSettings = DEFAULT_PLUGIN_SETTINGS;
+  private desktopTarget: SessionTarget | null = null;
+  private desktopActionRevision = 0;
+  private readonly desktopStatusListeners = new Set<() => void>();
+  private desktopSessionTarget: SessionTarget | null = null;
+  private desktopConfigureQueue: Promise<void> = Promise.resolve();
+  private desktopGeneration = '';
+  private desktopIconAvailable = false;
+  private desktopNativeReady = false;
+  private desktopDisposed = false;
+  private desktopRecoveryAttempted = false;
+  private desktopConfiguration = '';
+  private desktopConfigurationDirty = false;
+  private readonly desktopControls = new DesktopControls({
+    toggle: async () => {
+      const revision = ++this.desktopActionRevision;
+      const controller = this.requireDictationController();
+      if (controller.isCaptureActive()) {
+        await controller.stopDictation();
+        return;
+      }
+      const target = this.desktopTarget;
+      if (
+        target === null ||
+        !this.isDesktopTargetOpen(target) ||
+        this.settings.selectedModel === null
+      ) {
+        this.notifyDesktop('failed');
+        return;
+      }
+      this.desktopSessionTarget = target;
+      await controller.startDictation({ target, background: true });
+      if (revision === this.desktopActionRevision && !controller.isCaptureActive())
+        this.notifyDesktop('failed');
+    },
+    openTarget: () => {
+      const target = this.desktopSessionTarget ?? this.desktopTarget;
+      if (target === null) return;
+      const leaf = this.app.workspace.getLeavesOfType('markdown').find((leaf) => {
+        const view = leaf.view as unknown as { file?: unknown; editor?: { cm?: unknown } };
+        return view.file === target.file && view.editor?.cm === target.view;
+      });
+      if (leaf) {
+        void this.app.workspace.revealLeaf(leaf);
+        window.focus();
+      }
+    },
+    openSettings: () => {
+      const app = this.app as unknown as {
+        setting: { open(): void; openTabById(id: string): void };
+      };
+      app.setting.open();
+      app.setting.openTabById(this.manifest.id);
+      window.focus();
+      new DesktopIntegrationSettingsModal(this.app, this.desktopSettingsDependencies()).open();
+    },
+    notify: (kind) => this.notifyDesktop(kind),
+    sound: (kind) => this.playDesktopSound(kind),
+  });
+
   private sidecarConnection: SidecarConnection | null = null;
   private sidecarInstallManager: SidecarInstallManager | null = null;
   private readonly temporaryLeafPinLeaseManager = new TemporaryLeafPinLeaseManager();
@@ -294,8 +361,17 @@ export default class LocalSttPlugin extends Plugin {
           onSaved,
           onError,
         ),
-      createSession: ({ callbacks, placement, rendererOptions, sessionId }) =>
-        Session.createFromActiveEditor(this.app, {
+      captureTarget: () => {
+        const target = Session.getDictationTarget(this.app);
+        this.desktopSessionTarget = target;
+        return target;
+      },
+      createSession: ({ callbacks, placement, rendererOptions, sessionId, target }) => {
+        if (target !== undefined && !this.isDesktopTargetOpen(target))
+          throw new Error(t('desktop.targetClosed'));
+        const resolved = target ?? Session.getDictationTarget(this.app);
+        if (resolved === null) throw new Error(t('desktop.targetClosed'));
+        return Session.createFromTarget(this.app, resolved, {
           callbacks,
           leafPinManager: this.temporaryLeafPinLeaseManager,
           pinNoteDuringTranscription: this.settings.pinNoteDuringTranscription,
@@ -303,7 +379,8 @@ export default class LocalSttPlugin extends Plugin {
           placement,
           rendererOptions,
           sessionId,
-        }),
+        });
+      },
       createLlmRouter: (settings) =>
         createConfiguredLlmRouter(settings, (secretId) => this.getSecret(secretId)),
       getSettings: () => this.settings,
@@ -336,6 +413,7 @@ export default class LocalSttPlugin extends Plugin {
         void this.openModelPicker();
       },
       onWorkflowStatus: (status) => {
+        this.publishDesktopStatus();
         this.dictationStatusControl?.render(
           this.dictationController?.getState() ?? 'idle',
           status,
@@ -579,8 +657,13 @@ export default class LocalSttPlugin extends Plugin {
       sidecarLifecycleGate: this.sidecarLifecycleGate,
     });
 
+    const desktopSettings = this.desktopSettingsDependencies();
     this.addSettingTab(
       new LocalSttSettingTab(this.app, this, {
+        getDesktopStatus: desktopSettings.getStatus,
+        subscribeDesktopStatus: desktopSettings.subscribeStatus,
+        retryDesktopControls: desktopSettings.retry,
+
         feedback: this.feedback,
         getSettings: () => this.settings,
         getSecret: (id) => this.getSecret(id),
@@ -756,6 +839,39 @@ export default class LocalSttPlugin extends Plugin {
 
   private async runPostLayoutStartup(): Promise<void> {
     await this.bootstrapLocalDictationSidebar();
+    this.desktopTarget = Session.getDictationTarget(this.app);
+    this.registerEvent(
+      this.app.workspace.on('active-leaf-change', () => {
+        const target = Session.getDictationTarget(this.app);
+        if (target !== null) this.desktopTarget = target;
+        this.publishDesktopStatus();
+      }),
+    );
+    this.register(
+      this.requireSidecarConnection().subscribe((event) => {
+        if (event.type === 'desktop_action' && this.desktopEnabled() && !this.desktopDisposed)
+          void this.desktopControls.handleAction(event);
+        if (event.type === 'desktop_status' && event.generation === this.desktopGeneration) {
+          this.desktopIconAvailable = event.iconAvailable;
+          this.desktopStatusMessage =
+            event.error ??
+            (event.owner
+              ? (event.effectiveShortcut ?? event.shortcutStatus)
+              : t('desktop.ownershipConflict'));
+          for (const listener of this.desktopStatusListeners) listener();
+          this.publishDesktopStatus();
+        }
+      }),
+    );
+    this.register(
+      this.requireSidecarConnection().subscribeProcessLifecycle((event) => {
+        if (event.type === 'stopped') this.handleDesktopProcessStop(event.unexpected);
+        else if (!this.desktopDisposed && this.desktopEnabled()) void this.configureDesktop();
+      }),
+    );
+    this.registerEvent(this.app.workspace.on('layout-change', () => this.publishDesktopStatus()));
+    this.registerEvent(this.app.vault.on('delete', () => this.publishDesktopStatus()));
+    await this.configureDesktop();
 
     try {
       await this.sidecarLifecycleGate.runUse(async () => {
@@ -921,6 +1037,8 @@ export default class LocalSttPlugin extends Plugin {
   }
 
   private async disposeAll(): Promise<void> {
+    this.desktopDisposed = true;
+    this.desktopControls.setGeneration('disposed');
     this.mediaTranscriptionModals.closeAll();
     this.youtubeTranscriptModals.closeAll();
     this.finalizedUtteranceAutoCopy.dispose();
@@ -1052,10 +1170,209 @@ export default class LocalSttPlugin extends Plugin {
     }
   }
 
+  private desktopSettingsDependencies(): DesktopIntegrationSettingsDependencies {
+    return {
+      access: createSettingAccess(() => this.settings, this.requirePresetStateStore()),
+      getStatus: () => this.desktopStatusMessage,
+      subscribeStatus: (listener) => {
+        this.desktopStatusListeners.add(listener);
+        return () => {
+          this.desktopStatusListeners.delete(listener);
+        };
+      },
+      retry: async () => {
+        this.desktopConfiguration = '';
+        this.desktopRecoveryAttempted = false;
+        await this.configureDesktop();
+      },
+      onError: (cause) =>
+        this.feedback.show({ cause, intent: 'error', message: t('desktop.modal.saveFailed') }),
+    };
+  }
+
+  desktopStatusMessage = '';
+
+  private desktopEnabled(): boolean {
+    return (
+      this.settings.desktopControlsEnabled &&
+      (this.settings.showDesktopStatusIcon || this.settings.globalDictationShortcut.length > 0)
+    );
+  }
+
+  private isDesktopTargetOpen(target: SessionTarget): boolean {
+    return this.app.workspace.getLeavesOfType('markdown').some((leaf) => {
+      const view = leaf.view as unknown as { file?: unknown; editor?: { cm?: unknown } };
+      return view.file === target.file && view.editor?.cm === target.view;
+    });
+  }
+
+  private handleDesktopProcessStop(unexpected: boolean): void {
+    this.desktopControls.setGeneration('disconnected');
+    this.desktopGeneration = '';
+    this.desktopNativeReady = false;
+    this.desktopIconAvailable = false;
+    this.desktopConfiguration = '';
+    this.desktopActionRevision += 1;
+    if (
+      this.desktopDisposed ||
+      !unexpected ||
+      this.desktopRecoveryAttempted ||
+      !this.desktopEnabled()
+    )
+      return;
+    this.desktopRecoveryAttempted = true;
+    this.notifyDesktop('failed');
+    this.desktopConfiguration = '';
+    void this.configureDesktop();
+  }
+
+  private configureDesktop(): Promise<void> {
+    const next = this.desktopConfigureQueue.then(() => this.configureDesktopNow());
+    this.desktopConfigureQueue = next.catch(() => {});
+    return next;
+  }
+
+  private async configureDesktopNow(): Promise<void> {
+    if (this.desktopDisposed || this.sidecarConnection === null) return;
+    const configuration = JSON.stringify([
+      this.settings.desktopControlsEnabled,
+      this.settings.globalDictationShortcut,
+      this.settings.showDesktopStatusIcon,
+    ]);
+    if (configuration === this.desktopConfiguration && !this.desktopConfigurationDirty) return;
+    if (!this.desktopEnabled() && this.desktopConfiguration === '') return;
+    this.desktopConfiguration = configuration;
+    this.desktopConfigurationDirty = false;
+    if (
+      this.desktopEnabled() &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'default'
+    ) {
+      await Notification.requestPermission().catch(() => {});
+    }
+    if (
+      this.desktopDisposed ||
+      configuration !==
+        JSON.stringify([
+          this.settings.desktopControlsEnabled,
+          this.settings.globalDictationShortcut,
+          this.settings.showDesktopStatusIcon,
+        ])
+    )
+      return;
+    this.desktopNativeReady = false;
+    this.desktopGeneration = randomUUID();
+    this.desktopControls.setGeneration(this.desktopGeneration);
+    this.desktopIconAvailable = false;
+    try {
+      const acknowledgement = await this.sidecarConnection.configureDesktop({
+        type: 'configure_desktop',
+        requestId: randomUUID(),
+        generation: this.desktopGeneration,
+        shortcut: this.settings.desktopControlsEnabled
+          ? this.settings.globalDictationShortcut || null
+          : null,
+        showIcon: this.settings.desktopControlsEnabled && this.settings.showDesktopStatusIcon,
+        vaultName: this.app.vault.getName(),
+        labels: {
+          ready: t('desktop.ready'),
+          starting: t('desktop.starting'),
+          recording: t('desktop.recording'),
+          finishing: t('desktop.finishing'),
+          unavailable: t('desktop.unavailable'),
+          start: t('desktop.start'),
+          stop: t('desktop.stop'),
+          cancelStart: t('desktop.cancelStart'),
+          openTarget: t('desktop.openTarget'),
+          settings: t('desktop.modal.settings'),
+        },
+      });
+      this.desktopNativeReady = acknowledgement.owner;
+      this.publishDesktopStatus();
+    } catch {
+      this.desktopStatusMessage = t('desktop.failed');
+      this.notifyDesktop('failed');
+    }
+  }
+
+  private publishDesktopStatus(): void {
+    if (this.desktopDisposed) return;
+    const workflow = this.dictationController?.getWorkflowStatus();
+    if (!this.dictationController?.isBusy()) this.desktopSessionTarget = null;
+    const destinationTarget = this.desktopSessionTarget ?? this.desktopTarget;
+    const status: DesktopState = this.dictationController?.isMicrophoneRecording()
+      ? 'recording'
+      : workflow?.capture === 'starting'
+        ? 'starting'
+        : workflow?.finishing || workflow?.transcribing || workflow?.providerCleanup
+          ? 'finishing'
+          : this.desktopTarget !== null &&
+              this.isDesktopTargetOpen(this.desktopTarget) &&
+              this.settings.selectedModel !== null
+            ? 'ready'
+            : 'unavailable';
+    this.desktopControls.update(
+      status,
+      this.settings.desktopControlsEnabled && this.settings.playRecordingSounds,
+      this.desktopIconAvailable,
+    );
+    if (!this.desktopEnabled() || !this.desktopNativeReady || this.desktopGeneration === '') return;
+    try {
+      this.sidecarConnection?.updateDesktopStatus({
+        type: 'update_desktop_status',
+        generation: this.desktopGeneration,
+        status,
+        canStart: status === 'ready',
+        destination:
+          destinationTarget === null
+            ? ''
+            : `${this.app.vault.getName()} / ${destinationTarget.file.path}`,
+      });
+    } catch {
+      /* Connection teardown owns recovery. */
+    }
+  }
+
+  private notifyDesktop(kind: 'recording' | 'stopped' | 'failed'): void {
+    if (this.desktopDisposed || !this.desktopEnabled()) return;
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try {
+        new Notification('Speech Kit', { body: t(`desktop.${kind}`) });
+      } catch {
+        /* Optional OS feedback must not interrupt capture or process recovery. */
+      }
+    }
+  }
+
+  private playDesktopSound(kind: 'start' | 'stop'): void {
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = kind === 'start' ? 660 : 440;
+    gain.gain.value = 0.04;
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.onended = () => {
+      void context.close().catch(() => {});
+    };
+    void context
+      .resume()
+      .then(() => {
+        oscillator.start();
+        oscillator.stop(context.currentTime + 0.08);
+      })
+      .catch(() => {
+        void context.close().catch(() => {});
+      });
+  }
+
   private async restartSidecarConnection() {
-    return await this.requireSidecarConnection().restart(
+    const health = await this.requireSidecarConnection().restart(
       this.settings.sidecarStartupTimeoutSeconds * 1000,
     );
+    this.desktopConfiguration = '';
+    await this.configureDesktop();
+    return health;
   }
 
   private async updateSettings(nextSettings: PluginSettings): Promise<void> {
@@ -1087,6 +1404,18 @@ export default class LocalSttPlugin extends Plugin {
   ): Promise<void> {
     const previousSettings = this.settings;
     this.settings = resolvePluginSettings(nextSettings);
+    if (!this.desktopEnabled()) {
+      this.desktopControls.setGeneration('disabled');
+      if (
+        this.desktopConfiguration !== '' &&
+        previousSettings.desktopControlsEnabled &&
+        (previousSettings.showDesktopStatusIcon ||
+          previousSettings.globalDictationShortcut.length > 0)
+      ) {
+        this.desktopConfigurationDirty = true;
+      }
+    }
+    if (this.dictationController !== null) void this.configureDesktop();
     this.refreshDictationControls();
     const llmWasDisabled = previousSettings.llmFeaturesEnabled && !this.settings.llmFeaturesEnabled;
     if (llmWasDisabled) {
