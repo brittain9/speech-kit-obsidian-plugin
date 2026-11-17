@@ -28,15 +28,12 @@ impl ksni::Tray for Tray {
     fn title(&self) -> String {
         format!("Speech Kit · {}", self.config.vault_name)
     }
-    fn icon_name(&self) -> String {
-        match self.status.status {
-            DesktopState::Recording => "media-record",
-            DesktopState::Starting => "content-loading-symbolic",
-            DesktopState::Finishing => "emblem-synchronizing-symbolic",
-            DesktopState::Unavailable => "dialog-warning-symbolic",
-            DesktopState::Ready => "audio-input-microphone-symbolic",
-        }
-        .into()
+    fn icon_pixmap(&self) -> Vec<ksni::Icon> {
+        vec![ksni::Icon {
+            width: super::glyph::SIZE as i32,
+            height: super::glyph::SIZE as i32,
+            data: super::glyph::argb(&self.status.status),
+        }]
     }
     fn watcher_online(&self) {
         self.availability(true);

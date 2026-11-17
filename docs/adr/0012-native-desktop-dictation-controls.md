@@ -38,3 +38,15 @@ session-scoped stop listeners remain one-shot. Every process loss invalidates
 native configuration and action generations. Intentional maintenance does not
 immediately respawn the process; a later successful startup restores enabled
 controls without restarting microphone capture.
+
+## Shared dictation glyph (direction A)
+
+The desktop icon extends the ribbon's Lucide audio-lines identity; the existing
+ribbon SVG and animation remain intact. In the native 24-point grid, Ready has
+six quiet short strokes. Recording has six separated strokes at x=2/6/10/14/18/22,
+with centerline lengths 3/11/18/7/13/3 and round 2-point strokes. Finishing has
+three short equal strokes; Starting retains its three dots and Unavailable its
+cross. These static shapes reflect lifecycle state, not a fabricated audio meter.
+One pure renderer supplies RGBA for macOS/Windows and network-order ARGB for
+Linux StatusNotifierItem; Linux uses the supplied pixels rather than a theme
+microphone icon. macOS keeps native template tinting.
