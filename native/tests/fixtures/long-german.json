@@ -1,0 +1,34 @@
+{
+  "source": {
+    "dataset": "Google FLEURS",
+    "repository": "google/fleurs",
+    "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "config": "de_de",
+    "split": "validation",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://huggingface.co/datasets/google/fleurs/viewer/de_de/validation",
+    "conversion": "FFmpeg 16 kHz mono PCM s16le"
+  },
+  "fixtures": [
+    {
+      "id": "de-fleurs-1618",
+      "language": "de",
+      "audioPath": "audio/de-fleurs-1618.wav",
+      "reference": "der nördliche teil oder die sentinel range hat die höchsten berge der antarktis das vinson-massiv dessen höchster gipfel mit 4892 m höhe der mount vinson ist",
+      "row": 17,
+      "recordingId": "10810883521240339065",
+      "sizeBytes": 850638,
+      "sha256": "43a9adcd731ec49a03ab47358793e823371280f44d63acb4b4dae076bcd1a3c6"
+    },
+    {
+      "id": "de-fleurs-1617",
+      "language": "de",
+      "audioPath": "audio/de-fleurs-1617.wav",
+      "reference": "der kruger nationalpark knp liegt im nordosten von südafrika. er grenzt im osten an mosambik im norden an simbabwe und im süden an den crocodile river",
+      "row": 18,
+      "recordingId": "10811824039129656648",
+      "sizeBytes": 739278,
+      "sha256": "00677259d2817246ae0d99863fb9ea2a44f1ee9293b5e287f04ceac379334514"
+    }
+  ]
+}

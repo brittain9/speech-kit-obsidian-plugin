@@ -4,6 +4,17 @@ Speech Kit embeds or downloads the following model artifacts so speech
 processing works offline. Downloaded catalog artifacts are verified against
 pinned sizes and SHA-256 hashes before activation.
 
+## OpenAI Whisper models and whisper.cpp
+
+- Work: OpenAI Whisper speech-recognition models, including quantized multilingual Small and Large V3 Turbo exports.
+- Original model source and license: https://github.com/openai/whisper and https://github.com/openai/whisper/blob/main/LICENSE
+- GGML conversion and runtime: https://github.com/ggml-org/whisper.cpp
+- Official converted artifact snapshot: https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1
+- License: MIT. Retain the upstream copyright and permission notices when redistributing models or runtime binaries.
+
+The managed catalog pins each downloaded artifact's exact SHA-256 and size.
+Quantized model choices use distinct model IDs; existing selections are preserved.
+
 ## FFmpeg media decoder (separate helper build)
 
 - Work: FFmpeg 9.0.2 command-line executables, `ffmpeg` and `ffprobe`
@@ -258,14 +269,15 @@ downloaded source-form JavaScript glue.
 - License: Creative Commons Attribution 4.0 International (CC BY 4.0)
   https://creativecommons.org/licenses/by/4.0/
 
-This project redistributes seven FLEURS validation recordings for multilingual
-ASR integration testing. The selected clips are parallel readings of FLEURS
-sentence 1577 in Spanish, German, French, Portuguese, Italian, Dutch, and
-Japanese. They were converted from 16 kHz mono floating-point WAV to 16 kHz mono
-signed 16-bit PCM WAV; speech content was not intentionally modified. Exact
-dataset configuration, row, recording ID, and derived-file SHA-256 are recorded
-in `native/tests/fixtures/multilingual.json`. No endorsement by Google, the
-FLEURS authors, or dataset contributors is implied.
+This project redistributes FLEURS validation recordings for multilingual ASR
+integration testing. The parallel clips read sentence 1577 in Spanish, German,
+French, Portuguese, Italian, Dutch, Japanese, Croatian, and Serbian. Additional
+German readings of sentences 1617 and 1618 cover natural longer utterances.
+The fixtures use 16 kHz mono signed 16-bit PCM WAV; speech content was not
+intentionally modified. Exact dataset configuration, row, recording ID,
+conversion, and derived-file SHA-256 are recorded in
+`native/tests/fixtures/multilingual.json` and `native/tests/fixtures/long-german.json`.
+No endorsement by Google, the FLEURS authors, or dataset contributors is implied.
 
 ## WeSpeaker speaker-embedding model
 
