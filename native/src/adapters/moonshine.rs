@@ -272,13 +272,16 @@ fn model_language_support(paths: &ModelPaths) -> Result<LanguageSupport, Transcr
             tags: vec!["de".to_string()],
         });
     }
-    // Keep existing monolithic English imports compatible. Unrecognized
-    // split exports need separate language validation before selection.
-    Ok(if paths.frontend_weights.is_some() {
-        LanguageSupport::Unknown
-    } else {
-        LanguageSupport::EnglishOnly
-    })
+    // A split export with no verified language cannot satisfy set_language.
+    // Reject it at probe as well as load, rather than advertising a ready model
+    // that the shared Unknown-language fallback would incorrectly offer as English.
+    if paths.frontend_weights.is_some() {
+        return Err(TranscriptionError::invalid_model(
+            "Unverified Moonshine split export: tokenizer does not match a supported language artifact",
+        ));
+    }
+    // Preserve the established contract for monolithic English imports.
+    Ok(LanguageSupport::EnglishOnly)
 }
 
 fn load_config(path: &Path) -> Result<MoonshineConfig, TranscriptionError> {
@@ -623,6 +626,7 @@ impl OrtMoonshineInference {
             )));
         }
 
+        let language_support = model_language_support(&paths)?;
         let (frontend, frontend_weights) = load_frontend(&paths, gpu)?;
         let encoder = build_session(&paths.encoder, gpu)?;
         let adapter = build_session(&paths.adapter, gpu)?;
@@ -651,7 +655,6 @@ impl OrtMoonshineInference {
             decoder_outputs,
         )?;
         let state = StreamingState::new(&config);
-        let language_support = model_language_support(&paths)?;
 
         Ok(Self {
             adapter,
@@ -1280,6 +1283,40 @@ mod tests {
                 .details
                 .unwrap_or_default()
                 .contains(FRONTEND_WEIGHTS_FILENAME)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn unverified_split_export_fails_probe_before_loading_ort_graphs() {
+        let root = temp_dir("unverified-split-export");
+        fs::create_dir_all(&root).unwrap();
+        let frontend = root.join(SPLIT_FRONTEND_FILENAME);
+        fs::write(&frontend, b"not a graph").unwrap();
+        fs::write(root.join(FRONTEND_WEIGHTS_FILENAME), b"not a graph").unwrap();
+        for filename in REQUIRED_SIBLINGS {
+            fs::write(root.join(filename), b"placeholder").unwrap();
+        }
+        fs::write(root.join(TOKENIZER_FILENAME), b"\x01a").unwrap();
+        fs::write(
+            root.join(CONFIG_FILENAME),
+            serde_json::to_vec(&serde_json::json!({
+                "encoder_dim": 1, "decoder_dim": 1, "depth": 1,
+                "nheads": 1, "head_dim": 1, "vocab_size": 1,
+                "bos_id": 0, "eos_id": 0, "frame_len": 1,
+                "total_lookahead": 0, "d_model_frontend": 1,
+                "c1": 1, "c2": 1, "max_seq_len": 1
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let error = MoonshineAdapter.probe_model(&frontend).unwrap_err();
+        assert_eq!(error.code, "invalid_model_file");
+        assert!(
+            error
+                .details
+                .unwrap_or_default()
+                .contains("Unverified Moonshine split export")
         );
         fs::remove_dir_all(root).unwrap();
     }

@@ -50,7 +50,8 @@ work. [Measurements and reproduction](../quality/2026-11-16-german-moonshine-exp
 For language identity, reuse the existing adapter probe override and recognize
 the exact verified German tokenizer SHA-256, after validating its graph layout.
 Neither a filename nor a vocabulary size is enough to identify a language.
-Unknown split tokenizers report unknown and cannot select German. Monolithic
+Unverified split tokenizers fail probe and load; reporting them as ready with
+unknown language would conflict with runtime language validation. Monolithic
 English imports retain compatibility. A new companion metadata file derived
 from the managed catalog would require new installation/import semantics and
 still would not independently verify external artifacts, so it adds complexity

@@ -13,7 +13,7 @@ use local_dictation_sidecar::engine::traits::ModelFamilyAdapter;
 use local_dictation_sidecar::engine::{ModelFamilyId, RuntimeId};
 use local_dictation_sidecar::protocol::{
     AccelerationPreference, AudioFrame, Command, Event, ListeningMode, ModelInstallState,
-    SelectedModel,
+    ModelProbeStatus, SelectedModel,
 };
 use local_dictation_sidecar::session::SpeakingStyle;
 use local_dictation_sidecar::transcription::GpuConfig;
@@ -386,18 +386,47 @@ fn unrecognized_split_tokenizer_cannot_claim_german_support() {
     *bytes.last_mut().unwrap() ^= 1;
     std::fs::write(path, bytes).unwrap();
     let frontend = root.join("frontend.model.ort");
+    let mut app = AppState::new(
+        "moonshine-unverified-probe",
+        ModelCatalog::load_bundled().unwrap(),
+    );
+    let (_, events) = app.handle_command(Command::ProbeModelSelection {
+        model_selection: SelectedModel::ExternalFile {
+            runtime_id: RuntimeId::OnnxRuntime,
+            family_id: ModelFamilyId::Moonshine,
+            file_path: frontend.display().to_string(),
+        },
+        model_store_path_override: None,
+        request_id: None,
+    });
+    assert!(
+        events.iter().any(|event| matches!(event,
+            Event::ModelProbeResult {
+                available: false,
+                status: ModelProbeStatus::Invalid,
+                details: Some(details),
+                ..
+            } if details.contains("Unverified Moonshine split export")
+        )),
+        "unverified split export was advertised as ready: {events:?}"
+    );
     assert_eq!(
         MoonshineAdapter
             .probe_model_and_language_support(&frontend)
-            .unwrap(),
-        LanguageSupport::Unknown
+            .unwrap_err()
+            .code,
+        "invalid_model_file"
     );
-    let mut model = MoonshineAdapter
-        .load_streaming(&frontend, GpuConfig { use_gpu: false })
-        .unwrap();
-    assert_eq!(
-        model.set_language("de").unwrap_err().code,
-        "unsupported_language"
+    let mut start = external_start("unverified-english-fallback", &frontend);
+    if let Command::StartSession { language, .. } = &mut start {
+        *language = "en".to_string();
+    }
+    let (_, events) = app.handle_command(start);
+    assert!(
+        events.iter().any(|event| matches!(event,
+            Event::Error { code, .. } if code == "invalid_model_file"
+        )),
+        "unverified split export was allowed to start: {events:?}"
     );
 }
 

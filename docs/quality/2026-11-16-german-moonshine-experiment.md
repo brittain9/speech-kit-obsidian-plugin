@@ -10,7 +10,8 @@ dictation. Keep the existing German Nemotron/Whisper choices available.
 The adapter now supports official split frontend weights, the decoder variant
 without unused cross-cache echoes, full graph validation during probe, and
 model-specific language validation. Monolithic English imports retain their
-existing language contract. Unknown split tokenizers cannot claim German support.
+existing language contract. Unverified split tokenizers fail probe and load with
+a clear invalid-model diagnostic.
 
 ## Provenance and resource bound
 
@@ -47,7 +48,7 @@ observations on a shared computer, not a controlled accuracy or battery study.
 | Silence through production VAD          | No partial or final speech output                                                                                 |
 | Direct neural model on zeros            | Hallucinates `Vielen Dank.`; silence safety depends on the existing VAD path                                      |
 | Cancellation and silent restart         | Clean stop and restart, no stale speech output                                                                    |
-| Mutated unrecognized split tokenizer    | Unknown language support; German selection rejected                                                               |
+| Mutated unrecognized split tokenizer    | Invalid probe; English fallback start rejected before graph loading                                              |
 | Existing English monolithic Tiny        | Existing real-fixture streaming/finalization regression passed                                                    |
 
 The standalone long-stress process peaked around 1.21 GB for Moonshine and
@@ -94,3 +95,19 @@ known failing raw-utterance quality gates. Keep those failures visible.
 
 Native Obsidian verification of the experimental German import remains pending.
 No package release, release tag, or version bump was made.
+
+## Independent probe-contract review
+
+The first implementation advertised an unrecognized split tokenizer as ready
+with unknown language support, while runtime language selection rejected every
+language. An authoritative `AppState` probe regression reproduced that false
+ready result. Probe and load now reject unverified split exports before loading
+graphs or frontend weights. The shared unknown-language policy is unchanged.
+
+The mutated real-artifact probe/start regression, a model-free early-rejection
+test, the known German short-stream/finalize/reset test, and the existing English
+monolithic adapter fixture test pass. The catalog-verified English suite rejected
+the older installed Tiny artifact before inference because its hash differs from
+the current catalog pin; that suite was not exercised against a fresh download.
+This correction does not address the documented long-utterance quality failures
+or expand the shipping catalog.
