@@ -675,87 +675,103 @@ describe('ModelInstallManager', () => {
       expect(harness.sidecarConnection.installModel).not.toHaveBeenCalled();
     });
 
-    it('keeps a managed Qwen pair installed, probed, selected and removable as speech rather than translation', async () => {
-      const selection: CatalogModelSelection = {
-        kind: 'catalog_model',
-        runtimeId: 'llama_cpp',
-        familyId: 'qwen3_asr',
+    it.each([
+      {
         modelId: 'qwen3_asr_0_6b_q8_0',
-      };
-      const model = (bundledCatalog as ModelCatalogRecord).models.find(
-        (entry) => entry.modelId === selection.modelId,
-      );
-      if (model === undefined) throw new Error('Qwen managed catalog entry missing');
-      harness.manager.getState().catalog.models.push(model);
-      const installed = {
-        ...sampleInstalledModel(),
-        runtimeId: selection.runtimeId,
-        familyId: selection.familyId,
-        modelId: selection.modelId,
-        installedArtifactIds: ['transcription', 'audio_encoder'],
+        filename: 'Qwen3-ASR-0.6B-Q8_0.gguf',
         totalSizeBytes: 1019141728,
-      };
-      const probe = {
-        ...sampleReadyProbeResult(selection),
-        displayName: model.displayName,
-        resolvedPath: '/models/llama_cpp/qwen3_asr/qwen3_asr_0_6b_q8_0/Qwen3-ASR-0.6B-Q8_0.gguf',
-      };
-      probe.mergedCapabilities = {
-        ...probe.mergedCapabilities,
-        family: {
-          ...probe.mergedCapabilities.family,
-          supportsInitialPrompt: false,
-          supportsSegmentTimestamps: false,
-          supportsAutomaticLanguageDetection: true,
-          supportsLanguageSelection: true,
-          supportedLanguages: { kind: 'list', tags: model.languageTags },
-        },
-        runtime: { ...probe.mergedCapabilities.runtime, supportedModelFormats: ['gguf'] },
-      };
-      harness.sidecarConnection.installModel.mockResolvedValueOnce({
-        ...sampleInstallUpdate(selection),
-        state: 'queued',
-      });
-      await harness.manager.install(selection);
-      const request = harness.sidecarConnection.installModel.mock.calls.at(-1)?.[0];
-      if (request === undefined) throw new Error('Expected Qwen install');
-      expect(request).toMatchObject({
-        familyId: 'qwen3_asr',
-        runtimeId: 'llama_cpp',
-        modelId: selection.modelId,
-      });
-      harness.sidecarConnection.listInstalledModels.mockResolvedValueOnce({
-        models: [sampleInstalledModel(), installed],
-      });
-      harness.sidecarConnection.probeModelSelection.mockResolvedValueOnce(probe);
-      emitInstallUpdate(harness, {
-        ...selection,
-        installId: request.installId,
-        state: 'completed',
-      });
-      await vi.waitFor(() => expect(harness.getSettings().selectedModel).toEqual(selection));
-      expect(harness.getSettings().selectedTranslationModel).toBeNull();
-      expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
-        status: 'ready',
-        capabilities: {
+      },
+      {
+        modelId: 'qwen3_asr_1_7b_q8_0',
+        filename: 'Qwen3-ASR-1.7B-Q8_0.gguf',
+        totalSizeBytes: 2520744288,
+      },
+    ])(
+      'keeps $modelId installed, probed, selected and removable as speech rather than translation',
+      async ({ modelId, filename, totalSizeBytes }) => {
+        const selection: CatalogModelSelection = {
+          kind: 'catalog_model',
+          runtimeId: 'llama_cpp',
           familyId: 'qwen3_asr',
-          family: { task: 'stt', supportsStreaming: false, supportsWordTimestamps: false },
-        },
-      });
-      expect(harness.getSettings().selectedModelCapabilitiesSnapshot?.selection).toEqual(selection);
-      await expect(harness.manager.remove(selection)).rejects.toThrow(/selected/);
-      await harness.manager.clearSelection();
-      harness.sidecarConnection.removeModel.mockResolvedValueOnce({ removed: true });
-      await harness.manager.remove(selection);
-      expect(harness.sidecarConnection.removeModel).toHaveBeenCalledWith(
-        expect.objectContaining({ familyId: 'qwen3_asr', modelId: selection.modelId }),
-      );
-      expect(
-        harness.manager
-          .getState()
-          .installedModels.some((entry) => entry.modelId === selection.modelId),
-      ).toBe(false);
-    });
+          modelId,
+        };
+        const model = (bundledCatalog as ModelCatalogRecord).models.find(
+          (entry) => entry.modelId === selection.modelId,
+        );
+        if (model === undefined) throw new Error('Qwen managed catalog entry missing');
+        harness.manager.getState().catalog.models.push(model);
+        const installed = {
+          ...sampleInstalledModel(),
+          runtimeId: selection.runtimeId,
+          familyId: selection.familyId,
+          modelId: selection.modelId,
+          installedArtifactIds: ['transcription', 'audio_encoder'],
+          totalSizeBytes,
+        };
+        const probe = {
+          ...sampleReadyProbeResult(selection),
+          displayName: model.displayName,
+          resolvedPath: `/models/llama_cpp/qwen3_asr/${modelId}/${filename}`,
+        };
+        probe.mergedCapabilities = {
+          ...probe.mergedCapabilities,
+          family: {
+            ...probe.mergedCapabilities.family,
+            supportsInitialPrompt: false,
+            supportsSegmentTimestamps: false,
+            supportsAutomaticLanguageDetection: true,
+            supportsLanguageSelection: true,
+            supportedLanguages: { kind: 'list', tags: model.languageTags },
+          },
+          runtime: { ...probe.mergedCapabilities.runtime, supportedModelFormats: ['gguf'] },
+        };
+        harness.sidecarConnection.installModel.mockResolvedValueOnce({
+          ...sampleInstallUpdate(selection),
+          state: 'queued',
+        });
+        await harness.manager.install(selection);
+        const request = harness.sidecarConnection.installModel.mock.calls.at(-1)?.[0];
+        if (request === undefined) throw new Error('Expected Qwen install');
+        expect(request).toMatchObject({
+          familyId: 'qwen3_asr',
+          runtimeId: 'llama_cpp',
+          modelId: selection.modelId,
+        });
+        harness.sidecarConnection.listInstalledModels.mockResolvedValueOnce({
+          models: [sampleInstalledModel(), installed],
+        });
+        harness.sidecarConnection.probeModelSelection.mockResolvedValueOnce(probe);
+        emitInstallUpdate(harness, {
+          ...selection,
+          installId: request.installId,
+          state: 'completed',
+        });
+        await vi.waitFor(() => expect(harness.getSettings().selectedModel).toEqual(selection));
+        expect(harness.getSettings().selectedTranslationModel).toBeNull();
+        expect(harness.manager.getState().selectedModelCapabilities).toMatchObject({
+          status: 'ready',
+          capabilities: {
+            familyId: 'qwen3_asr',
+            family: { task: 'stt', supportsStreaming: false, supportsWordTimestamps: false },
+          },
+        });
+        expect(harness.getSettings().selectedModelCapabilitiesSnapshot?.selection).toEqual(
+          selection,
+        );
+        await expect(harness.manager.remove(selection)).rejects.toThrow(/selected/);
+        await harness.manager.clearSelection();
+        harness.sidecarConnection.removeModel.mockResolvedValueOnce({ removed: true });
+        await harness.manager.remove(selection);
+        expect(harness.sidecarConnection.removeModel).toHaveBeenCalledWith(
+          expect.objectContaining({ familyId: 'qwen3_asr', modelId: selection.modelId }),
+        );
+        expect(
+          harness.manager
+            .getState()
+            .installedModels.some((entry) => entry.modelId === selection.modelId),
+        ).toBe(false);
+      },
+    );
 
     it('supports the managed install, select, and remove lifecycle for Moonshine', async () => {
       const installedModel = sampleMoonshineInstalledModel();
