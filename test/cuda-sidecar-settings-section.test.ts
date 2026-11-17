@@ -89,10 +89,12 @@ describe('CUDA sidecar Settings actions', () => {
 
     const dispose = section.init();
     await vi.waitFor(() => {
-      expect(Setting.instances.some((setting) => setting.name === 'GPU sidecar')).toBe(true);
+      expect(Setting.instances.some((setting) => setting.name === 'Local engine (CUDA)')).toBe(
+        true,
+      );
     });
 
-    const gpuSetting = Setting.named('GPU sidecar');
+    const gpuSetting = Setting.named('Local engine (CUDA)');
     expect(gpuSetting.buttonComponents.map((button) => button.text)).toEqual(['Uninstall']);
 
     dispose();

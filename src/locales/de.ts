@@ -345,13 +345,13 @@ export const de = {
   'settings.missingSidecar.name': 'Richten Sie Speech Kit ein',
   'settings.missingSidecar.desc':
     'Speech Kit ist noch nicht fertig. Führen Sie den Setup-Assistenten aus, um die Sprach-Engine und ein Modell zu installieren.',
-  'settings.sidecar.name': 'Sidecar',
+  'settings.sidecar.name': 'Lokale Engine',
   'settings.sidecar.genericName': 'sidecar',
   'settings.sidecar.variantName': '{variant} sidecar',
-  'settings.sidecar.desc': 'Speech-to-Text-Engine.',
-  'settings.sidecar.cpuName': 'CPU sidecar',
-  'settings.sidecar.cpuDesc': 'Speech-to-Text-Engine. Erforderlich.',
-  'settings.sidecar.gpuName': 'GPU sidecar',
+  'settings.sidecar.desc': 'Führt lokale Sprach- und Übersetzungsmodelle aus.',
+  'settings.sidecar.cpuName': 'Lokale Engine (CPU)',
+  'settings.sidecar.cpuDesc': 'Führt lokale Sprach- und Übersetzungsmodelle aus. Erforderlich.',
+  'settings.sidecar.gpuName': 'Lokale Engine (CUDA)',
   'settings.sidecar.cudaLibraryPath.name': 'CUDA Bibliothekspfad',
   'settings.sidecar.cudaLibraryPath.desc':
     'Optionaler Bibliothekssuchpfad für sidecar (Flatpak, benutzerdefinierte CUDA-Installationen).',

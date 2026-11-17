@@ -341,13 +341,13 @@ export const nl = {
   'settings.missingSidecar.name': 'Stel Speech Kit in',
   'settings.missingSidecar.desc':
     'Speech Kit is nog niet klaar. Voer de installatiewizard uit om de spraakengine en een model te installeren.',
-  'settings.sidecar.name': 'Sidecar',
+  'settings.sidecar.name': 'Lokale engine',
   'settings.sidecar.genericName': 'sidecar',
   'settings.sidecar.variantName': '{variant} sidecar',
-  'settings.sidecar.desc': 'Spraak-naar-tekst-engine.',
-  'settings.sidecar.cpuName': 'CPU sidecar',
-  'settings.sidecar.cpuDesc': 'Spraak-naar-tekst-engine. Vereist.',
-  'settings.sidecar.gpuName': 'GPU sidecar',
+  'settings.sidecar.desc': 'Voert lokale spraak- en vertaalmodellen uit.',
+  'settings.sidecar.cpuName': 'Lokale engine (CPU)',
+  'settings.sidecar.cpuDesc': 'Voert lokale spraak- en vertaalmodellen uit. Vereist.',
+  'settings.sidecar.gpuName': 'Lokale engine (CUDA)',
   'settings.sidecar.cudaLibraryPath.name': 'CUDA-bibliotheekpad',
   'settings.sidecar.cudaLibraryPath.desc':
     'Optioneel bibliotheekzoekpad voor de sidecar (Flatpak, aangepaste CUDA-installaties).',

@@ -337,13 +337,13 @@ export const ja = {
   'settings.missingSidecar.name': 'Speech Kit のセットアップ',
   'settings.missingSidecar.desc':
     'Speech Kit はまだ準備ができていません。セットアップ ウィザードを実行して、音声エンジンとモデルをインストールします。',
-  'settings.sidecar.name': 'Sidecar',
+  'settings.sidecar.name': 'ローカルエンジン',
   'settings.sidecar.genericName': 'sidecar',
   'settings.sidecar.variantName': '{variant} sidecar',
-  'settings.sidecar.desc': '音声テキスト変換エンジン。',
-  'settings.sidecar.cpuName': 'CPU sidecar',
-  'settings.sidecar.cpuDesc': '音声テキスト変換エンジン。必須。',
-  'settings.sidecar.gpuName': 'GPU sidecar',
+  'settings.sidecar.desc': '音声・翻訳モデルをローカルで実行します。',
+  'settings.sidecar.cpuName': 'ローカルエンジン (CPU)',
+  'settings.sidecar.cpuDesc': '音声・翻訳モデルをローカルで実行します。必須です。',
+  'settings.sidecar.gpuName': 'ローカルエンジン (CUDA)',
   'settings.sidecar.cudaLibraryPath.name': 'CUDA ライブラリ パス',
   'settings.sidecar.cudaLibraryPath.desc':
     'sidecar (Flatpak、カスタム CUDA インストール) のオプションのライブラリ検索パス。',

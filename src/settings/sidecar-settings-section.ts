@@ -95,6 +95,9 @@ export class SidecarSettingsSection {
     }
 
     this.container.empty();
+    // Native Settings hides the divider on :first-child. This owned wrapper
+    // follows another Advanced row, so keep its first engine row separated.
+    this.container.createSpan({ attr: { 'aria-hidden': 'true' } }).hide();
 
     if (Platform.isMacOS) {
       this.renderInstallRow({
