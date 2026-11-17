@@ -16,6 +16,32 @@ import { Modal, Setting, TestElement } from './__mocks__/obsidian';
 const testView = { file: { path: 'Notes/source.md' } };
 
 describe('TranslationController', () => {
+  it('blocks new translation UI and model work when the feature is hidden', () => {
+    Modal.instances.length = 0;
+    const getState = vi.fn(() => ({ catalog: { models: [] }, installedModels: [] }));
+    const controller = new TranslationController({
+      sidecarLifecycleGate: new SidecarLifecycleGate(),
+      app: {} as never,
+      canReadAloud: () => false,
+      feedback: { show: vi.fn() },
+      getSettings: () => ({ ...DEFAULT_PLUGIN_SETTINGS, translationEnabled: false }),
+      logger: { error: vi.fn() } as never,
+      modelManager: { getState, subscribe: () => () => {} } as never,
+      onReadAloud: vi.fn(),
+      saveSettings: vi.fn(async () => {}),
+    });
+    const editor = {
+      getValue: () => 'Public example.',
+      getRange: () => 'Public',
+      getCursor: () => ({ line: 0, ch: 0 }),
+      somethingSelected: () => true,
+    };
+    controller.translateNote(editor as never, testView as never);
+    controller.translateSelection(editor as never, testView as never);
+    expect(Modal.instances).toHaveLength(0);
+    expect(getState).not.toHaveBeenCalled();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -554,6 +580,35 @@ describe('TranslationController', () => {
     );
   });
 
+  it('keeps accepted translation output applicable after hiding the feature', async () => {
+    const race = createControllerSelectionRace();
+    await race.openCompletedPreview();
+    race.settings.translationEnabled = false;
+    Modal.instances.at(-1)?.close();
+    race.reopen();
+    expect(race.modelDropdownDisabled()).toBe(true);
+    expect(race.latestAction('Replace').disabled).toBe(false);
+    await race.latestAction('Replace').click();
+    expect(race.replaceRange).toHaveBeenCalledWith(
+      'Translated with Model A.',
+      { line: 0, ch: 0 },
+      { line: 0, ch: 20 },
+    );
+    expect(race.startTranslation).toHaveBeenCalledOnce();
+  });
+
+  it('offers retained output without a new translation action when hidden after the source changes', async () => {
+    const race = createControllerSelectionRace();
+    await race.openCompletedPreview();
+    race.settings.translationEnabled = false;
+    race.changeText('Changed public source.');
+    Modal.instances.at(-1)?.close();
+    race.reopen();
+    expect(race.actionNames()).toContain('Copy');
+    expect(race.actionNames()).not.toContain('Translate again');
+    expect(race.startTranslation).toHaveBeenCalledOnce();
+  });
+
   it('reopens a completed selection without starting duplicate inference', async () => {
     const race = createControllerSelectionRace();
     await race.openCompletedPreview();
@@ -962,9 +1017,10 @@ function createControllerSelectionRace() {
   });
 
   let sourceText = 'Translate this note.';
-  const editor = { getValue: () => sourceText, replaceRange: vi.fn() };
+  const editor = { getValue: () => sourceText, replaceRange: vi.fn(), focus: vi.fn() };
   const sourceView = { file: { path: 'Notes/original.md' } };
   return {
+    replaceRange: editor.replaceRange,
     modelB,
     modelC,
     get settings() {

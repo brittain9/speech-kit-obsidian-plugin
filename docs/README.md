@@ -2,6 +2,8 @@
 
 ## Use Speech Kit
 
+- [Hide optional tools](guides/optional-features.md) while keeping their models and settings.
+
 - [Transcribe files and YouTube captions](guides/media-transcription.md), including AI provider setup and note safety.
 - [Review AI presets](guides/ai-preset-prompts.md) and their default prompts.
 - [Set up Linux](guides/linux-support.md) or [enable CUDA for Whisper](guides/cuda-setup.md).

@@ -116,8 +116,13 @@ export class MediaLlmCoordinator {
   constructor(private readonly dependencies: MediaLlmCoordinatorDependencies) {}
 
   preflight(settings = this.dependencies.getSettings(), job?: MediaLlmJob | null): boolean {
-    if (job === null) return true;
-    if (job === undefined && (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled)) {
+    if (
+      job === null ||
+      !settings.llmFeaturesEnabled ||
+      !this.dependencies.getSettings().llmFeaturesEnabled
+    )
+      return true;
+    if (job === undefined && !settings.mediaLlmProcessing) {
       return true;
     }
     if (this.dependencies.createRouter === undefined) {
@@ -134,8 +139,13 @@ export class MediaLlmCoordinator {
   ): Promise<MediaLlmRunResult> {
     if (job === null) return emptyResult('skipped');
     const settings = job?.settings ?? this.dependencies.getSettings();
-    if (job === undefined && (!settings.mediaLlmProcessing || !settings.llmFeaturesEnabled))
+    if (
+      !settings.llmFeaturesEnabled ||
+      !this.dependencies.getSettings().llmFeaturesEnabled ||
+      (job === undefined && !settings.mediaLlmProcessing)
+    ) {
       return emptyResult('skipped');
+    }
     const rawText = transcriptText ?? session.joinRawSessionText();
     const providerId =
       settings.llmRoutingPolicy === null
@@ -229,6 +239,7 @@ export class MediaLlmCoordinator {
   private isCurrentProviderConfiguration(settings: PluginSettings): boolean {
     const current = this.dependencies.getSettings();
     return (
+      current.llmFeaturesEnabled &&
       JSON.stringify(current.llmRoutingPolicy) === JSON.stringify(settings.llmRoutingPolicy) &&
       JSON.stringify(current.llmProviderConfigurations) ===
         JSON.stringify(settings.llmProviderConfigurations)

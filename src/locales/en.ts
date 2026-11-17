@@ -416,6 +416,8 @@ export const en = {
   'translation.notice.copied': 'Copied the translation.',
   'translation.notice.copyFailed': 'Could not copy the translation.',
   'translation.notice.tooLong': 'Translate up to {count} characters at a time.',
+  'translation.notice.disabled':
+    'Translation is hidden. Enable it in Speech Kit settings to start another translation.',
   'translation.notice.noText': 'There is no text to translate in this note.',
   'common.reset': 'Reset',
   'common.actionFailed': 'Could not complete this action. Try again.',
@@ -440,6 +442,17 @@ export const en = {
   'settings.groups.model': 'Models',
   'settings.groups.readAloud': 'Read aloud',
   'settings.groups.translation': 'Translation',
+  'settings.features.title': 'Customize tools',
+  'settings.features.rowDescription': 'Choose which tools appear in Speech Kit.',
+  'settings.features.customize': 'Customize',
+  'settings.features.description':
+    'Hide tools you do not use. Your models and settings are kept, and active work can finish.',
+  'settings.features.translation': 'Translation',
+  'settings.features.translationDesc': 'Translate selected text or notes.',
+  'settings.features.readAloud': 'Read aloud',
+  'settings.features.readAloudDesc': 'Listen to notes with local speech models.',
+  'settings.features.llm': 'AI transformations',
+  'settings.features.llmDesc': 'Transform dictation and media transcripts with an AI provider.',
   'settings.groups.capture': 'Capture',
   'settings.groups.transcriptOutput': 'Transcript output',
   'settings.groups.llmTransformation': 'LLM transformation',
@@ -951,8 +964,8 @@ export const en = {
   'llm.sidebar.activePreset': 'Active preset',
   'llm.sidebar.unavailable.title': 'LLM features are unavailable',
   'llm.sidebar.unavailable.description':
-    'Enable LLM features in Speech Kit settings to configure transforms.',
-  'llm.sidebar.unavailable.summary': 'Enable LLM features in settings',
+    'Enable AI transformations in Settings → Speech Kit → Advanced → Customize tools.',
+  'llm.sidebar.unavailable.summary': 'Enable AI transformations in Customize tools',
   'llm.sidebar.off.title': 'Raw transcript mode',
   'llm.sidebar.off.description':
     'Dictation inserts the raw local transcript. Turn on Transform when you want cleanup, rewriting, or summaries.',

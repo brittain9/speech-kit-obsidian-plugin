@@ -196,6 +196,7 @@ export interface PluginSettings {
   localTranscriptSidebarBootstrapped: boolean;
   mediaLlmProcessing: boolean;
   modelStorePathOverride: string;
+  readAloudEnabled: boolean;
   readAloudLanguage: DictationLanguage;
   retainLastUtterance: boolean;
   schemaVersion: 11;
@@ -220,6 +221,7 @@ export interface PluginSettings {
   timestampsEnabled: boolean;
   timestampSessionHeader: boolean;
   timestampSparseIntervalMs: number;
+  translationEnabled: boolean;
   translationSourceLanguage: TranslationLanguage | null;
   translationStyle: TranslationStyle;
   translationStyleInstruction: string;
@@ -272,6 +274,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   localTranscriptSidebarBootstrapped: false,
   mediaLlmProcessing: false,
   modelStorePathOverride: '',
+  readAloudEnabled: true,
   readAloudLanguage: 'auto',
   retainLastUtterance: true,
   schemaVersion: 11,
@@ -293,6 +296,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   timestampsEnabled: false,
   timestampSessionHeader: true,
   timestampSparseIntervalMs: DEFAULT_TIMESTAMP_SPARSE_INTERVAL_MS,
+  translationEnabled: true,
   translationSourceLanguage: null,
   translationStyle: 'default',
   translationStyleInstruction: '',
@@ -425,6 +429,7 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.modelStorePathOverride,
       DEFAULT_PLUGIN_SETTINGS.modelStorePathOverride,
     ),
+    readAloudEnabled: readBoolean(raw.readAloudEnabled, DEFAULT_PLUGIN_SETTINGS.readAloudEnabled),
     readAloudLanguage: isDictationLanguage(raw.readAloudLanguage)
       ? raw.readAloudLanguage
       : DEFAULT_PLUGIN_SETTINGS.readAloudLanguage,
@@ -504,6 +509,10 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       DEFAULT_PLUGIN_SETTINGS.timestampSparseIntervalMs,
       MIN_TIMESTAMP_SPARSE_INTERVAL_MS,
       MAX_TIMESTAMP_SPARSE_INTERVAL_MS,
+    ),
+    translationEnabled: readBoolean(
+      raw.translationEnabled,
+      DEFAULT_PLUGIN_SETTINGS.translationEnabled,
     ),
     translationSourceLanguage: normalizeTranslationLanguage(raw.translationSourceLanguage),
     translationStyle: normalizeTranslationStyle(

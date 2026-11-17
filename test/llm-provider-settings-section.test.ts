@@ -67,29 +67,6 @@ it('keeps the secret control mounted when leaving the edited URL for a click', a
   expect(parent.contains(secretRow)).toBe(true);
 });
 
-it('persists the global enable switch without overwriting other settings', async () => {
-  Setting.reset();
-  let settings: PluginSettings = { ...DEFAULT_PLUGIN_SETTINGS, llmNetworkTimeoutSec: 42 };
-  renderLlmProviderSettings(new TestElement() as unknown as HTMLElement, {
-    app: {} as App,
-    feedback: { show: vi.fn() },
-    getSecret: () => '',
-    getSettings: () => settings,
-    managePresets: vi.fn(),
-    mutatePresetState: vi.fn(async () => {}),
-    openContextSettings: vi.fn(),
-    openModelSettings: vi.fn(),
-    openTimingSettings: vi.fn(),
-    persist: async (mutation) => {
-      settings = mutation(settings);
-    },
-    restoreDefaults: vi.fn(),
-  });
-  Setting.named('Enable LLM features').onlyToggle().change(true);
-  await vi.waitFor(() => expect(settings.llmFeaturesEnabled).toBe(true));
-  expect(settings.llmNetworkTimeoutSec).toBe(42);
-});
-
 it('keeps the saved transform mode while global features are disabled', async () => {
   Setting.reset();
   let settings: PluginSettings = {
@@ -112,17 +89,7 @@ it('keeps the saved transform mode while global features are disabled', async ()
     },
     restoreDefaults: vi.fn(),
   });
-  const transform = Setting.named('Transform new dictation').onlyToggle();
-  expect(transform.toggleEl.disabled).toBe(true);
-  expect(transform.value).toBe(true);
-  Setting.named('Enable LLM features').onlyToggle().change(true);
-  await vi.waitFor(() => expect(settings.llmFeaturesEnabled).toBe(true));
-  await vi.waitFor(() => {
-    const current = Setting.instances
-      .filter((setting) => setting.name === 'Transform new dictation')
-      .at(-1);
-    expect(current?.onlyToggle().toggleEl.disabled).toBe(false);
-  });
+  expect(Setting.instances).toHaveLength(0);
   expect(settings.llmPostprocessMode).toBe('batch');
 });
 
@@ -185,7 +152,6 @@ it('groups daily and provider controls and opens advanced settings beside their 
   expect(dailyGroup).not.toBeNull();
   expect(providerGroup).not.toBeNull();
   expect(providerGroup).not.toBe(dailyGroup);
-  expect(Setting.named('Enable LLM features').settingEl.closest('.setting-group')).toBe(dailyGroup);
   expect(timing.settingEl.closest('.setting-group')).toBe(dailyGroup);
   expect(model.settingEl.closest('.setting-group')).toBe(providerGroup);
   const action = (setting: Setting, label: string) => {
@@ -203,7 +169,5 @@ it('groups daily and provider controls and opens advanced settings beside their 
   expect(openContextSettings).toHaveBeenCalledOnce();
   expect(openModelSettings).toHaveBeenCalledOnce();
   expect(Setting.instances.some((setting) => setting.name === 'Manage presets')).toBe(false);
-  expect(Setting.named('Enable LLM features').descEl.textContent).toContain(
-    'Settings or the sidebar',
-  );
+  expect(Setting.instances.some((setting) => setting.name === 'Enable LLM features')).toBe(false);
 });
