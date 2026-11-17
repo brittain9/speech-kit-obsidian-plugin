@@ -24,3 +24,10 @@ transcription, and the Speech Kit view remain available without AI features.
 **Transform new dictation** is narrower: it controls automatic transformation of
 new speech. It can stay off while you explicitly choose a preset for a file or
 YouTube transcript, as long as **AI transformations** is on.
+
+The same **Customize tools** dialog has one **Dictation control** choice:
+**Ribbon**, **Status bar**, **Both**, or **Commands only**. Ribbon is the default.
+Changing it keeps an active session running. The command palette and assigned
+hotkeys can always start or stop dictation, including when both quick controls
+are hidden. The status-bar button offers Dictate, Stop, and Retry without
+opening the optional sidebar.

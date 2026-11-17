@@ -199,9 +199,9 @@ export const nl = {
   'settings.transcriptFormatting.newParagraph': 'Nieuwe alinea',
   'settings.transcriptFormatting.name': 'Opmaak van transcripties',
   'settings.transcriptFormatting.desc': 'Hoe zinnen met elkaar worden verbonden.',
-  'settings.phraseFinalization.responsiveOption': 'Responsief – korte pauzes',
-  'settings.phraseFinalization.balancedOption': 'Evenwichtig – standaard',
-  'settings.phraseFinalization.patientOption': 'Geduldig – lange pauzes',
+  'settings.phraseFinalization.responsiveOption': 'Responsief',
+  'settings.phraseFinalization.balancedOption': 'Evenwichtig',
+  'settings.phraseFinalization.patientOption': 'Geduldig',
   'settings.phraseFinalization.name': 'Afronding van de zin',
   'settings.phraseFinalization.responsive':
     'Wordt voltooid na kortere pauzes voor sneller voltooide tekst.',

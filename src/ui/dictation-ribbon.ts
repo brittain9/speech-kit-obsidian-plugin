@@ -40,6 +40,7 @@ export class DictationRibbonController {
   private readonly reducedMotionListener: () => void;
   private readonly visibilityObserver: IntersectionObserver | null;
   private hasVisibleArea = true;
+  private visible = true;
   private disposed = false;
   private state: DictationControllerState = 'idle';
   private visualState: DictationControllerState = 'idle';
@@ -79,6 +80,27 @@ export class DictationRibbonController {
     this.render();
   }
 
+  setVisible(visible: boolean): void {
+    if (this.disposed || visible === this.visible) return;
+    this.visible = visible;
+    this.element.toggle(visible);
+    if (!visible) {
+      this.cancelHold();
+      this.stopAnimation();
+      this.reducedMotion.removeEventListener('change', this.reducedMotionListener);
+      this.visibilityObserver?.disconnect();
+      return;
+    }
+    this.reducedMotion.addEventListener('change', this.reducedMotionListener);
+    if (this.visibilityObserver !== null) {
+      this.hasVisibleArea = false;
+      this.visibilityObserver.observe(this.element);
+    }
+    this.visualState = this.state;
+    this.render();
+    this.syncAnimation();
+  }
+
   getElement(): HTMLElement {
     return this.element;
   }
@@ -89,6 +111,10 @@ export class DictationRibbonController {
     }
     const previousState = this.state;
     this.state = state;
+    if (!this.visible) {
+      this.visualState = state;
+      return;
+    }
     if (this.shouldStartHold(previousState, state)) {
       // visualState lags behind during the tail-hold, but the announced state
       // (aria-label, title) must reflect reality immediately.
@@ -179,6 +205,7 @@ export class DictationRibbonController {
 
   private syncAnimation(): void {
     const shouldRun =
+      this.visible &&
       !this.disposed &&
       this.hasVisibleArea &&
       this.visualState === 'speech_detected' &&

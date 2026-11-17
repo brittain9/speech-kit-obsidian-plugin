@@ -107,7 +107,7 @@ import { READ_ALOUD_SPEED_PRESETS, readAloudControlLabels } from './tts/read-alo
 import { ReadAloudController, type ReadAloudState } from './tts/read-aloud-controller';
 import { didReadAloudSettingsChange, resolveReadAloudVoiceId } from './tts/read-aloud-selection';
 import { DictationRibbonController } from './ui/dictation-ribbon';
-import { renderDictationWorkflowStatus } from './ui/dictation-workflow-status';
+import { mountDictationStatusControl } from './ui/dictation-workflow-status';
 import { LOCAL_DICTATION_VIEW_TYPE, LocalDictationView } from './ui/local-dictation-view';
 import { renderMediaProgressStatus } from './ui/media-progress-presenter';
 import { MediaToolInstallModal } from './ui/media-tool-install-modal';
@@ -154,7 +154,7 @@ export default class LocalSttPlugin extends Plugin {
     workspace: this.app.workspace,
   });
   private ribbonController: DictationRibbonController | null = null;
-  private dictationStatus: HTMLElement | null = null;
+  private dictationStatusControl: ReturnType<typeof mountDictationStatusControl> | null = null;
   private readAloudController: ReadAloudController | null = null;
   private readAloudFollowAlong: ReadAloudFollowAlong | null = null;
   private releaseReadAloudModelSubscription: (() => void) | null = null;
@@ -247,6 +247,7 @@ export default class LocalSttPlugin extends Plugin {
       (leaf) =>
         new LocalDictationView(leaf, {
           getDictationState: () => this.dictationController?.getState() ?? 'idle',
+          editPreset: (ref, onClosed) => void this.openPresetManager(onClosed, ref),
           toggleDictation: () => this.requireDictationController().toggleDictation(),
           feedback: this.feedback,
           openSettings: () => {
@@ -281,7 +282,9 @@ export default class LocalSttPlugin extends Plugin {
     });
     this.ribbonController = new DictationRibbonController(ribbonElement);
     this.ribbonController.setVisualizer(this.audioLevelMeter);
-    this.dictationStatus = this.addStatusBarItem();
+    this.dictationStatusControl = mountDictationStatusControl(this.addStatusBarItem(), () =>
+      this.requireDictationController().toggleDictation(),
+    );
     this.dictationController = new DictationSessionController({
       audioLevelMeter: this.audioLevelMeter,
       captureStream: this.audioCaptureStream,
@@ -333,8 +336,12 @@ export default class LocalSttPlugin extends Plugin {
         void this.openModelPicker();
       },
       onWorkflowStatus: (status) => {
-        if (this.dictationStatus !== null)
-          renderDictationWorkflowStatus(this.dictationStatus, status);
+        this.dictationStatusControl?.render(
+          this.dictationController?.getState() ?? 'idle',
+          status,
+          this.settings.dictationControlLocation === 'status_bar' ||
+            this.settings.dictationControlLocation === 'both',
+        );
       },
       onSidecarMissing: () => {
         void this.openSetupWizard();
@@ -354,6 +361,7 @@ export default class LocalSttPlugin extends Plugin {
         this.readAloudController?.stop();
       },
     });
+    this.refreshDictationControls();
     this.readAloudStatus = this.addStatusBarItem();
     this.translationStatus = new TranslationStatusController(this.addStatusBarItem());
     this.mediaTranscriptionStatus = this.addStatusBarItem();
@@ -427,7 +435,7 @@ export default class LocalSttPlugin extends Plugin {
         wasLastJobCancelled: () =>
           this.requireAudioFileTranscriptionController().wasLastMediaJobCancelled(),
         onManageModels: () => void this.openModelPicker(),
-        onManagePresets: (onClosed) => void this.openMediaPresetManager(onClosed),
+        onManagePresets: (onClosed) => void this.openPresetManager(onClosed),
         startFile: async (file, options) => {
           const controller = this.requireAudioFileTranscriptionController();
           if (controller.isBusy()) throw new Error(t('media.modal.alreadyRunning'));
@@ -667,7 +675,7 @@ export default class LocalSttPlugin extends Plugin {
             this.requireAudioFileTranscriptionController().isMediaJobActive('youtube_captions'),
           wasLastJobCancelled: () =>
             this.requireAudioFileTranscriptionController().wasLastMediaJobCancelled(),
-          onManagePresets: (onClosed) => void this.openMediaPresetManager(onClosed),
+          onManagePresets: (onClosed) => void this.openPresetManager(onClosed),
           insertPartialTranscript: () =>
             this.requireAudioFileTranscriptionController().insertPartialTranscript(),
           start: async (url, options) => {
@@ -907,6 +915,8 @@ export default class LocalSttPlugin extends Plugin {
   }
 
   override onunload(): void {
+    this.dictationStatusControl?.dispose();
+    this.dictationStatusControl = null;
     void this.disposeAll();
   }
 
@@ -1059,12 +1069,25 @@ export default class LocalSttPlugin extends Plugin {
     return this.app.secretStorage.getSecret(secretId)?.trim() ?? '';
   }
 
+  private refreshDictationControls(): void {
+    const location = this.settings.dictationControlLocation;
+    this.ribbonController?.setVisible(location === 'ribbon' || location === 'both');
+    if (this.dictationController !== null) {
+      this.dictationStatusControl?.render(
+        this.dictationController.getState(),
+        this.dictationController.getWorkflowStatus(),
+        location === 'status_bar' || location === 'both',
+      );
+    }
+  }
+
   private async applySettings(
     nextSettings: PluginSettings,
     options: { persist: boolean },
   ): Promise<void> {
     const previousSettings = this.settings;
     this.settings = resolvePluginSettings(nextSettings);
+    this.refreshDictationControls();
     const llmWasDisabled = previousSettings.llmFeaturesEnabled && !this.settings.llmFeaturesEnabled;
     if (llmWasDisabled) {
       this.dictationController?.disableLlmForActiveSessions();
@@ -1312,9 +1335,10 @@ export default class LocalSttPlugin extends Plugin {
     return this.presetStateStore;
   }
 
-  private async openMediaPresetManager(onClosed: () => void): Promise<void> {
+  private async openPresetManager(onClosed: () => void, initialPresetRef?: string): Promise<void> {
     await this.requirePresetStateStore().synchronize();
     new PresetManagerModal(this.app, {
+      ...(initialPresetRef === undefined ? {} : { initialPresetRef }),
       feedback: this.feedback,
       getSettings: () => this.settings,
       mutatePresetState: (mutation) => this.requirePresetStateStore().mutate(mutation),

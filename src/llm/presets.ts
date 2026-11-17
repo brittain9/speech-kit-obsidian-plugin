@@ -458,13 +458,16 @@ export function describePresetTiming(timing: LlmPresetTiming | undefined): strin
   return t('llm.preset.timing.either');
 }
 
+export function describePresetOutput(output: LlmPresetOutput): string {
+  return output === 'add_above'
+    ? t('llm.preset.behavior.addAbove')
+    : output === 'add_below'
+      ? t('llm.preset.behavior.addBelow')
+      : t('llm.preset.behavior.replace');
+}
+
 export function describePresetBehavior(preset: LlmPreset): string {
-  const output =
-    preset.output === 'add_above'
-      ? t('llm.preset.behavior.addAbove')
-      : preset.output === 'add_below'
-        ? t('llm.preset.behavior.addBelow')
-        : t('llm.preset.behavior.replace');
+  const output = describePresetOutput(preset.output);
   const overridden: string[] = [];
   if (preset.overrides?.minWords !== undefined) {
     overridden.push(t('llm.preset.override.minimumWords'));

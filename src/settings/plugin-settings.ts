@@ -161,6 +161,14 @@ export interface AudioInputDevice {
   label: string;
 }
 
+export type DictationControlLocation = 'ribbon' | 'status_bar' | 'both' | 'commands_only';
+
+export function isDictationControlLocation(value: unknown): value is DictationControlLocation {
+  return (
+    value === 'ribbon' || value === 'status_bar' || value === 'both' || value === 'commands_only'
+  );
+}
+
 export interface PluginSettings {
   accelerationPreference: AccelerationPreference;
   audioInputDevice: AudioInputDevice | null;
@@ -171,6 +179,7 @@ export interface PluginSettings {
   diarizationEnabled: boolean;
   diarizationMaxSpeakers: number | null;
   dictationAnchor: DictationAnchor;
+  dictationControlLocation: DictationControlLocation;
   pinNoteDuringTranscription: boolean;
   dictationLanguage: DictationLanguage;
   autoCopyFinalizedUtterances: boolean;
@@ -243,6 +252,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   diarizationEnabled: false,
   diarizationMaxSpeakers: null,
   dictationAnchor: 'at_cursor',
+  dictationControlLocation: 'ribbon',
   pinNoteDuringTranscription: true,
   dictationLanguage: DEFAULT_DICTATION_LANGUAGE,
   autoCopyFinalizedUtterances: false,
@@ -360,6 +370,9 @@ export function resolvePluginSettings(data: unknown): PluginSettings {
       raw.autoCopyFinalizedUtterances,
       DEFAULT_PLUGIN_SETTINGS.autoCopyFinalizedUtterances,
     ),
+    dictationControlLocation: isDictationControlLocation(raw.dictationControlLocation)
+      ? raw.dictationControlLocation
+      : DEFAULT_PLUGIN_SETTINGS.dictationControlLocation,
     listeningMode: readListeningMode(raw.listeningMode),
     llmFeaturesEnabled: readBoolean(
       raw.llmFeaturesEnabled,

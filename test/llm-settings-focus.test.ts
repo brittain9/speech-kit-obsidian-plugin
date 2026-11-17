@@ -111,6 +111,7 @@ function setup(withEarlierSameName = false) {
     getSecret: () => '',
     getSettings: () => DEFAULT_PLUGIN_SETTINGS,
     managePresets: vi.fn(),
+    editPreset: vi.fn(),
     mutatePresetState: vi.fn(async () => {}),
     openContextSettings: vi.fn(),
     openModelSettings: vi.fn(),
