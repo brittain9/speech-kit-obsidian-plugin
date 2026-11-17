@@ -37,6 +37,9 @@ export class DictationRibbonController {
   private rafId: number | null = null;
   private readonly reducedMotion: MediaQueryList;
   private readonly reducedMotionListener: () => void;
+  private readonly visibilityObserver: IntersectionObserver | null;
+  private hasVisibleArea = true;
+  private disposed = false;
   private state: DictationControllerState = 'idle';
   private visualState: DictationControllerState = 'idle';
   private holdTimer: number | null = null;
@@ -47,6 +50,30 @@ export class DictationRibbonController {
     this.reducedMotion = matchMedia(REDUCED_MOTION_QUERY);
     this.reducedMotionListener = (): void => this.onReducedMotionChange();
     this.reducedMotion.addEventListener('change', this.reducedMotionListener);
+    this.visibilityObserver =
+      typeof IntersectionObserver === 'undefined'
+        ? null
+        : new IntersectionObserver(
+            (entries) => {
+              if (this.disposed) return;
+              for (const entry of entries) {
+                if (entry.target !== this.element) continue;
+                const visible =
+                  entry.isIntersecting &&
+                  entry.intersectionRect.width > 0 &&
+                  entry.intersectionRect.height > 0;
+                if (this.hasVisibleArea === visible) continue;
+                this.hasVisibleArea = visible;
+                this.syncAnimation();
+              }
+            },
+            // Report clipping to zero area even if edges still intersect.
+            { threshold: 0.01 },
+          );
+    if (this.visibilityObserver !== null) {
+      this.hasVisibleArea = false;
+      this.visibilityObserver.observe(this.element);
+    }
     this.render();
   }
 
@@ -87,8 +114,10 @@ export class DictationRibbonController {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.cancelHold();
     this.stopAnimation();
+    this.visibilityObserver?.disconnect();
     this.reducedMotion.removeEventListener('change', this.reducedMotionListener);
     this.element.remove();
   }
@@ -147,6 +176,8 @@ export class DictationRibbonController {
 
   private syncAnimation(): void {
     const shouldRun =
+      !this.disposed &&
+      this.hasVisibleArea &&
       this.visualState === 'speech_detected' &&
       this.bandReader !== null &&
       !this.reducedMotion.matches;

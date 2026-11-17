@@ -61,6 +61,158 @@ function makeController(): { controller: DictationRibbonController; element: Fak
   return { controller, element };
 }
 
+function visibilityHarness() {
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  const observers: Array<{
+    callback: IntersectionObserverCallback;
+    observe: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+  }> = [];
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    const id = ++nextFrame;
+    frames.set(id, callback);
+    return id;
+  });
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      readonly observe = vi.fn();
+      readonly disconnect = vi.fn();
+      constructor(readonly callback: IntersectionObserverCallback) {
+        observers.push(this);
+      }
+    },
+  );
+  const { controller, element } = makeController();
+  const readBands = vi.fn(() => new Float32Array(BAND_COUNT).fill(0.5));
+  controller.setVisualizer({ readBands });
+  const visibility = (visible: boolean, area = visible ? 1 : 0) => {
+    const observer = observers[0];
+    observer?.callback(
+      [
+        {
+          intersectionRect: { width: area, height: area },
+          isIntersecting: visible,
+          target: element,
+        } as unknown as IntersectionObserverEntry,
+      ],
+      observer as unknown as IntersectionObserver,
+    );
+  };
+  const advanceFrames = (count: number) => {
+    for (let index = 0; index < count; index += 1) {
+      const pending = [...frames.values()];
+      frames.clear();
+      for (const callback of pending) callback(index * 16);
+    }
+  };
+  return { advanceFrames, controller, element, frames, observers, readBands, visibility };
+}
+
+describe('DictationRibbonController visibility', () => {
+  it('stops visualizer reads while the ribbon is hidden and resumes when revealed', () => {
+    const harness = visibilityHarness();
+    harness.visibility(true);
+    harness.controller.setState('speech_detected');
+    harness.advanceFrames(20);
+    expect(harness.readBands).toHaveBeenCalledTimes(20);
+    harness.readBands.mockClear();
+
+    harness.visibility(false);
+    harness.advanceFrames(120);
+
+    expect(harness.readBands.mock.calls.length).toBe(0);
+    expect(harness.frames.size).toBe(0);
+    expect(harness.element.attributes['aria-label']).toBe('Speech Kit — hearing speech');
+    harness.visibility(true);
+    harness.advanceFrames(20);
+    expect(harness.readBands).toHaveBeenCalledTimes(20);
+    harness.controller.dispose();
+  });
+
+  it('waits for the first visible observation before polling audio bands', () => {
+    const harness = visibilityHarness();
+    harness.controller.setState('speech_detected');
+    harness.advanceFrames(120);
+    expect(harness.readBands.mock.calls.length).toBe(0);
+    harness.visibility(false);
+    harness.advanceFrames(120);
+    expect(harness.readBands.mock.calls.length).toBe(0);
+    harness.visibility(true);
+    harness.advanceFrames(10);
+    expect(harness.readBands).toHaveBeenCalledTimes(10);
+    harness.controller.dispose();
+  });
+
+  it('keeps zero-area edge intersections static until the ribbon has visible area', () => {
+    const harness = visibilityHarness();
+    harness.controller.setState('speech_detected');
+    harness.visibility(true, 0);
+    harness.advanceFrames(120);
+    expect(harness.readBands.mock.calls.length).toBe(0);
+    harness.visibility(true, 1);
+    harness.advanceFrames(10);
+    expect(harness.readBands).toHaveBeenCalledTimes(10);
+    harness.controller.dispose();
+  });
+
+  it('preserves the speech tail deadline across hiding and revealing', () => {
+    const harness = visibilityHarness();
+    harness.visibility(true);
+    harness.controller.setState('speech_detected');
+    harness.visibility(false);
+    harness.controller.setState('listening');
+    vi.advanceTimersByTime(4_999);
+    harness.visibility(true);
+    harness.advanceFrames(5);
+    expect(harness.readBands).toHaveBeenCalledTimes(5);
+    expect(harness.element.attributes['aria-label']).toBe('Speech Kit — listening');
+
+    harness.visibility(false);
+    vi.advanceTimersByTime(1);
+    harness.visibility(true);
+    harness.readBands.mockClear();
+    harness.advanceFrames(120);
+    expect(harness.readBands.mock.calls.length).toBe(0);
+    expect(harness.element.dataset.localSttState).toBe('listening');
+    harness.controller.dispose();
+  });
+
+  it('respects reduced motion when a hidden ribbon is revealed', () => {
+    const harness = visibilityHarness();
+    harness.controller.setState('speech_detected');
+    mediaQuery.matches = true;
+    mediaQuery.fireChange();
+    harness.visibility(true);
+    harness.advanceFrames(120);
+    expect(harness.readBands.mock.calls.length).toBe(0);
+    mediaQuery.matches = false;
+    mediaQuery.fireChange();
+    harness.advanceFrames(10);
+    expect(harness.readBands).toHaveBeenCalledTimes(10);
+    harness.controller.dispose();
+  });
+
+  it('disconnects visibility tracking and ignores late callbacks after disposal', () => {
+    const harness = visibilityHarness();
+    harness.visibility(true);
+    harness.controller.setState('speech_detected');
+    harness.controller.setState('listening');
+    harness.controller.dispose();
+    expect(harness.observers[0]?.disconnect).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(harness.element.removed).toBe(true);
+    harness.visibility(false);
+    harness.visibility(true);
+    harness.controller.setState('speech_detected');
+    harness.advanceFrames(120);
+    expect(harness.frames.size).toBe(0);
+    expect(harness.readBands.mock.calls.length).toBe(0);
+  });
+});
+
 describe('DictationRibbonController speech tail hold', () => {
   it('keeps the speech_detected look for 5s after VAD drops, then flips to listening', () => {
     const { controller, element } = makeController();
