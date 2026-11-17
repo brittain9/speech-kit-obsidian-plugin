@@ -72,7 +72,7 @@ These are the execution paths in the current source and sidecar build configurat
 | Feature and model family                     | macOS Apple silicon | Windows x86-64 | Windows ARM64 | Linux x86-64 | Linux ARM64 |
 | -------------------------------------------- | ------------------- | -------------- | ------------- | ------------ | ----------- |
 | Batch speech · Whisper                       | CPU / Metal         | CPU / CUDA*    | CPU           | CPU / CUDA*  | CPU         |
-| Batch speech · Qwen3 ASR 0.6B                | CPU / Metal         | CPU / CUDA*    | CPU           | CPU / CUDA*  | CPU         |
+| Batch speech · Qwen3 ASR                     | CPU / Metal         | CPU / CUDA*    | CPU           | CPU / CUDA*  | CPU         |
 | Live dictation · Moonshine (English)         | CPU                 | CPU            | CPU           | CPU          | CPU         |
 | Live dictation · Nemotron / Parakeet Unified | CPU                 | CPU            | CPU           | CPU          | CPU         |
 | Batch speech · Cohere Transcribe (English)   | CPU                 | CPU            | CPU           | CPU          | CPU         |
