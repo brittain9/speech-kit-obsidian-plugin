@@ -2177,3 +2177,15 @@
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
 }
+
+.local-stt-dictation-status {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+
+.local-stt-dictation-status__button {
+  height: auto;
+  padding: var(--size-2-1) var(--size-4-1);
+  font-size: var(--font-ui-smaller);
+}

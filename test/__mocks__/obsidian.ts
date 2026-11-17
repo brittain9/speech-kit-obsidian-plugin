@@ -90,6 +90,14 @@ export class TestElement {
     this.listeners.set(event, listeners);
   }
 
+  removeEventListener(event: string, listener: (event: TestEvent) => unknown): void {
+    const listeners = this.listeners.get(event) ?? [];
+    this.listeners.set(
+      event,
+      listeners.filter((candidate) => candidate !== listener),
+    );
+  }
+
   async click(): Promise<void> {
     if (this.disabled) return;
     this.dispatchEvent({ type: 'click' });
