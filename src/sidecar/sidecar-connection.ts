@@ -23,6 +23,7 @@ import {
   createStartTranslationCommand,
   createStopSessionCommand,
   createSynthesisPlaybackPositionCommand,
+  type DesktopStatusEvent,
   type ErrorEvent,
   encodeAudioFrame,
   encodeJsonFrame,
@@ -52,6 +53,8 @@ import {
 import { localizeSidecarEvent, rawSidecarEventDetail } from './sidecar-event-localization';
 import { createSidecarStderrLogEntry } from './sidecar-logging';
 import { type ResolveSidecarLaunchSpec, SidecarProcess } from './sidecar-process';
+
+type ProcessLifecycleEvent = { type: 'started' } | { type: 'stopped'; unexpected: boolean };
 
 type SidecarEventListener = (event: SidecarEvent) => void;
 type SynthesisAudioListener = (frame: SynthesisAudioFrame) => void;
@@ -122,6 +125,8 @@ interface SidecarConnectionOptions {
 export class SidecarConnection {
   private readonly eventListeners = new Set<SidecarEventListener>();
   private readonly processStopListeners = new Set<(unexpected: boolean) => void>();
+  private readonly processLifecycleListeners = new Set<(event: ProcessLifecycleEvent) => void>();
+  private processObservedRunning = false;
   private readonly synthesisAudioListeners = new Set<SynthesisAudioListener>();
   private readonly frameParser = new FramedMessageParser(parseEventFrame);
   private readonly pendingWaiters = new Set<PendingEventWaiter>();
@@ -183,8 +188,32 @@ export class SidecarConnection {
       new SidecarProcess(options.resolveLaunchSpec, handlers);
   }
 
+  async configureDesktop(
+    command: import('./protocol').ConfigureDesktopCommand,
+  ): Promise<DesktopStatusEvent> {
+    return this.sendCommandAndWait(
+      command,
+      (event): event is DesktopStatusEvent =>
+        event.type === 'desktop_status' &&
+        event.requestId === command.requestId &&
+        event.generation === command.generation,
+      'desktop_status',
+      this.options.getRequestTimeoutMs(),
+      (event) => event.requestId === command.requestId || event.code === 'invalid_frame',
+      { requestId: command.requestId },
+    );
+  }
+
+  updateDesktopStatus(command: import('./protocol').UpdateDesktopStatusCommand): void {
+    if (this.process.isRunning()) this.process.write(encodeJsonFrame(command));
+  }
+
   async ensureStarted(): Promise<void> {
     await this.process.start();
+    if (this.process.isRunning() && !this.processObservedRunning) {
+      this.processObservedRunning = true;
+      this.notifyProcessLifecycle({ type: 'started' });
+    }
   }
 
   async healthCheck(timeoutMs = this.options.getRequestTimeoutMs()): Promise<HealthOkEvent> {
@@ -458,6 +487,7 @@ export class SidecarConnection {
     }
     this.eventListeners.clear();
     this.synthesisAudioListeners.clear();
+    this.processLifecycleListeners.clear();
     this.rejectPendingWaiters(new Error('SidecarConnection disposed'));
   }
 
@@ -474,7 +504,27 @@ export class SidecarConnection {
     return () => this.processStopListeners.delete(listener);
   }
 
+  /** Persistent observer for connection-owned resources across process replacements. */
+  subscribeProcessLifecycle(listener: (event: ProcessLifecycleEvent) => void): () => void {
+    this.processLifecycleListeners.add(listener);
+    return () => this.processLifecycleListeners.delete(listener);
+  }
+
+  private notifyProcessLifecycle(event: ProcessLifecycleEvent): void {
+    for (const listener of [...this.processLifecycleListeners]) {
+      try {
+        listener(event);
+      } catch (error) {
+        this.options.logger?.warn('sidecar', 'Process lifecycle observer failed.', error);
+      }
+    }
+  }
+
   private notifyProcessStopped(unexpected: boolean): void {
+    if (this.processObservedRunning) {
+      this.processObservedRunning = false;
+      this.notifyProcessLifecycle({ type: 'stopped', unexpected });
+    }
     const listeners = [...this.processStopListeners];
     this.processStopListeners.clear();
     for (const listener of listeners) listener(unexpected);

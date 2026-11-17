@@ -297,6 +297,20 @@ struct CommandEnvelope {
     rename_all_fields = "camelCase"
 )]
 pub enum Command {
+    ConfigureDesktop {
+        request_id: String,
+        generation: String,
+        shortcut: Option<String>,
+        show_icon: bool,
+        vault_name: String,
+        labels: Box<crate::desktop::DesktopLabels>,
+    },
+    UpdateDesktopStatus {
+        generation: String,
+        status: crate::desktop::DesktopState,
+        destination: String,
+        can_start: bool,
+    },
     Health,
     ProbeSystemAudio,
     StartSession {
@@ -422,6 +436,23 @@ struct EventEnvelope {
     rename_all_fields = "camelCase"
 )]
 pub enum Event {
+    DesktopStatus {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
+        generation: String,
+        shortcut_status: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        effective_shortcut: Option<String>,
+        icon_available: bool,
+        owner: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+    DesktopAction {
+        generation: String,
+        action_id: u64,
+        action: String,
+    },
     HealthOk {
         sidecar_version: String,
         status: HealthStatus,

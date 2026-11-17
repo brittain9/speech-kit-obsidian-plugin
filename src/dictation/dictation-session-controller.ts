@@ -25,7 +25,7 @@ import {
   resolveLlmPostprocessMode,
   resolveLlmTransformSnapshot,
 } from '../llm/transform-policy';
-import type { Session, SessionAcceptResult } from '../session/session';
+import type { Session, SessionAcceptResult, SessionTarget } from '../session/session';
 import type { StageId, StageOutcome, TranscriptRevision } from '../session/session-journal';
 import type { PluginSettings, SmartParagraphPauseSettings } from '../settings/plugin-settings';
 import { formatErrorMessage } from '../shared/format-utils';
@@ -171,7 +171,9 @@ interface DictationSessionControllerDependencies {
     placement: NotePlacementOptions;
     rendererOptions: TranscriptRenderOptions;
     sessionId: string;
+    target?: SessionTarget;
   }) => ControllerSession;
+  captureTarget?: () => SessionTarget | null;
   createLlmRouter: (settings: PluginSettings) => LlmRouter | null;
   feedback: Pick<UserFeedback, 'show'>;
   getSettings: () => PluginSettings;
@@ -258,6 +260,7 @@ export class DictationSessionController {
   private llmDisableRevision = 0;
   private startRevision = 0;
   private state: DictationControllerState = 'idle';
+  private microphoneStopping = false;
 
   constructor(private readonly dependencies: DictationSessionControllerDependencies) {
     this.releaseSidecarSubscription = this.dependencies.sidecarConnection.subscribe((event) => {
@@ -318,6 +321,14 @@ export class DictationSessionController {
 
   isBusy(): boolean {
     return this.activeSessionId !== null || this.sessions.size > 0 || this.state === 'starting';
+  }
+
+  isMicrophoneRecording(): boolean {
+    return (
+      this.microphoneStopping ||
+      ((this.state === 'listening' || this.state === 'speech_detected') &&
+        this.dependencies.captureStream.isCapturing())
+    );
   }
 
   isCaptureActive(): boolean {
@@ -385,7 +396,9 @@ export class DictationSessionController {
     await this.startDictation();
   }
 
-  async startDictation(): Promise<void> {
+  async startDictation(
+    options: { target?: SessionTarget; background?: boolean } = {},
+  ): Promise<void> {
     if (this.isCaptureActive() || this.sessions.size >= MAX_CONTROLLER_SESSIONS) {
       return;
     }
@@ -398,6 +411,16 @@ export class DictationSessionController {
       return;
     }
 
+    const capturedTarget = options.target ?? this.dependencies.captureTarget?.();
+    if (capturedTarget === null) {
+      this.dependencies.feedback.show({
+        intent: 'warning',
+        key: 'dictation-target-unavailable',
+        message: t('setup.ready.openMarkdownNote'),
+      });
+      return;
+    }
+    const target = capturedTarget;
     let speechLease: SidecarLifecycleLease;
     try {
       speechLease = this.dependencies.sidecarLifecycleGate.acquireSpeech();
@@ -414,7 +437,7 @@ export class DictationSessionController {
     const releaseStartOperation = speechLease.retain();
     this.pendingSpeechLease = speechLease;
     try {
-      await this.startDictationWithLease(speechLease);
+      await this.startDictationWithLease(speechLease, target, options.background ?? false);
     } finally {
       if (this.pendingSpeechLease === speechLease) {
         this.pendingSpeechLease = null;
@@ -424,7 +447,11 @@ export class DictationSessionController {
     }
   }
 
-  private async startDictationWithLease(speechLease: SidecarLifecycleLease): Promise<void> {
+  private async startDictationWithLease(
+    speechLease: SidecarLifecycleLease,
+    target: SessionTarget | undefined,
+    background: boolean,
+  ): Promise<void> {
     const startRevision = ++this.startRevision;
     const llmDisableRevisionAtStart = this.llmDisableRevision;
     this.applyUiState('starting');
@@ -438,11 +465,11 @@ export class DictationSessionController {
         key: 'dictation-model-missing',
         message: t('settings.model.noModelSelected'),
       });
-      this.dependencies.onModelMissing?.();
+      if (!background) this.dependencies.onModelMissing?.();
       return;
     }
 
-    if (!this.dependencies.hasDictationTarget()) {
+    if (target === undefined && !this.dependencies.hasDictationTarget()) {
       this.dependencies.feedback.show({
         intent: 'warning',
         key: 'dictation-target-unavailable',
@@ -476,7 +503,7 @@ export class DictationSessionController {
       if (error instanceof SidecarNotInstalledError) {
         this.dependencies.logger?.debug('sidecar', 'sidecar not installed; prompting install');
         this.applyUiState('idle');
-        this.dependencies.onSidecarMissing?.();
+        if (!background) this.dependencies.onSidecarMissing?.();
         return;
       }
       this.handleError(FEEDBACK_FAILURES.startDictation, error);
@@ -516,6 +543,7 @@ export class DictationSessionController {
           transcriptFormatting: snapshot.transcriptFormatting,
         },
         sessionId,
+        ...(target !== undefined ? { target } : {}),
       });
     } catch (error) {
       this.handleError(FEEDBACK_FAILURES.startDictation, error);
@@ -799,6 +827,7 @@ export class DictationSessionController {
     if (this.activeSessionId !== sessionId) {
       return;
     }
+    this.microphoneStopping = this.isMicrophoneRecording();
     this.activeSessionId = null;
     this.dependencies.audioLevelMeter.clearSession(sessionId);
     this.applyUiState('idle');
@@ -808,6 +837,7 @@ export class DictationSessionController {
     if (entry !== undefined) entry.captureStop = captureStop;
     this.publishWorkflowStatus();
     await captureStop;
+    this.microphoneStopping = false;
     if (entry?.captureStop === captureStop) entry.captureStop = null;
     this.publishWorkflowStatus();
   }

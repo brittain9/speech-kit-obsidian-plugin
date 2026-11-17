@@ -29,6 +29,7 @@ import { LlmTimingSettingsModal } from '../ui/llm-timing-settings-modal';
 import { MediaToolInstallModal } from '../ui/media-tool-install-modal';
 import { PresetManagerModal } from '../ui/preset-manager-modal';
 import { renderCustomizeToolsSetting } from './customize-tools-modal';
+import { renderDesktopIntegrationSetting } from './desktop-integration-setting';
 import { renderDiarizationSetting } from './diarization-setting';
 import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
@@ -96,6 +97,9 @@ interface SettingsTabDependencies {
   openModelPicker: (options?: ModelPickerOptions) => Promise<void>;
   openSetupWizard: () => Promise<void>;
   openSpeechKit?: () => Promise<void>;
+  getDesktopStatus?: () => string;
+  subscribeDesktopStatus?: (listener: () => void) => () => void;
+  retryDesktopControls?: () => Promise<void>;
   sidecarVersion: string;
   resolvePluginDirectory: () => Promise<string>;
   resetLlmTransformation: () => Promise<void>;
@@ -291,6 +295,24 @@ export class LocalSttSettingTab extends PluginSettingTab {
     // --- Capture ---
     const captureCard = createSettingGroup(containerEl, t('settings.groups.capture'));
 
+    renderDesktopIntegrationSetting(captureCard, this.app, {
+      access: this.access,
+      getStatus: () => this.dependencies.getDesktopStatus?.() ?? '',
+      subscribeStatus: (listener) =>
+        this.dependencies.subscribeDesktopStatus?.(listener) ?? (() => {}),
+      retry: async () => {
+        await this.dependencies.retryDesktopControls?.();
+      },
+      onError: (cause) =>
+        this.dependencies.feedback.show({
+          cause,
+          intent: 'error',
+          message: t('desktop.modal.saveFailed'),
+        }),
+      onChanged: () => this.refreshSettingsTab(),
+      onDialogOpened: () =>
+        this.lifecycle.focusAfterDialog({ settingName: t('desktop.enabled'), controlIndex: 1 }),
+    });
     const systemAudioSupported = isSystemAudioSupportedOnCurrentPlatform();
 
     this.disposeMicrophoneSection = renderMicrophonePicker(captureCard, {

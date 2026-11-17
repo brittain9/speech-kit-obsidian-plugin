@@ -33,3 +33,5 @@ Run `npm run test -- test/sidecar-wire-contract.test.ts` and
 Both are part of the ordinary frontend/native test suites. No models are needed.
 ADR 0007 and `scripts/verify-sidecar-compatibility.mjs` remain the release-policy
 authority; these tests add evidence without changing compatibility policy.
+
+Desktop configuration/status commands and registration/action events share the same framed JSON stream. `generation` rejects events from replaced configurations, and `actionId` rejects duplicate activations. Desktop status never carries transcript contents.

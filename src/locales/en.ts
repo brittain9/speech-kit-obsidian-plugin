@@ -1,4 +1,57 @@
 export const en = {
+  'desktop.ready': 'Ready',
+  'desktop.starting': 'Starting',
+  'desktop.recording': 'Listening',
+  'desktop.start': 'Start',
+  'desktop.stop': 'Stop',
+  'desktop.enabled': 'Desktop integration',
+  'desktop.enabledDesc':
+    'Use optional global shortcuts, desktop controls and recording sounds while Obsidian is open.',
+  'desktop.captureDesc': 'Dictate into Obsidian from other apps.',
+  'desktop.shortcutSummary': 'Shortcut: {shortcut}',
+  'desktop.configureHint': 'Choose a shortcut or enable desktop controls in settings.',
+  'desktop.modal.settings': 'Desktop integration settings',
+  'desktop.modal.shortcut': 'Global shortcut',
+  'desktop.modal.status': 'Status',
+  'desktop.modal.retry': 'Retry',
+  'desktop.modal.off': 'Desktop integration is off. Your preferences are kept.',
+  'desktop.modal.noShortcut': 'No global shortcut assigned.',
+  'desktop.modal.registered': 'Shortcut registered: {shortcut}',
+  'desktop.modal.soundsDesc': 'Cue microphone start and stop.',
+  'desktop.modal.saveFailed': 'Could not save desktop integration settings.',
+  'desktop.icon.macos': 'Show in menu bar',
+  'desktop.icon.windows': 'Show in system tray',
+  'desktop.icon.linux': 'Show desktop status icon',
+  'desktop.iconDesc.macos': 'Keep dictation controls in the menu bar.',
+  'desktop.iconDesc.windows': 'Keep dictation controls in the system tray.',
+  'desktop.iconDesc.linux': 'Keep dictation controls in your desktop tray.',
+  'desktop.shortcutHelp.macos':
+    'Start or stop from another app while Obsidian is open. Enter a chord such as Control+Alt+J (⌃⌥J). Use Command for ⌘, Shift for ⇧ and Alt for Option. Leave empty to disable the shortcut.',
+  'desktop.shortcutHelp.windows':
+    'Start or stop from another app while Obsidian is open. Enter a chord such as Control+Shift+D. Leave empty to disable the shortcut.',
+  'desktop.shortcutHelp.linux':
+    'Start or stop from another app while Obsidian is open. Enter a chord such as Control+Shift+D. On Wayland, your desktop approves the binding. A compatible tray host is needed for the status icon; shortcuts work without it.',
+  'desktop.finishing': 'Finishing',
+  'desktop.unavailable': 'Unavailable',
+  'desktop.stopped': 'Microphone stopped. Finishing transcript.',
+  'desktop.failed':
+    'Dictation could not start or desktop controls disconnected. Check Speech Kit in Obsidian.',
+  'desktop.targetClosed': 'The dictation target note is no longer open.',
+  'desktop.ownershipConflict':
+    'Desktop controls belong to another open vault. Disable them there, then retry here.',
+  'desktop.cancelStart': 'Cancel start',
+  'desktop.openTarget': 'Open target note',
+  'desktop.settings': 'Settings…',
+  'desktop.shortcut': 'Global dictation shortcut',
+  'desktop.shortcutDesc':
+    'Start or stop from another app. Leave empty to disable. Use a chord such as Control+Shift+D. On Wayland, your desktop approves the binding.',
+  'desktop.icon': 'Show desktop status icon',
+  'desktop.iconDesc':
+    'Show controls in the menu bar or system tray. GNOME requires a compatible AppIndicator extension; shortcuts work without it.',
+  'desktop.sounds': 'Play recording sounds',
+  'desktop.soundsDesc': 'Play a short cue when microphone recording starts or stops.',
+  'desktop.retry': 'Retry desktop controls',
+
   'notice.dictationNotActive': 'Dictation is not currently active.',
   'audio-file-model-required':
     'Select and validate a local speech-to-text model in Manage models, then try the audio file again.',
