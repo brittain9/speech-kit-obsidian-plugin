@@ -1,7 +1,7 @@
 import type { EditorView } from '@codemirror/view';
 import { Platform, type TFile } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
-import type { DecodedAudioFile } from '../src/audio/audio-file-decoder';
+import { AUDIO_FILE_MAX_DURATION_MS, type DecodedAudioFile } from '../src/audio/audio-file-decoder';
 import {
   AudioFileTranscriptionController,
   type AudioFileTranscriptionControllerDependencies,
@@ -1590,7 +1590,45 @@ describe('AudioFileTranscriptionController', () => {
     expect(harness.sessions[0]?.acceptTranscript).toHaveBeenCalledOnce();
   });
 
-  it('localizes decoder, model-duration, and sidecar failures with actionable copy', async () => {
+  it('streams a complete recording beyond the model utterance limit to the native session', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    const frameCount = 2_000;
+    const decoded = new FakeDecodedAudio(16_000, 1, frameCount * 320, [
+      new Float32Array(frameCount * 320),
+    ]);
+    let framesConsumed = 0;
+    sidecarConnection.sendAudioFrameWithBackpressure.mockImplementation(async (sessionId) => {
+      sidecarConnection.emit({
+        type: 'file_audio_progress',
+        sessionId,
+        framesConsumed: ++framesConsumed,
+      });
+    });
+    const harness = createHarness({ decoder: { decode: async () => decoded }, sidecarConnection });
+    harness.setCapabilities(
+      readyCapabilities({
+        capabilities: {
+          ...batchCapabilities,
+          family: { ...batchCapabilities.family, maxAudioDurationSecs: 35 },
+        },
+      }),
+    );
+
+    const transcribing = harness.controller.transcribe();
+    await vi.waitFor(() => expect(sidecarConnection.requestStopSession).toHaveBeenCalledOnce());
+    const sessionId = sidecarConnection.issuedSessionIds[0];
+    if (sessionId === undefined) throw new Error('Expected a native file session.');
+    sidecarConnection.emit(transcriptReady(sessionId, 'Complete forty second recording.'));
+    sidecarConnection.emit({ reason: 'user_stop', sessionId, type: 'session_stopped' });
+    await transcribing;
+
+    expect(sidecarConnection.sendAudioFrameWithBackpressure).toHaveBeenCalledTimes(frameCount);
+    expect(harness.sessions[0]?.accepted.at(-1)?.text).toBe('Complete forty second recording.');
+    expect(harness.controller.getMediaError()).toBeNull();
+    expect(decoded.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('localizes decoder, media-duration, and sidecar failures with actionable copy', async () => {
     const decoderFailure = createHarness({
       decoder: {
         decode: async () => {
@@ -1606,24 +1644,20 @@ describe('AudioFileTranscriptionController', () => {
       expect.objectContaining({ key: 'audio-file-decode-failed' }),
     );
 
-    const modelDuration = createHarness({
-      decoder: {
-        decode: async () => createAudio(),
-      },
-    });
-    modelDuration.setCapabilities(
-      readyCapabilities({
-        capabilities: {
-          ...batchCapabilities,
-          family: { ...batchCapabilities.family, maxAudioDurationSecs: 0.01 },
-        },
-        selection: selectedModel,
-      }),
+    const oversizedAudio: DecodedAudioFile = {
+      sampleRate: 16_000,
+      numberOfChannels: 1,
+      length: (AUDIO_FILE_MAX_DURATION_MS / 1_000 + 1) * 16_000,
+      dispose: vi.fn(),
+      pumpFrames: vi.fn(),
+    };
+    const mediaDuration = createHarness({ decoder: { decode: async () => oversizedAudio } });
+    await mediaDuration.controller.transcribe();
+    expect(mediaDuration.feedback.show).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'audio-file-duration' }),
     );
-    await modelDuration.controller.transcribe();
-    expect(modelDuration.feedback.show).toHaveBeenCalledWith(
-      expect.objectContaining({ key: 'audio-file-model-duration' }),
-    );
+    expect(mediaDuration.sidecarConnection.startSessionWithControl).not.toHaveBeenCalled();
+    expect(oversizedAudio.pumpFrames).not.toHaveBeenCalled();
 
     const sidecarFailure = createHarness();
     sidecarFailure.sidecarConnection.ensureStarted.mockRejectedValueOnce(new Error('spawn failed'));

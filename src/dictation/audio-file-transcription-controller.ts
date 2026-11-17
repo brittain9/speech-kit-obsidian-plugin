@@ -107,7 +107,6 @@ interface AudioFileModelConfiguration {
   readonly diarizationMaxSpeakers: number | null;
   readonly detailedTimestampsEnabled: boolean;
   readonly language: PluginSettings['dictationLanguage'];
-  readonly maxModelDurationMs: number | null;
   readonly modelSelection: SelectedModel;
   readonly modelStorePathOverride: string;
   readonly speakingStyle: PluginSettings['speakingStyle'];
@@ -501,7 +500,8 @@ export class AudioFileTranscriptionController {
       this.ensureMediaModelAvailable(initialConfiguration);
       try {
         assertDecodedAudioWithinBudget(decodedAudio, {
-          maxModelDurationMs: initialConfiguration.maxModelDurationMs,
+          // Native VAD bounds each inference utterance separately from the media duration.
+          maxModelDurationMs: null,
         });
       } catch (error) {
         await decodedAudio.dispose();
@@ -1019,10 +1019,6 @@ export class AudioFileTranscriptionController {
         (options?.timestampsEnabled ?? settings.timestampsEnabled) &&
         capabilities.family.supportsSegmentTimestamps,
       language,
-      maxModelDurationMs:
-        capabilities.family.maxAudioDurationSecs === null
-          ? null
-          : capabilities.family.maxAudioDurationSecs * 1_000,
       modelSelection: selection,
       modelStorePathOverride: settings.modelStorePathOverride,
       speakingStyle: settings.speakingStyle,
