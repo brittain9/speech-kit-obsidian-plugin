@@ -12,6 +12,7 @@ import {
   setAnchorEffect,
   setAnchorModeEffect,
 } from './dictation-anchor-extension';
+import { NoteSurfaceAdmissionError } from './note-surface-admission';
 import {
   clearProvisionalTranscriptEffect,
   setProvisionalTranscriptEffect,
@@ -199,13 +200,13 @@ export class NoteSurface {
         (range) => this.initialAnchorPos > range.from && this.initialAnchorPos < range.to,
       )
     ) {
-      throw new Error('Dictation destination is inside a processing region');
+      throw new NoteSurfaceAdmissionError('processing_region');
     }
     this.followCaret =
       view.state.selection.main.empty && view.state.selection.main.head === this.initialAnchorPos;
     this.insertInitialPrefix();
     if (this.desynchronization !== null) {
-      throw new Error('Editor rejected the dictation destination prefix');
+      throw new NoteSurfaceAdmissionError('editor_rejected');
     }
     this.initialBoundaryPos = this.initialAnchorPos;
     // Register before pinning the anchor so the ownership check below sees this

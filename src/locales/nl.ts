@@ -1,6 +1,11 @@
 import type { TranslationCatalog } from '.';
 
 export const nl = {
+  'notice.dictationDestinationProcessing':
+    'Verplaats de cursor buiten de tekst die nog wordt verwerkt, of wacht tot de verwerking klaar is.',
+  'notice.dictationDestinationRejected':
+    'Kies een ander invoegpunt of controleer of de editor wijzigingen toestaat en probeer opnieuw te dicteren.',
+
   'notice.dictationNotActive': 'Dicteren is momenteel niet actief.',
   'commands.transcribeAudioFile': 'Lokaal audiobestand transcriberen',
   'commands.cancelAudioFile': 'Transcriptie van lokaal audiobestand annuleren',

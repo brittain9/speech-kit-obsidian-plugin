@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
+
 import { EditorState, Transaction } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { expect, it, vi } from 'vitest';
 import { NoteSurface, noteSurfaceUpdateListenerExtension } from '../src/editor/note-surface';
+import { NoteSurfaceAdmissionError } from '../src/editor/note-surface-admission';
 import {
   provisionalTranscriptExtension,
   provisionalTranscriptStateField,
@@ -570,7 +572,9 @@ it('refuses a new dictation at the caret inside an older processing region', () 
   older.appendProjection('old', projection('older speech'));
   older.setProcessingRange({ from: 0, to: 12 });
   view.dispatch({ selection: { anchor: 5 }, annotations: Transaction.userEvent.of('select') });
-  expect(() => new NoteSurface(view, { anchor: 'at_cursor' })).toThrow();
+  expect(() => new NoteSurface(view, { anchor: 'at_cursor' })).toThrow(
+    new NoteSurfaceAdmissionError('processing_region'),
+  );
   expect(view.state.doc.toString()).toBe('older speech');
   older.dispose();
   view.destroy();
@@ -625,7 +629,9 @@ it('refuses session construction when an editor filter rejects its initial prefi
     }),
     parent: document.body,
   });
-  expect(() => new NoteSurface(view, { anchor: 'end_of_note' })).toThrow();
+  expect(() => new NoteSurface(view, { anchor: 'end_of_note' })).toThrow(
+    new NoteSurfaceAdmissionError('editor_rejected'),
+  );
   expect(view.state.doc.toString()).toBe('existing note');
   view.destroy();
 });

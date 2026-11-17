@@ -1,6 +1,11 @@
 import type { TranslationCatalog } from '.';
 
 export const de = {
+  'notice.dictationDestinationProcessing':
+    'Bewegen Sie den Cursor aus dem noch verarbeiteten Text oder warten Sie, bis die Verarbeitung abgeschlossen ist.',
+  'notice.dictationDestinationRejected':
+    'Wählen Sie eine andere Einfügeposition oder prüfen Sie, ob der Editor Änderungen zulässt, und starten Sie das Diktat erneut.',
+
   'notice.dictationNotActive': 'Das Diktat ist derzeit nicht aktiv.',
   'commands.transcribeAudioFile': 'Lokale Audiodatei transkribieren',
   'commands.cancelAudioFile': 'Transkription lokaler Audiodatei abbrechen',

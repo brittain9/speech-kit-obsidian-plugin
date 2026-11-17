@@ -11,6 +11,7 @@ import {
   formatSystemAudioSidecarErrorMessage,
 } from '../audio/system-audio-permission-message';
 import type { NotePlacementOptions, SurfaceDesynchronization } from '../editor/note-surface';
+import { NoteSurfaceAdmissionError } from '../editor/note-surface-admission';
 import type { RawTranscriptRecoveryReceipt } from '../editor/raw-transcript-recovery';
 import {
   type LlmPostprocessMode,
@@ -546,7 +547,20 @@ export class DictationSessionController {
         ...(target !== undefined ? { target } : {}),
       });
     } catch (error) {
-      this.handleError(FEEDBACK_FAILURES.startDictation, error);
+      if (error instanceof NoteSurfaceAdmissionError) {
+        this.dependencies.feedback.show({
+          cause: error,
+          intent: 'action-required',
+          key: `dictation-destination-${error.reason}`,
+          message:
+            error.reason === 'processing_region'
+              ? t('notice.dictationDestinationProcessing')
+              : t('notice.dictationDestinationRejected'),
+        });
+        this.applyUiState('error');
+      } else {
+        this.handleError(FEEDBACK_FAILURES.startDictation, error);
+      }
       return;
     }
 

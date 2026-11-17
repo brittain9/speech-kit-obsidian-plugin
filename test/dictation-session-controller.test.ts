@@ -8,6 +8,7 @@ import {
 } from '../src/dictation/dictation-session-controller';
 import { LastUtteranceRecovery } from '../src/dictation/last-utterance-recovery';
 import type { NotePlacementOptions, SurfaceDesynchronization } from '../src/editor/note-surface';
+import { NoteSurfaceAdmissionError } from '../src/editor/note-surface-admission';
 import type { RawTranscriptRecoveryReceipt } from '../src/editor/raw-transcript-recovery';
 import { type LlmCleanupFailure, ProviderError } from '../src/llm/provider';
 import type { LlmRouter, LlmRouterCleanupResult } from '../src/llm/router';
@@ -2739,24 +2740,38 @@ describe('DictationSessionController', () => {
     });
   });
 
-  it('does not acquire microphone audio when note-surface admission rejects session construction', async () => {
-    const captureStream = new FakeCaptureStream();
-    const sidecarConnection = new FakeSidecarConnection();
-    const show = vi.fn();
-    const controller = createController({
-      captureStream,
-      sidecarConnection,
-      feedback: { show },
-      createSession: () => {
-        throw new Error('Dictation destination is inside a processing region');
-      },
-    });
-    await controller.startDictation();
-    expect(captureStream.start).not.toHaveBeenCalled();
-    expect(sidecarConnection.startSession).not.toHaveBeenCalled();
-    expect(controller.getState()).toBe('error');
-    expect(show).toHaveBeenCalledOnce();
-  });
+  it.each([
+    [
+      'processing_region',
+      'Move the cursor outside the text still being processed, or wait for it to finish.',
+    ],
+    [
+      'editor_rejected',
+      'Choose another insertion point or check whether the editor allows changes, then try dictation again.',
+    ],
+  ] as const)(
+    'explains %s admission refusal without acquiring microphone audio',
+    async (reason, message) => {
+      const captureStream = new FakeCaptureStream();
+      const sidecarConnection = new FakeSidecarConnection();
+      const show = vi.fn();
+      const controller = createController({
+        captureStream,
+        sidecarConnection,
+        feedback: { show },
+        createSession: () => {
+          throw new NoteSurfaceAdmissionError(reason);
+        },
+      });
+      await controller.startDictation();
+      expect(captureStream.start).not.toHaveBeenCalled();
+      expect(sidecarConnection.startSession).not.toHaveBeenCalled();
+      expect(controller.getState()).toBe('error');
+      expect(show).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ intent: 'action-required', message }),
+      );
+    },
+  );
 
   it.each([true, false])(
     'offers a projection-rejected final while respecting recovery retention=%s',
