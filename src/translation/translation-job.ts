@@ -11,10 +11,12 @@ export type TranslationJobState =
   | { completed: number; phase: 'translating'; startedAt: number; total: number }
   | { phase: 'missing_model' }
   | { phase: 'completed'; sourceUnitsKept: number; text: string }
-  | { phase: 'cancelled' }
+  | { backendCancellation?: 'pending' | 'unconfirmed'; phase: 'cancelled' }
   | { error: unknown; phase: 'failed' };
 
 export interface TranslationJobRunOptions {
+  onCancellationPending?: (failed: boolean) => void;
+  onCancellationComplete?: () => void;
   onProgress: (completed: number, total: number) => void;
   onReady: () => void;
   signal: AbortSignal;
@@ -61,6 +63,21 @@ export class TranslationJob {
     this.setState({ phase: 'loading', startedAt });
     void this.options
       .run({
+        onCancellationPending: (failed) => {
+          if (this.currentState.phase !== 'cancelled') return;
+          this.setState({
+            backendCancellation: failed ? 'unconfirmed' : 'pending',
+            phase: 'cancelled',
+          });
+        },
+        onCancellationComplete: () => {
+          if (
+            this.currentState.phase !== 'cancelled' ||
+            this.currentState.backendCancellation === undefined
+          )
+            return;
+          this.setState({ phase: 'cancelled' });
+        },
         onProgress: (completed, total) => {
           if (!abortController.signal.aborted) {
             this.setState({ completed, phase: 'translating', startedAt, total });
@@ -94,10 +111,11 @@ export class TranslationJob {
   }
 
   cancel(): void {
-    if (this.abortController === null) return;
-    this.abortController.abort();
+    const abortController = this.abortController;
+    if (abortController === null) return;
     this.abortController = null;
     this.setState({ phase: 'cancelled' });
+    abortController.abort();
   }
 
   private setState(state: TranslationJobState): void {

@@ -23,6 +23,7 @@ interface CommandDependencies {
   isAudioFileTranscriptionActive: () => boolean;
   isReadAloudActive: () => boolean;
   plugin: Plugin;
+  openSpeechKit: () => Promise<void>;
   hasLastUtterance: () => boolean;
   reinsertLastUtterance: (editor: Editor) => void;
   restoreRawTranscript: () => void;
@@ -41,6 +42,11 @@ interface CommandDependencies {
 }
 
 export function registerCommands(dependencies: CommandDependencies): void {
+  dependencies.plugin.addCommand({
+    id: 'open-speech-kit',
+    name: t('commands.openSpeechKit'),
+    callback: () => dependencies.openSpeechKit(),
+  });
   dependencies.plugin.addCommand({
     id: 'translate-selection',
     name: t('commands.translateSelection'),

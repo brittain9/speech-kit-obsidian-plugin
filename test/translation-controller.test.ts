@@ -226,6 +226,108 @@ describe('TranslationController', () => {
     await vi.waitFor(() => expect(Setting.buttonNamed('Replace')).toBeDefined());
   });
 
+  it.each([false, true])(
+    'keeps native cancellation visible until termination is confirmed (write failure: %s)',
+    async (cancelWriteFails) => {
+      Modal.instances.length = 0;
+      Setting.reset();
+      const listeners = new Set<(event: SidecarEvent) => void>();
+      const gate = new SidecarLifecycleGate();
+      const setDetachedStatus = vi.fn();
+      const selection = {
+        kind: 'catalog_model' as const,
+        familyId: 'tencent_hy_mt',
+        modelId: 'hy-mt',
+        runtimeId: 'llama_cpp',
+      } as const;
+      const startTranslation = vi.fn(async (_payload: { translationId: string }) => {});
+      const controller = new TranslationController({
+        sidecarLifecycleGate: gate,
+        app: {} as never,
+        canReadAloud: () => false,
+        feedback: { show: vi.fn() },
+        getSettings: () => ({
+          ...DEFAULT_PLUGIN_SETTINGS,
+          selectedTranslationModel: selection,
+        }),
+        logger: { error: vi.fn(), warn: vi.fn() } as never,
+        modelManager: {
+          subscribe: () => () => {},
+          getState: () => ({
+            activeInstall: null,
+            installRequestPending: false,
+            selectedTranslationModel: selection,
+            installedModels: [selection],
+            catalog: {
+              models: [
+                {
+                  ...selection,
+                  task: 'translation',
+                  translationSupport: { kind: 'all_to_all', languages: ['en', 'es'] },
+                },
+              ],
+            },
+          }),
+        } as never,
+        onReadAloud: vi.fn(),
+        saveSettings: vi.fn(async () => {}),
+        setDetachedStatus,
+        sidecarConnection: {
+          cancelTranslation: () => {
+            if (cancelWriteFails) throw new Error('stdin closed');
+          },
+          startTranslation,
+          subscribe: (listener: (event: SidecarEvent) => void) => {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+          },
+          subscribeProcessStop: () => () => {},
+        } as never,
+      });
+      const editor = { getValue: () => 'Public test text.', replaceRange: vi.fn() };
+      controller.translateNote(editor as never, testView as never);
+      await vi.waitFor(() => expect(startTranslation).toHaveBeenCalledOnce());
+      await Setting.buttonNamed('Cancel').click();
+
+      expect(() => gate.acquireMutation()).toThrow();
+      const modal = Modal.instances.at(-1);
+      expect(Setting.instances.at(-1)?.buttonComponents.map((button) => button.text)).toEqual([
+        'Close',
+      ]);
+      expect(
+        modal?.contentEl.findByText(
+          cancelWriteFails
+            ? 'Translation canceled, but the speech engine may still be running. Stop other speech work, then quit and reopen Obsidian before engine maintenance.'
+            : 'Translation canceled. The speech engine is still stopping. If it stays busy, stop other speech work, then quit and reopen Obsidian.',
+        ),
+      ).toBeDefined();
+      await Setting.buttonNamed('Close').click();
+      expect(setDetachedStatus).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          phase: 'cancelled',
+          backendCancellation: cancelWriteFails ? 'unconfirmed' : 'pending',
+        }),
+        expect.any(Function),
+      );
+      controller.translateNote(editor as never, testView as never);
+      expect(startTranslation).toHaveBeenCalledOnce();
+      expect(Setting.instances.at(-1)?.buttonComponents.map((button) => button.text)).toEqual([
+        'Close',
+      ]);
+      Modal.instances.at(-1)?.close();
+      const translationId = startTranslation.mock.calls[0]?.[0].translationId;
+      if (!translationId) throw new Error('Missing translation request');
+      for (const listener of listeners) listener({ type: 'translation_cancelled', translationId });
+      expect(setDetachedStatus).toHaveBeenLastCalledWith(
+        { phase: 'cancelled' },
+        expect.any(Function),
+      );
+      gate.acquireMutation().release();
+      expect(editor.replaceRange).not.toHaveBeenCalled();
+      controller.dispose();
+    },
+  );
+
   it('starts a fresh translation from the current note after it changed', async () => {
     Modal.instances.length = 0;
     Setting.reset();
