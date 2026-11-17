@@ -79,6 +79,7 @@ npm run install:dev:cuda -- --vault <vault> # build CPU+CUDA and force-install
 ```sh
 npm run test             # TypeScript unit tests
 npm run test:system-audio # Manual hardware smoke for native system audio
+npm run test:sidecar:client # Production TS client + real sidecar (build:sidecar first)
 npm run typecheck        # type checking
 npm run lint             # Biome linting
 npm run check            # full quality gate (TS + Rust)
@@ -97,6 +98,20 @@ npm run format           # auto-format with Biome
 - **Rust:** `cargo build`, `cargo fmt --check`, `cargo clippy`, `cargo test`
 
 Do not merge with failing CI.
+
+The Linux sidecar PR lane also runs the production TypeScript connection,
+framing/parser, and Node process adapter against the native executable it already
+builds. This model-free check covers health/system information, invalid requests,
+malformed commands, orderly shutdown, and process exit with a pending request.
+Each wait has a deadline; teardown closes streams and waits for child exit even
+after a failed assertion. Obsidian host APIs use the existing test mock; the
+connection, framing/parser, Node adapter, and executable are production code.
+
+Run `npm run build:sidecar && npm run test:sidecar:client` locally. The command
+defaults to `native/target/debug/local-dictation-sidecar` (`.exe` on Windows),
+honors `CARGO_TARGET_DIR`, and accepts an explicit `SPEECH_KIT_SIDECAR_BIN` path.
+Frontend-only tests skip this suite unless that environment variable is set;
+the dedicated command fails with a build hint when its binary is absent.
 
 ## Translating the plugin
 
