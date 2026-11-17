@@ -21,7 +21,14 @@ pub mod whisper;
 #[cfg(feature = "engine-supertonic")]
 pub mod supertonic;
 
-#[cfg(any(feature = "engine-nemotron-asr", feature = "engine-parakeet-unified"))]
+#[cfg(any(
+    feature = "engine-nemotron-asr",
+    feature = "engine-parakeet-unified",
+    feature = "engine-parakeet-tdt"
+))]
 pub(crate) mod nemo_rnnt;
 #[cfg(feature = "engine-parakeet-unified")]
 pub mod parakeet_unified;
+
+#[cfg(feature = "engine-parakeet-tdt")]
+pub mod parakeet_tdt;
