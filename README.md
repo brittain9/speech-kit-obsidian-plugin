@@ -69,7 +69,7 @@ For Linux and CUDA requirements, see the [Linux guide](docs/guides/linux-support
 
 1. Install **Speech Kit** from [Community Plugins](https://obsidian.md/plugins?id=local-dictation).
 2. Follow the setup wizard to install the native engine and a speech model.
-3. Select **Try dictation now**, or start from the ribbon, command palette, or a hotkey.
+3. Select **Try dictation now**, or use the ribbon, command palette, or a hotkey. To choose a status-bar control, open **Settings → Speech Kit → Advanced → Customize tools**.
 
 Dictation, local file transcription, translation, and read aloud require no account, API key, usage credits, or cloud service. Once their models are installed, they continue working offline. YouTube caption import requires a connection to YouTube.
 

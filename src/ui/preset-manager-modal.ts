@@ -8,6 +8,7 @@ import {
   type LlmPresetEntry,
   listPresetEntries,
   resolveActivePresetEntry,
+  resolvePresetEntry,
 } from '../llm/presets';
 import type { LlmPresetStateMutation } from '../settings/llm-preset-state';
 import {
@@ -32,6 +33,7 @@ import {
 import { type PresetSearchHit, searchPresetEntries } from './preset-search';
 
 interface PresetManagerModalDependencies {
+  initialPresetRef?: string;
   feedback: Pick<UserFeedback, 'show'>;
   getSettings: () => PluginSettings;
   mutatePresetState: (mutation: LlmPresetStateMutation) => Promise<void>;
@@ -57,6 +59,17 @@ export class PresetManagerModal extends Modal {
   override onOpen(): void {
     this.isOpen = true;
     this.modalEl.addClass('local-stt-preset-manager');
+    if (this.deps.initialPresetRef !== undefined) {
+      const entry = resolvePresetEntry(
+        this.deps.initialPresetRef,
+        this.deps.getSettings().llmPostprocessUserPresets,
+      );
+      if (entry !== null) {
+        this.openEntry(entry);
+        return;
+      }
+      this.deps.feedback.show({ intent: 'warning', message: t('llm.preset.editor.notFound') });
+    }
     this.render();
   }
 
@@ -301,9 +314,15 @@ export class PresetManagerModal extends Modal {
     updatePromptSize(draft.prompt);
 
     let timingDropdown: DropdownComponent | null = null;
-    new Setting(this.contentEl)
+    const timingSetting = new Setting(this.contentEl)
       .setName(t('llm.preset.editor.timing'))
-      .setDesc(t('llm.preset.editor.timingDescription'))
+      .setDesc(
+        t(
+          draft.output === 'replace'
+            ? 'llm.preset.editor.timingDescription'
+            : 'llm.preset.editor.timingAdd',
+        ),
+      )
       .addDropdown((dropdown) => {
         dropdown.addOption('either', t('llm.preset.editor.timingEither'));
         dropdown.addOption('per_utterance', t('llm.preset.editor.timingPerUtterance'));
@@ -332,6 +351,13 @@ export class PresetManagerModal extends Modal {
           }
           timingDropdown?.setValue(draft.output === 'replace' ? draft.timing : 'batch');
           timingDropdown?.setDisabled(draft.output !== 'replace');
+          timingSetting.setDesc(
+            t(
+              draft.output === 'replace'
+                ? 'llm.preset.editor.timingDescription'
+                : 'llm.preset.editor.timingAdd',
+            ),
+          );
         });
       });
 

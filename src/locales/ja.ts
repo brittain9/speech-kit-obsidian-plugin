@@ -197,9 +197,9 @@ export const ja = {
   'settings.transcriptFormatting.newParagraph': '新しい段落',
   'settings.transcriptFormatting.name': 'トランスクリプトのフォーマット',
   'settings.transcriptFormatting.desc': 'フレーズがどのように結合されるか。',
-  'settings.phraseFinalization.responsiveOption': 'すばやく — 短い間隔',
-  'settings.phraseFinalization.balancedOption': '標準 — 通常の間隔',
-  'settings.phraseFinalization.patientOption': 'じっくり — 長い間隔',
+  'settings.phraseFinalization.responsiveOption': 'すばやく',
+  'settings.phraseFinalization.balancedOption': '標準',
+  'settings.phraseFinalization.patientOption': 'じっくり',
   'settings.phraseFinalization.name': 'フレーズの確定',
   'settings.phraseFinalization.responsive':
     '短い一時停止の後に終了し、テキストをより速く完成させることができます。',

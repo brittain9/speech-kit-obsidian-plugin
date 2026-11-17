@@ -8,7 +8,10 @@ import {
   MIN_DIARIZATION_MAX_SPEAKERS,
 } from './plugin-settings';
 
-type DiarizationSettingsModalDependencies = ModalSettingsPersistence;
+interface DiarizationSettingsModalDependencies extends ModalSettingsPersistence {
+  streamingModelSelected?: () => boolean;
+  chooseModel?: () => void;
+}
 
 export class DiarizationSettingsModal extends Modal {
   private readonly autoSaver: ModalSettingsAutoSaver;
@@ -34,11 +37,16 @@ export class DiarizationSettingsModal extends Modal {
 
   private render(): void {
     this.contentEl.empty();
-    const diarizationEnabled = this.deps.getSettings().diarizationEnabled;
+    const streaming = this.deps.streamingModelSelected?.() === true;
+    const diarizationEnabled = this.deps.getSettings().diarizationEnabled && !streaming;
 
     this.contentEl.createEl('p', {
       cls: 'setting-item-description',
-      text: t('settings.speakerLabels.modal.intro'),
+      text: t(
+        streaming
+          ? 'settings.speakerLabels.inactiveStreaming'
+          : 'settings.speakerLabels.modal.intro',
+      ),
     });
 
     this.contentEl.createEl('p', {
@@ -46,12 +54,23 @@ export class DiarizationSettingsModal extends Modal {
       text: t('settings.speakerLabels.numberedVoices'),
     });
 
+    if (streaming && this.deps.chooseModel !== undefined) {
+      new Setting(this.contentEl).addButton((button) => {
+        button.setButtonText(t('settings.speakerLabels.chooseModel')).onClick(() => {
+          this.close();
+          this.deps.chooseModel?.();
+        });
+      });
+    }
+
     new Setting(this.contentEl)
       .setName(t('settings.speakerLabels.maximumSpeakers.name'))
       .setDesc(
-        diarizationEnabled
-          ? t('settings.speakerLabels.maximumSpeakers.desc')
-          : t('settings.speakerLabels.maximumSpeakers.disabledDesc'),
+        streaming
+          ? t('settings.speakerLabels.streamingLimitation')
+          : diarizationEnabled
+            ? t('settings.speakerLabels.maximumSpeakers.desc')
+            : t('settings.speakerLabels.maximumSpeakers.disabledDesc'),
       )
       .addDropdown((dropdown) => {
         dropdown.addOption('auto', t('settings.speakerLabels.automatic'));
@@ -65,6 +84,7 @@ export class DiarizationSettingsModal extends Modal {
         dropdown.setValue(this.maxSpeakers?.toString() ?? 'auto');
         dropdown.setDisabled(!diarizationEnabled);
         dropdown.onChange((value) => {
+          if (this.deps.streamingModelSelected?.() === true) return;
           if (value === 'auto') {
             this.maxSpeakers = null;
             void this.autoSaver.persist({ diarizationMaxSpeakers: null });
@@ -84,13 +104,17 @@ export class DiarizationSettingsModal extends Modal {
       });
 
     new Setting(this.contentEl).addButton((button) => {
-      button.setButtonText(t('common.reset')).onClick(async () => {
-        this.maxSpeakers = DEFAULT_PLUGIN_SETTINGS.diarizationMaxSpeakers;
-        this.render();
-        await this.autoSaver.persist({
-          diarizationMaxSpeakers: DEFAULT_PLUGIN_SETTINGS.diarizationMaxSpeakers,
+      button
+        .setButtonText(t('common.reset'))
+        .setDisabled(streaming)
+        .onClick(async () => {
+          if (this.deps.streamingModelSelected?.() === true) return;
+          this.maxSpeakers = DEFAULT_PLUGIN_SETTINGS.diarizationMaxSpeakers;
+          this.render();
+          await this.autoSaver.persist({
+            diarizationMaxSpeakers: DEFAULT_PLUGIN_SETTINGS.diarizationMaxSpeakers,
+          });
         });
-      });
     });
   }
 }

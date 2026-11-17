@@ -13,6 +13,9 @@ class FakeMediaQueryList {
   removeEventListener(_event: 'change', cb: () => void): void {
     this.listeners.delete(cb);
   }
+  listenerCount(): number {
+    return this.listeners.size;
+  }
   fireChange(): void {
     for (const cb of this.listeners) cb();
   }
@@ -26,6 +29,7 @@ class FakeElement {
   removed = false;
   innerHTML = '';
   readonly style = {
+    display: '',
     setProperty: (name: string, value: string): void => {
       this.styleProps[name] = value;
     },
@@ -35,6 +39,9 @@ class FakeElement {
   };
   setAttribute(name: string, value: string): void {
     this.attributes[name] = value;
+  }
+  toggle(visible: boolean): void {
+    this.style.display = visible ? '' : 'none';
   }
   remove(): void {
     this.removed = true;
@@ -466,4 +473,43 @@ describe('DictationRibbonController bar rendering', () => {
 
     expect(rafCallbacks).toHaveLength(0);
   });
+});
+
+it('pauses hidden ribbon animation and observers and restores current state without removing the plugin item', () => {
+  const { controller, element } = makeController();
+  controller.setState('speech_detected');
+  controller.setVisible(false);
+  expect(element.style.display).toBe('none');
+  expect(mediaQuery.listenerCount()).toBe(0);
+  controller.setState('starting');
+  vi.advanceTimersByTime(6_000);
+  expect(element.removed).toBe(false);
+  controller.setVisible(true);
+  controller.setVisible(true);
+  expect(mediaQuery.listenerCount()).toBe(1);
+  expect(element.dataset.localSttState).toBe('starting');
+  controller.dispose();
+  controller.setVisible(false);
+  controller.setVisible(true);
+  expect(mediaQuery.listenerCount()).toBe(0);
+});
+
+it('releases viewport tracking while the quick control is hidden and observes once on restore', () => {
+  const harness = visibilityHarness();
+  harness.visibility(true);
+  harness.controller.setState('speech_detected');
+  harness.advanceFrames(2);
+  harness.controller.setVisible(false);
+  expect(harness.observers[0]?.disconnect).toHaveBeenCalledOnce();
+  harness.advanceFrames(2);
+  expect(harness.readBands).toHaveBeenCalledTimes(2);
+  harness.controller.setVisible(true);
+  harness.controller.setVisible(true);
+  expect(harness.observers[0]?.observe).toHaveBeenCalledTimes(2);
+  harness.advanceFrames(2);
+  expect(harness.readBands).toHaveBeenCalledTimes(2);
+  harness.visibility(true);
+  harness.advanceFrames(2);
+  expect(harness.readBands).toHaveBeenCalledTimes(4);
+  harness.controller.dispose();
 });

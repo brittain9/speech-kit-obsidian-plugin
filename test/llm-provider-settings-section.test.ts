@@ -16,6 +16,7 @@ it('offers provider configuration and preset and context settings in Settings', 
     getSecret: () => '',
     getSettings: () => DEFAULT_PLUGIN_SETTINGS,
     managePresets,
+    editPreset: vi.fn(),
     mutatePresetState: vi.fn(async () => {}),
     openContextSettings,
     openModelSettings,
@@ -30,7 +31,8 @@ it('offers provider configuration and preset and context settings in Settings', 
   ).toContain('Ollama');
   expect(Setting.named('Transform new dictation').onlyToggle().value).toBe(false);
   expect(Setting.named('Active preset').onlyDropdown()).toBeDefined();
-  expect(Setting.named('Run transform').onlyDropdown()).toBeDefined();
+  expect(Setting.named('When to transform').dropdownComponents).toHaveLength(0);
+  expect(Setting.buttonNamed('Edit preset')).toBeDefined();
   expect(Setting.named('Show original transcript').onlyToggle()).toBeDefined();
 });
 
@@ -47,6 +49,7 @@ it('keeps the secret control mounted when leaving the edited URL for a click', a
     getSecret: () => '',
     getSettings: () => settings,
     managePresets: vi.fn(),
+    editPreset: vi.fn(),
     mutatePresetState: vi.fn(async () => {}),
     openContextSettings: vi.fn(),
     openModelSettings: vi.fn(),
@@ -80,6 +83,7 @@ it('keeps the saved transform mode while global features are disabled', async ()
     getSecret: () => '',
     getSettings: () => settings,
     managePresets: vi.fn(),
+    editPreset: vi.fn(),
     mutatePresetState: vi.fn(async () => {}),
     openContextSettings: vi.fn(),
     openModelSettings: vi.fn(),
@@ -102,6 +106,7 @@ it('opens advanced model settings before a provider is selected', async () => {
     getSecret: () => '',
     getSettings: () => DEFAULT_PLUGIN_SETTINGS,
     managePresets: vi.fn(),
+    editPreset: vi.fn(),
     mutatePresetState: vi.fn(async () => {}),
     openContextSettings: vi.fn(),
     openModelSettings,
@@ -135,6 +140,7 @@ it('groups daily and provider controls and opens advanced settings beside their 
     getSecret: () => '',
     getSettings: () => settings,
     managePresets,
+    editPreset: vi.fn(),
     mutatePresetState: vi.fn(async () => {}),
     openContextSettings,
     openModelSettings,
@@ -143,7 +149,7 @@ it('groups daily and provider controls and opens advanced settings beside their 
     restoreDefaults: vi.fn(),
   });
   const preset = Setting.named('Active preset');
-  const timing = Setting.named('Run transform');
+  const timing = Setting.named('When to transform');
   const context = Setting.named('Use current note as context');
   const provider = Setting.named('Provider');
   const model = Setting.named('Model');
@@ -161,7 +167,7 @@ it('groups daily and provider controls and opens advanced settings beside their 
     return button;
   };
   await action(preset, 'Manage presets').click();
-  await action(timing, 'Timing settings').click();
+  await action(timing, 'Minimum words and timestamps').click();
   await action(context, 'Context settings').click();
   await action(model, 'Advanced model settings').click();
   expect(managePresets).toHaveBeenCalledOnce();

@@ -2,7 +2,8 @@ import type { App } from 'obsidian';
 import { Modal, Setting } from 'obsidian';
 
 import { t } from '../shared/i18n';
-import { addToggleSetting, type SettingAccess } from './setting-helpers';
+import { isDictationControlLocation } from './plugin-settings';
+import { addEnumSetting, addToggleSetting, type SettingAccess } from './setting-helpers';
 
 interface CustomizeToolsDependencies {
   access: SettingAccess;
@@ -66,6 +67,18 @@ class CustomizeToolsModal extends Modal {
       desc: t('settings.features.llmDesc'),
       key: 'llmFeaturesEnabled',
       onChange: onChanged,
+    });
+    addEnumSetting(this.contentEl, access, {
+      name: t('settings.dictationControl.name'),
+      desc: t('settings.dictationControl.description'),
+      key: 'dictationControlLocation',
+      isValid: isDictationControlLocation,
+      options: [
+        { value: 'ribbon', label: t('settings.dictationControl.ribbon') },
+        { value: 'status_bar', label: t('settings.dictationControl.statusBar') },
+        { value: 'both', label: t('settings.dictationControl.both') },
+        { value: 'commands_only', label: t('settings.dictationControl.commandsOnly') },
+      ],
     });
   }
 
