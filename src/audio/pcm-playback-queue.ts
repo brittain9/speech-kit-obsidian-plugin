@@ -26,11 +26,17 @@ export class PcmPlaybackQueue {
     private readonly createAudioContext: AudioContextFactory = () => new AudioContext(),
   ) {}
 
-  start(): void {
+  start(paused = false): Promise<void> | void {
     this.stop();
     this.generation += 1;
     this.context = this.createAudioContext();
     this.nextStartTime = this.context.currentTime;
+    if (paused) {
+      // Establish intent before yielding so Resume can safely follow a pending
+      // suspend. Callers await this before admitting replacement audio.
+      this.paused = true;
+      return this.context.suspend();
+    }
   }
 
   enqueue(sequence: number, sampleRate: number, pcm16le: Uint8Array): void {

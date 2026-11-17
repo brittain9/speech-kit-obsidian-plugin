@@ -261,8 +261,9 @@ export class ReadAloudController {
     if (speechLease === null) return;
     const releaseStartOperation = speechLease.retain();
     this.pendingStartRevision += 1;
+    const paused = this.state === 'paused';
     try {
-      await this.startChunks(remaining, speed, configuration, speechLease);
+      await this.startChunks(remaining, speed, configuration, speechLease, paused);
     } finally {
       releaseStartOperation();
     }
@@ -281,6 +282,7 @@ export class ReadAloudController {
     speed: number,
     configuration: SynthesisConfiguration,
     speechLease: SidecarLifecycleLease,
+    paused = false,
   ): Promise<void> {
     const previousSynthesisId = this.activeSynthesisId;
     if (previousSynthesisId !== null) {
@@ -298,8 +300,10 @@ export class ReadAloudController {
     this.lastPlayedSequence = -1;
     this.sampleRate = null;
     try {
-      this.playback.start();
-      this.setState('reading');
+      const preparingPlayback = this.playback.start(paused);
+      this.setState(paused ? 'paused' : 'reading');
+      if (preparingPlayback !== undefined) await preparingPlayback;
+      if (this.activeSynthesisId !== synthesisId) return;
       await this.deps.sidecarConnection.startSynthesis({
         chunks,
         ...configuration,
