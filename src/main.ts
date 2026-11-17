@@ -524,7 +524,7 @@ export default class LocalSttPlugin extends Plugin {
       getSecret: (secretId) => this.getSecret(secretId),
       getSettings: () => this.settings,
       getTarget: () => Session.getDictationTarget(this.app),
-      isDictationBusy: () => this.requireDictationController().isCaptureActive(),
+      isDictationBusy: () => this.requireDictationController().isBusy(),
       logger: this.logger,
       onModelMissing: () => {
         void this.openModelPicker();

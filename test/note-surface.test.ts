@@ -324,7 +324,7 @@ describe('NoteSurface', () => {
         setAnchorEffect.of(100),
         setAnchorModeEffect.of('visible'),
         setProvisionalTranscriptEffect.of({ from: 0, to: 1, utteranceId: 'u1' }),
-        setSessionProcessingEffect.of({ from: 0, to: 1 }),
+        setSessionProcessingEffect.of({ owner: surface, range: { from: 0, to: 1 } }),
       ],
     }).state;
     view.replaceEditorStateWithoutViewUpdate(replacementState);
@@ -333,7 +333,7 @@ describe('NoteSurface', () => {
     expect(surface.dispose()).toEqual(failure);
     expect(view.state.field(dictationAnchorStateField)).toEqual({ mode: 'hidden', pos: null });
     expect(view.state.field(provisionalTranscriptStateField).size).toBe(0);
-    expect(view.state.field(sessionProcessingStateField)).toBeNull();
+    expect(view.state.field(sessionProcessingStateField).size).toBe(0);
     expect(doc(view)).toBe(externalReplacement);
   });
 

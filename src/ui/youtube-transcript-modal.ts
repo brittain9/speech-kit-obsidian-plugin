@@ -129,6 +129,11 @@ class YouTubeTranscriptModal extends Modal {
       cls: 'local-stt-media-intro',
     });
 
+    this.contentEl.createEl('p', {
+      text: t('youtube.modal.dictationPlacement'),
+      cls: 'local-stt-media-source-hint',
+    });
+
     const urlSetting = new Setting(this.contentEl)
       .setName(t('youtube.modal.urlName'))
       .addText((text) => {

@@ -7,6 +7,7 @@ import {
   provisionalTranscriptExtension,
   provisionalTranscriptStateField,
 } from '../src/editor/provisional-transcript-extension';
+import { sessionProcessingExtension } from '../src/editor/session-processing-extension';
 
 function projection(text: string) {
   return {
@@ -486,4 +487,74 @@ it('can dispose the surface after the editor view is destroyed', () => {
   view.destroy();
   expect(surface.dispose()).toBeNull();
   expect(failure).not.toHaveBeenCalled();
+});
+
+it('keeps another session processing lock when an unrelated surface clears or disposes', () => {
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: 'speech captions',
+      extensions: [noteSurfaceUpdateListenerExtension(), sessionProcessingExtension()],
+    }),
+    parent: document.body,
+  });
+  const speech = new NoteSurface(view, { anchor: 'at_cursor' });
+  const captions = new NoteSurface(view, { anchor: 'at_cursor' });
+  speech.setProcessingRange({ from: 0, to: 6 });
+  captions.setProcessingRange(null);
+  captions.dispose();
+  view.dispatch({ changes: { from: 0, to: 6, insert: 'lost' } });
+  expect(view.state.doc.toString()).toBe('speech captions');
+  speech.setProcessingRange(null);
+  view.dispatch({ changes: { from: 0, to: 6, insert: 'editable' } });
+  expect(view.state.doc.toString()).toBe('editable captions');
+  speech.dispose();
+  view.destroy();
+});
+
+it('protects both processing regions while keeping the gap editable and releases only the owner', () => {
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: 'speech gap captions',
+      extensions: [noteSurfaceUpdateListenerExtension(), sessionProcessingExtension()],
+    }),
+    parent: document.body,
+  });
+  const speech = new NoteSurface(view, { anchor: 'at_cursor' });
+  const captions = new NoteSurface(view, { anchor: 'at_cursor' });
+  speech.setProcessingRange({ from: 0, to: 6 });
+  captions.setProcessingRange({ from: 11, to: 19 });
+  view.dispatch({ changes: { from: 7, to: 10, insert: 'typed gap' } });
+  expect(view.state.doc.toString()).toBe('speech typed gap captions');
+  view.dispatch({ changes: { from: 0, to: 6, insert: 'lost' } });
+  expect(view.state.doc.toString()).toBe('speech typed gap captions');
+  speech.dispose();
+  view.dispatch({ changes: { from: 0, to: 6, insert: 'editable' } });
+  expect(view.state.doc.toString()).toBe('editable typed gap captions');
+  view.dispatch({ changes: { from: 19, to: 27, insert: 'lost' } });
+  expect(view.state.doc.toString()).toBe('editable typed gap captions');
+  captions.dispose();
+  view.destroy();
+});
+
+it('appends a sibling transcript outside a processing boundary without extending the lock', () => {
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: 'speech',
+      selection: { anchor: 6 },
+      extensions: [noteSurfaceUpdateListenerExtension(), sessionProcessingExtension()],
+    }),
+    parent: document.body,
+  });
+  const speech = new NoteSurface(view, { anchor: 'at_cursor' });
+  speech.setProcessingRange({ from: 0, to: 6 });
+  const captions = new NoteSurface(view, { anchor: 'end_of_note' });
+  expect(captions.appendProjection('captions', projection('captions')).kind).toBe('appended');
+  expect(view.state.doc.toString()).toBe('speech\ncaptions');
+  view.dispatch({ changes: { from: 7, to: 15, insert: 'editable captions' } });
+  expect(view.state.doc.toString()).toBe('speech\neditable captions');
+  captions.dispose();
+  view.dispatch({ changes: { from: 0, to: 6, insert: 'lost' } });
+  expect(view.state.doc.toString()).toBe('speech\neditable captions');
+  speech.dispose();
+  view.destroy();
 });
