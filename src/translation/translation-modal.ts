@@ -36,6 +36,7 @@ export interface TranslationSnapshot {
   to: EditorPosition;
 }
 interface TranslationModalDependencies {
+  isFeatureEnabled: () => boolean;
   canReadAloud: (text: string, language: TranslationLanguage) => boolean;
   configuration: {
     model: CatalogModelRecord | null;
@@ -277,7 +278,8 @@ export class TranslationModal extends Modal {
     const operationActive = this.operationIsActive();
     const selectionPending =
       this.modelSelectionPending || this.dependencies.isModelSelectionPending();
-    const controlsActive = operationActive || selectionPending;
+    const controlsActive =
+      !this.dependencies.isFeatureEnabled() || operationActive || selectionPending;
     const modelSetting = new Setting(this.selectorsEl).setName(
       t('settings.translation.model.name'),
     );
@@ -289,7 +291,8 @@ export class TranslationModal extends Modal {
       dropdown.addOption('', t('translation.modal.chooseModel'));
       dropdown.setValue(this.draftModel === null ? '' : translationModelKey(this.draftModel));
       dropdown.setDisabled(
-        operationActive ||
+        !this.dependencies.isFeatureEnabled() ||
+          operationActive ||
           (selectionPending && !this.modelSelectionPending) ||
           options.length === 0,
       );
@@ -408,6 +411,7 @@ export class TranslationModal extends Modal {
   }
 
   private async changeDraftModel(value: string): Promise<void> {
+    if (!this.dependencies.isFeatureEnabled()) return;
     if (
       this.operationIsActive() ||
       (this.dependencies.isModelSelectionPending() && !this.modelSelectionPending)
@@ -562,6 +566,10 @@ export class TranslationModal extends Modal {
     this.renderReadAloudAction();
     this.renderActions();
   }
+  refreshFeatureAvailability(): void {
+    if (!this.closed) this.renderState();
+  }
+
   private renderState(): void {
     if (this.outputEl !== null) {
       if (this.state.phase === 'completed') {
@@ -743,6 +751,16 @@ export class TranslationModal extends Modal {
       );
       return;
     }
+    if (!this.dependencies.isFeatureEnabled() && this.state.phase !== 'completed') {
+      this.renderStatus(t('translation.notice.disabled'));
+      actions.addButton((button) =>
+        button.setButtonText(t('translation.modal.dismiss')).onClick(() => {
+          this.dependencies.onDismissed();
+          this.close();
+        }),
+      );
+      return;
+    }
     if (this.state.phase === 'missing_model') {
       const requirement =
         this.draftModel === null
@@ -814,13 +832,15 @@ export class TranslationModal extends Modal {
     if (this.state.phase !== 'completed') return;
     const current = this.resultIsCurrent();
     if (!current) {
-      actions.addButton((button) =>
-        button
-          .setButtonText(t('translation.modal.translateAgain'))
-          .setCta()
-          .setDisabled(this.modelSelectionPending || this.dependencies.isModelSelectionPending())
-          .onClick(() => this.requestFreshTranslation()),
-      );
+      if (this.dependencies.isFeatureEnabled()) {
+        actions.addButton((button) =>
+          button
+            .setButtonText(t('translation.modal.translateAgain'))
+            .setCta()
+            .setDisabled(this.modelSelectionPending || this.dependencies.isModelSelectionPending())
+            .onClick(() => this.requestFreshTranslation()),
+        );
+      }
       actions.addButton((button) =>
         button.setButtonText(t('translation.modal.copy')).onClick(() => void this.copy()),
       );
@@ -830,7 +850,11 @@ export class TranslationModal extends Modal {
           this.close();
         }),
       );
-      this.renderStatus(this.retryStatusText());
+      this.renderStatus(
+        this.dependencies.isFeatureEnabled()
+          ? this.retryStatusText()
+          : t('translation.notice.disabled'),
+      );
       return;
     }
     const canApply = this.state.sourceUnitsKept === 0;
@@ -858,6 +882,7 @@ export class TranslationModal extends Modal {
     );
   }
   private requestFreshTranslation(): void {
+    if (!this.dependencies.isFeatureEnabled()) return;
     if (!this.dependencies.sourceIsAvailable()) {
       this.renderActions();
       return;
@@ -871,6 +896,7 @@ export class TranslationModal extends Modal {
     );
   }
   private restart(source: TranslationLanguage, target: TranslationLanguage): void {
+    if (!this.dependencies.isFeatureEnabled()) return;
     if (!this.dependencies.sourceIsAvailable()) {
       this.renderActions();
       return;
@@ -886,6 +912,7 @@ export class TranslationModal extends Modal {
     this.dependencies.onRestart(source, target, this.currentStyleInstruction());
   }
   private async installPack(): Promise<void> {
+    if (!this.dependencies.isFeatureEnabled()) return;
     if (
       this.draftModel === null ||
       this.installingPack ||

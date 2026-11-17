@@ -37,6 +37,40 @@ afterEach(() => {
 });
 
 describe('YouTube transcript modal', () => {
+  it('starts transcript-only imports with AI hidden even when the saved media preset was enabled', async () => {
+    const registry = new YouTubeTranscriptModalRegistry();
+    const start = vi.fn(async (_url: string, _options: MediaTranscriptionJobOptions) => {});
+    registry.open({} as never, {
+      cancel: vi.fn(async () => {}),
+      getProgress: () => null,
+      getError: () => null,
+      getPartialTranscript: () => null,
+      getResultSource: () => null,
+      getAiResult: () => null,
+      getCompletedVideoId: () => null,
+      getSettings: () => ({
+        ...DEFAULT_PLUGIN_SETTINGS,
+        llmFeaturesEnabled: false,
+        mediaLlmProcessing: true,
+      }),
+      insertPartialTranscript: () => false,
+      isBusy: () => false,
+      isJobActive: () => false,
+      wasLastJobCancelled: () => false,
+      onManagePresets: vi.fn(),
+      start,
+      subscribeProgress: () => () => {},
+    });
+    expect(settings().some(({ name }) => name === t('youtube.modal.aiPreset'))).toBe(false);
+    settings()
+      .find(({ name }) => name === t('youtube.modal.urlName'))
+      ?.textComponents[0]?.change('https://www.youtube.com/watch?v=8MxG6tOkdNY');
+    await buttonNamed(t('media.modal.start')).click();
+    await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
+    expect(start.mock.calls[0]?.[1].mediaLlmSnapshot).toBeNull();
+    registry.closeAll();
+  });
+
   it('opens the preset editor and refreshes the selection after it closes', async () => {
     let onClosed: (() => void) | undefined;
     const onManagePresets = vi.fn((callback: () => void) => {

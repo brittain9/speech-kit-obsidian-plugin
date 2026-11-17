@@ -19,6 +19,10 @@ The decoder reads the audio track from common containers such as MP3, WAV, M4A, 
 
 Speech Kit retrieves the video's existing creator captions when available, otherwise its automatic captions. It does not translate captions into an unavailable language. The complete caption result is formatted and inserted once. This command needs an internet connection, but it does not download video or audio, run a speech model, or require the media decoder. If captions are missing, restricted, or cannot be read, the note is left unchanged.
 
+You can import captions while microphone dictation is listening or finishing. Captions are appended at the end of the original note during dictation; later speech stays in its own dictation region before the caption block. When dictation is idle, the normal insertion setting applies. Caption import does not take the speech engine away from dictation, so you can stop or restart dictation while captions load. Another media job must finish or be cancelled before starting a second import.
+
+Caption retrieval has no automatic audio fallback. To transcribe a local audio or video file instead, finish dictation and let accepted speech drain first; file transcription uses the speech engine and cannot overlap that work.
+
 ## AI presets and note safety
 
 Choose **Transcript only** to add the raw transcript without AI processing. If you choose a preset, Speech Kit applies that preset to the complete transcript after insertion. A local AI provider keeps transcript text on your computer; a remote provider receives transcript text. The audio or video file itself is never sent to an AI provider. If AI processing fails, the raw transcript remains in the note.

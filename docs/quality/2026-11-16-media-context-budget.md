@@ -10,4 +10,4 @@ Global file acquisition limits, four-hour media duration, in-memory decoded PCM 
 
 Validation: 58 controller/decoder tests passed; the full frontend gate passed (type checking, lint, 1,932 tests with ten skipped, and production build). Native segmentation behavior is covered by the existing `session` tests; no native behavior changed in this slice. Interactive long-media verification remains a separate combined-build check.
 
-After merging current main, the focused controller/decoder suite passed all 60 tests under Node 24.22.3 and the current lockfile, including the merged transcript recovery regressions. The resulting PR diff remains limited to this record, the controller, and its tests.
+After merging current main, the focused controller/decoder suite passed all 66 tests under Node 24.22.3 and the current lockfile, including the merged transcript recovery regressions. The resulting PR diff remains limited to this record, the controller, and its tests.

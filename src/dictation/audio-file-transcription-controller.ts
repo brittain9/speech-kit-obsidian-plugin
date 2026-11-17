@@ -344,7 +344,8 @@ export class AudioFileTranscriptionController {
   }
 
   isCaptureActive(): boolean {
-    return this.isBusy();
+    // Caption imports share media UI ownership, but never own speech inference.
+    return this.isBusy() && this.activeMediaProvider?.id !== 'youtube_captions';
   }
 
   async transcribe(): Promise<void> {
@@ -674,7 +675,7 @@ export class AudioFileTranscriptionController {
     mediaLlmJob: MediaLlmJob | null | undefined,
     signal: AbortSignal,
   ): Promise<void> {
-    this.revalidateTarget(target, signal);
+    this.revalidateTarget(target, signal, 'captions');
     const settings = this.dependencies.getSettings();
     const sessionId = randomUUID();
     const baseRendererOptions = createRendererOptions(settings, Date.now(), options);
@@ -693,7 +694,11 @@ export class AudioFileTranscriptionController {
         onLockedNoteDeleted: () => {},
         onSurfaceDesynchronized: () => {},
       },
-      placement: { anchor: settings.dictationAnchor },
+      // Keep captions out of a live or draining dictation range, even if the
+      // user moved the caret into the middle of that range while captions loaded.
+      placement: {
+        anchor: this.dependencies.isDictationBusy() ? 'end_of_note' : settings.dictationAnchor,
+      },
       rendererOptions,
       sessionId,
       target,
@@ -742,7 +747,7 @@ export class AudioFileTranscriptionController {
         warnings: [],
       };
       transcript.handleTranscript(event);
-      this.revalidateTarget(target, signal);
+      this.revalidateTarget(target, signal, 'captions');
       await transcript.commitStaged();
       transcriptCommitted = true;
       this.lastMediaResultSource = captions.source;
@@ -787,9 +792,8 @@ export class AudioFileTranscriptionController {
     this.activeMediaProvider = { abortController, id: 'youtube_captions' };
 
     try {
-      if (this.dependencies.isDictationBusy()) throw new Error(t('media.modal.alreadyRunning'));
       const target = this.dependencies.getTarget();
-      if (target === null) throw new AudioFileWorkflowError('audio-file-target-required');
+      if (target === null) throw new Error(t('youtube.modal.targetRequired'));
       const settings = this.dependencies.getSettings();
       const mediaLlmJob =
         options.mediaLlmSnapshot === undefined
@@ -1028,10 +1032,15 @@ export class AudioFileTranscriptionController {
     };
   }
 
-  private revalidateTarget(target: SessionTarget, signal: AbortSignal): void {
+  private revalidateTarget(
+    target: SessionTarget,
+    signal: AbortSignal,
+    workflow: 'audio' | 'captions' = 'audio',
+  ): void {
     this.throwIfCancelled(signal);
     const currentTarget = this.dependencies.getTarget();
     if (currentTarget === null || !Session.targetsEqual(target, currentTarget)) {
+      if (workflow === 'captions') throw new Error(t('youtube.modal.targetChanged'));
       throw new AudioFileWorkflowError('audio-file-target-changed');
     }
   }

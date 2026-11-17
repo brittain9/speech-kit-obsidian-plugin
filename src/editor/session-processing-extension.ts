@@ -12,70 +12,82 @@ export interface SessionProcessingRange {
   to: number;
 }
 
-export const setSessionProcessingEffect = StateEffect.define<SessionProcessingRange | null>();
+export const setSessionProcessingEffect = StateEffect.define<{
+  owner: object;
+  range: SessionProcessingRange | null;
+}>();
 
 // Internal dispatches (e.g. rewriteRegion) tag transactions with this so the
 // processing-range lock lets them through while still blocking user edits.
 export const bypassSessionProcessingLock = Annotation.define<true>();
 
-export const sessionProcessingStateField = StateField.define<SessionProcessingRange | null>({
-  create: () => null,
+export const sessionProcessingStateField = StateField.define<
+  ReadonlyMap<object, SessionProcessingRange>
+>({
+  create: () => new Map(),
   update(value, tr) {
-    let next = value;
-
-    if (next !== null && !tr.changes.empty) {
-      const mappedFrom = tr.changes.mapPos(next.from, -1);
-      const mappedTo = tr.changes.mapPos(next.to, 1);
-      next = mappedFrom < mappedTo ? { from: mappedFrom, to: mappedTo } : null;
+    if (
+      (tr.changes.empty || value.size === 0) &&
+      !tr.effects.some((effect) => effect.is(setSessionProcessingEffect))
+    ) {
+      return value;
     }
-
+    const next = new Map<object, SessionProcessingRange>();
+    for (const [owner, range] of value) {
+      // Sibling workflows may append at either boundary. That text remains
+      // outside this owner's processing region.
+      const from = tr.changes.mapPos(range.from, 1);
+      const to = tr.changes.mapPos(range.to, -1);
+      if (from < to) next.set(owner, { from, to });
+    }
     for (const effect of tr.effects) {
-      if (effect.is(setSessionProcessingEffect)) {
-        const range = effect.value;
-        next = range === null || range.from >= range.to ? null : { ...range };
-      }
+      if (!effect.is(setSessionProcessingEffect)) continue;
+      const { owner, range } = effect.value;
+      if (range === null || range.from >= range.to) next.delete(owner);
+      else next.set(owner, { ...range });
     }
-
     return next;
   },
 });
 
 const EMPTY_DECORATIONS: DecorationSet = Decoration.none;
-
 const PROCESSING_DECORATION = Decoration.mark({ class: 'local-stt-session-processing' });
 
 export const sessionProcessingDecorationsField = StateField.define<DecorationSet>({
-  create(state) {
-    return decorationsFor(state);
-  },
+  create: decorationsFor,
   update(value, tr) {
     const prev = tr.startState.field(sessionProcessingStateField, false);
     const next = tr.state.field(sessionProcessingStateField, false);
-    if (prev === next) {
-      return value;
-    }
-    return decorationsFor(tr.state);
+    return prev === next ? value : decorationsFor(tr.state);
   },
   provide: (field) => EditorView.decorations.from(field),
 });
 
-function decorationsFor(state: EditorState): DecorationSet {
-  const range = state.field(sessionProcessingStateField, false);
-  if (range === undefined || range === null) {
-    return EMPTY_DECORATIONS;
+function processingRanges(state: EditorState): SessionProcessingRange[] {
+  const ranges = [...(state.field(sessionProcessingStateField, false)?.values() ?? [])].sort(
+    (left, right) => left.from - right.from || left.to - right.to,
+  );
+  const merged: SessionProcessingRange[] = [];
+  for (const range of ranges) {
+    const previous = merged.at(-1);
+    if (previous !== undefined && range.from <= previous.to) {
+      previous.to = Math.max(previous.to, range.to);
+    } else merged.push({ ...range });
   }
-  return Decoration.set([PROCESSING_DECORATION.range(range.from, range.to)]);
+  return merged;
+}
+
+function decorationsFor(state: EditorState): DecorationSet {
+  const ranges = processingRanges(state);
+  return ranges.length === 0
+    ? EMPTY_DECORATIONS
+    : Decoration.set(ranges.map((range) => PROCESSING_DECORATION.range(range.from, range.to)));
 }
 
 const processingRangeLock = EditorState.changeFilter.of((tr) => {
-  if (tr.annotation(bypassSessionProcessingLock) === true) {
-    return true;
-  }
-  const range = tr.startState.field(sessionProcessingStateField, false);
-  if (range === undefined || range === null) {
-    return true;
-  }
-  return [range.from, range.to];
+  if (tr.annotation(bypassSessionProcessingLock) === true) return true;
+  const ranges = processingRanges(tr.startState);
+  return ranges.length === 0 ? true : ranges.flatMap((range) => [range.from, range.to]);
 });
 
 export function sessionProcessingExtension(): Extension {

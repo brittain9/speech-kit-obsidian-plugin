@@ -218,6 +218,25 @@ describe('resolveReadRange', () => {
 });
 
 describe('ReadAloudController', () => {
+  it('blocks new playback when hidden while preserving stop for already accepted speech', async () => {
+    const harness = controllerHarness({ selected: true });
+    harness.updateSettings({ readAloudEnabled: false });
+    expect(harness.controller.canReadText('Hello.', 'en')).toBe(false);
+    await harness.controller.readText('Hello.', 'en');
+    await harness.controller.read(editorFor('Hello.', { ch: 0, line: 0 }));
+    expect(harness.startSynthesis).not.toHaveBeenCalled();
+    expect(harness.stopDictation).not.toHaveBeenCalled();
+
+    harness.updateSettings({ readAloudEnabled: true });
+    await harness.controller.readText('Hello.', 'en');
+    expect(harness.startSynthesis).toHaveBeenCalledOnce();
+    harness.updateSettings({ readAloudEnabled: false });
+    expect(harness.controller.isActive()).toBe(true);
+    harness.controller.stop();
+    expect(harness.cancelSynthesis).toHaveBeenCalledOnce();
+    expect(harness.controller.isActive()).toBe(false);
+  });
+
   it('releases its speech lease when playback cannot start', async () => {
     const gate = new SidecarLifecycleGate();
     const harness = controllerHarness({ selected: true, sidecarLifecycleGate: gate });
