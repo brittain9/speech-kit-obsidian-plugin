@@ -1,0 +1,21 @@
+# Speech Kit's graph excludes separate projects and local experiments.
+/.worktrees/
+/obsidian-yt-transcript/
+/prototypes/
+/CONTEXT.md
+
+# Generated output, bundled dependencies, and the graph's own tooling.
+/graphify-out/
+/tools/graphify/
+/native/vendor/
+/references/
+/tasks/
+*.min.js
+package-lock.json
+Cargo.lock
+
+# Local credentials and runtime state, including files added after setup.
+.env
+.env.*
+*.pem
+*.key
