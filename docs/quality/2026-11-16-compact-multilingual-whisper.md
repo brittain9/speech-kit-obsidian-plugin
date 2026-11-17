@@ -96,10 +96,11 @@ which accelerator executed recognition or provide Metal performance measurements
 Native chooser QA found the existing English Small and new multilingual Small
 have nearly equal download sizes. The existing model now displays as **Whisper
 Small English**, with an English-only summary and detail note; its model ID,
-artifact, and defaults are unchanged. The frontend follow-up was integrated into
-QA, but the embedded native catalog still needs rebuilding before the final
-name check. Native automatic detection/cancellation were not reported in this
-smoke pass; their real-worker integration checks above passed separately. CUDA,
+artifact, and defaults are unchanged. After rebuilding the all-engine helper,
+root verified both distinct names in the native model chooser and restored
+Moonshine Tiny as the test-vault dictation model. Native automatic
+detection/cancellation were not reported in this smoke pass; their real-worker
+integration checks above passed separately. CUDA,
 Linux, Windows, and hours-long sustained use remain unverified.
 
 ## Architecture and model research outcome
