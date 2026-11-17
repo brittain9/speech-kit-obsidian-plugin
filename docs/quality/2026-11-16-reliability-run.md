@@ -14,7 +14,7 @@ roadmap. No release, release tag, or package version bump is authorized.
   and correction-rules PR #459. The personal vault is outside QA scope.
 - Graphify is pinned and isolated, with model backends disabled. Its local AST
   graph oriented ownership queries; actual source and tests established behavior.
-  The refreshed intermediate graph contained 7,826 nodes and 20,716 edges.
+  The refreshed intermediate graph contained 7,870 nodes and 20,903 edges at the intermediate main checkpoint; refresh after further merges before querying.
 - Node 24.22.3 and the dependency updates were reviewed against official sources.
   The combined QA worktree used a clean lockfile install under Node 24.22.3;
   npm reported zero vulnerabilities. A temporary npm cache avoided sandboxed
@@ -57,15 +57,16 @@ grouped when describing product improvements.
 The combined branch `/tmp/speech-kit-reliability-qa` integrates the reviewed source
 slices and current main. It is a local QA branch, not a release artifact.
 
-- Clean modern-dependency frontend gate: 2,034 passed, 15 skipped; both TypeScript
+- Clean modern-dependency frontend gate: 2,035 passed, 15 skipped; both TypeScript
   targets, Biome, Obsidian ESLint, and production frontend build passed.
 - Full project Rust quality command: formatting, all-engine Clippy with warnings
   denied, and 23 executed test suites: 425 passed, 35 ignored, zero failures.
   Ignored model/platform tests are not claimed as executed by that command.
 - The five real-client/installed-sidecar tests passed under Vitest 5.1.
 - Normal all-engine Mac debug helper, including Metal support, built successfully.
-  Installed JavaScript, styles and manifest hashes matched the QA source outputs;
-  the installed helper matched its install-manifest hash.
+  Manual tool comparisons recorded matching installed JavaScript, styles and manifest
+  hashes against QA outputs, and a matching helper install-manifest hash. The build
+  logs alone do not contain those comparisons.
 - Model-specific real inference and managed install checks are recorded separately
   in the model quality notes; their scope is not equivalent to every OS or accelerator.
 
@@ -109,30 +110,55 @@ slices and current main. It is a local QA branch, not a release artifact.
    hidden, retained keyboard focus, and distinguished stopped capture from finishing
    work. It fitted a narrower native window and light/dark themes. Original window,
    theme and ribbon settings were restored. The later configurable-location version
-   still needs native switching verification; prototype results do not establish it.
+   was also switched to Status bar in native Settings: the preference persisted,
+   the microphone ribbon control hid, and capture reached Listening. All four
+   locations have automated visibility/lifecycle coverage; not all four received
+   separate native capture trials.
 
-## Final reviewable slices and experiments
+## Further merged outcomes and current experiments
 
-- #560: separate whole-file decoder limits from model utterance context; native VAD
-  still bounds inference chunks. Focused controller/decoder regressions and CI passed.
-  Its normal merge is being reconciled with latest main; do not bypass repository rules.
-- #558: plain preset timing, direct preset editing, native sidebar restraint, and a
-  compact off-state. Off retains the toggle, active preset and Edit preset; Settings
-  and the enabled sidebar retain full configuration. Source review and CI passed;
-  final compact off/on native acceptance remains pending.
-- #561: one quick-control location choice (Ribbon default, Status bar, Both, Commands
-  only). Commands/hotkeys remain available, passive workflow status remains visible
-  during work, and visibility changes release animation/observer resources. Source
-  review and CI passed; native preference switching remains pending.
-- #554: external German Moonshine split-export support and honest unknown-tokenizer
-  probe rejection. This remains an exploratory draft, outside the shipping catalog.
-- #562: isolated Parakeet TDT export experiment. Short clips passed, but natural long
-  German failed badly, including real VAD sessions. An independent decoder reproduced
-  the raw output. Do not recommend or adopt this pinned export on leaderboard rank
-  or short-clip speed alone; this does not establish that every upstream export fails.
+- #560 merged: separate whole-file decoder limits from model utterance context;
+  native VAD still bounds inference chunks. Focused regressions and CI passed.
+- #558 merged: plain preset timing, direct preset editing, and a compact sidebar
+  off-state. Native checks showed the toggle, active Summary preset and Edit action
+  while off, and full timing/original/context controls while on.
+- #561 merged: one quick-control location choice: Ribbon (default), Status bar,
+  Both, or Commands only. Commands/hotkeys remain available; visibility changes
+  release animation and observer resources.
+- #565 merged: short phrase-finalization choices (Responsive, Balanced, Patient)
+  with explanations in the tooltip. Native labels and tooltip were checked.
+- #566: speaker settings open even with a streaming model. The inactive dialog
+  explains compatibility, preserves disabled saved options, and opens the existing
+  batch-only picker. Native navigation and collapsed timestamp-help spacing passed.
+  This changes guidance, not speaker identification quality.
+- #554 remains an exploratory draft outside the shipping catalog. Natural German
+  samples exposed accuracy weaknesses in the tested Tiny and Small split exports; successful
+  cancellation and short phrase boundaries do not establish adoption readiness.
+- #562 remains an isolated Parakeet TDT experiment. Short clips passed, but natural
+  long German failed, including real VAD sessions. An independent decoder reproduced
+  the raw output. This does not establish that every upstream export fails.
+- Qwen ASR is now explicitly authorized by the owner, superseding the earlier spec
+  exclusion. Native helper and packaging work is in progress. Neither a catalog
+  adoption nor streaming performance is claimed before completing integration review. Accuracy thresholds are provisional
+  evaluation aids, not a universal adoption veto.
 
-The last native step paused when the test-vault window became unavailable and
-Obsidian switched to another vault. Native actions stopped. Reopen test-vault to
-complete control-location and compact sidebar checks. Leave capture/recording off,
-restore temporary preferences, refresh Graphify after final main integration, and
-record any remaining unverified platform or hardware behavior. No release was made.
+Computer use temporarily lost a reliable target/focus across desktops. Actions
+stopped when the personal vault appeared. After the owner closed that vault,
+checks continued only in test-vault. Temporary preferences were restored to ribbon
+controls, AI transformation off, recording off, and Moonshine Tiny. The owner's
+selected Summary preset was preserved. Only the synthetic QA note was cleaned up.
+
+Speaker-label accuracy has not been established by these UX changes. The owner's
+reported batch-quality issue also needs a concrete failing fixture and workflow
+before attributing it to a decoder, segmentation, diarization, or transformation.
+No release was made.
+
+## Wrap-up and next pass
+
+The owner requested wrapping up before further model experiments. Preserve Qwen
+implementation and packaging as a draft, with unfinished checks explicit. Do not
+start another download or expand implementation during the handoff. Next, review
+GitHub Actions and historical model criteria for relevance and design. A worse
+accuracy score alone does not mean a model should not be supported. Preserve raw
+results and reconsider exclusions through matched comparisons and useful user
+tradeoffs. This clarification supersedes any earlier universal-gate wording.
