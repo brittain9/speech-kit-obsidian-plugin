@@ -418,6 +418,8 @@ export const en = {
   'translation.notice.copied': 'Copied the translation.',
   'translation.notice.copyFailed': 'Could not copy the translation.',
   'translation.notice.tooLong': 'Translate up to {count} characters at a time.',
+  'translation.notice.disabled':
+    'Translation is hidden. Enable it in Speech Kit settings to start another translation.',
   'translation.notice.noText': 'There is no text to translate in this note.',
   'common.reset': 'Reset',
   'common.actionFailed': 'Could not complete this action. Try again.',
@@ -442,6 +444,17 @@ export const en = {
   'settings.groups.model': 'Models',
   'settings.groups.readAloud': 'Read aloud',
   'settings.groups.translation': 'Translation',
+  'settings.features.title': 'Customize tools',
+  'settings.features.rowDescription': 'Choose which tools appear in Speech Kit.',
+  'settings.features.customize': 'Customize',
+  'settings.features.description':
+    'Hide tools you do not use. Your models and settings are kept, and active work can finish.',
+  'settings.features.translation': 'Translation',
+  'settings.features.translationDesc': 'Translate selected text or notes.',
+  'settings.features.readAloud': 'Read aloud',
+  'settings.features.readAloudDesc': 'Listen to notes with local speech models.',
+  'settings.features.llm': 'AI transformations',
+  'settings.features.llmDesc': 'Transform dictation and media transcripts with an AI provider.',
   'settings.groups.capture': 'Capture',
   'settings.groups.transcriptOutput': 'Transcript output',
   'settings.groups.llmTransformation': 'LLM transformation',
@@ -589,6 +602,13 @@ export const en = {
   'settings.systemAudio.ready': 'System audio is ready.',
   'settings.systemAudio.testFailed':
     'Could not test system audio. Check that the speech engine is installed and try again.',
+  'settings.speakerLabels.batchPickerGuidance':
+    'Showing batch speech models for speaker labels. Install and select a model to use it; your current model stays selected until you choose another.',
+  'settings.speakerLabels.inactiveStreaming':
+    'Not active with this streaming model. Choose a batch model to use speaker labels; your preference is kept.',
+  'settings.speakerLabels.numberedVoices':
+    'Group voices as Speaker 1, Speaker 2, and so on. Labels are estimates; review them for mistakes.',
+  'settings.speakerLabels.chooseModel': 'Choose batch model',
   'settings.speakerLabels.name': 'Speaker labels',
   'settings.speakerLabels.desc': 'Label each phrase by speaker.',
   'settings.speakerLabels.streamingLimitation': 'Speaker labels require a batch model.',
@@ -606,6 +626,12 @@ export const en = {
   'settings.timestamps.modal.title': 'Timestamp settings',
   'settings.timestamps.modal.intro':
     'Choose landmarks at intervals, phrase boundaries, or Smart paragraph breaks.',
+  'settings.timestamps.timingDetails': 'How timing works',
+  'settings.timestamps.timingDetailsDesc':
+    'Intervals add a landmark at the next phrase boundary, not on a timer. Every phrase uses finer model timestamps when available, and phrase starts otherwise. These are audio positions, not the time text appeared. For recorded audio, time since start refers to the recording.',
+  'settings.timestamps.example': 'Example · 30 seconds after a 14:00 start',
+  'settings.timestamps.clock.sinceStart': 'Time since start · (0:30)',
+  'settings.timestamps.clock.localTime': 'Local time · (14:00:30)',
   'settings.timestamps.clock.elapsed': 'Elapsed',
   'settings.timestamps.clock.wallClock': 'Wall clock',
   'settings.timestamps.frequency.atIntervals': 'At intervals',
@@ -916,6 +942,13 @@ export const en = {
     'The base URL cannot contain a query string or fragment.',
   'llm.routing.settingsSaveFailed': 'Could not save the provider settings. Try again.',
   'llm.sidebar.openSettings': 'Open settings',
+  'commands.openSpeechKit': 'Open Speech Kit',
+  'sidebar.openFailed': 'Speech Kit could not open its controls. Try the command again.',
+  'sidebar.controls.title': 'Speech Kit controls',
+  'sidebar.controls.description':
+    'Start or stop dictation from the Speech Kit view, even when the ribbon is hidden.',
+  'sidebar.dictation.title': 'Dictation',
+  'sidebar.dictation.destination': 'Writes to the note active when you start.',
   'llm.sidebar.eyebrow': 'Transcript workflow',
   'llm.sidebar.title': 'Transform dictation',
   'llm.sidebar.description': 'Choose how spoken text is shaped before it reaches your note.',
@@ -933,8 +966,8 @@ export const en = {
   'llm.sidebar.activePreset': 'Active preset',
   'llm.sidebar.unavailable.title': 'LLM features are unavailable',
   'llm.sidebar.unavailable.description':
-    'Enable LLM features in Speech Kit settings to configure transforms.',
-  'llm.sidebar.unavailable.summary': 'Enable LLM features in settings',
+    'Enable AI transformations in Settings → Speech Kit → Advanced → Customize tools.',
+  'llm.sidebar.unavailable.summary': 'Enable AI transformations in Customize tools',
   'llm.sidebar.off.title': 'Raw transcript mode',
   'llm.sidebar.off.description':
     'Dictation inserts the raw local transcript. Turn on Transform when you want cleanup, rewriting, or summaries.',

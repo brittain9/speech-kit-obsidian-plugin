@@ -79,7 +79,7 @@ describe('local media transcription modal', () => {
     expect(startFile).not.toHaveBeenCalled();
     registry.closeAll();
   });
-  it('keeps the file workflow focused on audio and video files', async () => {
+  it.each([true, false])('shows AI controls only when enabled: %s', async (enabled) => {
     const registry = new MediaTranscriptionModalRegistry();
     const onManagePresets = vi.fn();
     registry.open({} as never, {
@@ -90,7 +90,11 @@ describe('local media transcription modal', () => {
       getPartialTranscript: () => null,
       insertPartialTranscript: () => false,
       getProgress: () => null,
-      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      getSettings: () => ({
+        ...DEFAULT_PLUGIN_SETTINGS,
+        llmFeaturesEnabled: enabled,
+        mediaLlmProcessing: true,
+      }),
       isTranscribing: () => false,
       isJobActive: () => false,
       wasLastJobCancelled: () => false,
@@ -113,9 +117,9 @@ describe('local media transcription modal', () => {
     const opener = settings()
       .flatMap(({ extraButtonComponents }) => extraButtonComponents)
       .find(({ tooltip }) => tooltip === t('llm.preset.manager.title'));
-    expect(opener).toBeDefined();
+    expect(opener !== undefined).toBe(enabled);
     await opener?.click();
-    expect(onManagePresets).toHaveBeenCalledOnce();
+    expect(onManagePresets).toHaveBeenCalledTimes(enabled ? 1 : 0);
 
     registry.closeAll();
   });

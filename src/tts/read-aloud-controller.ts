@@ -140,6 +140,7 @@ export class ReadAloudController {
   }
 
   async read(editor: Editor, fallbackRange: ReadAloudFallbackRange = 'entire_note'): Promise<void> {
+    if (!this.deps.getSettings().readAloudEnabled) return;
     const source = editor.getValue();
     const range = resolveReadRange(editor, source, fallbackRange);
     const chunks = extractAndSegmentMarkdown(source, range);
@@ -158,12 +159,14 @@ export class ReadAloudController {
 
   canReadText(text: string, language: string): boolean {
     return (
+      this.deps.getSettings().readAloudEnabled &&
       extractAndSegmentMarkdown(text, undefined, { locale: language }).length > 0 &&
       this.resolveSynthesisConfiguration(language, 'capability_check') !== null
     );
   }
 
   async readText(text: string, language: string): Promise<void> {
+    if (!this.deps.getSettings().readAloudEnabled) return;
     const chunks = extractAndSegmentMarkdown(text, undefined, { locale: language });
     if (chunks.length === 0) {
       this.deps.feedback.show({ intent: 'warning', message: t('tts.notice.noText') });

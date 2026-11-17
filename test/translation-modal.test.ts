@@ -1124,6 +1124,7 @@ function createModal({
     targetLanguage: 'es',
   });
   return new TranslationModal({} as never, {
+    isFeatureEnabled: () => true,
     canReadAloud,
     configuration: {
       model: jobModel,

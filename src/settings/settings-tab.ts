@@ -28,7 +28,8 @@ import { LlmModelSettingsModal } from '../ui/llm-model-settings-modal';
 import { LlmTimingSettingsModal } from '../ui/llm-timing-settings-modal';
 import { MediaToolInstallModal } from '../ui/media-tool-install-modal';
 import { PresetManagerModal } from '../ui/preset-manager-modal';
-import { diarizationSettingDescription } from './diarization-setting';
+import { renderCustomizeToolsSetting } from './customize-tools-modal';
+import { renderDiarizationSetting } from './diarization-setting';
 import { DiarizationSettingsModal } from './diarization-settings-modal';
 import { applyDictationLanguageChange } from './dictation-language-setting';
 import { changeHardwareAcceleration } from './hardware-acceleration-action';
@@ -94,6 +95,7 @@ interface SettingsTabDependencies {
   modelInstallManager: ModelInstallManager;
   openModelPicker: (options?: ModelPickerOptions) => Promise<void>;
   openSetupWizard: () => Promise<void>;
+  openSpeechKit?: () => Promise<void>;
   sidecarVersion: string;
   resolvePluginDirectory: () => Promise<string>;
   resetLlmTransformation: () => Promise<void>;
@@ -257,10 +259,12 @@ export class LocalSttSettingTab extends PluginSettingTab {
       onModelInfo: this.buildModelInfoCallback(manager, 'stt'),
     });
 
-    const ttsModelContainer = modelSection.createDiv({ cls: 'local-stt-model-summary-slot' });
-    const translationModelContainer = modelSection.createDiv({
-      cls: 'local-stt-model-summary-slot',
-    });
+    const ttsModelContainer = settings.readAloudEnabled
+      ? modelSection.createDiv({ cls: 'local-stt-model-summary-slot' })
+      : null;
+    const translationModelContainer = settings.translationEnabled
+      ? modelSection.createDiv({ cls: 'local-stt-model-summary-slot' })
+      : null;
 
     const modelState = manager.getState();
     const selectedCapabilities = modelState.selectedModelCapabilities;
@@ -311,10 +315,10 @@ export class LocalSttSettingTab extends PluginSettingTab {
             model: deriveCurrentModelDisplay(modelState).displayName,
           })
         : t('settings.dictationLanguage.desc'),
-      coverage.readAloud
+      !settings.readAloudEnabled || coverage.readAloud
         ? null
         : t('settings.dictationLanguage.noReadAloud', { language: languageLabel }),
-      coverage.translation
+      !settings.translationEnabled || coverage.translation
         ? null
         : t('settings.dictationLanguage.noTranslation', { language: languageLabel }),
     ]
@@ -411,79 +415,75 @@ export class LocalSttSettingTab extends PluginSettingTab {
 
     this.renderTranscriptFormattingSetting(outputCard);
 
-    const diarizationSetting = addToggleSetting(outputCard, this.access, {
-      name: t('settings.speakerLabels.name'),
-      desc: '',
-      key: 'diarizationEnabled',
-    });
-    const updateDiarizationDesc = (): void => {
-      const caps = manager.getState().selectedModelCapabilities;
-      diarizationSetting.setDesc(
-        diarizationSettingDescription(
-          caps.status === 'ready' && caps.capabilities.family.supportsStreaming,
-        ),
-      );
-    };
-    updateDiarizationDesc();
-    this.disposeDiarizationDesc = manager.subscribe(updateDiarizationDesc);
-    diarizationSetting.addExtraButton((button) => {
-      button
-        .setIcon('sliders-horizontal')
-        .setTooltip(t('settings.speakerLabels.modal.title'))
-        .onClick(() => {
-          new DiarizationSettingsModal(this.app, {
-            getSettings: () => this.dependencies.getSettings(),
-            savePatch: (patch) =>
-              this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
-          }).open();
-        });
-      button.extraSettingsEl.setAttribute('aria-label', t('settings.speakerLabels.modal.title'));
+    this.disposeDiarizationDesc = renderDiarizationSetting(outputCard, {
+      getSettings: () => this.dependencies.getSettings(),
+      saveEnabled: (enabled) => this.access.persistOne('diarizationEnabled', enabled),
+      streamingModelSelected: () => {
+        const caps = manager.getState().selectedModelCapabilities;
+        return caps.status === 'ready' && caps.capabilities.family.supportsStreaming;
+      },
+      subscribe: (listener) => manager.subscribe(listener),
+      chooseModel: () => {
+        void this.openModelPickerFromSettings(
+          { initialTask: 'stt', requireBatchStt: true, onChanged: () => this.refreshSettingsTab() },
+          t('settings.speakerLabels.name'),
+        );
+      },
+      configure: () => {
+        new DiarizationSettingsModal(this.app, {
+          getSettings: () => this.dependencies.getSettings(),
+          savePatch: (patch) =>
+            this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
+        }).open();
+      },
     });
 
     this.renderTimestampSettings(outputCard, settings);
 
-    // --- Read aloud ---
-    const readAloudSection = createSettingGroup(containerEl, t('settings.groups.readAloud'));
-    const hotkeySetting = new Setting(readAloudSection)
-      .setName(t('settings.readAloud.hotkey'))
-      .setDesc(t('settings.readAloud.hotkeyDesc'))
-      .addButton((button) => {
-        button.setButtonText(t('setup.wizard.openHotkeySettings')).onClick(() => {
-          openFilteredHotkeySettings(this.app, t('commands.readAloud'), (error) => {
-            this.dependencies.feedback.show({
-              cause: error,
-              intent: 'warning',
-              message: t('setup.wizard.openHotkeySettingsFallback'),
+    if (ttsModelContainer !== null) {
+      // --- Read aloud ---
+      const readAloudSection = createSettingGroup(containerEl, t('settings.groups.readAloud'));
+      const hotkeySetting = new Setting(readAloudSection)
+        .setName(t('settings.readAloud.hotkey'))
+        .setDesc(t('settings.readAloud.hotkeyDesc'))
+        .addButton((button) => {
+          button.setButtonText(t('setup.wizard.openHotkeySettings')).onClick(() => {
+            openFilteredHotkeySettings(this.app, t('commands.readAloud'), (error) => {
+              this.dependencies.feedback.show({
+                cause: error,
+                intent: 'warning',
+                message: t('setup.wizard.openHotkeySettingsFallback'),
+              });
             });
           });
         });
-      });
 
-    renderReadAloudHighlightSetting(readAloudSection, this.access);
+      renderReadAloudHighlightSetting(readAloudSection, this.access);
 
-    new Setting(readAloudSection)
-      .setName(t('settings.readAloud.speed'))
-      .setDesc(t('settings.readAloud.speedDesc'))
-      .addSlider((slider) => {
-        configureReadAloudSpeedSlider(slider, settings.ttsSpeed, (speed) =>
-          this.access.persistOne('ttsSpeed', speed),
-        );
-      });
+      new Setting(readAloudSection)
+        .setName(t('settings.readAloud.speed'))
+        .setDesc(t('settings.readAloud.speedDesc'))
+        .addSlider((slider) => {
+          configureReadAloudSpeedSlider(slider, settings.ttsSpeed, (speed) =>
+            this.access.persistOne('ttsSpeed', speed),
+          );
+        });
 
-    this.disposeReadAloudSection = renderTextToSpeechSettings(
-      ttsModelContainer,
-      readAloudSection,
-      hotkeySetting.settingEl,
-      {
-        getSettings: () => this.dependencies.getSettings(),
-        manager,
-        openSelectedModelDetails: this.buildModelInfoCallback(manager, 'tts'),
-        openModelPicker: (options) =>
-          this.openModelPickerFromSettings(options ?? {}, t('settings.model.task.tts')),
-        persistLanguage: (language) => this.access.persistOne('readAloudLanguage', language),
-        persistVoice: (voice) => this.access.persistOne('selectedTtsVoice', voice),
-      },
-    );
+      this.disposeReadAloudSection = renderTextToSpeechSettings(
+        ttsModelContainer,
+        readAloudSection,
+        hotkeySetting.settingEl,
+        {
+          getSettings: () => this.dependencies.getSettings(),
+          manager,
+          openSelectedModelDetails: this.buildModelInfoCallback(manager, 'tts'),
+          openModelPicker: (options) =>
+            this.openModelPickerFromSettings(options ?? {}, t('settings.model.task.tts')),
+          persistLanguage: (language) => this.access.persistOne('readAloudLanguage', language),
+          persistVoice: (voice) => this.access.persistOne('selectedTtsVoice', voice),
+        },
+      );
+    }
 
     const translationSettingsDependencies = {
       getSettings: () => this.dependencies.getSettings(),
@@ -507,72 +507,76 @@ export class LocalSttSettingTab extends PluginSettingTab {
       },
     } satisfies TranslationSettingsDependencies;
 
-    this.disposeTranslationModelSection = renderTranslationModelSetting(
-      translationModelContainer,
-      translationSettingsDependencies,
-    );
+    if (translationModelContainer !== null) {
+      this.disposeTranslationModelSection = renderTranslationModelSetting(
+        translationModelContainer,
+        translationSettingsDependencies,
+      );
 
-    // --- Translation ---
-    const translationSection = createSettingGroup(containerEl, t('settings.groups.translation'));
-    this.disposeTranslationSection = renderTranslationSettings(
-      translationSection,
-      translationSettingsDependencies,
-    );
+      // --- Translation ---
+      const translationSection = createSettingGroup(containerEl, t('settings.groups.translation'));
+      this.disposeTranslationSection = renderTranslationSettings(
+        translationSection,
+        translationSettingsDependencies,
+      );
+    }
 
-    const llmSectionGeneration = this.llmSectionGeneration;
-    this.disposeLlmSection = renderLlmProviderSettings(containerEl, {
-      app: this.app,
-      feedback: this.dependencies.feedback,
-      getSecret: this.dependencies.getSecret,
-      getSettings: this.dependencies.getSettings,
-      logger: this.dependencies.logger,
-      persist: (mutation) => this.dependencies.mutateLlmSettings(mutation),
-      mutatePresetState: this.dependencies.mutatePresetState,
-      managePresets: () => {
-        void this.dependencies.synchronizePresets().then(() => {
-          if (this.llmSectionGeneration !== llmSectionGeneration) return;
-          new PresetManagerModal(this.app, {
-            feedback: this.dependencies.feedback,
+    if (settings.llmFeaturesEnabled) {
+      const llmSectionGeneration = this.llmSectionGeneration;
+      this.disposeLlmSection = renderLlmProviderSettings(containerEl, {
+        app: this.app,
+        feedback: this.dependencies.feedback,
+        getSecret: this.dependencies.getSecret,
+        getSettings: this.dependencies.getSettings,
+        logger: this.dependencies.logger,
+        persist: (mutation) => this.dependencies.mutateLlmSettings(mutation),
+        mutatePresetState: this.dependencies.mutatePresetState,
+        managePresets: () => {
+          void this.dependencies.synchronizePresets().then(() => {
+            if (this.llmSectionGeneration !== llmSectionGeneration) return;
+            new PresetManagerModal(this.app, {
+              feedback: this.dependencies.feedback,
+              getSettings: this.dependencies.getSettings,
+              mutatePresetState: this.dependencies.mutatePresetState,
+              onClose: () => this.refreshSettingsTab(),
+            }).open();
+          });
+        },
+        openContextSettings: () => {
+          new LlmContextSettingsModal(this.app, {
             getSettings: this.dependencies.getSettings,
-            mutatePresetState: this.dependencies.mutatePresetState,
-            onClose: () => this.refreshSettingsTab(),
+            savePatch: (patch) =>
+              this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
           }).open();
-        });
-      },
-      openContextSettings: () => {
-        new LlmContextSettingsModal(this.app, {
-          getSettings: this.dependencies.getSettings,
-          savePatch: (patch) =>
-            this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
-        }).open();
-      },
-      openTimingSettings: () => {
-        new LlmTimingSettingsModal(this.app, {
-          getSettings: this.dependencies.getSettings,
-          savePatch: (patch) =>
-            this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
-        }).open();
-      },
-      openModelSettings: () => {
-        new LlmModelSettingsModal(this.app, {
-          getSettings: this.dependencies.getSettings,
-          savePatch: (patch) =>
-            this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
-        }).open();
-      },
-      restoreDefaults: () => {
-        new ConfirmModal(this.app, {
-          confirmLabel: t('settings.llm.restoreDefaults.button'),
-          destructive: true,
-          message: t('settings.llm.restoreDefaults.confirmEditableMessage'),
-          onConfirm: async () => {
-            await this.dependencies.resetLlmTransformation();
-            this.refreshSettingsTab();
-          },
-          title: t('settings.llm.restoreDefaults.name'),
-        }).open();
-      },
-    });
+        },
+        openTimingSettings: () => {
+          new LlmTimingSettingsModal(this.app, {
+            getSettings: this.dependencies.getSettings,
+            savePatch: (patch) =>
+              this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
+          }).open();
+        },
+        openModelSettings: () => {
+          new LlmModelSettingsModal(this.app, {
+            getSettings: this.dependencies.getSettings,
+            savePatch: (patch) =>
+              this.dependencies.mutateLlmSettings((current) => ({ ...current, ...patch })),
+          }).open();
+        },
+        restoreDefaults: () => {
+          new ConfirmModal(this.app, {
+            confirmLabel: t('settings.llm.restoreDefaults.button'),
+            destructive: true,
+            message: t('settings.llm.restoreDefaults.confirmEditableMessage'),
+            onConfirm: async () => {
+              await this.dependencies.resetLlmTransformation();
+              this.refreshSettingsTab();
+            },
+            title: t('settings.llm.restoreDefaults.name'),
+          }).open();
+        },
+      });
+    }
 
     // --- Engine options ---
     // Built inline (rather than via createSettingGroup) so renderEngineOptions
@@ -655,6 +659,28 @@ export class LocalSttSettingTab extends PluginSettingTab {
       changeModelStore: (path) => this.dependencies.modelInstallManager.changeModelStore(path),
       feedback: this.dependencies.feedback,
     });
+
+    renderCustomizeToolsSetting(advancedSection, this.app, {
+      access: this.access,
+      onChanged: () => this.refreshSettingsTab(),
+      onDialogOpened: () =>
+        this.lifecycle.focusAfterDialog({
+          settingName: t('settings.features.title'),
+          controlIndex: 0,
+        }),
+    });
+
+    if (this.dependencies.openSpeechKit !== undefined) {
+      new Setting(advancedSection)
+        .setName(t('sidebar.controls.title'))
+        .setDesc(t('sidebar.controls.description'))
+        .addButton((button) => {
+          button.setButtonText(t('commands.openSpeechKit')).onClick(() => {
+            (this.app as App & { setting?: { close: () => void } }).setting?.close();
+            void this.dependencies.openSpeechKit?.();
+          });
+        });
+    }
 
     new Setting(advancedSection)
       .setName(t('settings.runSetup.name'))

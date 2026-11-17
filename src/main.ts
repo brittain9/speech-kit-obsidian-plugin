@@ -17,7 +17,7 @@ import { pickLocalAudioFile } from './audio/local-audio-file-picker';
 import { isMediaToolInstalled } from './audio/media-tool-installer';
 import { MicrophoneRecording, MicrophoneRecordingWriter } from './audio/microphone-recording';
 import { SidecarAudioLevelMeter } from './audio/sidecar-audio-level-meter';
-import { registerCommands } from './commands/register-commands';
+import { registerCommands, registerEditorMenu } from './commands/register-commands';
 import { AudioFileTranscriptionController } from './dictation/audio-file-transcription-controller';
 import { DictationSessionController } from './dictation/dictation-session-controller';
 import { FinalizedUtteranceAutoCopy } from './dictation/finalized-utterance-auto-copy';
@@ -112,6 +112,7 @@ import { LOCAL_DICTATION_VIEW_TYPE, LocalDictationView } from './ui/local-dictat
 import { renderMediaProgressStatus } from './ui/media-progress-presenter';
 import { MediaToolInstallModal } from './ui/media-tool-install-modal';
 import { MediaTranscriptionModalRegistry } from './ui/media-transcription-modal';
+import { openSpeechKitView } from './ui/open-speech-kit-view';
 import { PresetManagerModal } from './ui/preset-manager-modal';
 import { YouTubeTranscriptModalRegistry } from './ui/youtube-transcript-modal';
 
@@ -245,6 +246,8 @@ export default class LocalSttPlugin extends Plugin {
       LOCAL_DICTATION_VIEW_TYPE,
       (leaf) =>
         new LocalDictationView(leaf, {
+          getDictationState: () => this.dictationController?.getState() ?? 'idle',
+          toggleDictation: () => this.requireDictationController().toggleDictation(),
           feedback: this.feedback,
           openSettings: () => {
             const host = this.app as unknown as {
@@ -339,6 +342,9 @@ export default class LocalSttPlugin extends Plugin {
       },
       setRibbonState: (state) => {
         this.ribbonController?.setState(state);
+        for (const leaf of this.app.workspace.getLeavesOfType(LOCAL_DICTATION_VIEW_TYPE)) {
+          if (leaf.view instanceof LocalDictationView) leaf.view.updateDictationState(state);
+        }
       },
       setRibbonQueueTier: (tier) => {
         this.ribbonController?.setQueueTier(tier);
@@ -585,6 +591,7 @@ export default class LocalSttPlugin extends Plugin {
         modelInstallManager: this.requireModelInstallManager(),
         openModelPicker: (options) => this.openModelPicker(options),
         openSetupWizard: () => this.openSetupWizard(),
+        openSpeechKit: () => this.openSpeechKit(),
         sidecarVersion: REQUIRED_SIDECAR_VERSION,
         resolvePluginDirectory: () => this.resolvePluginDirectoryPath(),
         resetLlmTransformation: () =>
@@ -601,6 +608,8 @@ export default class LocalSttPlugin extends Plugin {
     );
 
     registerCommands({
+      getSettings: () => this.settings,
+      openSpeechKit: () => this.openSpeechKit(),
       cancelAudioFile: async () => this.requireAudioFileTranscriptionController().cancel(),
       cancelDictation: async () => this.requireDictationController().cancelDictation(),
       clearLastUtterance: () => {
@@ -721,24 +730,11 @@ export default class LocalSttPlugin extends Plugin {
     });
 
     this.registerEvent(
-      this.app.workspace.on('editor-menu', (menu, editor, view) => {
-        if (!editor.somethingSelected()) return;
-        menu.addItem((item) => {
-          item
-            .setTitle(t('commands.translateSelection'))
-            .setIcon('languages')
-            .onClick(() => {
-              this.requireTranslationController().translateSelection(editor, view);
-            });
-        });
-        menu.addItem((item) => {
-          item
-            .setTitle(t('commands.readAloud'))
-            .setIcon('audio-lines')
-            .onClick(() => {
-              void this.requireReadAloudController().read(editor);
-            });
-        });
+      registerEditorMenu(this.app.workspace, {
+        getSettings: () => this.settings,
+        readAloud: (editor) => this.requireReadAloudController().read(editor),
+        translateSelection: (editor, view) =>
+          this.requireTranslationController().translateSelection(editor, view),
       }),
     );
 
@@ -779,6 +775,12 @@ export default class LocalSttPlugin extends Plugin {
     }
   }
 
+  private async openSpeechKit(): Promise<void> {
+    if (!(await openSpeechKitView(this.app.workspace))) {
+      this.feedback.show({ intent: 'warning', message: t('sidebar.openFailed') });
+    }
+  }
+
   private async ensureLocalDictationSidebar(): Promise<void> {
     if (this.app.workspace.getLeavesOfType(LOCAL_DICTATION_VIEW_TYPE).length > 0) {
       return;
@@ -792,9 +794,6 @@ export default class LocalSttPlugin extends Plugin {
   }
 
   private async bootstrapLocalDictationSidebar(): Promise<void> {
-    if (!this.settings.llmFeaturesEnabled) {
-      return;
-    }
     if (this.settings.localTranscriptSidebarBootstrapped) {
       return;
     }
@@ -807,14 +806,7 @@ export default class LocalSttPlugin extends Plugin {
   }
 
   private async syncLocalDictationSidebar(): Promise<void> {
-    if (!this.settings.llmFeaturesEnabled) {
-      for (const leaf of this.app.workspace.getLeavesOfType(LOCAL_DICTATION_VIEW_TYPE)) {
-        leaf.detach();
-      }
-      return;
-    }
-
-    await this.ensureLocalDictationSidebar();
+    this.requestLocalDictationSidebarRefresh();
   }
 
   async openSetupWizard(options: { throwOnFailure?: boolean } = {}): Promise<void> {
@@ -839,6 +831,7 @@ export default class LocalSttPlugin extends Plugin {
       isSidecarInstalled: () => this.isSidecarInstalled(),
       logger: this.logger,
       modelInstallManager: this.requireModelInstallManager(),
+      openSpeechKit: () => this.openSpeechKit(),
       onCompleted: async () => {
         await this.updateSettings({
           ...this.settings,
@@ -883,6 +876,7 @@ export default class LocalSttPlugin extends Plugin {
             ...(pickerOptions.initialTask === undefined
               ? {}
               : { initialTask: pickerOptions.initialTask }),
+            requireBatchStt: pickerOptions.requireBatchStt ?? false,
             manager: this.requireModelInstallManager(),
             onChanged: pickerOptions.onChanged ?? (() => {}),
             ...(pickerOptions.onClosed === undefined ? {} : { onClosed: pickerOptions.onClosed }),
@@ -1086,6 +1080,12 @@ export default class LocalSttPlugin extends Plugin {
     this.rawTranscriptRecovery.setEnabled(this.settings.retainLastUtterance);
     if (options.persist) {
       await this.saveData(this.settings);
+    }
+    if (
+      previousSettings.translationEnabled !== this.settings.translationEnabled ||
+      previousSettings.readAloudEnabled !== this.settings.readAloudEnabled
+    ) {
+      this.translationController?.onSettingsChanged();
     }
     if (previousSettings.highlightSpokenText !== this.settings.highlightSpokenText) {
       this.readAloudFollowAlong?.setEnabled(this.settings.highlightSpokenText);

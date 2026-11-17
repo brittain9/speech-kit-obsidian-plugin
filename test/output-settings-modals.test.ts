@@ -11,6 +11,26 @@ describe('transcript output settings modals', () => {
     MockSetting.reset();
   });
 
+  it('shows a live renderer example and hides the interval outside interval mode', () => {
+    const modal = new TimestampSettingsModal({} as App, {
+      getSettings: () => DEFAULT_PLUGIN_SETTINGS,
+      savePatch: vi.fn(async () => {}),
+    });
+    modal.open();
+    const preview = modal.contentEl.querySelector('pre');
+    expect(preview?.textContent).toContain('[2026-01-01 14:00]');
+    expect(preview?.textContent).toContain('(0:30)');
+    MockSetting.named('Session header').onlyToggle().change(false);
+    expect(preview?.textContent).not.toContain('[2026-01-01 14:00]');
+    MockSetting.named('Reference clock').onlyDropdown().change('wallclock');
+    expect(preview?.textContent).toContain('(14:00:30)');
+    MockSetting.named('Frequency').onlyDropdown().change('every_utterance');
+    expect(MockSetting.named('Interval').settingEl.style.display).toBe('none');
+    expect(preview?.textContent).toContain('(14:00:30)');
+    MockSetting.named('Frequency').onlyDropdown().change('sparse');
+    expect(MockSetting.named('Interval').settingEl.style.display).toBe('');
+  });
+
   it('announces an invalid timestamp interval without persisting it', async () => {
     const saveSettings = vi.fn(async () => {});
     new TimestampSettingsModal({} as App, {

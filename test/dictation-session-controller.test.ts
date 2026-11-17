@@ -1215,6 +1215,58 @@ describe('DictationSessionController', () => {
     });
   });
 
+  it('keeps active output settings stable and applies advanced preferences only to the next session', async () => {
+    const sidecarConnection = new FakeSidecarConnection();
+    let settings = createSettings({ selectedModel: createExternalModelSelection() });
+    const renderers: TranscriptRenderOptions[] = [];
+    const controller = createController({
+      sidecarConnection,
+      getSettings: () => settings,
+      createSession: (_session, options) => renderers.push(options.rendererOptions),
+    });
+    await controller.startDictation();
+    const first = sidecarConnection.startSession.mock.calls[0]?.[0];
+    settings = {
+      ...settings,
+      timestampsEnabled: true,
+      timestampClock: 'wallclock',
+      timestampDensity: 'every_utterance',
+      timestampSessionHeader: false,
+      diarizationEnabled: true,
+      diarizationMaxSpeakers: 2,
+    };
+    await controller.startDictation();
+    expect(sidecarConnection.startSession).toHaveBeenCalledTimes(1);
+    expect(first).toMatchObject({ diarizationEnabled: false, diarizationMaxSpeakers: null });
+    expect(renderers[0]?.timestamps).toMatchObject({
+      enabled: false,
+      clock: 'elapsed',
+      density: 'sparse',
+      header: true,
+    });
+    await controller.stopDictation();
+    sidecarConnection.emit({
+      type: 'session_stopped',
+      sessionId: first?.sessionId ?? '',
+      reason: 'user_stop',
+    });
+    await vi.waitFor(() => expect(controller.getState()).toBe('idle'));
+    await controller.startDictation();
+    expect(sidecarConnection.startSession).toHaveBeenCalledTimes(2);
+    expect(sidecarConnection.startSession.mock.calls[1]?.[0]).toMatchObject({
+      diarizationEnabled: true,
+      diarizationMaxSpeakers: 2,
+    });
+    expect(renderers[1]?.timestamps).toMatchObject({
+      enabled: true,
+      clock: 'wallclock',
+      density: 'every_utterance',
+      header: false,
+    });
+    expect(settings).toMatchObject({ timestampsEnabled: true, diarizationEnabled: true });
+    controller.dispose();
+  });
+
   it('passes the configured speaker limit to the sidecar session', async () => {
     const sidecarConnection = new FakeSidecarConnection();
     const controller = createController({
