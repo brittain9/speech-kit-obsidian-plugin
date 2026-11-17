@@ -300,3 +300,55 @@ it('does not publish desktop updates before the native process acknowledges supp
   desktop.publishDesktopStatus();
   expect(updateDesktopStatus).toHaveBeenCalledOnce();
 });
+
+it('restores action generation after real settings off/on while native ACK is pending', async () => {
+  const actualPlugin = new LocalSttPlugin(
+    { vault: { getName: () => 'Test' }, workspace: {} } as unknown as import('obsidian').App,
+    { id: 'local-dictation' } as import('obsidian').PluginManifest,
+  );
+  const configure = vi.fn(async () => ({ owner: true }));
+  Object.assign(actualPlugin, {
+    settings: {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      desktopControlsEnabled: true,
+      showDesktopStatusIcon: true,
+    },
+    sidecarConnection: { configureDesktop: configure, updateDesktopStatus: vi.fn() },
+    dictationController: {},
+    refreshDictationControls: vi.fn(),
+    publishDesktopStatus: vi.fn(),
+  });
+  const plugin = actualPlugin as unknown as {
+    settings: typeof DEFAULT_PLUGIN_SETTINGS;
+    desktopGeneration: string;
+    desktopControls: { setGeneration: (generation: string) => void };
+    configureDesktop: () => Promise<void>;
+    applySettings: (
+      settings: typeof DEFAULT_PLUGIN_SETTINGS,
+      options: { persist: boolean },
+    ) => Promise<void>;
+  };
+  const generation = vi.spyOn(plugin.desktopControls, 'setGeneration');
+  vi.stubGlobal('Notification', { permission: 'denied' });
+  let acknowledge!: (value: { owner: boolean }) => void;
+  configure.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        acknowledge = resolve;
+      }),
+  );
+  const configuring = plugin.configureDesktop();
+  await vi.waitFor(() => expect(acknowledge).toBeDefined());
+  await plugin.applySettings(
+    { ...plugin.settings, desktopControlsEnabled: false },
+    { persist: false },
+  );
+  await plugin.applySettings(
+    { ...plugin.settings, desktopControlsEnabled: true },
+    { persist: false },
+  );
+  acknowledge({ owner: true });
+  await configuring;
+  await plugin.configureDesktop();
+  expect(generation).toHaveBeenLastCalledWith(plugin.desktopGeneration);
+});

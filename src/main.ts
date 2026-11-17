@@ -175,6 +175,7 @@ export default class LocalSttPlugin extends Plugin {
   private desktopDisposed = false;
   private desktopRecoveryAttempted = false;
   private desktopConfiguration = '';
+  private desktopConfigurationDirty = false;
   private readonly desktopControls = new DesktopControls({
     toggle: async () => {
       const revision = ++this.desktopActionRevision;
@@ -1220,9 +1221,10 @@ export default class LocalSttPlugin extends Plugin {
       this.settings.globalDictationShortcut,
       this.settings.showDesktopStatusIcon,
     ]);
-    if (configuration === this.desktopConfiguration) return;
+    if (configuration === this.desktopConfiguration && !this.desktopConfigurationDirty) return;
     if (!this.desktopEnabled() && this.desktopConfiguration === '') return;
     this.desktopConfiguration = configuration;
+    this.desktopConfigurationDirty = false;
     if (
       this.desktopEnabled() &&
       typeof Notification !== 'undefined' &&
@@ -1384,7 +1386,17 @@ export default class LocalSttPlugin extends Plugin {
   ): Promise<void> {
     const previousSettings = this.settings;
     this.settings = resolvePluginSettings(nextSettings);
-    if (!this.desktopEnabled()) this.desktopControls.setGeneration('disabled');
+    if (!this.desktopEnabled()) {
+      this.desktopControls.setGeneration('disabled');
+      if (
+        this.desktopConfiguration !== '' &&
+        previousSettings.desktopControlsEnabled &&
+        (previousSettings.showDesktopStatusIcon ||
+          previousSettings.globalDictationShortcut.length > 0)
+      ) {
+        this.desktopConfigurationDirty = true;
+      }
+    }
     if (this.dictationController !== null) void this.configureDesktop();
     this.refreshDictationControls();
     const llmWasDisabled = previousSettings.llmFeaturesEnabled && !this.settings.llmFeaturesEnabled;
