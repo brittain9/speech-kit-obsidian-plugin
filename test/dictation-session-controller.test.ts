@@ -4238,3 +4238,22 @@ function transcriptReady(
     ...overrides,
   };
 }
+
+it('starts replacement dictation on the first toggle after a sidecar failure', async () => {
+  const sidecarConnection = new FakeSidecarConnection();
+  const captureStream = new FakeCaptureStream();
+  const controller = createController({ sidecarConnection, captureStream });
+  await controller.startDictation();
+  sidecarConnection.emit({
+    type: 'error',
+    code: 'sidecar_exited',
+    message: 'The sidecar process exited unexpectedly.',
+  });
+  await vi.waitFor(() => expect(controller.isBusy()).toBe(false));
+  expect(controller.getState()).toBe('error');
+  await controller.toggleDictation();
+  expect(sidecarConnection.startSession).toHaveBeenCalledTimes(2);
+  expect(captureStream.isCapturing()).toBe(true);
+  expect(controller.getState()).toBe('listening');
+  await controller.dispose();
+});
