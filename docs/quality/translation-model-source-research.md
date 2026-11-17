@@ -90,12 +90,12 @@ Transformers example explicitly sets `add_generation_prompt=False`, whereas
 current `llama-cli` applies a generation prompt.
 
 1. Tencent's [GGUF model
-   card](https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF/blob/265b2e615a7dc9b06c435dc878829ad99a512ba2/README.md)
+card](https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF/blob/265b2e615a7dc9b06c435dc878829ad99a512ba2/README.md)
    invokes `llama-cli -p` with the natural-language prompt above.
 2. Tencent's Transformers example passes that prompt as one `user` message to
    `tokenizer.apply_chat_template(..., add_generation_prompt=False)`. The
    immutable [Jinja
-   template](https://huggingface.co/tencent/HY-MT1.5-1.8B/blob/dbad03788f49709801014c95d481a514c272ca52/chat_template.jinja)
+template](https://huggingface.co/tencent/HY-MT1.5-1.8B/blob/dbad03788f49709801014c95d481a514c272ca52/chat_template.jinja)
    adds Hunyuan-specific BOS/role/control tokens. Tencent explicitly says there
    is no default system prompt.
 
@@ -189,13 +189,13 @@ documented MADLAD input format.
 Sources:
 
 - HY's immutable [model
-  config](https://huggingface.co/tencent/HY-MT1.5-1.8B/blob/dbad03788f49709801014c95d481a514c272ca52/config.json)
+config](https://huggingface.co/tencent/HY-MT1.5-1.8B/blob/dbad03788f49709801014c95d481a514c272ca52/config.json)
   and [technical report](https://arxiv.org/html/2512.24092#S2) establish the
   architecture parameters, base model, and training pipeline.
 - The MADLAD [model
-  config](https://huggingface.co/google/madlad400-3b-mt/blob/fa184c675da0b5c9e1c8694fccd4e12e2d422094/config.json),
+config](https://huggingface.co/google/madlad400-3b-mt/blob/fa184c675da0b5c9e1c8694fccd4e12e2d422094/config.json),
   [Google Research checkpoint
-  page](https://github.com/google-research/google-research/tree/master/madlad_400),
+page](https://github.com/google-research/google-research/tree/master/madlad_400),
   and [paper](https://arxiv.org/abs/2309.04662) establish the architecture and
   original provenance.
 - The Google-hosted Hugging Face card explicitly discloses that Juarez Bochi,
@@ -226,22 +226,22 @@ batched example. At inspected commit
 [`91f8c9c`](https://github.com/ggml-org/llama.cpp/tree/91f8c9c5fb038c086e13e9cd823c29b33b07ba54):
 
 - llama.cpp's [supported-model
-  list](https://github.com/ggml-org/llama.cpp/blob/91f8c9c5fb038c086e13e9cd823c29b33b07ba54/README.md#models)
+list](https://github.com/ggml-org/llama.cpp/blob/91f8c9c5fb038c086e13e9cd823c29b33b07ba54/README.md#models)
   includes Flan-T5 and Hunyuan.
 - Its [architecture
-  registry](https://github.com/ggml-org/llama.cpp/blob/91f8c9c5fb038c086e13e9cd823c29b33b07ba54/src/llama-arch.cpp)
+registry](https://github.com/ggml-org/llama.cpp/blob/91f8c9c5fb038c086e13e9cd823c29b33b07ba54/src/llama-arch.cpp)
   recognizes `t5`, `t5encoder`, `hunyuan-moe`, and `hunyuan-dense`.
 - Its [T5 conversion
-  code](https://github.com/ggml-org/llama.cpp/blob/91f8c9c5fb038c086e13e9cd823c29b33b07ba54/conversion/t5.py)
+code](https://github.com/ggml-org/llama.cpp/blob/91f8c9c5fb038c086e13e9cd823c29b33b07ba54/conversion/t5.py)
   registers `T5ForConditionalGeneration` and emits T5 GGUF metadata.
 - Its [T5 model
-  implementation](https://github.com/ggml-org/llama.cpp/blob/91f8c9c5fb038c086e13e9cd823c29b33b07ba54/src/models/t5.cpp)
+implementation](https://github.com/ggml-org/llama.cpp/blob/91f8c9c5fb038c086e13e9cd823c29b33b07ba54/src/models/t5.cpp)
   loads separate encoder/decoder layers and builds self-attention,
   cross-attention, encoder, and decoder graphs. The public API explicitly
   supports encoder output feeding decoder cross-attention
   ([`llama_encode`](https://github.com/ggml-org/llama.cpp/blob/91f8c9c5fb038c086e13e9cd823c29b33b07ba54/include/llama.h)).
 - On macOS, [Metal is enabled by
-  default](https://github.com/ggml-org/llama.cpp/blob/91f8c9c5fb038c086e13e9cd823c29b33b07ba54/docs/build.md#metal-build)
+default](https://github.com/ggml-org/llama.cpp/blob/91f8c9c5fb038c086e13e9cd823c29b33b07ba54/docs/build.md#metal-build)
   and `--n-gpu-layers 0` explicitly disables GPU inference.
 
 The interface boundary matters: current upstream `llama-server` does not
@@ -276,7 +276,7 @@ actual offload remain empirical questions.
 - **Transformers/PyTorch:** explicitly supported by the
   [Google-hosted card](https://huggingface.co/google/madlad400-3b-mt/blob/fa184c675da0b5c9e1c8694fccd4e12e2d422094/README.md#usage)
   and [Transformers
-  docs](https://huggingface.co/docs/transformers/model_doc/madlad-400).
+docs](https://huggingface.co/docs/transformers/model_doc/madlad-400).
   PyTorch's [MPS backend](https://docs.pytorch.org/docs/stable/notes/mps.html)
   runs modules on Apple's GPU through Metal. **Inference:** MADLAD should be
   testable through Transformers on MPS, but none of the cited MADLAD sources

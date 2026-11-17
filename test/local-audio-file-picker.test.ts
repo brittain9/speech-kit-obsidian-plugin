@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { pickLocalAudioFile } from '../src/audio/local-audio-file-picker';
 
 class FakeInput {
@@ -63,6 +63,29 @@ function asDocument(fake: FakeDocument): Document {
 }
 
 describe('pickLocalAudioFile', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('opens the picker in the active popout document instead of the main window', async () => {
+    const mainDocument = new FakeDocument();
+    const popoutDocument = new FakeDocument();
+    vi.stubGlobal('document', asDocument(mainDocument));
+    vi.stubGlobal('activeDocument', asDocument(popoutDocument));
+    const abort = new AbortController();
+    const picking = pickLocalAudioFile(abort.signal);
+    try {
+      expect(mainDocument.body.children).toEqual([]);
+      const input = popoutDocument.body.children[0];
+      if (!input) throw new Error('Expected the picker in the active popout document.');
+      expect(input.click).toHaveBeenCalledOnce();
+      input.dispatch('cancel');
+      await expect(picking).resolves.toBeNull();
+      expect(popoutDocument.body.children).toEqual([]);
+    } finally {
+      abort.abort();
+      await picking.catch(() => {});
+    }
+  });
+
   it('uses a local audio-only file input and resolves the selected File', async () => {
     const fakeDocument = new FakeDocument();
     const picking = pickLocalAudioFile(new AbortController().signal, asDocument(fakeDocument));
