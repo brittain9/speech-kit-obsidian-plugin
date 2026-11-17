@@ -200,9 +200,9 @@ export const de = {
   'settings.transcriptFormatting.newParagraph': 'Neuer Absatz',
   'settings.transcriptFormatting.name': 'Transkriptformatierung',
   'settings.transcriptFormatting.desc': 'Wie Phrasen zusammengefügt werden.',
-  'settings.phraseFinalization.responsiveOption': 'Reaktionsfreudig – kurze Pausen',
-  'settings.phraseFinalization.balancedOption': 'Ausgewogen – Standard',
-  'settings.phraseFinalization.patientOption': 'Geduldig – lange Pausen',
+  'settings.phraseFinalization.responsiveOption': 'Reaktionsfreudig',
+  'settings.phraseFinalization.balancedOption': 'Ausgewogen',
+  'settings.phraseFinalization.patientOption': 'Geduldig',
   'settings.phraseFinalization.name': 'Finalisierung der Phrase',
   'settings.phraseFinalization.responsive':
     'Wird nach kürzeren Pausen abgeschlossen, um den Text schneller fertigzustellen.',

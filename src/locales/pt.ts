@@ -201,9 +201,9 @@ export const pt = {
   'settings.transcriptFormatting.newParagraph': 'Novo parágrafo',
   'settings.transcriptFormatting.name': 'Formatação da transcrição',
   'settings.transcriptFormatting.desc': 'Forma como as frases são unidas.',
-  'settings.phraseFinalization.responsiveOption': 'Responsivo — pausas curtas',
-  'settings.phraseFinalization.balancedOption': 'Equilibrado — normal',
-  'settings.phraseFinalization.patientOption': 'Tolerante — pausas longas',
+  'settings.phraseFinalization.responsiveOption': 'Responsivo',
+  'settings.phraseFinalization.balancedOption': 'Equilibrado',
+  'settings.phraseFinalization.patientOption': 'Tolerante',
   'settings.phraseFinalization.name': 'Finalização de frases',
   'settings.phraseFinalization.responsive':
     'Finaliza após pausas mais curtas para apresentar mais depressa o texto concluído.',

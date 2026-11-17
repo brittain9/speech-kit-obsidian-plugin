@@ -18,6 +18,12 @@ describe('phraseFinalizationDescription', () => {
   });
 
   it('keeps shared model behavior in the tooltip', () => {
+    expect(PHRASE_FINALIZATION_TOOLTIP).toContain('Responsive:');
+    expect(PHRASE_FINALIZATION_TOOLTIP).toContain('shorter pauses');
+    expect(PHRASE_FINALIZATION_TOOLTIP).toContain('Balanced:');
+    expect(PHRASE_FINALIZATION_TOOLTIP).toContain('standard pause tolerance');
+    expect(PHRASE_FINALIZATION_TOOLTIP).toContain('Patient:');
+    expect(PHRASE_FINALIZATION_TOOLTIP).toContain('longer pauses');
     expect(PHRASE_FINALIZATION_TOOLTIP).toContain('every transcription model');
     expect(PHRASE_FINALIZATION_TOOLTIP).toContain('Live words can still update');
   });
