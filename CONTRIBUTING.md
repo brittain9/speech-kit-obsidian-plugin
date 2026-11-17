@@ -13,7 +13,7 @@ Before changing an ownership boundary, compatibility contract, core product cons
 
 ## Prerequisites
 
-- Node.js `24.22.2`, npm `11.19.1`
+- Node.js `24.22.3`, npm `11.19.1`
 - TypeScript `6.0.3`
 - Rust `1.94.1`
 - CMake and a platform C/C++ toolchain for native sidecar builds

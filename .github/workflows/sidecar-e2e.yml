@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: 24.22.2
+  NODE_VERSION: 24.22.3
   RUST_TOOLCHAIN: 1.94.1
   MODEL_CACHE_DIR: ${{ github.workspace }}/.test-models
 
