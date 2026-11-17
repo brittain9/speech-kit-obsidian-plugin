@@ -1,6 +1,7 @@
 import type { App } from 'obsidian';
 import { Setting, type SettingDefinitionRender, type SettingGroup } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
+import { renderCustomizeToolsSetting } from '../src/settings/customize-tools-modal';
 import { DiarizationSettingsModal } from '../src/settings/diarization-settings-modal';
 import { LlmPresetStateStore } from '../src/settings/llm-preset-state';
 import { DEFAULT_PLUGIN_SETTINGS, type PluginSettings } from '../src/settings/plugin-settings';
@@ -8,7 +9,6 @@ import { createSettingAccess } from '../src/settings/setting-helpers';
 import {
   LocalSttSettingTab,
   renderAutomaticCopyFinalizedUtterancesSetting,
-  renderFeatureSettings,
   renderNotePinningSetting,
   renderReadAloudHighlightSetting,
 } from '../src/settings/settings-tab';
@@ -38,17 +38,18 @@ describe('LocalSttSettingTab Obsidian 1.13 compatibility', () => {
       selectedTranslationModel,
     };
     const onChanged = vi.fn();
-    renderFeatureSettings(
-      new TestElement() as unknown as HTMLElement,
-      {
+    renderCustomizeToolsSetting(new TestElement() as unknown as HTMLElement, {} as App, {
+      access: {
         getSettings: () => settings,
         persistOne: async (key, value) => {
           settings = { ...settings, [key]: value };
         },
       },
       onChanged,
-    );
-    for (const name of ['Enable translation', 'Enable read aloud', 'Enable AI transformations']) {
+      onClosed: vi.fn(),
+    });
+    await rows.buttonNamed('Customize').click();
+    for (const name of ['Translation', 'Read aloud', 'AI transformations']) {
       rows.named(name).onlyToggle().change(false);
     }
     await vi.waitFor(() => {
@@ -61,7 +62,7 @@ describe('LocalSttSettingTab Obsidian 1.13 compatibility', () => {
     expect(settings.selectedTranslationModel).toEqual(selectedTranslationModel);
     expect(settings.selectedTtsModel).toEqual(selectedTtsModel);
     expect(settings.llmNetworkTimeoutSec).toBe(42);
-    rows.named('Enable translation').onlyToggle().change(true);
+    rows.named('Translation').onlyToggle().change(true);
     await vi.waitFor(() => expect(settings.translationEnabled).toBe(true));
     expect(settings.readAloudEnabled).toBe(false);
   });
