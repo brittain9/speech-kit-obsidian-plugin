@@ -185,6 +185,92 @@ describe('external model file modal', () => {
 });
 
 describe('model browser', () => {
+  it('opens only compatible batch choices from the speaker-label entry without changing selection', () => {
+    vi.stubGlobal('createFragment', () => new TestElement());
+    const streaming = sttModel('Streaming Moonshine', 'moonshine', ['en']);
+    const batch = sttModel('Batch Whisper', 'whisper', ['en']);
+    const state = {
+      activeInstall: null,
+      failedInstall: null,
+      installRequestPending: false,
+      catalog: {
+        catalogVersion: 1,
+        collections: [],
+        models: [streaming, batch],
+        families: [streaming, batch].map((model) => ({ ...model, displayName: model.familyId })),
+      },
+      compiledAdapters: [streaming, batch].map((model) => ({
+        ...model,
+        familyCapabilities: {
+          task: 'stt',
+          supportsStreaming: model === streaming,
+          supportedLanguages: { kind: 'all' },
+        },
+      })),
+      compiledRuntimes: [],
+      installedModels: [],
+      loadStatus: 'ready',
+      loadError: null,
+      modelStore: { path: '/models', overridePath: null, usingDefaultPath: true },
+      selectedModel: {
+        kind: 'catalog_model',
+        runtimeId: streaming.runtimeId,
+        familyId: streaming.familyId,
+        modelId: streaming.modelId,
+      },
+      selectedModelCapabilities: { status: 'none' },
+      selectedTtsModel: null,
+      selectedTtsModelCapabilities: { status: 'none' },
+      selectedTranslationModel: null,
+    } as unknown as ModelManagerState;
+    const select = vi.fn();
+    const modal = new ManageModelsModal({} as never, {
+      feedback: { show: vi.fn() },
+      requireBatchStt: true,
+      manager: {
+        getState: () => state,
+        getDictationLanguage: () => 'en',
+        subscribe: () => () => {},
+        select,
+      } as unknown as ModelInstallManager,
+      onChanged: vi.fn(),
+    });
+    modal.open();
+    const families = (modal.contentEl as unknown as TestElement).querySelectorAll('details');
+    expect(families).toHaveLength(1);
+    expect(families[0]?.getAttribute('data-family-key')).toBe('whisper_cpp:whisper');
+    expect((families[0] as unknown as HTMLDetailsElement).open).toBe(true);
+    expect(
+      (modal.contentEl as unknown as TestElement).querySelectorAll(
+        '.local-stt-model-row-container',
+      ),
+    ).toHaveLength(1);
+    expect(state.selectedModel).toMatchObject({ modelId: 'Streaming Moonshine' });
+    expect(select).not.toHaveBeenCalled();
+    modal.close();
+
+    const ordinaryPicker = new ManageModelsModal({} as never, {
+      feedback: { show: vi.fn() },
+      manager: {
+        getState: () => state,
+        getDictationLanguage: () => 'en',
+        subscribe: () => () => {},
+        select,
+      } as unknown as ModelInstallManager,
+      onChanged: vi.fn(),
+    });
+    ordinaryPicker.open();
+    const ordinaryFamilies = (ordinaryPicker.contentEl as unknown as TestElement).querySelectorAll(
+      'details',
+    );
+    expect(ordinaryFamilies).toHaveLength(2);
+    const selectedFamily = ordinaryFamilies.find(
+      (family) => family.getAttribute('data-family-key') === 'onnx_runtime:moonshine',
+    );
+    expect((selectedFamily as unknown as HTMLDetailsElement).open).toBe(true);
+    ordinaryPicker.close();
+  });
+
   it('does not return focus to Settings when the picker opens setup', async () => {
     const onClosed = vi.fn();
     const onRunSetup = vi.fn();
