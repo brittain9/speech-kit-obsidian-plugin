@@ -5,6 +5,7 @@ import type { LlmCleanupFailure } from '../llm/provider';
 import type { LlmPresetStateMutation, PluginSettingsMutation } from '../settings/llm-preset-state';
 import type { PluginSettings } from '../settings/plugin-settings';
 import { createSettingGroup } from '../settings/setting-helpers';
+import { captureSettingsFocus, restoreSettingsFocus } from '../settings/settings-tab-lifecycle';
 import { t } from '../shared/i18n';
 import type { PluginLogger } from '../shared/plugin-logger';
 import type { UserFeedback } from '../shared/user-feedback';
@@ -31,6 +32,7 @@ interface LocalDictationViewDependencies {
   logger?: PluginLogger | undefined;
   mutatePresetState: (mutation: LlmPresetStateMutation) => Promise<void>;
   openSettings?: () => void;
+  editPreset?: (ref: string, onClosed: () => void) => void;
   mutateSettings: (mutation: PluginSettingsMutation) => Promise<void>;
   subscribeLlmCleanupFailure?: (callback: () => void) => () => void;
   synchronizePresets: () => Promise<void>;
@@ -139,6 +141,9 @@ export class LocalDictationView extends ItemView {
         mutateSettings: this.dependencies.mutateSettings,
         mutatePresetState: this.dependencies.mutatePresetState,
         rerender: () => this.requestRefresh(),
+        ...(this.dependencies.editPreset === undefined
+          ? {}
+          : { editPreset: (ref: string) => this.openPresetEditor(ref) }),
       });
       if (settings.llmPostprocessMode === 'off') {
         this.renderEmptyState(contentEl, presentation);
@@ -148,6 +153,19 @@ export class LocalDictationView extends ItemView {
     } finally {
       contentEl.scrollTop = scrollTop;
     }
+  }
+
+  private openPresetEditor(ref: string): void {
+    const focus = captureSettingsFocus(this.contentEl);
+    this.dependencies.editPreset?.(ref, () => {
+      if (this.closed) return;
+      this.refresh();
+      const document = this.contentEl.ownerDocument;
+      const active = document.activeElement;
+      if (active === null || active === document.body || active === document.documentElement) {
+        restoreSettingsFocus(this.contentEl, focus);
+      }
+    });
   }
 
   updateDictationState(state: DictationControllerState): void {

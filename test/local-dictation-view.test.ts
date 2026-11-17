@@ -1,7 +1,7 @@
 import type { WorkspaceLeaf } from 'obsidian';
 import { expect, it, vi } from 'vitest';
 
-import { DEFAULT_PLUGIN_SETTINGS } from '../src/settings/plugin-settings';
+import { DEFAULT_PLUGIN_SETTINGS, resolvePluginSettings } from '../src/settings/plugin-settings';
 import { LocalDictationView } from '../src/ui/local-dictation-view';
 import { Setting, type TestElement } from './__mocks__/obsidian';
 
@@ -126,4 +126,32 @@ it('keeps dictation controls available when AI transformations are disabled', as
   expect(start.text).toBe('Stop dictation');
   view.updateDictationState('idle');
   expect(start.text).toBe('Start dictation');
+});
+
+it('opens the active preset from its timing summary and ignores close callbacks after the view closes', async () => {
+  Setting.reset();
+  let onClosed: (() => void) | undefined;
+  const editPreset = vi.fn((_ref: string, closed: () => void) => {
+    onClosed = closed;
+  });
+  const settings = resolvePluginSettings({ llmPostprocessActivePresetRef: 'builtin:summary' });
+  const view = new LocalDictationView({ app: {} } as unknown as WorkspaceLeaf, {
+    feedback: { show: vi.fn() },
+    getSecret: () => '',
+    getSettings: () => settings,
+    getDictationState: () => 'idle',
+    toggleDictation: vi.fn(async () => {}),
+    editPreset,
+    mutatePresetState: vi.fn(async () => {}),
+    mutateSettings: vi.fn(async () => {}),
+    synchronizePresets: vi.fn(async () => {}),
+  });
+  view.refresh();
+  await Setting.buttonNamed('Edit preset').click();
+  expect(editPreset.mock.calls[0]?.[0]).toBe('user:default:summary');
+  const content = view.contentEl as unknown as TestElement;
+  const first = content.children[0];
+  await view.onClose();
+  onClosed?.();
+  expect(content.children[0]).toBe(first);
 });

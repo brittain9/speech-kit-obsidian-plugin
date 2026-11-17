@@ -247,6 +247,7 @@ export default class LocalSttPlugin extends Plugin {
       (leaf) =>
         new LocalDictationView(leaf, {
           getDictationState: () => this.dictationController?.getState() ?? 'idle',
+          editPreset: (ref, onClosed) => void this.openPresetManager(onClosed, ref),
           toggleDictation: () => this.requireDictationController().toggleDictation(),
           feedback: this.feedback,
           openSettings: () => {
@@ -427,7 +428,7 @@ export default class LocalSttPlugin extends Plugin {
         wasLastJobCancelled: () =>
           this.requireAudioFileTranscriptionController().wasLastMediaJobCancelled(),
         onManageModels: () => void this.openModelPicker(),
-        onManagePresets: (onClosed) => void this.openMediaPresetManager(onClosed),
+        onManagePresets: (onClosed) => void this.openPresetManager(onClosed),
         startFile: async (file, options) => {
           const controller = this.requireAudioFileTranscriptionController();
           if (controller.isBusy()) throw new Error(t('media.modal.alreadyRunning'));
@@ -667,7 +668,7 @@ export default class LocalSttPlugin extends Plugin {
             this.requireAudioFileTranscriptionController().isMediaJobActive('youtube_captions'),
           wasLastJobCancelled: () =>
             this.requireAudioFileTranscriptionController().wasLastMediaJobCancelled(),
-          onManagePresets: (onClosed) => void this.openMediaPresetManager(onClosed),
+          onManagePresets: (onClosed) => void this.openPresetManager(onClosed),
           insertPartialTranscript: () =>
             this.requireAudioFileTranscriptionController().insertPartialTranscript(),
           start: async (url, options) => {
@@ -1311,9 +1312,10 @@ export default class LocalSttPlugin extends Plugin {
     return this.presetStateStore;
   }
 
-  private async openMediaPresetManager(onClosed: () => void): Promise<void> {
+  private async openPresetManager(onClosed: () => void, initialPresetRef?: string): Promise<void> {
     await this.requirePresetStateStore().synchronize();
     new PresetManagerModal(this.app, {
+      ...(initialPresetRef === undefined ? {} : { initialPresetRef }),
       feedback: this.feedback,
       getSettings: () => this.settings,
       mutatePresetState: (mutation) => this.requirePresetStateStore().mutate(mutation),

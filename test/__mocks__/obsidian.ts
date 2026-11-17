@@ -165,8 +165,12 @@ export class TestElement {
     this.style.display = 'none';
   }
 
-  append(...children: TestElement[]): void {
+  append(...children: Array<TestElement | string>): void {
     for (const child of children) {
+      if (typeof child === 'string') {
+        this.appendText(child);
+        continue;
+      }
       child.remove();
       elementParents.set(child, this);
       this.children.push(child);
@@ -366,6 +370,7 @@ export class TestInputElement extends TestElement {
 }
 
 export class TestTextAreaElement extends TestElement {
+  placeholder = '';
   override disabled = false;
   maxLength = 0;
   rows = 0;
@@ -428,6 +433,11 @@ export class TextAreaComponent {
 
   setDisabled(disabled: boolean): this {
     this.inputEl.disabled = disabled;
+    return this;
+  }
+
+  setPlaceholder(placeholder: string): this {
+    this.inputEl.placeholder = placeholder;
     return this;
   }
 

@@ -1,7 +1,7 @@
 import { Setting, setTooltip } from 'obsidian';
 import {
   describePresetBehavior,
-  describePresetTiming,
+  describePresetOutput,
   isLlmPresetTiming,
   listPresetEntries,
   resolveActivePresetEntry,
@@ -17,6 +17,7 @@ interface DailyControlDependencies {
   mutatePresetState: (mutation: LlmPresetStateMutation) => Promise<void>;
   rerender: () => void;
   managePresets?: () => void;
+  editPreset?: (ref: string) => void;
   openTimingSettings?: () => void;
   openContextSettings?: () => void;
 }
@@ -43,9 +44,24 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
     settings.llmPostprocessActivePresetRef,
     settings.llmPostprocessUserPresets,
   );
+  const effectiveTiming =
+    active.preset.timing ??
+    (settings.llmPostprocessMode === 'off'
+      ? settings.llmPostprocessLastEnabledMode
+      : settings.llmPostprocessMode);
+  const timingLabel = t(
+    effectiveTiming === 'batch' ? 'llm.timing.option.batch' : 'llm.timing.option.perUtterance',
+  );
+  const detail = [active.preset.description, describePresetBehavior(active.preset)]
+    .filter(Boolean)
+    .join(' · ');
   const presetSetting = new Setting(parent)
     .setName(t('llm.sidebar.activePreset'))
-    .setDesc(active.preset.description ?? describePresetBehavior(active.preset))
+    .setDesc(
+      entries.length === 0
+        ? t('llm.preset.none')
+        : `${timingLabel} · ${describePresetOutput(active.preset.output)}.`,
+    )
     .addDropdown((dropdown) => {
       for (const entry of entries)
         dropdown.addOption(
@@ -59,7 +75,8 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
         dropdown.setDisabled(true);
       }
       dropdown.setValue(active.ref);
-      setTooltip(dropdown.selectEl, active.preset.label);
+      setTooltip(dropdown.selectEl, detail);
+      dropdown.selectEl.setAttribute('aria-description', detail);
       dropdown.onChange(async (value) => {
         await deps.mutatePresetState((state) => ({ ...state, activePresetRef: value }));
         deps.rerender();
@@ -73,39 +90,49 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
       button.extraSettingsEl.setAttribute('aria-label', label);
     });
   }
-  const timingSetting = new Setting(parent)
-    .setName(t('llm.sidebar.runTransform.name'))
-    .setDesc(
-      active.preset.timing === undefined
-        ? t('llm.sidebar.runTransform.description')
-        : t('llm.sidebar.runTransform.setByPreset', {
-            preset: active.preset.label,
-            timing: describePresetTiming(active.preset.timing),
-          }),
-    )
-    .addDropdown((dropdown) => {
+  const timingSetting = new Setting(parent).setName(t('llm.sidebar.runTransform.name'));
+  if (entries.length === 0) {
+    timingSetting.setDesc(t('llm.preset.none'));
+  } else if (active.preset.timing !== undefined) {
+    timingSetting.setDesc(
+      t('llm.sidebar.runTransform.fixed', { preset: active.preset.label, timing: timingLabel }),
+    );
+    if (deps.editPreset !== undefined) {
+      timingSetting.addButton((button) => {
+        button.setButtonText(t('llm.preset.manager.editTooltip')).onClick(() => {
+          const current = deps.getSettings();
+          if (!current.llmFeaturesEnabled) return;
+          const entry = resolveActivePresetEntry(
+            current.llmPostprocessActivePresetRef,
+            current.llmPostprocessUserPresets,
+          );
+          deps.editPreset?.(entry.ref);
+        });
+      });
+    }
+  } else {
+    timingSetting.setDesc(t('llm.sidebar.runTransform.description')).addDropdown((dropdown) => {
       dropdown.addOption('per_utterance', t('llm.timing.option.perUtterance'));
       dropdown.addOption('batch', t('llm.timing.option.batch'));
-      dropdown.setValue(
-        active.preset.timing ??
-          (settings.llmPostprocessMode === 'off'
-            ? settings.llmPostprocessLastEnabledMode
-            : settings.llmPostprocessMode),
-      );
-      dropdown.setDisabled(active.preset.timing !== undefined);
+      dropdown.setValue(effectiveTiming);
       dropdown.onChange(async (value) => {
         if (!isLlmPresetTiming(value)) return;
-        await deps.mutateSettings((current) => ({
-          ...current,
-          llmPostprocessLastEnabledMode: value,
-          llmPostprocessMode: current.llmPostprocessMode === 'off' ? 'off' : value,
-        }));
+        if (!canEditSharedTiming(deps.getSettings())) return;
+        await deps.mutateSettings((current) => {
+          if (!canEditSharedTiming(current)) return current;
+          return {
+            ...current,
+            llmPostprocessLastEnabledMode: value,
+            llmPostprocessMode: current.llmPostprocessMode === 'off' ? 'off' : value,
+          };
+        });
         deps.rerender();
       });
     });
+  }
   const openTimingSettings = deps.openTimingSettings;
   if (openTimingSettings) {
-    const label = t('llm.timing.title');
+    const label = t('llm.timing.advancedTooltip');
     timingSetting.addExtraButton((button) => {
       button.setIcon('settings').setTooltip(label).onClick(openTimingSettings);
       button.extraSettingsEl.setAttribute('aria-label', label);
@@ -143,4 +170,14 @@ export function renderLlmDailyControls(parent: HTMLElement, deps: DailyControlDe
       button.extraSettingsEl.setAttribute('aria-label', label);
     });
   }
+}
+
+function canEditSharedTiming(settings: PluginSettings): boolean {
+  return (
+    settings.llmFeaturesEnabled &&
+    resolveActivePresetEntry(
+      settings.llmPostprocessActivePresetRef,
+      settings.llmPostprocessUserPresets,
+    ).preset.timing === undefined
+  );
 }

@@ -12,6 +12,7 @@ import { captureSettingsFocus, restoreSettingsFocus } from './settings-tab-lifec
 
 interface LlmProviderSettingsDependencies extends LlmRoutingControlsDependencies {
   managePresets: () => void;
+  editPreset: (ref: string) => void;
   mutatePresetState: (mutation: LlmPresetStateMutation) => Promise<void>;
   openContextSettings: () => void;
   openModelSettings: () => void;
@@ -38,6 +39,7 @@ export function renderLlmProviderSettings(
       mutatePresetState: dependencies.mutatePresetState,
       rerender: render,
       managePresets: dependencies.managePresets,
+      editPreset: dependencies.editPreset,
       openTimingSettings: dependencies.openTimingSettings,
       openContextSettings: dependencies.openContextSettings,
     });
