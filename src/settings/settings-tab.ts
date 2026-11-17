@@ -631,6 +631,37 @@ export class LocalSttSettingTab extends PluginSettingTab {
     // --- Advanced (includes sidecar install/uninstall) ---
     const advancedSection = createSettingGroup(containerEl, t('settings.groups.advanced'));
 
+    renderCustomizeToolsSetting(advancedSection, this.app, {
+      access: this.access,
+      onChanged: () => this.refreshSettingsTab(),
+      onDialogOpened: () =>
+        this.lifecycle.focusAfterDialog({
+          settingName: t('settings.features.title'),
+          controlIndex: 0,
+        }),
+    });
+
+    if (this.dependencies.openSpeechKit !== undefined) {
+      new Setting(advancedSection)
+        .setName(t('sidebar.controls.title'))
+        .setDesc(t('sidebar.controls.description'))
+        .addButton((button) => {
+          button.setButtonText(t('commands.openSpeechKit')).onClick(() => {
+            (this.app as App & { setting?: { close: () => void } }).setting?.close();
+            void this.dependencies.openSpeechKit?.();
+          });
+        });
+    }
+
+    new Setting(advancedSection)
+      .setName(t('settings.runSetup.name'))
+      .setDesc(t('settings.runSetup.desc'))
+      .addButton((button) => {
+        button.setButtonText(t('settings.runSetup.name')).onClick(() => {
+          void this.dependencies.openSetupWizard();
+        });
+      });
+
     // Sidecar rows live in their own owned container so re-renders can simply
     // empty + rebuild without disturbing the rest of the Advanced section.
     const sidecarContainer = advancedSection.createDiv();
@@ -689,43 +720,6 @@ export class LocalSttSettingTab extends PluginSettingTab {
       key: 'retainLastUtterance',
     });
 
-    renderModelStoreSetting(advancedSection, {
-      currentPath: this.dependencies.getSettings().modelStorePathOverride,
-      changeModelStore: (path) => this.dependencies.modelInstallManager.changeModelStore(path),
-      feedback: this.dependencies.feedback,
-    });
-
-    renderCustomizeToolsSetting(advancedSection, this.app, {
-      access: this.access,
-      onChanged: () => this.refreshSettingsTab(),
-      onDialogOpened: () =>
-        this.lifecycle.focusAfterDialog({
-          settingName: t('settings.features.title'),
-          controlIndex: 0,
-        }),
-    });
-
-    if (this.dependencies.openSpeechKit !== undefined) {
-      new Setting(advancedSection)
-        .setName(t('sidebar.controls.title'))
-        .setDesc(t('sidebar.controls.description'))
-        .addButton((button) => {
-          button.setButtonText(t('commands.openSpeechKit')).onClick(() => {
-            (this.app as App & { setting?: { close: () => void } }).setting?.close();
-            void this.dependencies.openSpeechKit?.();
-          });
-        });
-    }
-
-    new Setting(advancedSection)
-      .setName(t('settings.runSetup.name'))
-      .setDesc(t('settings.runSetup.desc'))
-      .addButton((button) => {
-        button.setButtonText(t('settings.runSetup.name')).onClick(() => {
-          void this.dependencies.openSetupWizard();
-        });
-      });
-
     const developerModeSetting = new Setting(advancedSection)
       .setName('Developer mode')
       .setDesc('Show verbose diagnostics and developer-only settings.');
@@ -735,6 +729,12 @@ export class LocalSttSettingTab extends PluginSettingTab {
         await this.access.persistOne('developerMode', value);
         this.refreshSettingsTab();
       });
+    });
+
+    renderModelStoreSetting(advancedSection, {
+      currentPath: this.dependencies.getSettings().modelStorePathOverride,
+      changeModelStore: (path) => this.dependencies.modelInstallManager.changeModelStore(path),
+      feedback: this.dependencies.feedback,
     });
   }
 
