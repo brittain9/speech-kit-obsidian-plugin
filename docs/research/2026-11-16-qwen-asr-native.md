@@ -36,7 +36,7 @@ ADR 0005 requires process isolation from Whisper because of GGML symbol collisio
 
 Initial native proof: the standalone isolated helper and the public Rust registry/adapter path both transcribed the pinned 5.4-second German fixture with zero normalized WER; manual selection and automatic `de` output passed, without control tokens or invented word timestamps. Public tests failed before family support and passed after implementation. Broader quality, managed-install, cancellation, and partial-transcription acceptance remain pending.
 
-## Wrap-up status
+## Historical wrap-up, 16 November
 
 The 0.6B pair is the only Qwen weight download (1,019,141,728 bytes). The public
 registry/adapter German manual and automatic tests passed. Eight short language
@@ -60,11 +60,24 @@ inference were started. The authorized disk allowance was raised to 18 GB after
 shared MTMD build caches grew substantially; approximately 43 GiB remained free
 at that checkpoint. Unrelated/shared caches were preserved.
 
-This is a draft native prototype, not an adopted model. Actual in-flight
-cancellation/retry, a managed pair install/probe/remove run, matched baseline and
-1.7B comparisons, all-engine coexistence, full branch gates/platform checks,
-frontend family-ID/import/catalog wiring, native UI verification, and progressive
-partial/re-decoding remain incomplete. The post-EOF safety patch was not followed
-by another real-model run. Production build scripts include the helper, but the
-branch is not ready for daily-use deployment until the frontend/native contract
-and outstanding checks are completed. No catalog entry/default/release changed.
+## Resumed integration, 17 November
+
+The native prototype is now integrated with frontend family parsing/persistence
+and an optional managed 0.6B pair entry. Both pinned artifacts are required;
+existing defaults are unchanged. The full frontend gate passed (2,056 passed,
+16 skipped). All-engine Metal debug binaries built successfully from `75459ec5`.
+
+The public loaded-model test passed real in-flight cancellation, bounded helper
+termination/reaping, a different-language retry using a fresh helper PID, and
+replacement cleanup. The combined build also passed Qwen-helper/parent-Whisper
+coexistence with real models, plus German manual/automatic output: three selected
+tests passed serially in 9.53 s. CPU was requested for inference; these results
+make no Metal speed or quality claim. The independent busy-owner-EOF fixture
+remains a process-lifecycle test, distinct from actual request cancellation.
+
+Native managed-install/UI, full integration gates and platform checks remain
+pending at this checkpoint. Exact alignment/matched baseline and the 1.7B model
+were not run. The raw English screen remains an informational observation,
+not a user acceptance threshold. Streaming and model-derived word timestamps
+remain unsupported. See the current
+[integration evidence](../quality/2026-11-16-qwen-asr-prototype.md).

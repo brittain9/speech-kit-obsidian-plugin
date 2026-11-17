@@ -331,3 +331,48 @@ fn real_inflight_cancel_reaps_helper_and_retry_uses_a_fresh_process() {
     );
     eprintln!("real helper cancellation/reap and different-language retry passed");
 }
+
+#[cfg(feature = "engine-whisper")]
+#[test]
+#[ignore = "requires STT_QWEN_MODEL and STT_WHISPER_MODEL; exercises both native GGML runtimes"]
+fn real_qwen_helper_coexists_with_parent_whisper_runtime() {
+    let qwen_path = PathBuf::from(std::env::var("STT_QWEN_MODEL").unwrap());
+    let whisper_path = PathBuf::from(std::env::var("STT_WHISPER_MODEL").unwrap());
+    let mut registry = EngineRegistry::build();
+    registry.register_adapter(Box::new(
+        local_dictation_sidecar::adapters::qwen_asr::QwenAsrAdapter::with_helper_executable(
+            PathBuf::from(env!("CARGO_BIN_EXE_local-dictation-asr-helper")),
+        ),
+    ));
+    let mut qwen = registry
+        .adapter(RuntimeId::LlamaCpp, ModelFamilyId::Qwen3Asr)
+        .unwrap()
+        .load(&qwen_path, GpuConfig { use_gpu: false })
+        .unwrap();
+    let pcm =
+        common::audio::decode_wav_16k_mono(&common::fixtures_dir().join("audio/jfk.wav")).unwrap();
+    let request = |path: PathBuf| TranscriptionRequest {
+        audio_samples: pcm.iter().map(|&s| f32::from(s) / 32768.0).collect(),
+        detailed_timestamps_enabled: false,
+        gpu_config: GpuConfig { use_gpu: false },
+        language: "en".into(),
+        model_file_path: path,
+        context: None,
+    };
+    let qwen_request = request(qwen_path);
+    let assert_english =
+        |output: &local_dictation_sidecar::transcription::EngineTranscriptOutput| {
+            let text = common::text::joined_text(output).to_lowercase();
+            assert!(text.contains("fellow americans"), "{text}");
+        };
+    assert_english(&qwen.transcribe(&qwen_request).unwrap());
+    // Qwen's helper remains resident while the parent loads and decodes with
+    // Whisper's distinct GGML build. Neither library is linked into the other.
+    let mut whisper = registry
+        .adapter(RuntimeId::WhisperCpp, ModelFamilyId::Whisper)
+        .unwrap()
+        .load(&whisper_path, GpuConfig { use_gpu: false })
+        .unwrap();
+    assert_english(&whisper.transcribe(&request(whisper_path)).unwrap());
+    assert_english(&qwen.transcribe(&qwen_request).unwrap());
+}

@@ -1,4 +1,4 @@
-# Qwen ASR draft prototype: preserved at wrap-up
+# Qwen ASR integration evidence
 
 The separate native ASR helper and the public registry/adapter path transcribed
 the pinned German clip correctly with manual language selection and automatic
@@ -22,20 +22,24 @@ owner loss independently of synchronous inference. Its busy subprocess fixture
 closes stdin, requires exit within two seconds, and reaps the child; it passed
 in 0.03 s. This exercises the real EOF reader with a blocked-operation fixture,
 not another real model/GPU run. The reviewer inspected the fixes; execution was
-performed separately. Actual in-flight request cancellation/retry remains pending.
+performed separately. Actual in-flight request cancellation/retry subsequently
+passed as described below.
 
 The reviewed packaging slice passed 55 focused frontend/script/installer tests and
 its full frontend gate (2,032 passed, 15 skipped) before integration. It includes the
 third helper in new builds/dev installs and preserves compatibility with released
-two-binary archives. New helper and model notices are retained. Full combined
-branch gates, all-engine coexistence, platform/native UI checks, and a production
-managed pair-install/probe/remove run remain incomplete.
+two-binary archives. New helper and model notices are retained. Combined
+validation then proceeded as described below; platform and native UI checks are
+tracked separately.
 
-Work stopped at the user's request: no 1.7B download, matched-Turbo run, progressive
-partial transcription, frontend family-ID/import/catalog integration, or catalog
-adoption. Streaming capability remains false; there is no cached stateful
-streaming claim. The branch is a reviewable draft, not ready for daily-use
-installation. Existing defaults and releases remain unchanged. See
+The initial draft was preserved when work stopped on 16 November. Work resumed
+on 17 November: the frontend now recognizes and persists `qwen3_asr`, and the
+catalog offers an optional 0.6B pair with both artifacts required. Existing
+defaults remain unchanged. The focused frontend/catalog suite and full frontend
+gate passed (2,056 passed, 16 skipped). This model supports bounded batch input;
+streaming capability remains false, with no cached encoder-state or progressive
+partial-output claim. The 1.7B candidate and matched-Turbo comparison remain
+unexecuted. No release was made. See
 [research and pinned artifacts](../research/2026-11-16-qwen-asr-native.md) and
 [ADR 0013](../adr/0013-use-native-llama-cpp-for-qwen-asr.md).
 
@@ -50,4 +54,16 @@ canceled German text, and requires model disposal to reap that replacement too.
 The complete test passed in 3.90 s; cancellation itself has a three-second bound.
 These are lifecycle observations, not a matched inference-speed benchmark.
 The full sidecar command cancellation and managed-install/UI checks remain
-separate integration steps.
+separate integration steps. The rebuilt production-client metadata/catalog/probe
+suite subsequently passed all six cases, as reported by the integrating reviewer.
+
+The combined all-engine Metal debug build passed from `75459ec5`. Three selected
+real-model tests then passed serially in 9.53 s: German manual/automatic output,
+cancellation/reap/fresh retry, and Qwen/Whisper coexistence. The coexistence test
+keeps Qwen's actual helper resident while the parent loads Whisper Base.en and
+transcribes the same English recording, then transcribes again through Qwen.
+This verifies the process-isolation boundary with both native GGML builds; it is
+not a concurrent throughput benchmark. Inference in these tests requested CPU,
+even though the binaries also contain Metal support. Native managed-install/UI,
+full branch gates and platform checks are tracked separately while the draft is
+reviewed.
