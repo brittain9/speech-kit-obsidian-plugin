@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -56,6 +58,41 @@ describe.skipIf(!binary)('production client with the real Rust sidecar', () => {
     expect(info.systemInfo.trim().length).toBeGreaterThan(0);
     expect(info.compiledRuntimes.length).toBeGreaterThan(0);
     expect(info.compiledAdapters.length).toBeGreaterThan(0);
+  }, 10_000);
+
+  it('round-trips the Qwen family, managed pair and unavailable probe through the production client', async () => {
+    const { connection } = connect();
+    const info = await connection.getSystemInfo();
+    expect(info.compiledAdapters.find((adapter) => adapter.familyId === 'qwen3_asr')).toMatchObject(
+      {
+        runtimeId: 'llama_cpp',
+        familyCapabilities: {
+          task: 'stt',
+          supportsStreaming: false,
+          supportsWordTimestamps: false,
+          supportsAutomaticLanguageDetection: true,
+        },
+      },
+    );
+    const catalog = await connection.listModelCatalog();
+    const model = catalog.models.find((entry) => entry.modelId === 'qwen3_asr_0_6b_q8_0');
+    expect(model).toMatchObject({ runtimeId: 'llama_cpp', familyId: 'qwen3_asr', task: 'stt' });
+    expect(
+      model?.artifacts.filter((artifact) => artifact.required).map((artifact) => artifact.filename),
+    ).toEqual(['Qwen3-ASR-0.6B-Q8_0.gguf', 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf']);
+    const result = await connection.probeModelSelection({
+      modelSelection: {
+        kind: 'external_file',
+        runtimeId: 'llama_cpp',
+        familyId: 'qwen3_asr',
+        filePath: join(tmpdir(), 'speech-kit-missing-qwen-fixture', 'Qwen3-ASR-0.6B-Q8_0.gguf'),
+      },
+    });
+    expect(result).toMatchObject({
+      available: false,
+      selection: { runtimeId: 'llama_cpp', familyId: 'qwen3_asr' },
+    });
+    await expect(connection.healthCheck()).resolves.toMatchObject({ type: 'health_ok' });
   }, 10_000);
 
   it('rejects an invalid public request with the server diagnostic and remains usable', async () => {

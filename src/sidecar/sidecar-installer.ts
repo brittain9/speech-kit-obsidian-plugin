@@ -205,13 +205,26 @@ export async function installSidecar(
     await rm(archivePath, { force: true });
     options.signal?.throwIfAborted();
 
-    const executableName = resolveSidecarExecutableName();
-    await markExecutable(join(stagingDirectory, executableName));
-    const helperName =
-      process.platform === 'win32'
-        ? 'local-dictation-translation-helper.exe'
-        : 'local-dictation-translation-helper';
-    await markExecutable(join(stagingDirectory, helperName));
+    const suffix = process.platform === 'win32' ? '.exe' : '';
+    const asrHelperName = `local-dictation-asr-helper${suffix}`;
+    const executableNames = [
+      resolveSidecarExecutableName(),
+      `local-dictation-translation-helper${suffix}`,
+      asrHelperName,
+    ];
+    for (const name of executableNames) {
+      const path = join(stagingDirectory, name);
+      const kind = await getExistingPathKind(path);
+      // Published two-binary archives predate Qwen and expose no ASR adapter.
+      // New builds package all three; any included helper must still be valid.
+      if (kind === 'missing' && name === asrHelperName) continue;
+      if (kind !== 'file') {
+        throw new Error(
+          `Invalid sidecar archive: ${name} must be a regular file. Install a complete matching sidecar package.`,
+        );
+      }
+      await markExecutable(path);
+    }
     options.signal?.throwIfAborted();
 
     const manifest: InstallManifest = {

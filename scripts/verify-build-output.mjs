@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises';
+import { access, lstat, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -41,17 +41,7 @@ export async function verifyFrontendBuildOutput(options = {}) {
 export async function verifySidecarBuildOutput(options = {}) {
   const profile = options.profile ?? 'debug';
   const rootDir = resolve(options.rootDir ?? '.');
-  const sidecarBinaryPath = join(
-    rootDir,
-    `native/target/${profile}/local-dictation-sidecar${SIDECAR_BINARY_SUFFIX}`,
-  );
-  await access(sidecarBinaryPath);
-  await access(
-    join(
-      rootDir,
-      `native/target/${profile}/local-dictation-translation-helper${SIDECAR_BINARY_SUFFIX}`,
-    ),
-  );
+  await verifySidecarExecutables(join(rootDir, 'native', 'target', profile));
 
   return await verifyOptionalCudaBuild(rootDir, profile);
 }
@@ -63,21 +53,30 @@ async function verifyOptionalCudaBuild(rootDir, profile) {
   );
   try {
     await access(cudaSidecarBinaryPath);
-    await access(
-      join(
-        rootDir,
-        `native/target-cuda/${profile}/local-dictation-translation-helper${SIDECAR_BINARY_SUFFIX}`,
-      ),
-    );
-  } catch {
-    return false;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
   }
+
+  await verifySidecarExecutables(join(rootDir, 'native', 'target-cuda', profile));
 
   for (const runtimeFilename of CUDA_RUNTIME_FILENAMES) {
     await access(join(rootDir, 'native', 'target-cuda', profile, runtimeFilename));
   }
 
   return true;
+}
+
+async function verifySidecarExecutables(directory) {
+  for (const binary of [
+    'local-dictation-sidecar',
+    'local-dictation-translation-helper',
+    'local-dictation-asr-helper',
+  ]) {
+    const path = join(directory, `${binary}${SIDECAR_BINARY_SUFFIX}`);
+    if (!(await lstat(path)).isFile())
+      throw new Error(`Expected a regular sidecar executable: ${path}`);
+  }
 }
 
 async function main() {

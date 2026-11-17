@@ -59,7 +59,7 @@ $cargoArgs = @(
   '--locked',
   '--manifest-path', 'native/Cargo.toml',
   '--target-dir', 'native/target-cuda',
-  '--features', 'engine-whisper,engine-cohere-transcribe,engine-hy-mt,engine-moonshine,engine-nemotron-asr,engine-parakeet-unified,engine-pocket-tts,engine-supertonic,gpu-cuda',
+  '--features', 'engine-whisper,engine-cohere-transcribe,engine-hy-mt,engine-qwen-asr,engine-moonshine,engine-nemotron-asr,engine-parakeet-unified,engine-pocket-tts,engine-supertonic,gpu-cuda',
   '--bins',
   '-j', "$jobs"
 )
@@ -113,11 +113,11 @@ Invoke-TimedStep "Stage CUDA runtime libraries" {
   }
 }
 
-$expected = @("$outDir/local-dictation-sidecar.exe", "$outDir/local-dictation-translation-helper.exe") +
+$expected = @("$outDir/local-dictation-sidecar.exe", "$outDir/local-dictation-translation-helper.exe", "$outDir/local-dictation-asr-helper.exe") +
   ($runtimeFiles | ForEach-Object { Join-Path $outDir $_ })
 Invoke-TimedStep "Verify CUDA sidecar artifacts" {
   foreach ($path in $expected) {
-    if (-not (Test-Path $path)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
       throw "expected build artifact missing: $path"
     }
     $item = Get-Item $path

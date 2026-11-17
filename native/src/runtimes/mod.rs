@@ -1,6 +1,6 @@
 pub mod bergamot_wasm;
 
-#[cfg(feature = "engine-hy-mt")]
+#[cfg(any(feature = "engine-hy-mt", feature = "engine-qwen-asr"))]
 pub mod llama_cpp;
 
 #[cfg(any(

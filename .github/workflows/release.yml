@@ -218,6 +218,7 @@ jobs:
         run: |
           codesign --force --sign - ${{ matrix.binary_path }}
           codesign --force --sign - native/target/release/local-dictation-translation-helper
+          codesign --force --sign - native/target/release/local-dictation-asr-helper
 
       - name: Package release archive
         env:

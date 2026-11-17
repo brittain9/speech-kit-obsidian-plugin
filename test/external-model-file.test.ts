@@ -98,6 +98,14 @@ describe('external model guidance', () => {
     }
   });
 
+  it('offers Qwen with paired-GGUF guidance without replacing the default engine', () => {
+    const option = getExternalFileEngineOption({ familyId: 'qwen3_asr', runtimeId: 'llama_cpp' });
+    expect(option?.label).toBe('Qwen3 ASR (llama.cpp)');
+    expect(option?.requirements.join(' ')).toContain('mmproj-');
+    expect(option?.requirements.join(' ')).toContain('no live partials');
+    expect(DEFAULT_EXTERNAL_FILE_ENGINE_SELECTION.familyId).toBe('whisper');
+  });
+
   it('keeps Whisper as the explicit default independent of option ordering', () => {
     expect(DEFAULT_EXTERNAL_FILE_ENGINE_SELECTION).toEqual({
       familyId: 'whisper',
