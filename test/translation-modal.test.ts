@@ -27,6 +27,74 @@ const SNAPSHOT: TranslationSnapshot = {
 };
 
 describe('TranslationModal mutation safety', () => {
+  it('keeps focused Cancel stable across real progress, elapsed ticks and model refreshes', async () => {
+    vi.useFakeTimers();
+    Setting.reset();
+    let progress = (_completed: number, _total: number) => {};
+    let signal: AbortSignal | null = null;
+    let refresh = () => {};
+    const manager = createTestModelManager([]);
+    const modal = createModal({
+      editor: { getValue: () => SNAPSHOT.source, replaceRange: vi.fn() },
+      modelManager: {
+        ...manager,
+        subscribe: (listener) => {
+          refresh = listener;
+          return () => {};
+        },
+      },
+      runTranslation: (options) => {
+        progress = options.onProgress;
+        signal = options.signal;
+        return new Promise(() => {});
+      },
+    });
+    try {
+      modal.open();
+      const cancel = latestAction('Cancel');
+      cancel.buttonEl.focus();
+      const modelControl = modelDropdown();
+      progress(1, 4);
+      progress(2, 4);
+      expect(modelDropdown()).toBe(modelControl);
+      refresh();
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(latestAction('Cancel')).toBe(cancel);
+      expect(cancel.buttonEl.ownerDocument.activeElement).toBe(cancel.buttonEl);
+      await cancel.click();
+      expect(signal).toHaveProperty('aborted', true);
+    } finally {
+      modal.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the action footer outside the scrollable custom-style content', () => {
+    Setting.reset();
+    const modal = createModal({
+      editor: { getValue: () => SNAPSHOT.source, replaceRange: vi.fn() },
+      jobModel: createModalModel({ familyId: 'tencent_hy_mt', runtimeId: 'llama_cpp' }),
+      getStyle: () => 'custom',
+      getStyleInstruction: () => '',
+      runTranslation: () => new Promise(() => {}),
+    });
+    modal.open();
+    const content = modal.contentEl as unknown as TestElement;
+    const body = content.findByClass('local-stt-translation-modal__body');
+    const footer = content.findByClass('local-stt-translation-modal__footer');
+    expect(body).toBeDefined();
+    const customInstruction = Setting.instances
+      .filter((setting) => setting.name === 'Advanced style instruction')
+      .at(-1);
+    expect(customInstruction?.textAreaComponents[0]?.inputEl.value).toBe('');
+    expect(body?.contains(customInstruction?.settingEl as TestElement)).toBe(true);
+    expect(footer).toBeDefined();
+    expect(content.children).toContain(footer);
+    expect(body?.contains(footer as TestElement)).toBe(false);
+    expect(footer?.contains(Setting.instances.at(-1)?.settingEl as TestElement)).toBe(true);
+    modal.close();
+  });
+
   it('offers an editable HY-MT2 custom style while translation is in progress', async () => {
     Setting.reset();
     const model = {

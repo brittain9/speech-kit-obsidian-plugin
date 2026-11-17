@@ -66,3 +66,10 @@ suite drives every enabled language through both exact shipping models and the
 complete AppState/VAD/worker pipeline. FLEURS is CC BY 4.0; attribution is also
 recorded in `THIRD_PARTY_NOTICES.md`. One read-speech fixture per language is a
 reproducible release gate, not a substitute for broader native-speaker review.
+
+`long-german.json` adds natural 23.1 s and 26.58 s German readings (validation
+rows 18 and 17, sentence IDs 1617 and 1618) from the same pinned FLEURS revision.
+Their recording IDs, official references, conversion, sizes, and SHA-256 hashes
+are recorded there. These longer fixtures distinguish real speech from the
+separate repeated-identical-audio stress case, which can trigger Whisper's
+repetition suppression. CC BY 4.0 attribution applies to these clips too.
