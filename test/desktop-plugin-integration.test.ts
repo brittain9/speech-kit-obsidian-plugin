@@ -41,7 +41,10 @@ function harness(): PluginHarness {
     desktopGeneration: '',
     desktopConfigureQueue: Promise.resolve(),
     desktopControls: { setGeneration: vi.fn() },
-    sidecarConnection: { configureDesktop: vi.fn(async () => {}), updateDesktopStatus: vi.fn() },
+    sidecarConnection: {
+      configureDesktop: vi.fn(async () => ({ owner: true })),
+      updateDesktopStatus: vi.fn(),
+    },
     app: { vault: { getName: () => 'Private vault' } },
     publishDesktopStatus: vi.fn(),
     notifyDesktop: vi.fn(),
@@ -265,4 +268,35 @@ it('recovers a process even when optional desktop notifications throw', async ()
   expect(() => plugin.handleDesktopProcessStop(true)).not.toThrow();
   await plugin.desktopConfigureQueue;
   expect(plugin.sidecarConnection.configureDesktop).toHaveBeenCalledOnce();
+});
+
+it('does not publish desktop updates before the native process acknowledges support', () => {
+  const plugin = new LocalSttPlugin(
+    {} as import('obsidian').App,
+    { id: 'local-dictation' } as import('obsidian').PluginManifest,
+  );
+  const updateDesktopStatus = vi.fn();
+  Object.assign(plugin, {
+    settings: {
+      ...DEFAULT_PLUGIN_SETTINGS,
+      desktopControlsEnabled: true,
+      showDesktopStatusIcon: true,
+    },
+    desktopGeneration: 'current',
+    sidecarConnection: { updateDesktopStatus },
+    dictationController: {
+      isBusy: () => false,
+      isMicrophoneRecording: () => false,
+      getWorkflowStatus: () => undefined,
+    },
+  });
+  const desktop = plugin as unknown as {
+    publishDesktopStatus(): void;
+    desktopNativeReady: boolean;
+  };
+  desktop.publishDesktopStatus();
+  expect(updateDesktopStatus).not.toHaveBeenCalled();
+  desktop.desktopNativeReady = true;
+  desktop.publishDesktopStatus();
+  expect(updateDesktopStatus).toHaveBeenCalledOnce();
 });

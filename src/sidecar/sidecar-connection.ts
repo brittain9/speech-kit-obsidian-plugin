@@ -23,6 +23,7 @@ import {
   createStartTranslationCommand,
   createStopSessionCommand,
   createSynthesisPlaybackPositionCommand,
+  type DesktopStatusEvent,
   type ErrorEvent,
   encodeAudioFrame,
   encodeJsonFrame,
@@ -187,9 +188,20 @@ export class SidecarConnection {
       new SidecarProcess(options.resolveLaunchSpec, handlers);
   }
 
-  async configureDesktop(command: import('./protocol').ConfigureDesktopCommand): Promise<void> {
-    await this.ensureStarted();
-    this.process.write(encodeJsonFrame(command));
+  async configureDesktop(
+    command: import('./protocol').ConfigureDesktopCommand,
+  ): Promise<DesktopStatusEvent> {
+    return this.sendCommandAndWait(
+      command,
+      (event): event is DesktopStatusEvent =>
+        event.type === 'desktop_status' &&
+        event.requestId === command.requestId &&
+        event.generation === command.generation,
+      'desktop_status',
+      this.options.getRequestTimeoutMs(),
+      (event) => event.requestId === command.requestId || event.code === 'invalid_frame',
+      { requestId: command.requestId },
+    );
   }
 
   updateDesktopStatus(command: import('./protocol').UpdateDesktopStatusCommand): void {

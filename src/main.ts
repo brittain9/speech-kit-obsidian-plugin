@@ -171,6 +171,7 @@ export default class LocalSttPlugin extends Plugin {
   private desktopConfigureQueue: Promise<void> = Promise.resolve();
   private desktopGeneration = '';
   private desktopIconAvailable = false;
+  private desktopNativeReady = false;
   private desktopDisposed = false;
   private desktopRecoveryAttempted = false;
   private desktopConfiguration = '';
@@ -1189,6 +1190,7 @@ export default class LocalSttPlugin extends Plugin {
   private handleDesktopProcessStop(unexpected: boolean): void {
     this.desktopControls.setGeneration('disconnected');
     this.desktopGeneration = '';
+    this.desktopNativeReady = false;
     this.desktopIconAvailable = false;
     this.desktopConfiguration = '';
     this.desktopActionRevision += 1;
@@ -1238,11 +1240,12 @@ export default class LocalSttPlugin extends Plugin {
         ])
     )
       return;
+    this.desktopNativeReady = false;
     this.desktopGeneration = randomUUID();
     this.desktopControls.setGeneration(this.desktopGeneration);
     this.desktopIconAvailable = false;
     try {
-      await this.sidecarConnection.configureDesktop({
+      const acknowledgement = await this.sidecarConnection.configureDesktop({
         type: 'configure_desktop',
         requestId: randomUUID(),
         generation: this.desktopGeneration,
@@ -1264,6 +1267,7 @@ export default class LocalSttPlugin extends Plugin {
           settings: t('desktop.settings'),
         },
       });
+      this.desktopNativeReady = acknowledgement.owner;
       this.publishDesktopStatus();
     } catch {
       this.desktopStatusMessage = t('desktop.failed');
@@ -1292,7 +1296,7 @@ export default class LocalSttPlugin extends Plugin {
       this.settings.desktopControlsEnabled && this.settings.playRecordingSounds,
       this.desktopIconAvailable,
     );
-    if (!this.desktopEnabled() || this.desktopGeneration === '') return;
+    if (!this.desktopEnabled() || !this.desktopNativeReady || this.desktopGeneration === '') return;
     try {
       this.sidecarConnection?.updateDesktopStatus({
         type: 'update_desktop_status',
