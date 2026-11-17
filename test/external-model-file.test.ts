@@ -43,13 +43,13 @@ describe('validateExternalModelFilePath', () => {
     ).resolves.toBe(whisperPath);
   });
 
-  it('requires frontend.ort as the selected Moonshine artifact', async () => {
+  it('requires a frontend as the selected Moonshine artifact', async () => {
     await expect(
       validateExternalModelFilePath(whisperPath, {
         familyId: 'moonshine',
         runtimeId: 'onnx_runtime',
       }),
-    ).rejects.toThrow(/requires its primary frontend\.ort artifact/);
+    ).rejects.toThrow(/requires its primary frontend\.ort or frontend\.model\.ort artifact/);
   });
 
   it('accepts frontend.ort for authoritative sidecar layout validation', async () => {
@@ -59,6 +59,17 @@ describe('validateExternalModelFilePath', () => {
         runtimeId: 'onnx_runtime',
       }),
     ).resolves.toBe(frontendPath);
+  });
+
+  it('accepts the split Moonshine compute frontend for authoritative sidecar validation', async () => {
+    const splitFrontendPath = join(modelDirectory, 'frontend.model.ort');
+    await writeFile(splitFrontendPath, 'split frontend fixture', 'utf8');
+    await expect(
+      validateExternalModelFilePath(splitFrontendPath, {
+        familyId: 'moonshine',
+        runtimeId: 'onnx_runtime',
+      }),
+    ).resolves.toBe(splitFrontendPath);
   });
 
   it('requires encoder.int8.onnx as the selected Nemotron artifact', async () => {

@@ -5,6 +5,7 @@ use ndarray::{Array, Array1, Array2, Array3, IxDyn};
 use ort::session::Session;
 use ort::value::{DynValue, PrimitiveTensorElementType, Tensor, Value};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
 use crate::engine::capabilities::{
     LanguageSupport, ModelFamilyCapabilities, ModelFamilyId, ModelTask, RuntimeId,
@@ -28,6 +29,8 @@ const FINAL_GENERATION_HEADROOM_TOKENS: usize = 24;
 const PARTIAL_REDECODE_WINDOW_TOKENS: usize = 12;
 
 const FRONTEND_FILENAME: &str = "frontend.ort";
+const SPLIT_FRONTEND_FILENAME: &str = "frontend.model.ort";
+const FRONTEND_WEIGHTS_FILENAME: &str = "frontend.weights.ort";
 const ENCODER_FILENAME: &str = "encoder.ort";
 const ADAPTER_FILENAME: &str = "adapter.ort";
 const CROSS_KV_FILENAME: &str = "cross_kv.ort";
@@ -36,7 +39,6 @@ const CONFIG_FILENAME: &str = "streaming_config.json";
 const TOKENIZER_FILENAME: &str = "tokenizer.bin";
 
 const REQUIRED_SIBLINGS: &[&str] = &[
-    FRONTEND_FILENAME,
     ENCODER_FILENAME,
     ADAPTER_FILENAME,
     CROSS_KV_FILENAME,
@@ -44,6 +46,27 @@ const REQUIRED_SIBLINGS: &[&str] = &[
     CONFIG_FILENAME,
     TOKENIZER_FILENAME,
 ];
+
+const FRONTEND_INPUTS: &[&str] = &[
+    "audio_chunk",
+    "sample_buffer",
+    "sample_len",
+    "conv1_buffer",
+    "conv2_buffer",
+    "frame_count",
+];
+const FRONTEND_OUTPUTS: &[&str] = &[
+    "features",
+    "sample_buffer_out",
+    "sample_len_out",
+    "conv1_buffer_out",
+    "conv2_buffer_out",
+    "frame_count_out",
+];
+// Exact official German Tiny/Small tokenizer. The upstream config has no
+// language field; a directory name or vocabulary size is not language evidence.
+const GERMAN_TOKENIZER_SHA256: &str =
+    "5725ad3771a1339802f8cebeda0fa8f7723f5282b1ee726c2544774d7399b9a7";
 
 static CAPABILITIES: ModelFamilyCapabilities = ModelFamilyCapabilities {
     task: ModelTask::Stt,
@@ -57,7 +80,7 @@ static CAPABILITIES: ModelFamilyCapabilities = ModelFamilyCapabilities {
     supports_word_timestamps: false,
     supports_initial_prompt: false,
     supports_streaming: true,
-    supports_language_selection: false,
+    supports_language_selection: true,
     supports_automatic_language_detection: false,
     supported_languages: LanguageSupport::EnglishOnly,
     max_audio_duration_secs: None,
@@ -81,46 +104,15 @@ impl ModelFamilyAdapter for MoonshineAdapter {
     }
 
     fn probe_model(&self, path: &Path) -> Result<(), TranscriptionError> {
-        let paths = resolve_model_paths(path)?;
-        let config = load_config(&paths.config)?;
-        let tokenizer = MoonshineTokenizer::load(&paths.tokenizer)?;
-        if tokenizer.len() != config.vocab_size {
-            return Err(TranscriptionError::invalid_model_with_details(format!(
-                "tokenizer vocabulary mismatch: config declares {}, tokenizer contains {}",
-                config.vocab_size,
-                tokenizer.len()
-            )));
-        }
-
-        let frontend =
-            build_session(&paths.frontend, GpuConfig { use_gpu: false }).map_err(|error| {
-                TranscriptionError::invalid_model_with_details(format!(
-                    "frontend session failed to load: {}",
-                    error.details.unwrap_or_else(|| error.message.to_string())
-                ))
-            })?;
-        verify_session_io(
-            &frontend,
-            "frontend",
-            &[
-                "audio_chunk",
-                "sample_buffer",
-                "sample_len",
-                "conv1_buffer",
-                "conv2_buffer",
-                "frame_count",
-            ],
-            &[
-                "features",
-                "sample_buffer_out",
-                "sample_len_out",
-                "conv1_buffer_out",
-                "conv2_buffer_out",
-                "frame_count_out",
-            ],
-        )?;
-
+        OrtMoonshineInference::load(path, GpuConfig { use_gpu: false })?;
         Ok(())
+    }
+
+    fn probe_model_and_language_support(
+        &self,
+        path: &Path,
+    ) -> Result<LanguageSupport, TranscriptionError> {
+        Ok(OrtMoonshineInference::load(path, GpuConfig { use_gpu: false })?.language_support)
     }
 
     fn load(
@@ -168,6 +160,7 @@ const fn default_max_seq_len() -> usize {
 
 struct ModelPaths {
     frontend: PathBuf,
+    frontend_weights: Option<PathBuf>,
     encoder: PathBuf,
     adapter: PathBuf,
     cross_kv: PathBuf,
@@ -179,9 +172,10 @@ struct ModelPaths {
 fn resolve_model_paths(path: &Path) -> Result<ModelPaths, TranscriptionError> {
     validate_model_path(path)?;
 
-    if path.file_name() != Some(OsStr::new(FRONTEND_FILENAME)) {
+    let split_frontend = path.file_name() == Some(OsStr::new(SPLIT_FRONTEND_FILENAME));
+    if !split_frontend && path.file_name() != Some(OsStr::new(FRONTEND_FILENAME)) {
         return Err(TranscriptionError::invalid_model_with_details(format!(
-            "Moonshine external models must be selected via {FRONTEND_FILENAME}; received {}",
+            "Moonshine external models must be selected via {FRONTEND_FILENAME} or {SPLIT_FRONTEND_FILENAME}; received {}",
             path.display()
         )));
     }
@@ -202,8 +196,19 @@ fn resolve_model_paths(path: &Path) -> Result<ModelPaths, TranscriptionError> {
         }
     }
 
+    let frontend_weights = split_frontend.then(|| model_dir.join(FRONTEND_WEIGHTS_FILENAME));
+    if let Some(weights) = &frontend_weights
+        && !weights.is_file()
+    {
+        return Err(TranscriptionError::invalid_model_with_details(format!(
+            "required Moonshine asset missing: {}",
+            weights.display()
+        )));
+    }
+
     Ok(ModelPaths {
-        frontend: model_dir.join(FRONTEND_FILENAME),
+        frontend: path.to_path_buf(),
+        frontend_weights,
         encoder: model_dir.join(ENCODER_FILENAME),
         adapter: model_dir.join(ADAPTER_FILENAME),
         cross_kv: model_dir.join(CROSS_KV_FILENAME),
@@ -211,6 +216,72 @@ fn resolve_model_paths(path: &Path) -> Result<ModelPaths, TranscriptionError> {
         config: model_dir.join(CONFIG_FILENAME),
         tokenizer: model_dir.join(TOKENIZER_FILENAME),
     })
+}
+
+fn load_frontend(
+    paths: &ModelPaths,
+    gpu: GpuConfig,
+) -> Result<(Session, Vec<(String, DynValue)>), TranscriptionError> {
+    let frontend = build_session(&paths.frontend, gpu)?;
+    let mut weights = Vec::new();
+    if let Some(path) = &paths.frontend_weights {
+        let mut weights_session = build_session(path, gpu)?;
+        if !weights_session.inputs().is_empty() || weights_session.outputs().is_empty() {
+            return Err(TranscriptionError::invalid_model(
+                "Moonshine weights graph must have no inputs and at least one output",
+            ));
+        }
+        let outputs = weights_session
+            .run(Vec::<(String, DynValue)>::new())
+            .map_err(|error| {
+                TranscriptionError::invalid_model_with_details(format!(
+                    "Moonshine frontend weights failed: {error}"
+                ))
+            })?;
+        for (name, output) in outputs.iter() {
+            let (shape, data) = tensor_f32(&output, name)?;
+            let value = Tensor::from_array((shape, data.into_boxed_slice())).map_err(|error| {
+                TranscriptionError::invalid_model_with_details(format!(
+                    "Moonshine frontend weight {name}: {error}"
+                ))
+            })?;
+            weights.push((name.to_string(), value.into_dyn()));
+        }
+    }
+    let mut inputs = FRONTEND_INPUTS.to_vec();
+    inputs.extend(weights.iter().map(|(name, _)| name.as_str()));
+    verify_session_io(&frontend, "frontend", &inputs, FRONTEND_OUTPUTS)?;
+    Ok((frontend, weights))
+}
+
+fn model_language_support(paths: &ModelPaths) -> Result<LanguageSupport, TranscriptionError> {
+    let tokenizer_bytes = std::fs::read(&paths.tokenizer).map_err(|error| {
+        TranscriptionError::invalid_model_with_details(format!("failed to read tokenizer: {error}"))
+    })?;
+    let digest: String = Sha256::digest(&tokenizer_bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    if digest == GERMAN_TOKENIZER_SHA256 {
+        if paths.frontend_weights.is_none() {
+            return Err(TranscriptionError::invalid_model(
+                "German Moonshine requires the split frontend",
+            ));
+        }
+        return Ok(LanguageSupport::List {
+            tags: vec!["de".to_string()],
+        });
+    }
+    // A split export with no verified language cannot satisfy set_language.
+    // Reject it at probe as well as load, rather than advertising a ready model
+    // that the shared Unknown-language fallback would incorrectly offer as English.
+    if paths.frontend_weights.is_some() {
+        return Err(TranscriptionError::invalid_model(
+            "Unverified Moonshine split export: tokenizer does not match a supported language artifact",
+        ));
+    }
+    // Preserve the established contract for monolithic English imports.
+    Ok(LanguageSupport::EnglishOnly)
 }
 
 fn load_config(path: &Path) -> Result<MoonshineConfig, TranscriptionError> {
@@ -388,6 +459,9 @@ trait MoonshineInference: Send {
     fn decode(&mut self, is_final: bool) -> Result<DecodedTranscript, TranscriptionError>;
     fn reset(&mut self);
     fn sample_count(&self) -> usize;
+    fn language_support(&self) -> LanguageSupport {
+        LanguageSupport::EnglishOnly
+    }
 }
 
 struct LoadedMoonshineModel<I> {
@@ -401,6 +475,22 @@ impl<I> LoadedMoonshineModel<I> {
 }
 
 impl<I: MoonshineInference> StreamingModel for LoadedMoonshineModel<I> {
+    fn set_language(&mut self, language: &str) -> Result<(), TranscriptionError> {
+        let supported = match self.inference.language_support() {
+            LanguageSupport::EnglishOnly => language == "en",
+            LanguageSupport::List { tags } => tags.iter().any(|tag| tag == language),
+            _ => false,
+        };
+        if supported {
+            Ok(())
+        } else {
+            Err(TranscriptionError::unsupported_language(
+                language,
+                "language must match the verified Moonshine model",
+            ))
+        }
+    }
+
     fn accept_audio(&mut self, samples: &[i16]) -> Result<(), TranscriptionError> {
         self.inference.accept_audio(samples)
     }
@@ -517,6 +607,8 @@ struct OrtMoonshineInference {
     decoder_kv: Session,
     encoder: Session,
     frontend: Session,
+    frontend_weights: Vec<(String, DynValue)>,
+    language_support: LanguageSupport,
     state: StreamingState,
     tokenizer: MoonshineTokenizer,
 }
@@ -534,7 +626,8 @@ impl OrtMoonshineInference {
             )));
         }
 
-        let frontend = build_session(&paths.frontend, gpu)?;
+        let language_support = model_language_support(&paths)?;
+        let (frontend, frontend_weights) = load_frontend(&paths, gpu)?;
         let encoder = build_session(&paths.encoder, gpu)?;
         let adapter = build_session(&paths.adapter, gpu)?;
         let cross_kv = build_session(&paths.cross_kv, gpu)?;
@@ -542,17 +635,24 @@ impl OrtMoonshineInference {
         verify_session_io(&encoder, "encoder", &["features"], &["encoded"])?;
         verify_session_io(&adapter, "adapter", &["encoded", "pos_offset"], &["memory"])?;
         verify_session_io(&cross_kv, "cross_kv", &["memory"], &["k_cross", "v_cross"])?;
-        verify_session_io(
-            &decoder_kv,
-            "decoder_kv",
-            &["token", "k_self", "v_self", "out_k_cross", "out_v_cross"],
+        // Newer official decoders omit the unchanged cross-cache echoes.
+        // The adapter owns those caches and only consumes logits/self-cache.
+        let decoder_outputs: &[&str] = if decoder_kv.outputs().len() == 3 {
+            &["logits", "out_k_self", "out_v_self"]
+        } else {
             &[
                 "logits",
                 "out_k_self",
                 "out_v_self",
                 "out_k_cross",
                 "out_v_cross",
-            ],
+            ]
+        };
+        verify_session_io(
+            &decoder_kv,
+            "decoder_kv",
+            &["token", "k_self", "v_self", "out_k_cross", "out_v_cross"],
+            decoder_outputs,
         )?;
         let state = StreamingState::new(&config);
 
@@ -563,6 +663,8 @@ impl OrtMoonshineInference {
             decoder_kv,
             encoder,
             frontend,
+            frontend_weights,
+            language_support,
             state,
             tokenizer,
         })
@@ -622,19 +724,22 @@ impl OrtMoonshineInference {
             "frame count",
         )?;
 
-        let outputs = self
-            .frontend
-            .run(ort::inputs![
-                "audio_chunk" => audio,
-                "sample_buffer" => sample_buffer,
-                "sample_len" => sample_len,
-                "conv1_buffer" => conv1,
-                "conv2_buffer" => conv2,
-                "frame_count" => frame_count,
-            ])
-            .map_err(|error| {
-                TranscriptionError::transcription_failure("Moonshine frontend", &error)
-            })?;
+        let mut inputs = ort::inputs![
+            "audio_chunk" => audio,
+            "sample_buffer" => sample_buffer,
+            "sample_len" => sample_len,
+            "conv1_buffer" => conv1,
+            "conv2_buffer" => conv2,
+            "frame_count" => frame_count,
+        ];
+        inputs.extend(
+            self.frontend_weights
+                .iter()
+                .map(|(name, value)| (name.as_str().into(), value.into())),
+        );
+        let outputs = self.frontend.run(inputs).map_err(|error| {
+            TranscriptionError::transcription_failure("Moonshine frontend", &error)
+        })?;
 
         let (feature_shape, features) = tensor_f32(output(&outputs, "features")?, "features")?;
         let feature_count = dimension(&feature_shape, 1, "features")?;
@@ -992,6 +1097,10 @@ fn generation_token_budget(sample_count: usize, max_seq_len: usize, is_final: bo
 }
 
 impl MoonshineInference for OrtMoonshineInference {
+    fn language_support(&self) -> LanguageSupport {
+        self.language_support.clone()
+    }
+
     fn accept_audio(&mut self, samples: &[i16]) -> Result<(), TranscriptionError> {
         self.state.sample_count += samples.len();
         self.state
@@ -1105,13 +1214,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn capabilities_describe_streaming_english_output() {
+    fn capabilities_describe_streaming_with_model_specific_language_selection() {
         let adapter = MoonshineAdapter;
         let capabilities = adapter.capabilities();
 
         assert!(capabilities.supports_streaming);
         assert!(!capabilities.supports_initial_prompt);
-        assert!(!capabilities.supports_language_selection);
+        assert!(capabilities.supports_language_selection);
         assert_eq!(
             capabilities.supported_languages,
             LanguageSupport::EnglishOnly
@@ -1155,6 +1264,60 @@ mod tests {
         assert_eq!(error.code, "invalid_model_file");
         assert!(error.details.unwrap_or_default().contains(ENCODER_FILENAME));
 
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn probe_requires_the_split_frontend_weights_sibling() {
+        let root = temp_dir("missing-split-weights");
+        fs::create_dir_all(&root).unwrap();
+        let frontend = root.join(SPLIT_FRONTEND_FILENAME);
+        fs::write(&frontend, b"not a graph").unwrap();
+        for filename in REQUIRED_SIBLINGS {
+            fs::write(root.join(filename), b"placeholder").unwrap();
+        }
+        let error = MoonshineAdapter.probe_model(&frontend).unwrap_err();
+        assert_eq!(error.code, "invalid_model_file");
+        assert!(
+            error
+                .details
+                .unwrap_or_default()
+                .contains(FRONTEND_WEIGHTS_FILENAME)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn unverified_split_export_fails_probe_before_loading_ort_graphs() {
+        let root = temp_dir("unverified-split-export");
+        fs::create_dir_all(&root).unwrap();
+        let frontend = root.join(SPLIT_FRONTEND_FILENAME);
+        fs::write(&frontend, b"not a graph").unwrap();
+        fs::write(root.join(FRONTEND_WEIGHTS_FILENAME), b"not a graph").unwrap();
+        for filename in REQUIRED_SIBLINGS {
+            fs::write(root.join(filename), b"placeholder").unwrap();
+        }
+        fs::write(root.join(TOKENIZER_FILENAME), b"\x01a").unwrap();
+        fs::write(
+            root.join(CONFIG_FILENAME),
+            serde_json::to_vec(&serde_json::json!({
+                "encoder_dim": 1, "decoder_dim": 1, "depth": 1,
+                "nheads": 1, "head_dim": 1, "vocab_size": 1,
+                "bos_id": 0, "eos_id": 0, "frame_len": 1,
+                "total_lookahead": 0, "d_model_frontend": 1,
+                "c1": 1, "c2": 1, "max_seq_len": 1
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let error = MoonshineAdapter.probe_model(&frontend).unwrap_err();
+        assert_eq!(error.code, "invalid_model_file");
+        assert!(
+            error
+                .details
+                .unwrap_or_default()
+                .contains("Unverified Moonshine split export")
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
