@@ -742,7 +742,7 @@ export const de = {
   'models.external.validation.nemotronEntryFile':
     'Nemotron ASR: Wählen Sie encoder.int8.onnx aus einem unterstützten Nemotron-int8-Export.',
   'models.external.validation.moonshineEntryFile':
-    'Moonshine erfordert sein primäres frontend.ort-Artefakt. Wählen Sie frontend.ort aus dem Streaming-Modellverzeichnis aus.',
+    'Moonshine benötigt frontend.ort oder frontend.model.ort als Hauptdatei. Wählen Sie das Frontend aus dem Streaming-Modellverzeichnis.',
   'models.external.validation.generic': 'Die Sprach-Engine konnte dieses Modell nicht validieren.',
   'models.external.requirements.nemotron.entry':
     'Wählen Sie encoder.int8.onnx aus einem unterstützten Nemotron-int8-Export.',
@@ -751,11 +751,11 @@ export const de = {
   'models.external.requirements.nemotron.compatibility':
     'Unterstützte Exporte: Englisch 560 ms und mehrsprachig 160 ms oder 560 ms. ORT GenAI-Exporte werden nicht unterstützt.',
   'models.external.requirements.moonshine.entry':
-    'Wählen Sie frontend.ort aus einem Verzeichnis für Moonshine-v2-Streaming-ORT-Modelle.',
+    'Wählen Sie frontend.ort oder frontend.model.ort zusammen mit frontend.weights.ort aus einem Moonshine-v2-Streaming-Modellverzeichnis.',
   'models.external.requirements.moonshine.siblings':
     'Das gleiche Verzeichnis muss encoder.ort, adapter.ort, cross_kv.ort, decoder_kv.ort, streaming_config.json und tokenizer.bin enthalten.',
   'models.external.requirements.moonshine.compatibility':
-    'Nicht-streamende Moonshine ONNX-Exporte sind nicht kompatibel.',
+    'Unterstützt bestehende englische Modelle und einen experimentellen deutschen Tiny-Export mit geteiltem Frontend. Lange deutsche Äußerungen können Text wiederholen. Nicht-streamende Moonshine-ONNX-Exporte sind nicht kompatibel.',
   'models.external.requirements.whisper.entry':
     'Wählen Sie eine whisper.cpp-kompatible GGML- oder GGUF-Modelldatei aus.',
   'models.external.requirements.whisper.validation':

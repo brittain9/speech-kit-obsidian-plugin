@@ -1,0 +1,93 @@
+{
+  "runtimeId": "onnx_runtime",
+  "familyId": "moonshine",
+  "task": "stt",
+  "modelId": "moonshine_tiny_streaming_de",
+  "collectionId": "moonshine_streaming",
+  "displayName": "Moonshine Tiny German",
+  "summary": "Compact German streaming dictation on CPU with a 32 MB model download.",
+  "languageTags": ["de"],
+  "uxTags": ["fast", "lightweight", "cpu"],
+  "licenseLabel": "MIT",
+  "licenseUrl": "https://github.com/moonshine-ai/moonshine/blob/d8d8fa29d05ca67441a7719e70099f9f48917a93/LICENSE",
+  "sourceUrl": "https://github.com/moonshine-ai/moonshine/blob/d8d8fa29d05ca67441a7719e70099f9f48917a93/core/moonshine-model-catalog.cpp",
+  "modelCardUrl": "https://huggingface.co/moonshine-ai/moonshine-streaming-tiny-de",
+  "notes": [
+    "German-only model for live, streaming dictation.",
+    "Int8 weights with the official split frontend; CPU execution."
+  ],
+  "artifacts": [
+    {
+      "artifactId": "frontend_model",
+      "role": "transcription_model",
+      "required": true,
+      "filename": "frontend.model.ort",
+      "sizeBytes": 23176,
+      "sha256": "4445bb4c2f41b0dd993999e06dc9367a0dde0d42a2e777116e7d93be102dc43d",
+      "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-de/quantized_26_08_24/frontend.model.ort"
+    },
+    {
+      "artifactId": "frontend_weights",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "frontend.weights.ort",
+      "sizeBytes": 2093280,
+      "sha256": "233fda61d583403bbf13ea71b6ba2335fdf57eac71be85a97dcbb90a6c2f4186",
+      "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-de/quantized_26_08_24/frontend.weights.ort"
+    },
+    {
+      "artifactId": "encoder",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "encoder.ort",
+      "sizeBytes": 7772792,
+      "sha256": "74610b818058e396f4b9d9ffd730cf8e36772122464d989dd3011dfa76bd6baf",
+      "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-de/quantized_26_08_24/encoder.ort"
+    },
+    {
+      "artifactId": "adapter",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "adapter.ort",
+      "sizeBytes": 1318472,
+      "sha256": "23b91142a35cfbc533a7f03ad8387d0b6d32856b465c6fe7a14ede44a254a345",
+      "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-de/quantized_26_08_24/adapter.ort"
+    },
+    {
+      "artifactId": "cross_kv",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "cross_kv.ort",
+      "sizeBytes": 1288120,
+      "sha256": "25e6d9d4f16569c2ede7e23a381fe7c60cc4b0f141adc88580557d4530634f17",
+      "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-de/quantized_26_08_24/cross_kv.ort"
+    },
+    {
+      "artifactId": "decoder_kv",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "decoder_kv.ort",
+      "sizeBytes": 19717336,
+      "sha256": "768b1464074fc4fb7327e8b863fc13dcd12cb7bbe8d8e9428fa7292f7fd9ca6e",
+      "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-de/quantized_26_08_24/decoder_kv.ort"
+    },
+    {
+      "artifactId": "streaming_config",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "streaming_config.json",
+      "sizeBytes": 509,
+      "sha256": "d31afd7c2dd5ee9ae3fa232312c5b42cb3e4fe1c6e9c53d885f2bea63023790a",
+      "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-de/quantized_26_08_24/streaming_config.json"
+    },
+    {
+      "artifactId": "tokenizer",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "tokenizer.bin",
+      "sizeBytes": 103319,
+      "sha256": "5725ad3771a1339802f8cebeda0fa8f7723f5282b1ee726c2544774d7399b9a7",
+      "downloadUrl": "https://download.moonshine.ai/model/tiny-streaming-de/quantized_26_08_24/tokenizer.bin"
+    }
+  ]
+}

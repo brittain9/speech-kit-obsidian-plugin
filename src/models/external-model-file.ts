@@ -8,7 +8,7 @@ import { t } from '../shared/i18n';
 import type { ExternalFileModelSelection } from './model-management-types';
 
 export interface ExternalFileEngineOption {
-  entryFilename?: string;
+  entryFilenames?: readonly string[];
   entryFilenameErrorKey?:
     | 'models.external.validation.nemotronEntryFile'
     | 'models.external.validation.moonshineEntryFile';
@@ -25,7 +25,7 @@ export const DEFAULT_EXTERNAL_FILE_ENGINE_SELECTION = {
 
 export const EXTERNAL_FILE_ENGINES: readonly ExternalFileEngineOption[] = [
   {
-    entryFilename: 'encoder.int8.onnx',
+    entryFilenames: ['encoder.int8.onnx'],
     entryFilenameErrorKey: 'models.external.validation.nemotronEntryFile',
     label: 'NVIDIA Nemotron ASR (ONNX Runtime)',
     placeholder: '/absolute/path/to/nemotron/encoder.int8.onnx',
@@ -37,7 +37,7 @@ export const EXTERNAL_FILE_ENGINES: readonly ExternalFileEngineOption[] = [
     selection: { familyId: 'nemotron_asr', runtimeId: 'onnx_runtime' },
   },
   {
-    entryFilename: 'frontend.ort',
+    entryFilenames: ['frontend.ort', 'frontend.model.ort'],
     entryFilenameErrorKey: 'models.external.validation.moonshineEntryFile',
     label: 'Moonshine (ONNX Runtime)',
     placeholder: '/absolute/path/to/moonshine/frontend.ort',
@@ -83,10 +83,10 @@ export async function validateExternalModelFilePath(
   const normalizedPath = pathResult.path;
 
   const option = getExternalFileEngineOption(engine);
-  if (option?.entryFilename && basename(normalizedPath) !== option.entryFilename) {
+  if (option?.entryFilenames && !option.entryFilenames.includes(basename(normalizedPath))) {
     throw new ExternalModelFileValidationError(
       'wrong_entry_file',
-      option.entryFilename,
+      option.entryFilenames.join(' / '),
       option.entryFilenameErrorKey,
     );
   }

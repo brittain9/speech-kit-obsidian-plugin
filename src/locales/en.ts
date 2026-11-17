@@ -1352,7 +1352,7 @@ export const en = {
   'models.external.validation.nemotronEntryFile':
     'Nemotron ASR requires its encoder.int8.onnx artifact. Select encoder.int8.onnx from a supported Nemotron int8 model folder.',
   'models.external.validation.moonshineEntryFile':
-    'Moonshine requires its primary frontend.ort artifact. Select frontend.ort from the streaming model directory.',
+    'Moonshine requires its primary frontend.ort or frontend.model.ort artifact. Select the frontend from the streaming model directory.',
   'models.external.validation.generic': 'The speech engine could not validate this model.',
   'models.external.requirements.nemotron.entry':
     'Select encoder.int8.onnx from a supported Nemotron int8 export.',
@@ -1361,11 +1361,11 @@ export const en = {
   'models.external.requirements.nemotron.compatibility':
     'Supports English 560 ms and multilingual 160 ms or 560 ms exports. ORT GenAI exports are not supported.',
   'models.external.requirements.moonshine.entry':
-    'Select frontend.ort from a Moonshine v2 streaming ORT model directory.',
+    'Select frontend.ort, or frontend.model.ort with frontend.weights.ort, from a Moonshine v2 streaming ORT model directory.',
   'models.external.requirements.moonshine.siblings':
     'The same directory must contain encoder.ort, adapter.ort, cross_kv.ort, decoder_kv.ort, streaming_config.json, and tokenizer.bin.',
   'models.external.requirements.moonshine.compatibility':
-    'Non-streaming Moonshine ONNX exports are not compatible.',
+    'Supports existing English models and an experimental German Tiny split export. Long German utterances may repeat text. Non-streaming Moonshine ONNX exports are not compatible.',
   'models.external.requirements.whisper.entry':
     'Select one whisper.cpp-compatible GGML or GGUF model file.',
   'models.external.requirements.whisper.validation':
