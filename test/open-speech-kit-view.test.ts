@@ -37,3 +37,19 @@ it('reports unavailable workspace space without pretending controls were opened'
   expect(await openSpeechKitView(workspace as unknown as Workspace)).toBe(false);
   expect(workspace.revealLeaf).not.toHaveBeenCalled();
 });
+
+it.each(['setViewState', 'revealLeaf'] as const)(
+  'reports failure when the workspace rejects %s',
+  async (method) => {
+    const leaf = { setViewState: vi.fn(async () => {}) };
+    const workspace = {
+      getLeavesOfType: () => [],
+      getLeftLeaf: () => leaf,
+      revealLeaf: vi.fn(async () => {}),
+    };
+    (method === 'setViewState' ? leaf.setViewState : workspace.revealLeaf).mockRejectedValueOnce(
+      new Error('workspace changed'),
+    );
+    expect(await openSpeechKitView(workspace as unknown as Workspace)).toBe(false);
+  },
+);
