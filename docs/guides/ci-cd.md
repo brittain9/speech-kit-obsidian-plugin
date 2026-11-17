@@ -51,10 +51,12 @@ budget or suppress a failed check merely to make CI green.
 
 ## Release approval
 
-Release preparation is separate from routine CI. A tag may build and stage a
-draft, but publication requires the owner's explicit manual action. Workflow
-dispatch stays a dry run. See the release runbook for asset validation and the
-final approval procedure. Do not run release workflows as part of CI testing.
+Release and deployment approval applies to agent actions. Agents need Alex's
+explicit approval for the prepared release or deployment before triggering it;
+see [AGENTS.md](../../AGENTS.md). A release tag then runs the existing automated
+build, attestation and publication flow, without a second manual Publish step.
+Workflow dispatch remains a dry run. See the release runbook for validation and
+recovery. Routine CI and PR merges do not constitute deployment approval.
 
 This redesign does not change repository protection rules, provision credentials,
 publish a version, or claim a measured cold-build speedup. Warm validation confirms

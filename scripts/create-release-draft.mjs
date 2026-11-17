@@ -68,7 +68,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   if (process.env.GITHUB_STEP_SUMMARY) {
     await appendFile(
       process.env.GITHUB_STEP_SUMMARY,
-      `## Release draft prepared\n\n${url.trim()}\n\nWait for the complete workflow to succeed, inspect the assets and provenance, then publish manually.\n`,
+      `## Release assets staged\n\n${url.trim()}\n\nThe approved tag workflow publishes automatically after verified staging.\n`,
     );
   }
 }
