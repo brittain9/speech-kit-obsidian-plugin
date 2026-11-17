@@ -36,9 +36,8 @@ shows each model's size, language coverage, license and installed availability.
 - **Qwen3 ASR:** batch speech recognition through a separate llama.cpp helper.
   The managed decoder and audio encoder are installed together. CPU, Metal and
   CUDA routes follow the package matrix; there is no live partial text or model
-  word timing. The current main catalog has 0.6B; 1.7B is a
-  [pending candidate](https://github.com/brittain9/speech-kit-obsidian-plugin/pull/573)
-  using the same adapter. [Adapter](../../native/src/adapters/qwen_asr.rs),
+  word timing. The managed 0.6B and 1.7B choices share the same adapter.
+  [Adapter](../../native/src/adapters/qwen_asr.rs),
   [helper model](../../native/src/qwen_asr_model.rs).
 - **Moonshine, NVIDIA Nemotron and Parakeet Unified:** live speech recognition
   through CPU ONNX Runtime. Moonshine and Parakeet are English-only in this
@@ -79,11 +78,12 @@ support matrix. [Native features](../../native/Cargo.toml),
 
 ## Validation coverage
 
-| Evidence                               | Current coverage                                                                                                                                        |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Automated build and correctness checks | Linux x86-64/ARM64, Windows x86-64/ARM64 and macOS Apple silicon; macOS checks use the Metal feature graph. Native-relevant changes select these lanes. |
-| Recorded real model and app checks     | Dated Apple M2 Pro checks include managed Qwen 0.6B and multilingual Whisper; the Linux guide separately records Fedora KDE/Flatpak and Ubuntu VM use.  |
-| Model-specific measurements            | Public fixtures and scoped quality/timing observations, with their stated host and execution context.                                                   |
+| Evidence                               | Current coverage                                                                                                                                                                                                 |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Automated build and correctness checks | Linux x86-64/ARM64, Windows x86-64/ARM64 and macOS Apple silicon; macOS checks use the Metal feature graph. Native-relevant changes select these lanes.                                                          |
+| Recorded real model and app checks     | Dated Apple M2 Pro checks include managed Qwen 0.6B and multilingual Whisper; the Linux guide separately records Fedora KDE/Flatpak and Ubuntu VM use.                                                           |
+| Qwen variant helper checks             | [Retained 0.6B/1.7B observations](../quality/2026-11-17-qwen17-observations.json) cover two public clips per model/backend on Apple M2 Pro with CPU and Metal requests, including the restricted-device failure. |
+| Model-specific measurements            | Public fixtures and scoped quality/timing observations, with their stated host and execution context.                                                                                                            |
 
 CI builds and model-free protocol checks are useful coverage, not proof that
 every checkpoint, GPU driver, audio device or desktop session was exercised.

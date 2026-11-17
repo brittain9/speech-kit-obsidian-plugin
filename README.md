@@ -82,7 +82,7 @@ These are the execution paths in the current source and sidecar build configurat
 
 \* CUDA requires the optional NVIDIA sidecar on Windows or Linux x86-64. Installing it does not accelerate the CPU-only families. Metal/CUDA entries identify available backend paths, not certification of every model on every GPU.
 
-Qwen3 ASR 1.7B is a [pending addition](https://github.com/brittain9/speech-kit-obsidian-plugin/pull/573) using the same batch/backend paths. Model language coverage varies. See [model and hardware support](docs/guides/model-hardware-support.md) for package boundaries, other GPUs, and validation coverage.
+Qwen3 ASR offers managed 0.6B and 1.7B choices using the same batch/backend paths. Model language coverage varies. See [model and hardware support](docs/guides/model-hardware-support.md) for package boundaries, other GPUs, and validation coverage.
 
 ## Getting started
 
