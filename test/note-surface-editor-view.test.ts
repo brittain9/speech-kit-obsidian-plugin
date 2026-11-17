@@ -558,3 +558,116 @@ it('appends a sibling transcript outside a processing boundary without extending
   speech.dispose();
   view.destroy();
 });
+
+it('refuses a new dictation at the caret inside an older processing region', () => {
+  const view = new EditorView({
+    state: EditorState.create({
+      extensions: [noteSurfaceUpdateListenerExtension(), sessionProcessingExtension()],
+    }),
+    parent: document.body,
+  });
+  const older = new NoteSurface(view, { anchor: 'at_cursor' });
+  older.appendProjection('old', projection('older speech'));
+  older.setProcessingRange({ from: 0, to: 12 });
+  view.dispatch({ selection: { anchor: 5 }, annotations: Transaction.userEvent.of('select') });
+  expect(() => new NoteSurface(view, { anchor: 'at_cursor' })).toThrow();
+  expect(view.state.doc.toString()).toBe('older speech');
+  older.dispose();
+  view.destroy();
+});
+
+it('rejects an append vetoed by another editor extension without claiming speech ownership', () => {
+  const view = new EditorView({
+    state: EditorState.create({
+      extensions: [noteSurfaceUpdateListenerExtension(), EditorState.changeFilter.of(() => false)],
+    }),
+    parent: document.body,
+  });
+  const surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  expect(surface.appendProjection('u', projection('recover me'))).toMatchObject({
+    kind: 'denied',
+    reason: { kind: 'surface_desynchronized' },
+  });
+  expect(surface.getSpan('u')).toBeUndefined();
+  expect(view.state.doc.toString()).toBe('');
+  surface.dispose();
+  view.destroy();
+});
+
+it('rejects a revision vetoed after its initial speech was inserted', () => {
+  let reject = false;
+  const view = new EditorView({
+    state: EditorState.create({
+      extensions: [
+        noteSurfaceUpdateListenerExtension(),
+        EditorState.changeFilter.of(() => !reject),
+      ],
+    }),
+    parent: document.body,
+  });
+  const surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  expect(surface.appendProjection('u', projection('partial')).kind).toBe('appended');
+  reject = true;
+  expect(surface.replaceAnchor('u', 'final speech', 'partial')).toMatchObject({
+    kind: 'denied',
+    reason: { kind: 'surface_desynchronized' },
+  });
+  expect(view.state.doc.toString()).toBe('partial');
+  surface.dispose();
+  view.destroy();
+});
+
+it('refuses session construction when an editor filter rejects its initial prefix', () => {
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: 'existing note',
+      extensions: [noteSurfaceUpdateListenerExtension(), EditorState.changeFilter.of(() => false)],
+    }),
+    parent: document.body,
+  });
+  expect(() => new NoteSurface(view, { anchor: 'end_of_note' })).toThrow();
+  expect(view.state.doc.toString()).toBe('existing note');
+  view.destroy();
+});
+
+it('keeps the original speech when another extension vetoes a cleanup rewrite', () => {
+  let reject = false;
+  const view = new EditorView({
+    state: EditorState.create({
+      extensions: [
+        noteSurfaceUpdateListenerExtension(),
+        EditorState.changeFilter.of(() => !reject),
+      ],
+    }),
+    parent: document.body,
+  });
+  const surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  surface.appendProjection('u', projection('original speech'));
+  reject = true;
+  expect(surface.rewriteRegion({ from: 0, to: 15 }, 'cleaned speech', [])).toEqual({
+    kind: 'rewritten_modified',
+  });
+  expect(view.state.doc.toString()).toBe('original speech');
+  surface.dispose();
+  view.destroy();
+});
+
+it('does not report a recording link inserted when another extension vetoes it', () => {
+  let reject = false;
+  const view = new EditorView({
+    state: EditorState.create({
+      extensions: [
+        noteSurfaceUpdateListenerExtension(),
+        EditorState.changeFilter.of(() => !reject),
+      ],
+    }),
+    parent: document.body,
+  });
+  const surface = new NoteSurface(view, { anchor: 'at_cursor' });
+  surface.appendProjection('u', projection('original speech'));
+  reject = true;
+  expect(surface.insertAfterRange({ from: 0, to: 15 }, '![[recording.webm]]')).toBe(false);
+  expect(view.state.doc.toString()).toBe('original speech');
+  surface.dispose();
+  view.destroy();
+});

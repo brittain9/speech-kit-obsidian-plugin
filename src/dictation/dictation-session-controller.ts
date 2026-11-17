@@ -1166,6 +1166,12 @@ export class DictationSessionController {
       this.cancelOnFatalTranscriptFailure(sessionId, FEEDBACK_FAILURES.transcriptWrite, error);
       return;
     }
+    // Journal admission precedes projection. A synchronous editor veto can
+    // cancel the session during acceptTranscript; still offer its admitted
+    // final to the existing privacy-controlled recovery/clipboard consumers.
+    if (result.kind === 'accepted' && revision.isFinal && revision.text.trim().length > 0) {
+      this.dependencies.onFinalizedUtteranceAccepted?.(revision.text);
+    }
     if (rejectsTranscriptWork(entry)) {
       return;
     }
@@ -1173,9 +1179,6 @@ export class DictationSessionController {
       this.handleError(FEEDBACK_FAILURES.recordTranscript, new Error(result.reason), entry);
       await this.cancelSession(sessionId);
       return;
-    }
-    if (result.kind === 'accepted' && revision.isFinal && revision.text.trim().length > 0) {
-      this.dependencies.onFinalizedUtteranceAccepted?.(revision.text);
     }
   }
 

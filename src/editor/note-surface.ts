@@ -1,4 +1,4 @@
-import type { Extension, StateEffect, TransactionSpec } from '@codemirror/state';
+import type { Extension, StateEffect, Text, TransactionSpec } from '@codemirror/state';
 import { Annotation, Transaction } from '@codemirror/state';
 import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 
@@ -19,6 +19,7 @@ import {
 import {
   bypassSessionProcessingLock,
   type SessionProcessingRange,
+  sessionProcessingStateField,
   setSessionProcessingEffect,
 } from './session-processing-extension';
 import { computeFirstPhrasePrefix } from './transcript-placement';
@@ -180,6 +181,8 @@ export class NoteSurface {
   private readonly pendingDispatches: Array<{
     token: object;
     seen: boolean;
+    expectedDocument: Text;
+    applied: boolean | null;
     updates: ViewUpdate[];
   }> = [];
 
@@ -190,9 +193,20 @@ export class NoteSurface {
   ) {
     nextSurfaceOrder += 1;
     this.initialAnchorPos = this.computePinPosition();
+    const processingRanges = view.state.field(sessionProcessingStateField, false);
+    if (
+      [...(processingRanges?.values() ?? [])].some(
+        (range) => this.initialAnchorPos > range.from && this.initialAnchorPos < range.to,
+      )
+    ) {
+      throw new Error('Dictation destination is inside a processing region');
+    }
     this.followCaret =
       view.state.selection.main.empty && view.state.selection.main.head === this.initialAnchorPos;
     this.insertInitialPrefix();
+    if (this.desynchronization !== null) {
+      throw new Error('Editor rejected the dictation destination prefix');
+    }
     this.initialBoundaryPos = this.initialAnchorPos;
     // Register before pinning the anchor so the ownership check below sees this
     // surface — a freshly created surface is always the newest, so it owns the
@@ -222,18 +236,18 @@ export class NoteSurface {
         this.followCaret = false;
       }
     }
-    if (!update.docChanged) return null;
     for (const pending of this.pendingDispatches) {
-      if (
-        update.transactions.some(
-          (transaction) => transaction.annotation(noteSurfaceDispatch) === pending.token,
-        )
-      ) {
+      const ownTransaction = update.transactions.find(
+        (transaction) => transaction.annotation(noteSurfaceDispatch) === pending.token,
+      );
+      if (ownTransaction !== undefined) {
         pending.seen = true;
+        pending.applied = ownTransaction.newDoc.eq(pending.expectedDocument);
       } else if (pending.seen) {
         pending.updates.push(update);
       }
     }
+    if (!update.docChanged) return null;
     if (this.desynchronization !== null) {
       return this.desynchronization;
     }
@@ -344,11 +358,11 @@ export class NoteSurface {
     const desynchronization = this.detectDesynchronization();
     if (desynchronization !== null) return desynchronization;
     const from = this.writingRegionTail();
-    this.view.dispatch({
+    this.dispatchTracked({
       changes: { from, insert: text },
       effects: this.ownerAnchorEffects(from + text.length),
     });
-    return null;
+    return this.desynchronization;
   }
 
   replaceAnchor(
@@ -449,7 +463,7 @@ export class NoteSurface {
         ? { selection: { anchor: position + prefix.length + text.length } }
         : {}),
     });
-    return true;
+    return !this.disposed && this.desynchronization === null;
   }
 
   rewriteRegion(
@@ -542,7 +556,14 @@ export class NoteSurface {
   }
 
   private dispatchTracked(spec: TransactionSpec, afterDispatch?: () => void): ViewUpdate[] {
-    const pending = { token: {}, seen: false, updates: [] as ViewUpdate[] };
+    const before = this.view.state;
+    const pending = {
+      token: {},
+      seen: false,
+      expectedDocument: before.changes(spec.changes).apply(before.doc),
+      applied: null as boolean | null,
+      updates: [] as ViewUpdate[],
+    };
     this.pendingDispatches.push(pending);
     try {
       const annotations = spec.annotations === undefined ? [] : [spec.annotations].flat();
@@ -550,7 +571,12 @@ export class NoteSurface {
         ...spec,
         annotations: [...annotations, noteSurfaceDispatch.of(pending.token)],
       });
-      afterDispatch?.();
+      // A successful dispatch may still have had its edits vetoed or rewritten
+      // by a change/transaction filter. Inspect our own transaction before any
+      // nested updates; those are mapped separately by callers.
+      const applied = pending.applied ?? this.view.state.doc.eq(pending.expectedDocument);
+      if (!applied) this.markDesynchronized(before.doc.length, this.view.state.doc.length);
+      else afterDispatch?.();
     } finally {
       this.pendingDispatches.splice(this.pendingDispatches.indexOf(pending), 1);
     }
@@ -803,10 +829,11 @@ export class NoteSurface {
     }
 
     const from = this.initialAnchorPos;
-    this.view.dispatch({
+    this.dispatchTracked({
       annotations: noteSurfaceInsertOrder.of(this.createdAt),
       changes: { from, insert: prefix },
     });
+    if (this.desynchronization !== null) return;
     this.initialAnchorPos += prefix.length;
     this.pendingInitialPrefix = prefix;
   }
