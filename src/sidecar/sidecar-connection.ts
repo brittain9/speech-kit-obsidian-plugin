@@ -200,7 +200,7 @@ export class SidecarConnection {
     await this.process.start();
     if (this.process.isRunning() && !this.processObservedRunning) {
       this.processObservedRunning = true;
-      for (const listener of this.processLifecycleListeners) listener({ type: 'started' });
+      this.notifyProcessLifecycle({ type: 'started' });
     }
   }
 
@@ -498,11 +498,20 @@ export class SidecarConnection {
     return () => this.processLifecycleListeners.delete(listener);
   }
 
+  private notifyProcessLifecycle(event: ProcessLifecycleEvent): void {
+    for (const listener of [...this.processLifecycleListeners]) {
+      try {
+        listener(event);
+      } catch (error) {
+        this.options.logger?.warn('sidecar', 'Process lifecycle observer failed.', error);
+      }
+    }
+  }
+
   private notifyProcessStopped(unexpected: boolean): void {
     if (this.processObservedRunning) {
       this.processObservedRunning = false;
-      for (const listener of this.processLifecycleListeners)
-        listener({ type: 'stopped', unexpected });
+      this.notifyProcessLifecycle({ type: 'stopped', unexpected });
     }
     const listeners = [...this.processStopListeners];
     this.processStopListeners.clear();

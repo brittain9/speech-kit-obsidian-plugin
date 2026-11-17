@@ -248,3 +248,21 @@ it('does not cache native registrations across an intentional process replacemen
   expect(plugin.sidecarConnection.configureDesktop).toHaveBeenCalledTimes(2);
   expect(plugin.desktopGeneration).not.toBe(generation);
 });
+
+it('recovers a process even when optional desktop notifications throw', async () => {
+  const plugin = harness();
+  plugin.settings.showDesktopStatusIcon = true;
+  Object.assign(plugin, { notifyDesktop: Object.getPrototypeOf(plugin).notifyDesktop });
+  vi.stubGlobal(
+    'Notification',
+    Object.assign(
+      () => {
+        throw new Error('OS notification unavailable');
+      },
+      { permission: 'granted' },
+    ),
+  );
+  expect(() => plugin.handleDesktopProcessStop(true)).not.toThrow();
+  await plugin.desktopConfigureQueue;
+  expect(plugin.sidecarConnection.configureDesktop).toHaveBeenCalledOnce();
+});

@@ -1089,3 +1089,18 @@ it('observes each process generation across concurrent starts and intentional re
   await connection.ensureStarted();
   expect(events).toHaveLength(4);
 });
+
+it('keeps lifecycle observer failures out of command delivery and lease cleanup', async () => {
+  const { connection, process } = createHarness();
+  connection.subscribeProcessLifecycle(() => {
+    throw new Error('optional desktop observer');
+  });
+  const stopped = vi.fn();
+  connection.subscribeProcessStop(stopped);
+  const pending = connection.healthCheck();
+  const rejected = expect(pending).rejects.toThrow('Sidecar exited');
+  await vi.waitFor(() => expect(process.writtenFrames).toHaveLength(1));
+  expect(() => process.exit()).not.toThrow();
+  await rejected;
+  expect(stopped).toHaveBeenCalledWith(true);
+});

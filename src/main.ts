@@ -1312,7 +1312,11 @@ export default class LocalSttPlugin extends Plugin {
   private notifyDesktop(kind: 'recording' | 'stopped' | 'failed'): void {
     if (this.desktopDisposed || !this.desktopEnabled()) return;
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      new Notification('Speech Kit', { body: t(`desktop.${kind}`) });
+      try {
+        new Notification('Speech Kit', { body: t(`desktop.${kind}`) });
+      } catch {
+        /* Optional OS feedback must not interrupt capture or process recovery. */
+      }
     }
   }
 
