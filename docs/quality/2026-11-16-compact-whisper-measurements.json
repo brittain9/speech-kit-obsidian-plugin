@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-16",
+  "environment": {
+    "cpu": "Apple M2 Pro",
+    "memoryBytes": 17179869184,
+    "os": "macOS 27.2.1",
+    "backend": "whisper.cpp CPU-only",
+    "whisperRs": "0.16.0",
+    "whisperRsSys": "0.15.0",
+    "profile": "debug integration-test binary",
+    "threadPolicy": "production adapter default, capped at 8 CPU threads"
+  },
+  "limits": [
+    "Shared computer; OS activity was not controlled. Root avoided heavy local builds and inference for the final pair.",
+    "Fresh model per process; warm filesystem caches; one quiet paired run after earlier repeated correctness runs.",
+    "Whole-test-process peak RSS, not Obsidian or long-term idle memory.",
+    "One short fixture per product language plus two natural long German clips; not a broad accuracy ranking."
+  ],
+  "models": [
+    {
+      "modelId": "whisper_small_q5_1",
+      "artifactSizeBytes": 190085487,
+      "loadMs": 138.50608400000002,
+      "peakResidentBytes": 716128256,
+      "cases": [
+        {
+          "audioSeconds": 11.125,
+          "errorRate": 0.038461538461538464,
+          "language": "en",
+          "processingMs": 1049.538708,
+          "realTimeFactor": 0.09434055802247192
+        },
+        {
+          "audioSeconds": 6.24,
+          "errorRate": 0.0,
+          "language": "es",
+          "processingMs": 737.5840000000001,
+          "realTimeFactor": 0.1182025641025641
+        },
+        {
+          "audioSeconds": 5.4,
+          "errorRate": 0.0,
+          "language": "de",
+          "processingMs": 702.0370839999999,
+          "realTimeFactor": 0.13000686740740738
+        },
+        {
+          "audioSeconds": 4.14,
+          "errorRate": 0.0,
+          "language": "fr",
+          "processingMs": 839.26575,
+          "realTimeFactor": 0.20272119565217392
+        },
+        {
+          "audioSeconds": 5.52,
+          "errorRate": 0.0,
+          "language": "pt",
+          "processingMs": 799.862166,
+          "realTimeFactor": 0.14490256630434784
+        },
+        {
+          "audioSeconds": 6.3,
+          "errorRate": 0.0,
+          "language": "it",
+          "processingMs": 923.13275,
+          "realTimeFactor": 0.14652900793650794
+        },
+        {
+          "audioSeconds": 4.2,
+          "errorRate": 0.1111111111111111,
+          "language": "nl",
+          "processingMs": 1071.621834,
+          "realTimeFactor": 0.2551480557142857
+        },
+        {
+          "audioSeconds": 7.32,
+          "errorRate": 0.0,
+          "language": "ja",
+          "processingMs": 1047.864125,
+          "realTimeFactor": 0.14315083674863388
+        },
+        {
+          "audioSeconds": 4.5,
+          "errorRate": 0.3333333333333333,
+          "language": "hr",
+          "processingMs": 816.318083,
+          "realTimeFactor": 0.18140401844444445
+        },
+        {
+          "audioSeconds": 5.64,
+          "errorRate": 0.36363636363636365,
+          "language": "sr",
+          "processingMs": 961.0224579999999,
+          "realTimeFactor": 0.17039405283687942
+        },
+        {
+          "audioSeconds": 5.4,
+          "errorRate": 0.0,
+          "language": "de-auto",
+          "processingMs": 1845.1006670000002,
+          "realTimeFactor": 0.3416853087037037
+        },
+        {
+          "audioSeconds": 26.58,
+          "errorRate": 0.25925925925925924,
+          "language": "de-fleurs-1618",
+          "processingMs": 1080.990084,
+          "realTimeFactor": 0.04066930338600452
+        },
+        {
+          "audioSeconds": 23.1,
+          "errorRate": 0.19230769230769232,
+          "language": "de-fleurs-1617",
+          "processingMs": 1183.327125,
+          "realTimeFactor": 0.05122628246753247
+        }
+      ]
+    },
+    {
+      "modelId": "whisper_large_v3_turbo_q8_0",
+      "artifactSizeBytes": 874188075,
+      "loadMs": 681.735958,
+      "peakResidentBytes": 1560739840,
+      "cases": [
+        {
+          "audioSeconds": 11.125,
+          "errorRate": 0.0,
+          "language": "en",
+          "processingMs": 11764.042375,
+          "realTimeFactor": 1.057442011235955
+        },
+        {
+          "audioSeconds": 6.24,
+          "errorRate": 0.0,
+          "language": "es",
+          "processingMs": 3999.964833,
+          "realTimeFactor": 0.6410200052884616
+        },
+        {
+          "audioSeconds": 5.4,
+          "errorRate": 0.0,
+          "language": "de",
+          "processingMs": 3601.335375,
+          "realTimeFactor": 0.6669139583333333
+        },
+        {
+          "audioSeconds": 4.14,
+          "errorRate": 0.0,
+          "language": "fr",
+          "processingMs": 3602.317083,
+          "realTimeFactor": 0.8701248992753623
+        },
+        {
+          "audioSeconds": 5.52,
+          "errorRate": 0.0,
+          "language": "pt",
+          "processingMs": 3727.381958,
+          "realTimeFactor": 0.6752503547101449
+        },
+        {
+          "audioSeconds": 6.3,
+          "errorRate": 0.0,
+          "language": "it",
+          "processingMs": 3636.484375,
+          "realTimeFactor": 0.577219742063492
+        },
+        {
+          "audioSeconds": 4.2,
+          "errorRate": 0.0,
+          "language": "nl",
+          "processingMs": 3541.407083,
+          "realTimeFactor": 0.8431921626190476
+        },
+        {
+          "audioSeconds": 7.32,
+          "errorRate": 0.0,
+          "language": "ja",
+          "processingMs": 3463.503417,
+          "realTimeFactor": 0.47315620450819673
+        },
+        {
+          "audioSeconds": 4.5,
+          "errorRate": 0.0,
+          "language": "hr",
+          "processingMs": 3565.588167,
+          "realTimeFactor": 0.792352926
+        },
+        {
+          "audioSeconds": 5.64,
+          "errorRate": 0.09090909090909091,
+          "language": "sr",
+          "processingMs": 3540.4039589999998,
+          "realTimeFactor": 0.6277311984042553
+        },
+        {
+          "audioSeconds": 5.4,
+          "errorRate": 0.0,
+          "language": "de-auto",
+          "processingMs": 6725.236041,
+          "realTimeFactor": 1.2454140816666668
+        },
+        {
+          "audioSeconds": 26.58,
+          "errorRate": 0.14814814814814814,
+          "language": "de-fleurs-1618",
+          "processingMs": 3647.216375,
+          "realTimeFactor": 0.13721656790820166
+        },
+        {
+          "audioSeconds": 23.1,
+          "errorRate": 0.15384615384615385,
+          "language": "de-fleurs-1617",
+          "processingMs": 4025.433667,
+          "realTimeFactor": 0.1742611977056277
+        }
+      ]
+    }
+  ]
+}

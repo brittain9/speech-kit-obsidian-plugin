@@ -1425,6 +1425,8 @@ export const en = {
     'Fast model with decent accuracy. A good choice for quick drafts on CPU.',
   'catalog.whisper_small_en_q5_1.summary':
     'Balances transcription quality, download size, and CPU speed.',
+  'catalog.whisper_small_q5_1.summary':
+    'Multilingual batch transcription with a compact 190 MB model download.',
   'catalog.whisper_medium_en_q5_0.summary':
     'High-accuracy model for users who prioritize transcription quality over speed.',
   'catalog.whisper_large_v3_turbo_q8_0.summary':

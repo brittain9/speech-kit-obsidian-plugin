@@ -17,6 +17,7 @@ describe('model catalog presentation', () => {
       'Whisper Tiny',
       'Whisper Base',
       'Whisper Small',
+      'Whisper Small Multilingual',
       'Whisper Medium',
       'Whisper Large V3 Turbo',
     ]);
@@ -24,10 +25,18 @@ describe('model catalog presentation', () => {
       expect(model.displayName).not.toMatch(/\b(?:English|Q\d)/u);
       expect(model.artifacts[0]?.filename).toMatch(/q(?:5|8)_\d/u);
     }
-    expect(whisperModels.slice(0, 4).every((model) => model.languageTags.join() === 'en')).toBe(
-      true,
-    );
-    expect(whisperModels[4]?.languageTags).toEqual([
+    for (const modelId of [
+      'whisper_tiny_en_q8_0',
+      'whisper_base_en_q8_0',
+      'whisper_small_en_q5_1',
+      'whisper_medium_en_q5_0',
+    ]) {
+      expect(whisperModels.find((model) => model.modelId === modelId)?.languageTags).toEqual([
+        'en',
+      ]);
+    }
+    const turbo = whisperModels.find((model) => model.modelId === 'whisper_large_v3_turbo_q8_0');
+    expect(turbo?.languageTags).toEqual([
       'en',
       'es',
       'de',
@@ -39,7 +48,7 @@ describe('model catalog presentation', () => {
       'hr',
       'sr',
     ]);
-    expect(whisperModels[4]?.supportsAutomaticLanguageDetection).toBe(true);
+    expect(turbo?.supportsAutomaticLanguageDetection).toBe(true);
   });
 
   it('does not use a generic recommendation tag', () => {

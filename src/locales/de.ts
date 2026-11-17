@@ -854,6 +854,8 @@ export const de = {
     'Schnelles Modell mit ordentlicher Genauigkeit. Eine gute Wahl für schnelle Entwürfe auf CPU.',
   'catalog.whisper_small_en_q5_1.summary':
     'Gleicht Transkriptionsqualität, Downloadgröße und CPU-Geschwindigkeit aus.',
+  'catalog.whisper_small_q5_1.summary':
+    'Mehrsprachige Transkription nach Sprechpausen mit einem kompakten Modelldownload von 190 MB.',
   'catalog.whisper_medium_en_q5_0.summary':
     'Hochpräzises Modell für Benutzer, denen die Qualität der Transkription wichtiger ist als die Geschwindigkeit.',
   'catalog.whisper_large_v3_turbo_q8_0.summary':

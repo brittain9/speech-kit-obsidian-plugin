@@ -1,5 +1,5 @@
 {
-  "catalogVersion": 9,
+  "catalogVersion": 10,
   "runtimes": [
     {
       "runtimeId": "bergamot_wasm",
@@ -222,6 +222,37 @@
           "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.en-q5_1.bin?download=true",
           "sha256": "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30",
           "sizeBytes": 190098681
+        }
+      ]
+    },
+    {
+      "runtimeId": "whisper_cpp",
+      "familyId": "whisper",
+      "task": "stt",
+      "modelId": "whisper_small_q5_1",
+      "collectionId": "english_cpu_first",
+      "displayName": "Whisper Small Multilingual",
+      "summary": "Multilingual batch transcription with a compact 190 MB model download.",
+      "languageTags": ["en", "es", "de", "fr", "pt", "it", "nl", "ja", "hr", "sr"],
+      "supportsAutomaticLanguageDetection": true,
+      "uxTags": ["balanced", "reduced-size", "cpu"],
+      "licenseLabel": "MIT",
+      "licenseUrl": "https://raw.githubusercontent.com/ggml-org/whisper.cpp/master/LICENSE",
+      "sourceUrl": "https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1",
+      "modelCardUrl": "https://github.com/ggml-org/whisper.cpp",
+      "notes": [
+        "Transcribes after each pause with automatic detection or explicit language selection.",
+        "Supports segment and optional word timestamps."
+      ],
+      "artifacts": [
+        {
+          "artifactId": "transcription",
+          "role": "transcription_model",
+          "required": true,
+          "filename": "ggml-small-q5_1.bin",
+          "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small-q5_1.bin?download=true",
+          "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
+          "sizeBytes": 190085487
         }
       ]
     },
