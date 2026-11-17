@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -130,8 +130,9 @@ it('keeps separate runner contexts attached to their own input measurements', as
   const output = await mkdtemp(join(tmpdir(), 'speech-quality-runners-'));
   directories.push(output);
   for (const name of ['whisper', 'nemotron']) {
+    await mkdir(join(output, name));
     await writeFile(
-      join(output, `${name}.environment.json`),
+      join(output, name, 'results.environment.json'),
       JSON.stringify({
         schemaVersion: 1,
         host: { cpuModels: [`${name} CPU`] },
@@ -139,12 +140,12 @@ it('keeps separate runner contexts attached to their own input measurements', as
       }),
     );
     await writeFile(
-      join(output, `${name}.jsonl`),
+      join(output, name, 'results.jsonl'),
       `${JSON.stringify({
         schemaVersion: 1,
         suite: 'english-product-path',
-        modelId: name,
-        modelName: name,
+        modelId: 'same-model',
+        modelName: 'Same model',
         language: 'en',
         selection: 'manual',
         fixtureId: 'fixture',
@@ -176,7 +177,8 @@ it('keeps separate runner contexts attached to their own input measurements', as
   expect(report.missingMeasurementSources).toEqual(['failed.jsonl']);
   expect(
     report.measurements.map((record: { environmentSource: string }) => record.environmentSource),
-  ).toEqual(['nemotron.environment.json', 'whisper.environment.json']);
+  ).toEqual(['nemotron/results.environment.json', 'whisper/results.environment.json']);
+  expect(report.rows).toHaveLength(2);
   expect(
     report.environments.map(
       (record: { context: { host: { cpuModels: string[] } } }) => record.context.host.cpuModels,

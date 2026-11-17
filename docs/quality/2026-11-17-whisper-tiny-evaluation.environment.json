@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-17T16:22:05.533Z",
+  "host": {
+    "platform": "darwin",
+    "processArchitecture": "arm64",
+    "machineArchitecture": "arm64",
+    "osRelease": "27.2.0",
+    "cpuModels": ["Apple M2 Pro"],
+    "logicalCpuCount": 12,
+    "availableParallelism": 12,
+    "memoryBytes": 17179869184,
+    "osFreeMemoryBytes": 265355264,
+    "loadAverage": [7.52392578125, 5.7470703125, 5.2705078125]
+  },
+  "software": {
+    "nodeVersion": "v26.13.1",
+    "gitCommit": "cb946326d23be13e42f7e268b6518865b6c6178a",
+    "trackedWorktreeDirty": true
+  },
+  "execution": {
+    "requestedAcceleration": "cpu",
+    "effectiveAcceleration": "unknown",
+    "effectiveAccelerationSource": "unobserved",
+    "inferenceThreads": null,
+    "modelState": "mixed",
+    "filesystemCache": "uncontrolled",
+    "declarationSource": "caller configuration"
+  },
+  "limitations": [
+    "CPU labels, host capacity and compiled support do not establish effective acceleration.",
+    "Execution settings and model residency are caller declarations; effective acceleration is unobserved.",
+    "Filesystem caches and concurrent workloads are uncontrolled; a new process does not prove cold storage.",
+    "Core counts are logical, memory is OS-visible, and available parallelism is not an inference thread count.",
+    "Git identity describes the checkout, not a compiled binary or untracked inputs."
+  ]
+}

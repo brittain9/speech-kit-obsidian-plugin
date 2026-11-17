@@ -46,6 +46,7 @@ export interface CaseEvidence {
 }
 
 export interface QualityReportRow {
+  environmentSource: string | null;
   audioDurationMs: number;
   firstPartialAudioMs: number | null;
   firstPartialAudioBudgetMs: number | null;

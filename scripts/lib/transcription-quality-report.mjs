@@ -74,6 +74,14 @@ export function parseQualityMeasurements(text, source = 'measurements.jsonl') {
           throw new Error(`${source}:${index + 1}: ${field} must be a non-empty string`);
         }
       }
+      if (
+        measurement.environmentSource !== undefined &&
+        (typeof measurement.environmentSource !== 'string' || !measurement.environmentSource.trim())
+      ) {
+        throw new Error(
+          `${source}:${index + 1}: environmentSource must identify a recorded context`,
+        );
+      }
       for (const field of NON_NEGATIVE_NUMBER_FIELDS) {
         if (typeof measurement[field] !== 'number' || !Number.isFinite(measurement[field])) {
           throw new Error(`${source}:${index + 1}: ${field} must be a finite number`);
@@ -225,6 +233,7 @@ function groupMeasurements(measurements) {
       measurement.selection,
       measurement.language,
       measurement.fixtureId,
+      measurement.environmentSource ?? '',
     ].join('\u0000');
     if (identities.has(identity)) {
       throw new Error(
@@ -239,6 +248,7 @@ function groupMeasurements(measurements) {
       measurement.selection,
       measurement.language,
       measurement.qualityMetric,
+      measurement.environmentSource ?? '',
     ].join('\u0000');
     const group = groups.get(key) ?? [];
     group.push(measurement);
@@ -274,6 +284,7 @@ export function buildQualityReport(measurements, metadata = {}) {
         firstPartialAudioMs:
           partialLatencies.length === 0 ? null : Math.round(mean(partialLatencies)),
         fixtureCount: group.length,
+        environmentSource: first.environmentSource ?? null,
         language: first.language,
         maxErrorRate: Math.max(...group.map((measurement) => measurement.qualityErrorRate)),
         maxQualityBudget: Math.max(...group.map((measurement) => measurement.qualityBudget)),
@@ -295,10 +306,16 @@ export function buildQualityReport(measurements, metadata = {}) {
       };
     })
     .sort((left, right) =>
-      [left.modelName, left.suite, left.selection, left.language]
+      [left.modelName, left.suite, left.selection, left.language, left.environmentSource]
         .join('\u0000')
         .localeCompare(
-          [right.modelName, right.suite, right.selection, right.language].join('\u0000'),
+          [
+            right.modelName,
+            right.suite,
+            right.selection,
+            right.language,
+            right.environmentSource,
+          ].join('\u0000'),
         ),
     );
 
@@ -378,14 +395,14 @@ export function renderQualityReportMarkdown(report) {
         ]
       : []),
     '',
-    '| Model | Scenario | Selection | Language | Fixtures | Quality mean / max | Quality budget | RTF / budget | Audio | Processing | First partial / budget | Result |',
-    '| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
+    '| Model | Context | Scenario | Selection | Language | Fixtures | Quality mean / max | Quality budget | RTF / budget | Audio | Processing | First partial / budget | Result |',
+    '| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
   ];
 
   for (const row of report.rows) {
     const quality = `${formatPercent(row.meanErrorRate)} / ${formatPercent(row.maxErrorRate)} ${row.qualityMetric.toUpperCase()}`;
     lines.push(
-      `| ${row.modelName} | ${scenarioLabel(row.suite)} | ${selectionLabel(row.selection)} | ${LANGUAGE_LABELS[row.language] ?? row.language} | ${row.fixtureCount} | ${quality} | ≤ ${formatPercent(row.maxQualityBudget)} | ${row.realTimeFactor.toFixed(2)}× / ≤ ${row.maxRealTimeFactorBudget.toFixed(2)}× | ${formatDuration(row.audioDurationMs)} | ${formatDuration(row.processingDurationMs)} | ${firstPartialLabel(row)} | ${row.passed ? 'Pass' : 'Fail'} |`,
+      `| ${row.modelName} | ${row.environmentSource ?? (report.environment ? 'shared run' : 'not recorded')} | ${scenarioLabel(row.suite)} | ${selectionLabel(row.selection)} | ${LANGUAGE_LABELS[row.language] ?? row.language} | ${row.fixtureCount} | ${quality} | ≤ ${formatPercent(row.maxQualityBudget)} | ${row.realTimeFactor.toFixed(2)}× / ≤ ${row.maxRealTimeFactorBudget.toFixed(2)}× | ${formatDuration(row.audioDurationMs)} | ${formatDuration(row.processingDurationMs)} | ${firstPartialLabel(row)} | ${row.passed ? 'Pass' : 'Fail'} |`,
     );
   }
 

@@ -83,3 +83,33 @@ dated evidence notes; this change does not relabel them as AppState runs or add
 a parallel benchmark framework. Expand product-path cases when a concrete
 model or workflow question needs them, retaining outputs and context rather than
 turning a provisional WER cutoff into a universal adoption veto.
+
+## Reporting smoke, 17 November
+
+An actual cached Whisper Tiny CPU-requested run exercised all eight existing
+English fixtures (75.555 seconds of audio) through AppState/VAD/worker. All eight
+fixture checks passed and all sessions stopped. Schema 2 output passed the new
+reader's independent score reconstruction; actual model hash and size matched
+the catalog. The recorded context reports the real Apple M2 Pro host, requested
+CPU and unobserved effective acceleration, with concurrent host load and a dirty
+tracked checkout. This was an end-to-end reporting check, not a controlled speed
+or broad accuracy comparison. Native test execution took 10.13 seconds.
+
+Retained [raw cases](2026-11-17-whisper-tiny-evaluation.jsonl) and
+[captured environment](2026-11-17-whisper-tiny-evaluation.environment.json)
+contain public-fixture text and artifact identities. The native producer was
+compiled from the reporting slice at `cb946326`; subsequent reporting fixes did
+not change those native sources. Re-render without inference:
+
+```sh
+quality_input=$(mktemp -d)
+cp docs/quality/2026-11-17-whisper-tiny-evaluation.jsonl \
+  docs/quality/2026-11-17-whisper-tiny-evaluation.environment.json "$quality_input/"
+node scripts/transcription-quality-report.mjs --render-only "$quality_input" \
+  --output-dir "$quality_input/report"
+```
+
+Reproduction of inference uses the existing `transcription_e2e` suite with
+`STT_TEST_WHISPER_MODEL` pointing at the verified cached model and
+`STT_QUALITY_REPORT_PATH` pointing at a new output file. No model was downloaded
+for this reporting smoke.

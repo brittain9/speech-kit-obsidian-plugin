@@ -28,6 +28,26 @@ function measurement(overrides: Record<string, unknown> = {}) {
 }
 
 describe('transcription quality report', () => {
+  it('separates host comparisons and rejects duplicate cases within the same context', () => {
+    const first = measurement({ environmentSource: 'linux/run.environment.json' });
+    const second = measurement({
+      environmentSource: 'mac/run.environment.json',
+      processingDurationMs: 1000,
+      realTimeFactor: 0.5,
+    });
+    const report = buildQualityReport([first, second]);
+    expect(report.rows).toHaveLength(2);
+    expect(report.rows.map((row) => row.environmentSource)).toEqual([
+      'linux/run.environment.json',
+      'mac/run.environment.json',
+    ]);
+    expect(report.rows.map((row) => row.realTimeFactor)).toEqual([0.25, 0.5]);
+    const markdown = renderQualityReportMarkdown(report);
+    expect(markdown).toContain('linux/run.environment.json');
+    expect(markdown).toContain('mac/run.environment.json');
+    expect(() => buildQualityReport([first, first])).toThrow('duplicate measurement');
+  });
+
   it('retains auditable case evidence without imposing language or hardware claims', () => {
     const record = measurement({
       schemaVersion: 2,
