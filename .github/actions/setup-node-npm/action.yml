@@ -3,7 +3,7 @@ description: Install Node.js at a pinned version and optionally cache npm and up
 
 inputs:
   node-version:
-    description: Node.js version to install (e.g. 24.22.2).
+    description: Node.js version to install (e.g. 24.22.3).
     required: true
   cache:
     description: Set to 'true' to enable actions/setup-node@v6 npm caching.

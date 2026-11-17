@@ -44,6 +44,7 @@ const MODEL_PICKER_TASKS: readonly ModelPickerTask[] = ['stt', 'tts', 'translati
 
 export interface ModelPickerOptions {
   initialTask?: ModelPickerTask;
+  requireBatchStt?: boolean;
   onChanged?: () => void;
   onClosed?: () => void;
 }
@@ -170,6 +171,7 @@ export function deriveTaskModelAvailability(
 interface ManageModelsModalDependencies {
   feedback: Pick<UserFeedback, 'show'>;
   initialTask?: ModelPickerTask;
+  requireBatchStt?: boolean;
   manager: ModelInstallManager;
   onChanged: () => void;
   onClosed?: () => void;
@@ -582,6 +584,12 @@ export class ManageModelsModal extends Modal {
       return;
     }
 
+    if (this.deps.requireBatchStt === true && this.activeTask === 'stt') {
+      this.listContainer.createEl('p', {
+        cls: 'setting-item-description',
+        text: t('settings.speakerLabels.batchPickerGuidance'),
+      });
+    }
     this.renderLanguageAvailability();
     const rows = this.getRunnableRows();
     const adapters = derivePickerFamilies(deriveModelFamilyTabs(state), rows, {
@@ -1190,6 +1198,14 @@ export class ManageModelsModal extends Modal {
       ),
     );
     if (model === undefined) return;
+    if (
+      this.deps.requireBatchStt === true &&
+      model.task === 'stt' &&
+      !this.getRunnableRows().some((row) =>
+        matchesModelTriple(row.model, model.runtimeId, model.familyId, model.modelId),
+      )
+    )
+      return;
 
     this.setActiveTask(model.task);
     const open = this.openFamilies.get(model.task) ?? new Set<string>();
@@ -1217,7 +1233,11 @@ export class ManageModelsModal extends Modal {
     return deriveModelRowStates(state).filter((row) =>
       state.compiledAdapters.some(
         (adapter) =>
-          adapter.runtimeId === row.model.runtimeId && adapter.familyId === row.model.familyId,
+          adapter.runtimeId === row.model.runtimeId &&
+          adapter.familyId === row.model.familyId &&
+          (this.deps.requireBatchStt !== true ||
+            row.model.task !== 'stt' ||
+            adapter.familyCapabilities?.supportsStreaming === false),
       ),
     );
   }

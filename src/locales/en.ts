@@ -581,6 +581,13 @@ export const en = {
   'settings.systemAudio.ready': 'System audio is ready.',
   'settings.systemAudio.testFailed':
     'Could not test system audio. Check that the speech engine is installed and try again.',
+  'settings.speakerLabels.batchPickerGuidance':
+    'Showing batch speech models for speaker labels. Install and select a model to use it; your current model stays selected until you choose another.',
+  'settings.speakerLabels.inactiveStreaming':
+    'Not active with this streaming model. Choose a batch model to use speaker labels; your preference is kept.',
+  'settings.speakerLabels.numberedVoices':
+    'Group voices as Speaker 1, Speaker 2, and so on. Labels are estimates; review them for mistakes.',
+  'settings.speakerLabels.chooseModel': 'Choose batch model',
   'settings.speakerLabels.name': 'Speaker labels',
   'settings.speakerLabels.desc': 'Label each phrase by speaker.',
   'settings.speakerLabels.streamingLimitation': 'Speaker labels require a batch model.',
@@ -598,6 +605,12 @@ export const en = {
   'settings.timestamps.modal.title': 'Timestamp settings',
   'settings.timestamps.modal.intro':
     'Choose landmarks at intervals, phrase boundaries, or Smart paragraph breaks.',
+  'settings.timestamps.timingDetails': 'How timing works',
+  'settings.timestamps.timingDetailsDesc':
+    'Intervals add a landmark at the next phrase boundary, not on a timer. Every phrase uses finer model timestamps when available, and phrase starts otherwise. These are audio positions, not the time text appeared. For recorded audio, time since start refers to the recording.',
+  'settings.timestamps.example': 'Example · 30 seconds after a 14:00 start',
+  'settings.timestamps.clock.sinceStart': 'Time since start · (0:30)',
+  'settings.timestamps.clock.localTime': 'Local time · (14:00:30)',
   'settings.timestamps.clock.elapsed': 'Elapsed',
   'settings.timestamps.clock.wallClock': 'Wall clock',
   'settings.timestamps.frequency.atIntervals': 'At intervals',

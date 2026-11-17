@@ -883,6 +883,7 @@ export default class LocalSttPlugin extends Plugin {
             ...(pickerOptions.initialTask === undefined
               ? {}
               : { initialTask: pickerOptions.initialTask }),
+            requireBatchStt: pickerOptions.requireBatchStt ?? false,
             manager: this.requireModelInstallManager(),
             onChanged: pickerOptions.onChanged ?? (() => {}),
             ...(pickerOptions.onClosed === undefined ? {} : { onClosed: pickerOptions.onClosed }),
