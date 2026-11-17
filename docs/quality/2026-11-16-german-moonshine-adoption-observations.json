@@ -9,7 +9,8 @@
   "limits": [
     "Two public natural German FLEURS clips, not a broad accuracy ranking.",
     "Shared Mac; Tiny paced run overlapped Small artifact download/integrity checks. No matched performance or battery claim.",
-    "Patient VAD and CPU-only native worker; no Obsidian UI or microphone capture in these checks."
+    "Patient VAD and CPU-only native worker; no Obsidian UI or microphone capture in these checks.",
+    "Existing lowercase, punctuation-separated WER; no numeric/unit equivalence normalization or independent native-speaker semantic review."
   ],
   "newSmallArtifactBytes": 121800823,
   "modelBodyTransfersBytes": 121904654,

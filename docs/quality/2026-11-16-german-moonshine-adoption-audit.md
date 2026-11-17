@@ -21,7 +21,10 @@ session errors. The floor was not weakened.
 | Small  | 121,800,823 bytes        | 1618, 26.58 s | 44.4%      | 44.4%         |
 | Small  | same                     | 1617, 23.1 s  | 30.8%      | 26.9%         |
 
-These are two read-speech samples, not a general accuracy leaderboard. Failures
+These are two read-speech samples, not a general accuracy leaderboard. Scores
+use the existing lowercase, punctuation-separated WER scorer; numeric formatting
+and unit abbreviations are not normalized to semantic equivalents. No independent
+native-speaker semantic review was performed. Failures
 include changed names and omitted or substituted words, not lifecycle errors.
 They justify keeping these exports out of this app's recommended catalog; they
 do not prove every upstream model or other export has the same limitations.
@@ -73,11 +76,16 @@ The two natural-speech diagnostics intentionally remain failing and ignored:
 ```sh
 cargo test --manifest-path native/Cargo.toml --no-default-features \
   --features engine-moonshine --test moonshine_german_e2e \
-  german_natural_long_recordings -- --ignored --nocapture
+  german_natural_long_recordings -- --ignored --nocapture --test-threads=1
 ```
 
 `german_multiple_phrases_preserve_session_and_language_contract` covers the
 separate passing short-phrase/language contract. The existing
 `german_worker_cancellation_allows_a_clean_silent_restart` covers cancellation.
+The changed diagnostic target compiles; its ordinary check passed with nine
+model diagnostics ignored. The existing selected-feature library suite passed
+329 tests with two ignored. Formatting and the eight stored Small SHA-256/size
+pins passed. Independent source/evidence review found no blocking findings.
+
 No package release, shipping catalog addition, or default change follows from
 this audit.
