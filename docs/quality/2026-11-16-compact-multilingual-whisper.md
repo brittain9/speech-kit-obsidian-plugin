@@ -90,3 +90,5 @@ German short and long WAV fixtures into a synthetic note, retry automatic
 language detection, cancel a job, and confirm the original note and previous
 model choices remain available. Verify the narrow model-picker label too.
 Metal, CUDA, Linux, Windows, and hours-long sustained use were not tested here.
+
+Native chooser QA found the existing English Small and new multilingual Small have nearly equal download sizes. The existing model now displays as **Whisper Small English**, with an English-only summary and detail note; its model ID, artifact, and defaults are unchanged. This keeps the two choices clear before opening model details.

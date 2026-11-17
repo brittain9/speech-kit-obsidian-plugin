@@ -16,13 +16,13 @@ describe('model catalog presentation', () => {
     expect(whisperModels.map((model) => model.displayName)).toEqual([
       'Whisper Tiny',
       'Whisper Base',
-      'Whisper Small',
+      'Whisper Small English',
       'Whisper Small Multilingual',
       'Whisper Medium',
       'Whisper Large V3 Turbo',
     ]);
     for (const model of whisperModels) {
-      expect(model.displayName).not.toMatch(/\b(?:English|Q\d)/u);
+      expect(model.displayName).not.toMatch(/\bQ\d/u);
       expect(model.artifacts[0]?.filename).toMatch(/q(?:5|8)_\d/u);
     }
     for (const modelId of [
