@@ -1,0 +1,94 @@
+{
+  "runtimeId": "onnx_runtime",
+  "familyId": "moonshine",
+  "task": "stt",
+  "modelId": "moonshine_small_streaming_de",
+  "collectionId": "moonshine_streaming",
+  "displayName": "Moonshine Small German (experimental)",
+  "summary": "Experimental German streaming export; natural long-speech adoption gates failed.",
+  "languageTags": ["de"],
+  "uxTags": ["fast", "lightweight", "cpu"],
+  "licenseLabel": "MIT",
+  "licenseUrl": "https://github.com/moonshine-ai/moonshine/blob/d8d8fa29d05ca67441a7719e70099f9f48917a93/LICENSE",
+  "sourceUrl": "https://github.com/moonshine-ai/moonshine/blob/d8d8fa29d05ca67441a7719e70099f9f48917a93/core/moonshine-model-catalog.cpp",
+  "modelCardUrl": null,
+  "notes": [
+    "German-only experimental model; not in the shipping catalog.",
+    "Official August split frontend, CPU execution.",
+    "Natural long-speech validation failed; do not treat short-clip success as adoption evidence."
+  ],
+  "artifacts": [
+    {
+      "artifactId": "frontend_model",
+      "role": "transcription_model",
+      "required": true,
+      "filename": "frontend.model.ort",
+      "sizeBytes": 26776,
+      "sha256": "a93453223d93aa41d21691568cde3a01125fe00710a5f7004a825e1a322d3025",
+      "downloadUrl": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/frontend.model.ort?download=true"
+    },
+    {
+      "artifactId": "frontend_weights",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "frontend.weights.ort",
+      "sizeBytes": 7769280,
+      "sha256": "8b417e2e0ee762e34d7163d24383823bb8bd1d037fb6966c32b3f86a3de4961f",
+      "downloadUrl": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/frontend.weights.ort?download=true"
+    },
+    {
+      "artifactId": "encoder",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "encoder.ort",
+      "sizeBytes": 44358376,
+      "sha256": "f31ef482f940e23af87906aeec986bf2e0a4862cad577bbc745264caab5a1858",
+      "downloadUrl": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/encoder.ort?download=true"
+    },
+    {
+      "artifactId": "adapter",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "adapter.ort",
+      "sizeBytes": 2869296,
+      "sha256": "be438a3eb12ba3697a9e474d20f899e52d8e27b43a6fc4c4c809d2a099646744",
+      "downloadUrl": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/adapter.ort?download=true"
+    },
+    {
+      "artifactId": "cross_kv",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "cross_kv.ort",
+      "sizeBytes": 5358752,
+      "sha256": "0c329cbf001bebbb9e34835e95676b9eb29e010405da46f65af511b8da16620e",
+      "downloadUrl": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/cross_kv.ort?download=true"
+    },
+    {
+      "artifactId": "decoder_kv",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "decoder_kv.ort",
+      "sizeBytes": 61314512,
+      "sha256": "7da8ac9a1da2a486158ccde88c756fd876bf7f11ef1c2ba14b80e8edcd30028c",
+      "downloadUrl": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/decoder_kv.ort?download=true"
+    },
+    {
+      "artifactId": "streaming_config",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "streaming_config.json",
+      "sizeBytes": 512,
+      "sha256": "12d16c7f5ea6734d197b79baf47914ea7e996d6fca8d303a19aca10d0617cecc",
+      "downloadUrl": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/streaming_config.json?download=true"
+    },
+    {
+      "artifactId": "tokenizer",
+      "role": "supporting_file",
+      "required": true,
+      "filename": "tokenizer.bin",
+      "sizeBytes": 103319,
+      "sha256": "5725ad3771a1339802f8cebeda0fa8f7723f5282b1ee726c2544774d7399b9a7",
+      "downloadUrl": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/tokenizer.bin?download=true"
+    }
+  ]
+}

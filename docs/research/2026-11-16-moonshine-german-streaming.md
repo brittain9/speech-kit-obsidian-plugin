@@ -57,3 +57,12 @@ from the managed catalog would require new installation/import semantics and
 still would not independently verify external artifacts, so it adds complexity
 without improving this bounded experiment. No new runtime, protocol, or metadata
 schema is introduced.
+
+## Natural German followup
+
+The bounded [adoption audit](../quality/2026-11-16-german-moonshine-adoption-audit.md)
+reuses the official Tiny cache and validates the official Small German export on
+the same supported August layout. Both fail the existing natural long-speech
+quality ceiling, including actual paced VAD sessions. No managed catalog addition
+follows. The audit records exact provenance, new transfers, compatibility checks,
+and intentionally failing diagnostic commands.

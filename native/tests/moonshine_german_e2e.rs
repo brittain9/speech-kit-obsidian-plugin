@@ -500,3 +500,172 @@ fn german_split_frontend_streams_finalizes_and_resets() {
         "reset leaked previous speech into silence"
     );
 }
+
+#[test]
+#[ignore = "requires the verified German streaming export; natural long-speech adoption gate"]
+fn german_natural_long_recordings_preserve_words_and_reset() {
+    let path = PathBuf::from(std::env::var("MOONSHINE_GERMAN_MODEL_PATH").unwrap());
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(common::fixtures_dir().join("long-german.json")).unwrap(),
+    )
+    .unwrap();
+    let mut model = MoonshineAdapter
+        .load_streaming(&path, GpuConfig { use_gpu: false })
+        .unwrap();
+    model.set_language("de").unwrap();
+    let mut failures = Vec::new();
+    for fixture in manifest["fixtures"].as_array().unwrap() {
+        let audio = common::audio::decode_wav_16k_mono(
+            &common::fixtures_dir().join(fixture["audioPath"].as_str().unwrap()),
+        )
+        .unwrap();
+        let started = Instant::now();
+        let mut partials = 0;
+        for chunk in audio.chunks(8_000) {
+            model.accept_audio(chunk).unwrap();
+            if !model.partial().unwrap().segments.is_empty() {
+                partials += 1;
+            }
+        }
+        let output = model.finalize_utterance().unwrap();
+        let text = common::text::joined_text(&output);
+        let wer = common::text::word_error_rate(fixture["reference"].as_str().unwrap(), &text);
+        eprintln!(
+            "{}",
+            serde_json::json!({
+                "fixture": fixture["id"], "audioSeconds": audio.len() as f64 / 16_000.0,
+                "wordErrorRate": wer, "partials": partials,
+                "computeMs": started.elapsed().as_secs_f64() * 1_000.0, "text": text,
+            })
+        );
+        assert!(
+            model.partial().unwrap().segments.is_empty(),
+            "finalization must reset partial state"
+        );
+        if wer > 0.30 || partials == 0 {
+            failures.push(format!("{}: WER={wer}, partials={partials}", fixture["id"]));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "natural German adoption gate failed: {failures:?}"
+    );
+}
+
+#[test]
+#[ignore = "paced real VAD/worker natural German adoption gate; requires verified German model"]
+fn german_natural_long_recordings_through_paced_vad() {
+    let path = PathBuf::from(std::env::var("MOONSHINE_GERMAN_MODEL_PATH").unwrap());
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(common::fixtures_dir().join("long-german.json")).unwrap(),
+    )
+    .unwrap();
+    let mut failures = Vec::new();
+    for fixture in manifest["fixtures"].as_array().unwrap() {
+        let audio = common::audio::decode_wav_16k_mono(
+            &common::fixtures_dir().join(fixture["audioPath"].as_str().unwrap()),
+        )
+        .unwrap();
+        let frames = common::audio::fixture_frames_with_trailing_silence(&audio);
+        let started = Instant::now();
+        let outcome = common::driver::stream_in_process_language(
+            SelectedModel::ExternalFile {
+                runtime_id: RuntimeId::OnnxRuntime,
+                family_id: ModelFamilyId::Moonshine,
+                file_path: path.display().to_string(),
+            },
+            &frames,
+            "de",
+        );
+        let wer = common::text::word_error_rate(
+            fixture["reference"].as_str().unwrap(),
+            &outcome.final_texts.join(" "),
+        );
+        eprintln!(
+            "{}",
+            serde_json::json!({
+                "fixture": fixture["id"], "audioSeconds": audio.len() as f64 / 16_000.0,
+                "wordErrorRate": wer, "partials": outcome.partials.len(), "finals": outcome.final_texts,
+                "wallMs": started.elapsed().as_secs_f64() * 1_000.0, "errors": outcome.errors,
+            })
+        );
+        if wer > 0.30 || !outcome.errors.is_empty() || !outcome.stopped {
+            failures.push(format!(
+                "{}: WER={wer}, errors={:?}, stopped={}",
+                fixture["id"], outcome.errors, outcome.stopped
+            ));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "paced natural German adoption gate failed: {failures:?}"
+    );
+}
+
+#[test]
+#[ignore = "requires a verified German model; multiple phrases and external language contract"]
+fn german_multiple_phrases_preserve_session_and_language_contract() {
+    let path = PathBuf::from(std::env::var("MOONSHINE_GERMAN_MODEL_PATH").unwrap());
+    assert_eq!(
+        MoonshineAdapter
+            .probe_model_and_language_support(&path)
+            .unwrap(),
+        LanguageSupport::List {
+            tags: vec!["de".to_string()]
+        }
+    );
+    let mut app = AppState::new(
+        "german-language-contract",
+        ModelCatalog::load_bundled().unwrap(),
+    );
+    let mut start = external_start("wrong-language", &path);
+    if let Command::StartSession { language, .. } = &mut start {
+        *language = "en".to_string();
+    }
+    let (_, events) = app.handle_command(start);
+    assert!(
+        events.iter().any(
+            |event| matches!(event, Event::Error { code, .. } if code == "unsupported_language")
+        ),
+        "German artifact accepted English: {events:?}"
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, Event::SessionStarted { .. }))
+    );
+    let audio = common::audio::decode_wav_16k_mono(
+        &common::fixtures_dir().join("audio/de-fleurs-1577.wav"),
+    )
+    .unwrap();
+    let mut sequence = audio.clone();
+    sequence.extend(std::iter::repeat_n(0_i16, 3 * 16_000));
+    sequence.extend(audio);
+    let frames = common::audio::fixture_frames_with_trailing_silence(&sequence);
+    let outcome = common::driver::stream_in_process_language(
+        SelectedModel::ExternalFile {
+            runtime_id: RuntimeId::OnnxRuntime,
+            family_id: ModelFamilyId::Moonshine,
+            file_path: path.display().to_string(),
+        },
+        &frames,
+        "de",
+    );
+    let reference = ["das erschien mir nicht sinnvoll es war ganz gewiss nicht fair"; 2].join(" ");
+    let wer = common::text::word_error_rate(&reference, &outcome.final_texts.join(" "));
+    eprintln!(
+        "{}",
+        serde_json::json!({"check":"multiple_phrases", "finals": outcome.final_texts,
+        "partials": outcome.partials.len(), "wordErrorRate": wer, "errors": outcome.errors})
+    );
+    assert!(outcome.errors.is_empty() && outcome.stopped);
+    assert_eq!(
+        outcome.final_texts.len(),
+        2,
+        "natural phrase boundary must finalize each clip once"
+    );
+    assert!(
+        wer <= 0.30,
+        "multiple-phrase short speech quality failed: {wer}"
+    );
+}

@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-16",
+  "disposition": "not_adopted",
+  "gate": {
+    "maximumWordErrorRate": 0.3,
+    "changed": false
+  },
+  "limits": [
+    "Two public natural German FLEURS clips, not a broad accuracy ranking.",
+    "Shared Mac; Tiny paced run overlapped Small artifact download/integrity checks. No matched performance or battery claim.",
+    "Patient VAD and CPU-only native worker; no Obsidian UI or microphone capture in these checks."
+  ],
+  "newSmallArtifactBytes": 121800823,
+  "modelBodyTransfersBytes": 121904654,
+  "sourceRevision": "d8d8fa29d05ca67441a7719e70099f9f48917a93",
+  "smallFiles": [
+    {
+      "url": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/adapter.ort",
+      "size": 2869296,
+      "crc32c": "rx5eAg==",
+      "checksumType": "crc32c",
+      "sha256": "be438a3eb12ba3697a9e474d20f899e52d8e27b43a6fc4c4c809d2a099646744"
+    },
+    {
+      "url": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/cross_kv.ort",
+      "size": 5358752,
+      "crc32c": "B9ac2w==",
+      "checksumType": "crc32c",
+      "sha256": "0c329cbf001bebbb9e34835e95676b9eb29e010405da46f65af511b8da16620e"
+    },
+    {
+      "url": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/decoder_kv.ort",
+      "size": 61314512,
+      "crc32c": "IRMZCQ==",
+      "checksumType": "crc32c",
+      "sha256": "7da8ac9a1da2a486158ccde88c756fd876bf7f11ef1c2ba14b80e8edcd30028c"
+    },
+    {
+      "url": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/encoder.ort",
+      "size": 44358376,
+      "crc32c": "AI1jZg==",
+      "checksumType": "crc32c",
+      "sha256": "f31ef482f940e23af87906aeec986bf2e0a4862cad577bbc745264caab5a1858"
+    },
+    {
+      "url": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/frontend.model.ort",
+      "size": 26776,
+      "crc32c": "nGFUEw==",
+      "checksumType": "crc32c",
+      "sha256": "a93453223d93aa41d21691568cde3a01125fe00710a5f7004a825e1a322d3025"
+    },
+    {
+      "url": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/frontend.weights.ort",
+      "size": 7769280,
+      "crc32c": "kUSrbA==",
+      "checksumType": "crc32c",
+      "sha256": "8b417e2e0ee762e34d7163d24383823bb8bd1d037fb6966c32b3f86a3de4961f"
+    },
+    {
+      "url": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/streaming_config.json",
+      "size": 512,
+      "crc32c": "Y/oEHw==",
+      "checksumType": "crc32c",
+      "sha256": "12d16c7f5ea6734d197b79baf47914ea7e996d6fca8d303a19aca10d0617cecc"
+    },
+    {
+      "url": "https://download.moonshine.ai/model/small-streaming-de/quantized_26_08_24/tokenizer.bin",
+      "size": 103319,
+      "crc32c": "x219Qw==",
+      "checksumType": "crc32c",
+      "sha256": "5725ad3771a1339802f8cebeda0fa8f7723f5282b1ee726c2544774d7399b9a7"
+    }
+  ],
+  "cases": [
+    {
+      "audioSeconds": 26.58,
+      "computeMs": 2366.692875,
+      "fixture": "de-fleurs-1618",
+      "partials": 47,
+      "text": "Der  lösliche  Teil  unter  die  Sentinel  Range  hat  die  höchsten  Berge  der  Antarktis,  das  Vincent  Massiv,  das  ein  höchster  Gipfel  mit  4.892  Meter  Höhe  der  Mordrinsen  ist.  Der",
+      "wordErrorRate": 0.4074074074074074,
+      "model": "tiny",
+      "route": "direct"
+    },
+    {
+      "audioSeconds": 23.1,
+      "computeMs": 1863.8142090000001,
+      "fixture": "de-fleurs-1617",
+      "partials": 38,
+      "text": "Der Krieger hat schon ein paar KNP nicht im Nordosten von Südafrika. Er grenzt im Osten an den Mosambik, im Norden an Zimbabwe und in Süden an dem Crocodile River.",
+      "wordErrorRate": 0.38461538461538464,
+      "model": "tiny",
+      "route": "direct"
+    },
+    {
+      "audioSeconds": 26.58,
+      "errors": [],
+      "finals": [
+        "Der lösliche Teil oder die Sentinel Range hat die höchsten Berge der Antarktis, das Vincent Massiv, dessen höchste Gipfel mit 4.892 Meter Höhe der Mordwinsen ist."
+      ],
+      "fixture": "de-fleurs-1618",
+      "partials": 33,
+      "wallMs": 27671.358125000002,
+      "wordErrorRate": 0.2962962962962963,
+      "model": "tiny",
+      "route": "paced_appstate_vad"
+    },
+    {
+      "audioSeconds": 23.1,
+      "errors": [],
+      "finals": [
+        "Der Krieger hat schon ein paar KMP-Liggin-Not aus dem von Südafrika. Er grenzt im Osten an unserem Weg im Norden an Zimbabwe und in Süden an dem Crocodile River."
+      ],
+      "fixture": "de-fleurs-1617",
+      "partials": 26,
+      "wallMs": 24082.815792,
+      "wordErrorRate": 0.5769230769230769,
+      "model": "tiny",
+      "route": "paced_appstate_vad"
+    },
+    {
+      "audioSeconds": 26.58,
+      "computeMs": 5372.844292,
+      "fixture": "de-fleurs-1618",
+      "partials": 49,
+      "text": "Der mögliche Teil unter die Sentinel Ranch hat die höchsten Berge der Antarktis. Das Vincent Massiv, das am höchsten Gipfel mit 4.892 Meter Höhe der Mondrinse ist.",
+      "wordErrorRate": 0.4444444444444444,
+      "model": "small",
+      "route": "direct"
+    },
+    {
+      "audioSeconds": 23.1,
+      "computeMs": 4424.223041,
+      "fixture": "de-fleurs-1617",
+      "partials": 40,
+      "text": "Der Krieg im Nationalpark war in Pelitim, Nordosten von Südafrika. Er grenzte im Osten an Mosambik, im Norden an Zimbabwe und im Süden an den Krokodil River.",
+      "wordErrorRate": 0.3076923076923077,
+      "model": "small",
+      "route": "direct"
+    },
+    {
+      "audioSeconds": 26.58,
+      "errors": [],
+      "finals": [
+        "Der mögliche Teil unter die Sentinel Ranch hat die höchsten Berge der Antarktis. Das Vincent Massiv, das am höchsten Gipfel mit 4.892 Meter Höhe der Mondrinse ist."
+      ],
+      "fixture": "de-fleurs-1618",
+      "partials": 30,
+      "wallMs": 27976.733249999997,
+      "wordErrorRate": 0.4444444444444444,
+      "model": "small",
+      "route": "paced_appstate_vad"
+    },
+    {
+      "audioSeconds": 23.1,
+      "errors": [],
+      "finals": [
+        "Der kriminelle Nationalpark war ein Pelitim Nordosten von Südafrika. Er grenzte im Osten an Mosambik, im Norden an Zimbabwe und im Süden an den Krokodil River."
+      ],
+      "fixture": "de-fleurs-1617",
+      "partials": 23,
+      "wallMs": 24324.889,
+      "wordErrorRate": 0.2692307692307692,
+      "model": "small",
+      "route": "paced_appstate_vad"
+    }
+  ],
+  "passingChecks": [
+    "Direct finalization clears partial state for both models.",
+    "Small real VAD emitted two correct short-phrase finals in one session.",
+    "Small probe reports only de; AppState rejects English before starting.",
+    "Tiny and Small cancellation followed by silent restart passed.",
+    "Existing installed monolithic English adapter fixture regression passed."
+  ],
+  "notRun": [
+    "Small managed installer replay: stopped before adoption because natural quality failed.",
+    "Matched resource comparison, native Obsidian UI, other operating systems, hardware acceleration."
+  ]
+}

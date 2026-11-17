@@ -111,3 +111,11 @@ the older installed Tiny artifact before inference because its hash differs from
 the current catalog pin; that suite was not exercised against a fresh download.
 This correction does not address the documented long-utterance quality failures
 or expand the shipping catalog.
+
+## Natural-speech adoption followup
+
+The [natural-speech audit](2026-11-16-german-moonshine-adoption-audit.md) additionally
+checks official Tiny and Small against two natural long German recordings,
+including real paced VAD sessions. Both fail the unchanged quality floor and
+remain outside the managed catalog. Small's supported layout and short-phrase
+lifecycle success do not override those negative adoption results.
