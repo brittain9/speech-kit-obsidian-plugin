@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { registerCommands } from '../src/commands/register-commands';
 
 describe('registerCommands', () => {
-  it('exposes recovery commands only while a retained utterance is available', () => {
+  it('exposes recovery commands only while a retained utterance is available', async () => {
     const commands: Command[] = [];
     const plugin = {
       addCommand: vi.fn((command: Command) => {
@@ -17,6 +17,7 @@ describe('registerCommands', () => {
     });
     const reinsertLastUtterance = vi.fn((_editor: Editor) => {});
     const copyLastUtterance = vi.fn();
+    const openSpeechKit = vi.fn(async () => {});
     const translateNote = vi.fn();
     const translateSelection = vi.fn();
     registerCommands({
@@ -31,6 +32,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => false,
       isAudioFileTranscriptionActive: () => false,
       isReadAloudActive: () => false,
+      openSpeechKit,
       plugin,
       readAloud: vi.fn(async () => {}),
       readAloudFromCursor: vi.fn(async () => {}),
@@ -60,6 +62,8 @@ describe('registerCommands', () => {
     expect(translateNote).toHaveBeenCalledWith(translationEditor, view);
     expect(translateSelection).toHaveBeenCalledWith(translationEditor, view);
 
+    await commands.find(({ id }) => id === 'open-speech-kit')?.callback?.();
+    expect(openSpeechKit).toHaveBeenCalledOnce();
     expect(reinsertCommand?.name).toBe('Reinsert last utterance');
     expect(copyCommand?.name).toBe('Copy last utterance');
     expect(clearCommand?.name).toBe('Clear last utterance');
@@ -114,6 +118,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => available,
       isAudioFileTranscriptionActive: () => false,
       isReadAloudActive: () => false,
+      openSpeechKit: vi.fn(async () => {}),
       plugin,
       readAloud: vi.fn(async () => {}),
       readAloudFromCursor: vi.fn(async () => {}),
@@ -178,6 +183,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => false,
       isAudioFileTranscriptionActive: () => false,
       isReadAloudActive: () => false,
+      openSpeechKit: vi.fn(async () => {}),
       plugin,
       readAloud: vi.fn(async () => {}),
       readAloudFromCursor: vi.fn(async () => {}),
@@ -225,6 +231,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => false,
       isAudioFileTranscriptionActive: () => false,
       isReadAloudActive: () => false,
+      openSpeechKit: vi.fn(async () => {}),
       plugin,
       readAloud: vi.fn(async () => {}),
       readAloudFromCursor: vi.fn(async () => {}),
@@ -278,6 +285,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => false,
       isAudioFileTranscriptionActive: () => active,
       isReadAloudActive: () => false,
+      openSpeechKit: vi.fn(async () => {}),
       plugin,
       readAloud: vi.fn(async () => {}),
       readAloudFromCursor: vi.fn(async () => {}),
@@ -324,6 +332,7 @@ describe('registerCommands', () => {
       hasRawTranscriptRecovery: () => false,
       isAudioFileTranscriptionActive: () => false,
       isReadAloudActive: () => false,
+      openSpeechKit: vi.fn(async () => {}),
       plugin,
       readAloud,
       readAloudFromCursor,
