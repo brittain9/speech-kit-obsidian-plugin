@@ -383,6 +383,12 @@ export const en = {
   'translation.modal.readyPartial_other':
     'Translation ready. {count} blocks kept their original language because their formatting could not be preserved.',
   'translation.modal.canceled': 'Translation canceled.',
+  'translation.modal.cancelPending':
+    'Translation canceled. The speech engine is still stopping. If it stays busy, stop other speech work, then quit and reopen Obsidian.',
+  'translation.modal.cancelUnconfirmed':
+    'Translation canceled, but the speech engine may still be running. Stop other speech work, then quit and reopen Obsidian before engine maintenance.',
+  'translation.status.cancelPending': 'Speech engine still stopping',
+  'translation.status.cancelUnconfirmed': 'Speech engine stop unconfirmed',
   'translation.modal.failed': 'Translation failed.',
   'translation.modal.missingModel': 'Install the local translation pack to use this language pair.',
   'translation.modal.chooseModel': 'Choose a translation model',
