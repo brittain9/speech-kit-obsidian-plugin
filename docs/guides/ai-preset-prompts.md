@@ -9,6 +9,25 @@ This review shows the exact English configuration of all 16 starting presets. Cl
 3. **Replace transcript** replaces the session’s transcript region, not the whole note. **Above** and **Below** add the result while retaining the source transcript.
 4. Replacement uses the existing raw-transcript recovery and undo behavior. Showing raw text below replacements remains controlled by your global setting (off by default).
 
+### Change dictation timing
+
+**When to transform** shows the effective dictation timing. If the active preset
+owns that choice, the row shows a summary and an **Edit preset** button that
+opens that exact saved preset. Replacement presets can choose **After each
+phrase**, **Once on stop**, or **Use dictation timing setting**. The last option
+leaves the daily timing selector editable. Changing that selector while
+**Transform new dictation** is off keeps automatic transformation off.
+
+Add-above and add-below output always runs when dictation stops; the preset
+editor explains that constraint. Choose **Replace text** if phrase-by-phrase
+transformation is wanted. Core timing and output behavior stays visible below
+the selected preset; its description and secondary overrides are available in
+the accessible tooltip. The gear beside timing is for **Minimum words and
+timestamps**, rather than changing a preset's timing.
+
+Media imports still run an explicitly selected preset once after inserting the
+complete transcript. Editing a preset never starts a provider request by itself.
+
 ### Shared settings
 
 - **Provider and model:** inherit your configured AI routing. No preset selects a model or changes credentials.
