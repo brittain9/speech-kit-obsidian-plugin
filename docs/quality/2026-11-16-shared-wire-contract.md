@@ -17,3 +17,10 @@ features, along with formatting and Clippy with warnings denied. An initial
 engine-free test run also passed; its Clippy invocation exposed pre-existing
 dead-code warnings from disabled engines, so final Clippy used the normal feature
 set. No inference, models, microphone, or vault content were needed.
+
+Linux CI exposed an avoidable test cost: the exhaustive split-point case timed
+out at five seconds while repeatedly comparing PCM arrays with Vitest's general
+matcher. Keeping the same split points and fixture expectations, Node's strict
+assertions reduced the complete local corpus run from 1.97 seconds to 203 ms.
+The fix preserves the bounded CI timeout and failure diagnostics rather than
+increasing it. This measures test overhead, not application inference speed.

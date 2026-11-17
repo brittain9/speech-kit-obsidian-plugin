@@ -1,3 +1,4 @@
+import { deepStrictEqual, equal } from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -150,9 +151,9 @@ describe('shared sidecar wire contract', () => {
       const parser = new FramedMessageParser<unknown>((text) => JSON.parse(text));
       const first = parser.pushChunk(joined.slice(0, split));
       const second = parser.pushChunk(joined.slice(split));
-      expect(first.fatal, `split ${split}`).toBeUndefined();
-      expect(second.fatal, `split ${split}`).toBeUndefined();
-      expect([...first.frames, ...second.frames], `split ${split}`).toEqual(expected);
+      equal(first.fatal, undefined, `split ${split}`);
+      equal(second.fatal, undefined, `split ${split}`);
+      deepStrictEqual([...first.frames, ...second.frames], expected, `split ${split}`);
     }
   });
 });
