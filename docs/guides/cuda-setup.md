@@ -1,9 +1,11 @@
 # CUDA setup
 
-CUDA accelerates Whisper models on supported NVIDIA GPUs. Published CUDA release
-archives bundle the runtime libraries Whisper needs, so most users only need a
-recent NVIDIA driver — no CUDA Toolkit. macOS uses Metal for Whisper
-automatically and needs none of this.
+CUDA provides an optional NVIDIA execution path for Whisper. Current source
+builds also wire it into the separate llama.cpp helpers for Tencent HY-MT 2
+translation and Qwen3 ASR. An installed sidecar must include the relevant family.
+CUDA packages bundle the native runtime libraries, so most users only need a
+recent NVIDIA driver, not the CUDA Toolkit. Apple silicon builds use Metal
+instead. See the [model/platform matrix](../../README.md#models-and-acceleration).
 
 This guide covers enabling CUDA on Windows and Linux, and building from source.
 
@@ -14,10 +16,11 @@ This guide covers enabling CUDA on Windows and Linux, and building from source.
 
 ## What CUDA accelerates
 
-Speech Kit's CUDA sidecar uses whisper.cpp's mature CUDA backend for
-Whisper. Acceleration options are model-aware, so Settings shows GPU controls
-only when the selected model has a production-ready accelerated path. The CUDA
-download is streamlined around this route.
+Whisper uses whisper.cpp; HY-MT 2 and Qwen ASR use their native llama.cpp helpers.
+The ONNX speech and voice families and Firefox Translations remain on CPU, even
+with the CUDA package installed. Settings exposes model-aware acceleration
+options. An available CUDA build path is not certification of every checkpoint
+on every GPU; see [support and validation coverage](model-hardware-support.md).
 
 ## Windows
 
