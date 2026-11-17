@@ -159,6 +159,10 @@ fn system_info_does_not_initialize_a_slow_metal_device() {
     let event = result.unwrap().unwrap();
     assert_eq!(event["type"], "system_info");
     assert!(
+        loaded.exists(),
+        "dyld must load the test interposition library"
+    );
+    assert!(
         !marker.exists(),
         "routine metadata must not initialize Metal"
     );
