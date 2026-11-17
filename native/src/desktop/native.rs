@@ -188,7 +188,12 @@ impl Ui {
             if let Some(popover) = &self.popover {
                 popover.update(config, state);
             } else {
-                self.popover = Some(super::popover::Popover::new(config, state, actions.clone()));
+                self.popover = Some(super::popover::Popover::new(
+                    config,
+                    state,
+                    actions.clone(),
+                    self.shortcut.as_ref(),
+                ));
             }
         }
         Ok(())

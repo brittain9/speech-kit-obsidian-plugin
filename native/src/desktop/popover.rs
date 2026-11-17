@@ -1,5 +1,6 @@
 //! Native macOS controls, shown only after an explicit status-item click.
 use super::*;
+use global_hotkey::hotkey::{HotKey, Modifiers};
 use objc2::{
     DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, rc::Retained, sel,
 };
@@ -51,12 +52,20 @@ pub(super) struct Popover {
     _target: Retained<ControlTarget>,
 }
 impl Popover {
-    pub fn new(config: &Configuration, status: &Status, actions: Actions) -> Self {
+    pub fn new(
+        config: &Configuration,
+        status: &Status,
+        actions: Actions,
+        registered_shortcut: Option<&HotKey>,
+    ) -> Self {
         let mtm = MainThreadMarker::new().expect("Popover belongs to main UI thread");
         let popover = NSPopover::new(mtm);
         popover.setBehavior(NSPopoverBehavior::Transient);
         popover.setAnimates(false);
-        popover.setContentSize(NSSize::new(336.0, 194.0));
+        let shortcut_hint = registered_shortcut_hint(registered_shortcut);
+        let footer_height = if shortcut_hint.is_some() { 22.0 } else { 0.0 };
+        let height = 194.0 + footer_height;
+        popover.setContentSize(NSSize::new(336.0, height));
         let target = ControlTarget::alloc(mtm).set_ivars(TargetState {
             actions,
             popover: popover.clone(),
@@ -65,11 +74,28 @@ impl Popover {
         let target: Retained<ControlTarget> = unsafe { msg_send![super(target), init] };
         let content = NSVisualEffectView::initWithFrame(
             NSVisualEffectView::alloc(mtm),
-            rect(0.0, 0.0, 336.0, 194.0),
+            rect(0.0, 0.0, 336.0, height),
         );
         content.setMaterial(NSVisualEffectMaterial::Popover);
         content.setBlendingMode(NSVisualEffectBlendingMode::WithinWindow);
         content.setState(NSVisualEffectState::Active);
+        // Keep the destination and primary controls unchanged; only a confirmed
+        // registration earns an additional footer below them.
+        let controls =
+            NSView::initWithFrame(NSView::alloc(mtm), rect(0.0, footer_height, 336.0, 194.0));
+        content.addSubview(&controls);
+        if let Some(hint) = shortcut_hint {
+            let footer = label(
+                &hint,
+                rect(18.0, 25.0, 300.0, 15.0),
+                11.0,
+                &NSColor::secondaryLabelColor(),
+                mtm,
+            );
+            footer.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
+            footer.setToolTip(Some(&NSString::from_str(&hint)));
+            content.addSubview(&footer);
+        }
         let title = label(
             "Speech Kit",
             rect(18.0, 151.0, 260.0, 24.0),
@@ -78,7 +104,7 @@ impl Popover {
             mtm,
         );
         title.setFont(Some(&NSFont::boldSystemFontOfSize(15.0)));
-        content.addSubview(&title);
+        controls.addSubview(&title);
         let settings = symbol_button(
             "gearshape",
             &config.labels.settings,
@@ -87,7 +113,7 @@ impl Popover {
             mtm,
         );
         settings.setFrame(rect(290.0, 148.0, 28.0, 28.0));
-        content.addSubview(&settings);
+        controls.addSubview(&settings);
 
         if let Some(image) = NSImage::imageWithSystemSymbolName_accessibilityDescription(
             &NSString::from_str("doc.text"),
@@ -95,7 +121,7 @@ impl Popover {
         ) {
             let icon = NSImageView::imageViewWithImage(&image, mtm);
             icon.setFrame(rect(18.0, 99.0, 24.0, 30.0));
-            content.addSubview(&icon);
+            controls.addSubview(&icon);
         }
         let (note, folder) = destination_text(config, status);
         let destination = label(
@@ -108,7 +134,7 @@ impl Popover {
         destination.setFont(Some(&NSFont::boldSystemFontOfSize(14.0)));
         destination.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
         destination.setToolTip(Some(&NSString::from_str(&status.destination)));
-        content.addSubview(&destination);
+        controls.addSubview(&destination);
         let location = label(
             &folder,
             rect(54.0, 95.0, 224.0, 17.0),
@@ -118,7 +144,7 @@ impl Popover {
         );
         location.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
         location.setToolTip(Some(&NSString::from_str(&status.destination)));
-        content.addSubview(&location);
+        controls.addSubview(&location);
         let open = symbol_button(
             "arrow.up.forward.square",
             &config.labels.open_target,
@@ -128,11 +154,11 @@ impl Popover {
         );
         open.setFrame(rect(290.0, 101.0, 28.0, 28.0));
         open.setEnabled(!status.destination.is_empty());
-        content.addSubview(&open);
+        controls.addSubview(&open);
 
         let divider = NSBox::initWithFrame(NSBox::alloc(mtm), rect(18.0, 78.0, 300.0, 1.0));
         divider.setBoxType(NSBoxType::Separator);
-        content.addSubview(&divider);
+        controls.addSubview(&divider);
         let state_label = label(
             "",
             rect(18.0, 31.0, 141.0, 22.0),
@@ -141,7 +167,7 @@ impl Popover {
             mtm,
         );
         state_label.setFont(Some(&NSFont::systemFontOfSize(13.0)));
-        content.addSubview(&state_label);
+        controls.addSubview(&state_label);
         let primary = unsafe {
             NSButton::buttonWithTitle_target_action(
                 &NSString::new(),
@@ -154,7 +180,7 @@ impl Popover {
         primary.setBezelStyle(NSBezelStyle::Push);
         primary.setFont(Some(&NSFont::systemFontOfSize(12.0)));
         primary.setKeyEquivalent(&NSString::from_str("\r"));
-        content.addSubview(&primary);
+        controls.addSubview(&primary);
         let controller = NSViewController::new(mtm);
         controller.setView(&content);
         popover.setContentViewController(Some(&controller));
@@ -242,6 +268,38 @@ fn symbol_button(
     button
 }
 
+// Configuration text alone is not proof that the OS registered a binding.
+fn registered_shortcut_hint(shortcut: Option<&HotKey>) -> Option<String> {
+    let shortcut = shortcut?;
+    let mut hint = String::new();
+    for (modifier, glyph) in [
+        (Modifiers::CONTROL, '⌃'),
+        (Modifiers::ALT, '⌥'),
+        (Modifiers::SHIFT, '⇧'),
+        (Modifiers::META, '⌘'),
+    ] {
+        if shortcut.mods.contains(modifier) {
+            hint.push(glyph);
+        }
+    }
+    let code = shortcut.key.to_string();
+    hint.push_str(match code.as_str() {
+        key if key.starts_with("Key") && key.len() == 4 => &key[3..],
+        key if key.starts_with("Digit") && key.len() == 6 => &key[5..],
+        "ArrowUp" => "↑",
+        "ArrowDown" => "↓",
+        "ArrowLeft" => "←",
+        "ArrowRight" => "→",
+        "Escape" => "⎋",
+        "Enter" => "↩",
+        "Tab" => "⇥",
+        "Backspace" => "⌫",
+        "Delete" => "⌦",
+        other => other,
+    });
+    Some(hint)
+}
+
 fn destination_text(config: &Configuration, status: &Status) -> (String, String) {
     let prefix = format!("{} / ", config.vault_name);
     let path = status
@@ -265,6 +323,21 @@ fn destination_text(config: &Configuration, status: &Status) -> (String, String)
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn registered_shortcut_uses_mac_modifier_glyphs() {
+        let key = "Control+Alt+J".parse().unwrap();
+        assert_eq!(registered_shortcut_hint(Some(&key)).as_deref(), Some("⌃⌥J"));
+    }
+    #[test]
+    fn registered_command_shift_and_digit_remain_readable() {
+        use global_hotkey::hotkey::{Code, HotKey, Modifiers};
+        let key = HotKey::new(Some(Modifiers::META | Modifiers::SHIFT), Code::Digit1);
+        assert_eq!(registered_shortcut_hint(Some(&key)).as_deref(), Some("⇧⌘1"));
+    }
+    #[test]
+    fn unregistered_or_unset_shortcuts_have_no_hint() {
+        assert_eq!(registered_shortcut_hint(None), None);
+    }
     fn config() -> Configuration {
         Configuration {
             request_id: "request".into(),
