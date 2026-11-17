@@ -1,3 +1,7 @@
+> Agents: obtain Alex's explicit approval for the prepared release before pushing
+> its tag or running a publishing/deployment action. Coding/CI/PR autonomy is separate
+> from release approval; see [AGENTS.md](../../AGENTS.md).
+
 # Cutting a Release
 
 Operational runbook for shipping a new plugin release.
@@ -74,7 +78,7 @@ npm run release:prepare -- --version <version> --sidecar
 ```
 
 That advances the sidecar metadata and Cargo mirrors to the plugin tag. The
-tagged workflow then builds the complete archive matrix into a draft for manual approval. The
+approved tag then builds and publishes the complete archive matrix. The
 command validates the current release state before changing anything and creates
 a comments-only notes scaffold. It refuses to overwrite existing notes. To
 change the Obsidian floor, also pass `--min-app-version <version>`; otherwise
@@ -159,9 +163,9 @@ lead time. When benchmarking a release, record when the release was requested
 alongside the published timestamp.
 
 The operating target is 30 minutes end to end when release notes are ready for
-review. Its machine-measurable service target is a complete draft within 25 minutes
-of the tag-triggered workflow starting. Manual inspection and approval remain
-required and are recorded separately from automated preparation. Release preparation, PR checks, review,
+review. Its machine-measurable service target is published assets within 25 minutes
+of the tag-triggered workflow starting. Agent release approval is required before triggering publication and is recorded
+separately from automated preparation. Release preparation, PR checks, review,
 and the merge-to-tag interval still count toward the primary metric; do not hide
 them by reporting only the tagged workflow.
 
@@ -197,8 +201,7 @@ the plugin and required sidecar versions match, it also builds the native matrix
 (macOS arm64, Linux x86_64 cpu+cuda, Linux arm64, Windows x86_64 cpu+cuda, Windows arm64), packages the archives,
 and generates checksums. When they differ, every native job is skipped. Both
 paths attest the plugin assets, create a **draft** release with the notes file
-as the body, and produce the timing report. The workflow never publishes the
-release. `workflow_dispatch` remains a dry run that uploads an artifact bundle
+as the body, publish the approved release, and produce the timing report. `workflow_dispatch` remains a dry run that uploads an artifact bundle
 without creating a GitHub Release.
 Unit, lint, and static-analysis gates run on pull requests and `main` in
 `ci.yml`; real-model certification runs only in manually dispatchable E2E
@@ -211,12 +214,11 @@ gh run watch <run-id> --exit-status   # do NOT pipe through `tail`/`head` — th
 gh release view <version>             # inspect the draft notes and expected asset set
 ```
 
-After the entire tagged workflow succeeds, Alex inspects the draft: verify the
-release tag points to the intended commit, the notes and asset set are complete,
-and checksums and provenance match the built files. Then publish manually from
-GitHub's release editor, or explicitly run `gh release edit <version> --draft=false`.
-Do not publish while the workflow is running: asset uploads use separate API
-requests and an interrupted upload can leave an incomplete draft.
+Approval happens before an agent triggers the release. Once the approved tag is
+pushed, the workflow stages verified assets and publishes automatically. After
+success, inspect the published notes, asset set, checksums and provenance. There
+is no additional manual Publish step. An interrupted upload can still leave an
+incomplete draft; use the recovery procedure below.
 
 ## What ships, and where it lands
 

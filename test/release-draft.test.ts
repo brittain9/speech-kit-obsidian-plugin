@@ -1,9 +1,17 @@
 import { readFile } from 'node:fs/promises';
 import { expect, it } from 'vitest';
 
-it('prepares a draft with provenance and keeps publication manual', async () => {
+it('publishes approved tag releases after staging and keeps dispatch artifact-only', async () => {
   const workflow = await readFile('.github/workflows/release.yml', 'utf8');
-  expect(workflow).not.toMatch(/--draft=false|gh release edit|softprops\/action-gh-release/);
+  expect(workflow).not.toContain('softprops/action-gh-release');
+  const publication = workflow.match(
+    / {6}- name: Publish approved release[\s\S]*?(?=\n {2}#|\n {2}[a-z-]+:)/,
+  )?.[0];
+  expect(publication).toContain("if: github.event_name == 'push'");
+  expect(publication).toContain('--draft=false');
+  expect(workflow.indexOf('node scripts/create-release-draft.mjs')).toBeLessThan(
+    workflow.indexOf('name: Publish approved release'),
+  );
   expect(workflow).toContain('node scripts/create-release-draft.mjs');
   expect(workflow).toContain("if: github.event_name == 'push'");
   expect(workflow).toContain("if: github.event_name == 'workflow_dispatch'");
