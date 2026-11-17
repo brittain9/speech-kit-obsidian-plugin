@@ -59,3 +59,17 @@ This redesign does not change repository protection rules, provision credentials
 publish a version, or claim a measured cold-build speedup. Warm validation confirms
 consistent native features; longer-term cache and timing comparisons remain
 observable in Actions rather than assumed.
+
+## Routine metadata avoids GPU initialization
+
+The newly enabled Metal protocol check exposed a timeout on a hosted macOS
+runner. Source inspection and a controlled public-wire regression confirmed
+that Whisper's old diagnostic string enumerated backends, creating the Metal
+device and compiling its library. The exact hosted-runner stall is not proven,
+but routine metadata should not depend on that work.
+
+System information now reports the Whisper version, build CPU flags and compiled
+accelerator support without backend discovery. Structured capability fields and
+test timeouts are unchanged. The regression injects a slow Metal function only
+into its own test child and verifies both fixture loading and absence of device
+initialization; it does not modify machine security settings.
