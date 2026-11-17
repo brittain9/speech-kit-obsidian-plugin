@@ -17,7 +17,7 @@ import { pickLocalAudioFile } from './audio/local-audio-file-picker';
 import { isMediaToolInstalled } from './audio/media-tool-installer';
 import { MicrophoneRecording, MicrophoneRecordingWriter } from './audio/microphone-recording';
 import { SidecarAudioLevelMeter } from './audio/sidecar-audio-level-meter';
-import { registerCommands } from './commands/register-commands';
+import { registerCommands, registerEditorMenu } from './commands/register-commands';
 import { AudioFileTranscriptionController } from './dictation/audio-file-transcription-controller';
 import { DictationSessionController } from './dictation/dictation-session-controller';
 import { FinalizedUtteranceAutoCopy } from './dictation/finalized-utterance-auto-copy';
@@ -603,6 +603,7 @@ export default class LocalSttPlugin extends Plugin {
     );
 
     registerCommands({
+      getSettings: () => this.settings,
       openSpeechKit: () => this.openSpeechKit(),
       cancelAudioFile: async () => this.requireAudioFileTranscriptionController().cancel(),
       cancelDictation: async () => this.requireDictationController().cancelDictation(),
@@ -724,24 +725,11 @@ export default class LocalSttPlugin extends Plugin {
     });
 
     this.registerEvent(
-      this.app.workspace.on('editor-menu', (menu, editor, view) => {
-        if (!editor.somethingSelected()) return;
-        menu.addItem((item) => {
-          item
-            .setTitle(t('commands.translateSelection'))
-            .setIcon('languages')
-            .onClick(() => {
-              this.requireTranslationController().translateSelection(editor, view);
-            });
-        });
-        menu.addItem((item) => {
-          item
-            .setTitle(t('commands.readAloud'))
-            .setIcon('audio-lines')
-            .onClick(() => {
-              void this.requireReadAloudController().read(editor);
-            });
-        });
+      registerEditorMenu(this.app.workspace, {
+        getSettings: () => this.settings,
+        readAloud: (editor) => this.requireReadAloudController().read(editor),
+        translateSelection: (editor, view) =>
+          this.requireTranslationController().translateSelection(editor, view),
       }),
     );
 
@@ -1084,6 +1072,12 @@ export default class LocalSttPlugin extends Plugin {
     this.rawTranscriptRecovery.setEnabled(this.settings.retainLastUtterance);
     if (options.persist) {
       await this.saveData(this.settings);
+    }
+    if (
+      previousSettings.translationEnabled !== this.settings.translationEnabled ||
+      previousSettings.readAloudEnabled !== this.settings.readAloudEnabled
+    ) {
+      this.translationController?.onSettingsChanged();
     }
     if (previousSettings.highlightSpokenText !== this.settings.highlightSpokenText) {
       this.readAloudFollowAlong?.setEnabled(this.settings.highlightSpokenText);

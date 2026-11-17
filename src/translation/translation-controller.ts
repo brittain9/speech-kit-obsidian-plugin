@@ -156,7 +156,13 @@ export class TranslationController {
   constructor(private readonly dependencies: TranslationControllerDependencies) {}
 
   translateSelection(editor: Editor, view: MarkdownFileInfo): void {
-    if (this.reopenActive(view) || !editor.somethingSelected() || view.file === null) return;
+    if (
+      this.reopenActive(view) ||
+      !this.dependencies.getSettings().translationEnabled ||
+      !editor.somethingSelected() ||
+      view.file === null
+    )
+      return;
     const from = editor.getCursor('from');
     const to = editor.getCursor('to');
     this.begin(editor, view, view.file, {
@@ -167,7 +173,12 @@ export class TranslationController {
     });
   }
   translateNote(editor: Editor, view: MarkdownFileInfo): void {
-    if (this.reopenActive(view) || view.file === null) return;
+    if (
+      this.reopenActive(view) ||
+      !this.dependencies.getSettings().translationEnabled ||
+      view.file === null
+    )
+      return;
     const source = editor.getValue();
     if (source.trim().length === 0) {
       this.dependencies.feedback.show({
@@ -184,6 +195,10 @@ export class TranslationController {
       to: endPosition(source),
     });
   }
+  onSettingsChanged(): void {
+    this.activeModal?.refreshFeatureAvailability();
+  }
+
   dispose(): void {
     this.active?.job.cancel();
     this.activeModal?.close();
@@ -204,6 +219,7 @@ export class TranslationController {
     targetOverride?: TranslationLanguage,
     styleInstructionOverride?: string,
   ): void {
+    if (!this.dependencies.getSettings().translationEnabled) return;
     if (snapshot.source.length > MAX_TRANSLATION_CHARACTERS) {
       this.dependencies.feedback.show({
         intent: 'warning',
@@ -319,6 +335,7 @@ export class TranslationController {
     if (active === null || this.activeModal !== null) return;
     this.dependencies.setDetachedStatus?.(null, () => {}, { preserveFocus: true });
     const modal = new TranslationModal(this.dependencies.app, {
+      isFeatureEnabled: () => this.dependencies.getSettings().translationEnabled,
       canReadAloud: this.dependencies.canReadAloud,
       editor: active.editor,
       sourcePath: active.sourceFile.path,
@@ -360,6 +377,7 @@ export class TranslationController {
         return this.persistTranslationLanguages(sourceLanguage, targetLanguage);
       },
       onModelChange: async (model, sourceLanguage, targetLanguage) => {
+        if (!this.dependencies.getSettings().translationEnabled) return false;
         const generation = ++active.modelSelectionGeneration;
         active.modelSelectionPendingGeneration = generation;
         active.modelSelectionTarget = model;
@@ -396,6 +414,7 @@ export class TranslationController {
       },
       onCancelPackInstall: () => this.dependencies.modelManager.cancel(),
       onInstallPack: async (model, sourceLanguage, targetLanguage) => {
+        if (!this.dependencies.getSettings().translationEnabled) return false;
         const requirement = this.installRequirement(model, sourceLanguage, targetLanguage);
         if (requirement.kind !== 'pack') {
           throw new Error('This translation direction does not have a downloadable pack.');

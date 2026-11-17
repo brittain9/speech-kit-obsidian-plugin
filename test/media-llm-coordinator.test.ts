@@ -37,8 +37,26 @@ function session(): MediaLlmEditorSession {
 }
 
 describe('MediaLlmCoordinator', () => {
+  it('keeps explicit media jobs transcript-only when AI features are hidden', async () => {
+    const captured = settings();
+    const current = { ...captured, llmFeaturesEnabled: false };
+    const createRouter = vi.fn();
+    const editor = session();
+    const coordinator = new MediaLlmCoordinator({
+      createRouter,
+      feedback: { show: vi.fn() },
+      getSettings: () => current,
+    });
+    const job = { settings: captured, snapshot: resolveLlmTransformSnapshot(captured) };
+    expect(coordinator.preflight(captured, job)).toBe(true);
+    await expect(coordinator.run(editor, job)).resolves.toMatchObject({ outcome: 'skipped' });
+    expect(createRouter).not.toHaveBeenCalled();
+    expect(editor.joinRawSessionText).not.toHaveBeenCalled();
+    expect(editor.replaceSessionRangeWithCleaned).not.toHaveBeenCalled();
+  });
+
   it('runs an explicitly selected media preset while the legacy global media toggle is off', async () => {
-    const current = settings({ llmFeaturesEnabled: false, mediaLlmProcessing: false });
+    const current = settings({ mediaLlmProcessing: false });
     const cleanup = vi.fn(async () => ({
       model: 'local-model',
       providerId: 'ollama' as const,

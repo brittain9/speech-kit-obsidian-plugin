@@ -58,6 +58,16 @@ describe('resolvePluginSettings', () => {
     expect(resolvePluginSettings({}).schemaVersion).toBe(11);
   });
 
+  it.each(['translationEnabled', 'readAloudEnabled'] as const)(
+    'keeps %s enabled by default and persists an explicit opt-out',
+    (feature) => {
+      expect(resolvePluginSettings({})[feature]).toBe(true);
+      expect(resolvePluginSettings({ [feature]: false })[feature]).toBe(false);
+      expect(resolvePluginSettings({ [feature]: true })[feature]).toBe(true);
+      expect(resolvePluginSettings({ [feature]: 'false' })[feature]).toBe(true);
+    },
+  );
+
   it('keeps temporary note pinning enabled unless the user disables it', () => {
     expect(DEFAULT_PLUGIN_SETTINGS.pinNoteDuringTranscription).toBe(true);
     expect(resolvePluginSettings({}).pinNoteDuringTranscription).toBe(true);
