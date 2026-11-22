@@ -5950,6 +5950,46 @@
           "sizeBytes": 355709344
         }
       ]
+    },
+    {
+      "runtimeId": "llama_cpp",
+      "familyId": "qwen3_asr",
+      "task": "stt",
+      "modelId": "oruk_fourier_2b_q8_0",
+      "collectionId": "qwen3_asr",
+      "displayName": "Oruk Fourier 2B Q8",
+      "summary": "English-only batch speech recognition for noncommercial use. 2.19 GB download.",
+      "languageTags": ["en"],
+      "supportsAutomaticLanguageDetection": false,
+      "uxTags": ["requires-terms-review"],
+      "licenseLabel": "CC BY-NC 4.0",
+      "licenseUrl": "https://huggingface.co/oruk/oruk-fourier-2b/blob/e8735ccc1c92d36d747cfcd5722950474fb9238f/README.md#license",
+      "sourceUrl": "https://huggingface.co/oruk/oruk-fourier-2b/tree/e8735ccc1c92d36d747cfcd5722950474fb9238f/gguf/llama-cpp",
+      "modelCardUrl": "https://huggingface.co/oruk/oruk-fourier-2b",
+      "notes": [
+        "Local noncommercial use with attribution to Oruk. Commercial use and hosted/API serving require a separate Oruk license.",
+        "Select English. Text appears after each phrase, without live partial text or model timestamps."
+      ],
+      "artifacts": [
+        {
+          "artifactId": "transcription",
+          "role": "transcription_model",
+          "required": true,
+          "filename": "Qwen3-ASR-Oruk-Fourier-2B-Q8_0.gguf",
+          "downloadUrl": "https://huggingface.co/oruk/oruk-fourier-2b/resolve/e8735ccc1c92d36d747cfcd5722950474fb9238f/gguf/llama-cpp/Qwen3-ASR-Oruk-Fourier-2B-Q8_0.gguf?download=true",
+          "sha256": "4a3a4761871be3a012c9473afc5ffa14ae301074e8c30cb244d7ccb51d122d89",
+          "sizeBytes": 1834423584
+        },
+        {
+          "artifactId": "audio_encoder",
+          "role": "supporting_file",
+          "required": true,
+          "filename": "mmproj-Qwen3-ASR-Oruk-Fourier-2B-Q8_0.gguf",
+          "downloadUrl": "https://huggingface.co/oruk/oruk-fourier-2b/resolve/e8735ccc1c92d36d747cfcd5722950474fb9238f/gguf/llama-cpp/mmproj-Qwen3-ASR-Oruk-Fourier-2B-Q8_0.gguf?download=true",
+          "sha256": "9e0652ccf07db1eafa841cceb1b0903636c1f8e91aba4a8c92408871dec99156",
+          "sizeBytes": 355710400
+        }
+      ]
     }
   ]
 }

@@ -2,6 +2,7 @@ import { t } from '../shared/i18n';
 
 const MODEL_SUMMARY_KEYS = {
   qwen3_asr_1_7b_q8_0: 'catalog.qwen3_asr_1_7b_q8_0.summary',
+  oruk_fourier_2b_q8_0: 'catalog.oruk_fourier_2b_q8_0.summary',
   qwen3_asr_0_6b_q8_0: 'catalog.qwen3_asr_0_6b_q8_0.summary',
   cohere_transcribe_fp16: 'catalog.cohere_transcribe_fp16.summary',
   cohere_transcribe_int8: 'catalog.cohere_transcribe_int8.summary',

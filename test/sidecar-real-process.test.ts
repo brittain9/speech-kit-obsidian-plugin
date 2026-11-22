@@ -79,6 +79,10 @@ describe.skipIf(!binary)('production client with the real Rust sidecar', () => {
     for (const [modelId, filenames] of [
       ['qwen3_asr_0_6b_q8_0', ['Qwen3-ASR-0.6B-Q8_0.gguf', 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf']],
       ['qwen3_asr_1_7b_q8_0', ['Qwen3-ASR-1.7B-Q8_0.gguf', 'mmproj-Qwen3-ASR-1.7B-Q8_0.gguf']],
+      [
+        'oruk_fourier_2b_q8_0',
+        ['Qwen3-ASR-Oruk-Fourier-2B-Q8_0.gguf', 'mmproj-Qwen3-ASR-Oruk-Fourier-2B-Q8_0.gguf'],
+      ],
     ] as const) {
       const model = catalog.models.find((entry) => entry.modelId === modelId);
       expect(model, `native catalog must embed ${modelId}`).toMatchObject({

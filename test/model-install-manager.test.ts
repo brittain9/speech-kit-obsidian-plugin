@@ -686,6 +686,11 @@ describe('ModelInstallManager', () => {
         filename: 'Qwen3-ASR-1.7B-Q8_0.gguf',
         totalSizeBytes: 2520744288,
       },
+      {
+        modelId: 'oruk_fourier_2b_q8_0',
+        filename: 'Qwen3-ASR-Oruk-Fourier-2B-Q8_0.gguf',
+        totalSizeBytes: 2190133984,
+      },
     ])(
       'keeps $modelId installed, probed, selected and removable as speech rather than translation',
       async ({ modelId, filename, totalSizeBytes }) => {
