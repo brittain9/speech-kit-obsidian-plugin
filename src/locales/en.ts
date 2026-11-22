@@ -1554,6 +1554,8 @@ export const en = {
   'sidecarError.vad_error': 'Voice activity detection failed on an audio frame.',
   'sidecarError.vad_init_failed': 'Failed to initialize the bundled Silero VAD.',
   'sidecarError.worker_panic': 'The speech engine transcription worker stopped unexpectedly.',
+  'catalog.oruk_fourier_2b_q8_0.summary':
+    'English-only batch speech recognition for noncommercial use. 2.19 GB download.',
   'catalog.qwen3_asr_0_6b_q8_0.summary':
     'Compact multilingual speech recognition. 1.02 GB download.',
   'catalog.qwen3_asr_1_7b_q8_0.summary':

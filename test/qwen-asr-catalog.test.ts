@@ -108,3 +108,15 @@ it('offers the larger Qwen pair without replacing the existing selection or defa
   );
   expect(resolvePluginSettings({}).selectedModel).toBeNull();
 });
+
+it('offers Fourier only for English with a license review before download', () => {
+  const model = catalog.models.find((entry) => entry.modelId === 'oruk_fourier_2b_q8_0');
+  expect(model).toMatchObject({
+    languageTags: ['en'],
+    supportsAutomaticLanguageDetection: false,
+    uxTags: ['requires-terms-review'],
+    licenseLabel: 'CC BY-NC 4.0',
+  });
+  expect(model?.artifacts).toHaveLength(2);
+  expect(model?.artifacts.every((artifact) => artifact.required)).toBe(true);
+});
